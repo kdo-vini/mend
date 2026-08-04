@@ -1,6 +1,7 @@
 import type { Request } from "express";
 import type { IssuePort } from "../issue-service.js";
 import type { KnowledgePort } from "../knowledge-service.js";
+import type { MediaAssetInput, MediaAssetRecord } from "../media-pipeline.js";
 
 export type WorkspaceRole = "owner" | "admin" | "agent" | "viewer";
 
@@ -163,6 +164,14 @@ export interface SendMessageInput {
   fileName?: string;
   mimeType?: string;
   idempotencyKey?: string;
+  mediaBatchId?: string;
+  assetId?: string;
+  attachments?: Array<{
+    assetId: string;
+    messageType: "image" | "video" | "audio" | "document";
+    caption?: string;
+    idempotencyKey: string;
+  }>;
 }
 
 export interface AiDraftInput {
@@ -209,6 +218,30 @@ export interface ConversationPort {
     conversationId: string,
     input: AiDraftInput,
   ): Promise<unknown | null>;
+}
+
+export interface MediaPort {
+  createUpload(
+    context: RequestContext,
+    input: MediaAssetInput,
+  ): Promise<unknown>;
+  complete(
+    context: RequestContext,
+    assetId: string,
+  ): Promise<MediaAssetRecord | null>;
+  findAsset(
+    context: RequestContext,
+    assetId: string,
+  ): Promise<MediaAssetRecord | null>;
+  listAssets(
+    context: RequestContext,
+    assetIds: string[],
+  ): Promise<MediaAssetRecord[]>;
+  signedUrl(
+    context: RequestContext,
+    assetId: string,
+    purpose?: "original" | "browser" | "provider" | "preview",
+  ): Promise<{ url: string; mimeType?: string }>;
 }
 
 export interface RepositoryListQuery {
@@ -286,4 +319,5 @@ export interface ApiRouterDependencies {
   knowledge: KnowledgePort;
   repositories: RepositoryPort;
   codingRuns: CodingRunPort;
+  media?: MediaPort;
 }

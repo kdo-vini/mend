@@ -8,6 +8,7 @@ import {
   Ellipsis,
   FileText,
   Filter,
+  Mic,
   ListFilter,
   LockKeyhole,
   Paperclip,
@@ -16,6 +17,7 @@ import {
   Search,
   Send,
   Sparkles,
+  Square,
   UserRound,
   X,
   Zap,
@@ -38,19 +40,32 @@ import {
   resolveLiveConversation,
   resumeLiveConversationAi,
   sendLiveMedia,
+  sendLiveMediaBatch,
   sendLiveMessage,
   snoozeLiveConversation,
   updateLiveConversation,
+  uploadLiveMediaAsset,
 } from "../api";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { useConversationScroll } from "../hooks/useConversationScroll";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PriorityDot } from "../../../shared/ui/DataDisplay";
+import { Select } from "../../../shared/ui/Select";
 
 interface AssigneeOption {
   value: string;
   label: string;
+}
+
+interface ComposerMediaInput {
+  mediaUrl?: string;
+  file?: File;
+  messageType: "image" | "video" | "audio" | "document";
+  mimeType?: string;
+  fileName?: string;
+  caption?: string;
+  onProgress?: (percent: number) => void;
 }
 
 function sortConversations(items: Conversation[]) {
@@ -346,45 +361,51 @@ export function InboxPage({
     return true;
   };
 
-  const sendMedia = async (input: {
-    mediaUrl?: string;
-    file?: File;
-    messageType: "image" | "video" | "audio" | "document";
-    mimeType?: string;
-    fileName?: string;
-    caption?: string;
-  }): Promise<boolean> => {
+  const sendMediaBatch = async (
+    inputs: ComposerMediaInput[],
+  ): Promise<boolean> => {
     if (!liveMode || !workspaceId) {
       onToast("Attachments are available only for a live WhatsApp workspace.");
       return false;
     }
     const conversationId = selected.id;
-    const clientId =
-      globalThis.crypto?.randomUUID?.() ??
-      `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const optimistic: Message = {
-      id: `temp:${clientId}`,
-      clientId,
-      conversationId,
-      direction: "outbound",
-      sender: "You",
-      text: input.caption ?? "",
-      time: "now",
-      type: input.messageType,
-      status: "sending",
-      attachment: {
-        name: input.fileName ?? input.messageType,
-        meta: input.mimeType ?? "Attachment",
-      },
-    };
+    const batchId = globalThis.crypto?.randomUUID?.() ?? `batch-${Date.now()}`;
+    const pending = inputs.map((input) => {
+      const clientId =
+        globalThis.crypto?.randomUUID?.() ??
+        `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      return {
+        input,
+        clientId,
+        optimistic: {
+          id: `temp:${clientId}`,
+          clientId,
+          conversationId,
+          direction: "outbound" as const,
+          sender: "You",
+          text: input.caption ?? "",
+          time: "now",
+          type: input.messageType,
+          status: "sending" as const,
+          mediaBatchId: batchId,
+          attachment: {
+            name: input.fileName ?? input.file?.name ?? input.messageType,
+            meta: input.mimeType ?? input.file?.type ?? "Attachment",
+          },
+        } satisfies Message,
+      };
+    });
     setConversations((current) =>
       sortConversations(
         current.map((item) =>
           item.id === conversationId
             ? {
                 ...item,
-                messages: [...item.messages, optimistic],
-                lastMessage: optimistic.text || "Attachment",
+                messages: [
+                  ...item.messages,
+                  ...pending.map((item) => item.optimistic),
+                ],
+                lastMessage: pending.at(-1)?.optimistic.text || "Attachment",
                 lastTime: "now",
                 lastMessageAt: new Date().toISOString(),
                 attention: "waiting_customer",
@@ -395,12 +416,43 @@ export function InboxPage({
       ),
     );
     try {
-      await sendLiveMedia({
-        workspaceId,
-        conversationId,
-        ...input,
-        idempotencyKey: clientId,
-      });
+      const uploaded: Array<{
+        assetId: string;
+        messageType: ComposerMediaInput["messageType"];
+        caption?: string;
+        idempotencyKey: string;
+      }> = [];
+      for (const item of pending) {
+        if (item.input.file) {
+          const asset = await uploadLiveMediaAsset({
+            workspaceId,
+            conversationId,
+            file: item.input.file,
+            batchId,
+            onProgress: (progress) => item.input.onProgress?.(progress.percent),
+          });
+          uploaded.push({
+            assetId: asset.assetId,
+            messageType: item.input.messageType,
+            caption: item.input.caption,
+            idempotencyKey: item.clientId,
+          });
+        } else if (item.input.mediaUrl) {
+          await sendLiveMedia({
+            workspaceId,
+            conversationId,
+            ...item.input,
+            idempotencyKey: item.clientId,
+          });
+        }
+      }
+      if (uploaded.length)
+        await sendLiveMediaBatch({
+          workspaceId,
+          conversationId,
+          batchId,
+          attachments: uploaded,
+        });
       const snapshot = await loadLiveConversationSnapshot(
         workspaceId,
         conversationId,
@@ -418,7 +470,7 @@ export function InboxPage({
             ? {
                 ...item,
                 messages: item.messages.map((message) =>
-                  message.id === optimistic.id
+                  pending.some((entry) => entry.optimistic.id === message.id)
                     ? { ...message, status: "failed" }
                     : message,
                 ),
@@ -723,7 +775,6 @@ export function InboxPage({
             onResolve={() => void setConversationState("resolved")}
             onAssign={assignConversation}
             assigneeOptions={assigneeOptions}
-            assigneeLabel={assigneeLabel}
             aiDetailsOpen={aiDetailsOpen}
             onToggleAiDetails={() => setAiDetailsOpen((current) => !current)}
           />
@@ -776,10 +827,10 @@ export function InboxPage({
                   </span>
                   <span>
                     <strong>
-                      {activeIssue.identifier} · {activeIssue.title}
+                      {activeIssue.identifier} Â· {activeIssue.title}
                     </strong>
                     <small>
-                      Issue linked · {activeIssue.status} ·{" "}
+                      Issue linked Â· {activeIssue.status} Â·{" "}
                       {activeIssue.priority}
                     </small>
                   </span>
@@ -798,9 +849,9 @@ export function InboxPage({
               </button>
             )}
           </div>
-          <Composer
+          <MediaComposer
             onSend={sendMessage}
-            onSendMedia={sendMedia}
+            onSendMediaBatch={sendMediaBatch}
             aiMode={selected.aiMode}
             automationState={selected.automationState}
             liveMode={liveMode}
@@ -812,7 +863,7 @@ export function InboxPage({
             }
             onUseDraft={async () => {
               if (!liveMode)
-                return "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um próximo passo.";
+                return "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um prÃ³ximo passo.";
               try {
                 const result = await requestAiDraft(
                   selected.messages
@@ -917,12 +968,12 @@ function AiDecisionSummary({
     conversation.aiDecision === "blocked";
   const title =
     conversation.automationState === "human_paused"
-      ? "Human takeover — AI paused"
+      ? "Human takeover â€” AI paused"
       : blocked
-        ? "AI blocked — needs human"
+        ? "AI blocked â€” needs human"
         : conversation.aiDecision === "auto_reply"
-          ? "AI active — auto-reply eligible"
-          : "AI active — Copilot";
+          ? "AI active â€” auto-reply eligible"
+          : "AI active â€” Copilot";
   return (
     <aside
       className={`ai-decision-card ${blocked ? "blocked" : ""} ${conversation.automationState === "human_paused" ? "paused" : ""}`}
@@ -1024,7 +1075,6 @@ function ConversationHeader({
   onResolve,
   onAssign,
   assigneeOptions,
-  assigneeLabel,
   aiDetailsOpen,
   onToggleAiDetails,
 }: {
@@ -1036,7 +1086,6 @@ function ConversationHeader({
   onResolve: () => void;
   onAssign: (assignee: string) => void;
   assigneeOptions: AssigneeOption[];
-  assigneeLabel: (value: string) => string;
   aiDetailsOpen: boolean;
   onToggleAiDetails: () => void;
 }) {
@@ -1061,7 +1110,7 @@ function ConversationHeader({
             </span>
           </div>
           <p>
-            {conversation.phone} · {conversation.company}
+            {conversation.phone} Â· {conversation.company}
           </p>
         </div>
       </div>
@@ -1069,27 +1118,19 @@ function ConversationHeader({
         <label className="conversation-assignee conversation-desktop-control">
           <UserRound size={13} aria-hidden="true" />
           <span className="sr-only">Conversation assignee</span>
-          <select
-            aria-label="Conversation assignee"
+          <Select
+            ariaLabel="Conversation assignee"
             value={conversation.assignee}
-            onChange={(event) => onAssign(event.target.value)}
-          >
-            {assigneeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <span className="conversation-assignee-label">
-            {assigneeLabel(conversation.assignee)}
-          </span>
+            options={assigneeOptions}
+            onChange={onAssign}
+          />
         </label>
         <span
           className={`mode-label ${conversation.aiMode} ${conversation.automationState}`}
         >
           <Sparkles size={13} />{" "}
           {conversation.automationState === "human_paused"
-            ? "Human takeover — AI paused"
+            ? "Human takeover â€” AI paused"
             : conversation.aiMode === "safe_auto"
               ? "Auto-reply"
               : conversation.aiMode === "draft"
@@ -1135,20 +1176,15 @@ function ConversationHeader({
               <label className="context-menu-select mobile-menu-control">
                 <UserRound size={14} />
                 <span>Assignee</span>
-                <select
-                  aria-label="Conversation assignee"
+                <Select
+                  ariaLabel="Conversation assignee"
                   value={conversation.assignee}
-                  onChange={(event) => {
-                    onAssign(event.target.value);
+                  options={assigneeOptions}
+                  onChange={(value) => {
+                    onAssign(value);
                     setMenuOpen(false);
                   }}
-                >
-                  {assigneeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
               <button
                 className="mobile-menu-control"
@@ -1251,11 +1287,32 @@ function MessageBubble({ message }: { message: Message }) {
             <Sparkles size={11} /> AI generated
           </span>
         )}
-        {message.sender} · {message.time}
+        {message.sender} Â· {message.time}
       </div>
       <div className="message-bubble-wrap">
         {message.deleted ? (
           <div className="message-bubble deleted-message">Message deleted</div>
+        ) : message.type !== "text" &&
+          message.mediaStatus &&
+          message.mediaStatus !== "ready" ? (
+          <div className="message-bubble attachment-bubble media-unavailable">
+            <div className="media-static-preview" aria-hidden="true">
+              {(message.attachment?.meta ?? "media")
+                .split("/")
+                .at(-1)
+                ?.toUpperCase()}
+            </div>
+            <span>
+              <strong>{message.attachment?.name ?? "Media"}</strong>
+              <small>
+                {message.mediaStatus === "processing"
+                  ? "Processing mediaâ€¦"
+                  : message.mediaStatus === "unsupported"
+                    ? `Format ${message.attachment?.meta ?? "unknown"} is not supported`
+                    : "Media unavailable"}
+              </small>
+            </span>
+          </div>
         ) : message.type === "text" ? (
           <div className="message-bubble">{message.text}</div>
         ) : message.type === "image" && attachmentUrl ? (
@@ -1300,7 +1357,7 @@ function MessageBubble({ message }: { message: Message }) {
           aria-label={message.status ?? "sent"}
         >
           {message.status === "sending" ? (
-            "Sending…"
+            "Sendingâ€¦"
           ) : message.status === "failed" ? (
             "Failed"
           ) : message.status === "read" || message.status === "delivered" ? (
@@ -1314,9 +1371,9 @@ function MessageBubble({ message }: { message: Message }) {
   );
 }
 
-function Composer({
+function MediaComposer({
   onSend,
-  onSendMedia,
+  onSendMediaBatch,
   onUseDraft,
   prefillDraft,
   aiMode,
@@ -1325,14 +1382,9 @@ function Composer({
   automationState,
 }: {
   onSend: (message: string) => boolean | Promise<boolean>;
-  onSendMedia?: (input: {
-    mediaUrl?: string;
-    file?: File;
-    messageType: "image" | "video" | "audio" | "document";
-    mimeType?: string;
-    fileName?: string;
-    caption?: string;
-  }) => boolean | Promise<boolean>;
+  onSendMediaBatch?: (
+    input: ComposerMediaInput[],
+  ) => boolean | Promise<boolean>;
   onUseDraft: () => string | Promise<string>;
   prefillDraft?: { text: string; requestId: number };
   aiMode: AiMode;
@@ -1340,23 +1392,128 @@ function Composer({
   whatsappConnected?: boolean;
   automationState: AutomationState;
 }) {
+  type PendingFile = {
+    id: string;
+    file: File;
+    type: ComposerMediaInput["messageType"];
+    caption: string;
+    previewUrl: string;
+    progress: number;
+  };
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [mediaUrl, setMediaUrl] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [mediaType, setMediaType] = useState<
-    "image" | "video" | "audio" | "document"
-  >("document");
+  const [mediaType, setMediaType] =
+    useState<ComposerMediaInput["messageType"]>("document");
   const [fileName, setFileName] = useState("");
   const [caption, setCaption] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const accepted =
+    "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.heic,.heif,.tiff,.mov,.avi,.mkv";
+
   useEffect(() => {
     if (!prefillDraft) return;
     setText(prefillDraft.text);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [prefillDraft]);
-  const submit = async () => {
+
+  useEffect(
+    () => () =>
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop()),
+    [],
+  );
+
+  const typeForFile = (file: File): ComposerMediaInput["messageType"] => {
+    if (file.type.startsWith("image/")) return "image";
+    if (file.type.startsWith("video/")) return "video";
+    if (file.type.startsWith("audio/")) return "audio";
+    const extension = file.name.toLowerCase().split(".").pop() ?? "";
+    if (
+      [
+        "jpg",
+        "jpeg",
+        "png",
+        "webp",
+        "gif",
+        "heic",
+        "heif",
+        "tiff",
+        "svg",
+      ].includes(extension)
+    )
+      return "image";
+    if (["mp4", "webm", "mov", "avi", "mkv"].includes(extension))
+      return "video";
+    if (["mp3", "wav", "aac", "m4a", "ogg", "opus", "flac"].includes(extension))
+      return "audio";
+    return "document";
+  };
+
+  const addFiles = (files: File[]) => {
+    const room = Math.max(0, 10 - pendingFiles.length);
+    const additions = files.slice(0, room).map((file) => ({
+      id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+      file,
+      type: typeForFile(file),
+      caption: "",
+      previewUrl: URL.createObjectURL(file),
+      progress: 0,
+    }));
+    if (!additions.length) return;
+    setPendingFiles((current) => [...current, ...additions]);
+    setMediaUrl("");
+    setAttachmentOpen(true);
+  };
+
+  const removeFile = (id: string) => {
+    setPendingFiles((current) => {
+      const item = current.find((entry) => entry.id === id);
+      if (item) URL.revokeObjectURL(item.previewUrl);
+      return current.filter((entry) => entry.id !== id);
+    });
+  };
+
+  const startRecording = async () => {
+    if (recording || sending || !navigator.mediaDevices?.getUserMedia) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recordingChunksRef.current = [];
+      recordingStreamRef.current = stream;
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) recordingChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        addFiles([
+          new File(recordingChunksRef.current, `voice-${Date.now()}.webm`, {
+            type: mimeType,
+          }),
+        ]);
+        stream.getTracks().forEach((track) => track.stop());
+        recorderRef.current = null;
+        recordingStreamRef.current = null;
+        setRecording(false);
+      };
+      recorder.start();
+      setRecording(true);
+    } catch {
+      setRecording(false);
+    }
+  };
+
+  const submitText = async () => {
     if (!text.trim() || sending) return;
     setSending(true);
     try {
@@ -1368,28 +1525,35 @@ function Composer({
       setSending(false);
     }
   };
-  const submitAttachment = async () => {
-    const cleanUrl = mediaUrl.trim();
-    if (
-      !onSendMedia ||
-      (!selectedFile && !/^https:\/\/[^\s]+$/i.test(cleanUrl)) ||
-      sending
-    )
-      return;
+
+  const submitAttachments = async () => {
+    if (!onSendMediaBatch || sending) return;
+    const inputs: ComposerMediaInput[] = pendingFiles.map((item) => ({
+      file: item.file,
+      messageType: item.type,
+      fileName: item.file.name,
+      caption: item.caption.trim() || undefined,
+      onProgress: (percent) =>
+        setPendingFiles((current) =>
+          current.map((entry) =>
+            entry.id === item.id ? { ...entry, progress: percent } : entry,
+          ),
+        ),
+    }));
+    if (!inputs.length && /^https:\/\/[^\s]+$/i.test(mediaUrl.trim()))
+      inputs.push({
+        mediaUrl: mediaUrl.trim(),
+        messageType: mediaType,
+        fileName: fileName.trim() || undefined,
+        caption: caption.trim() || undefined,
+      });
+    if (!inputs.length) return;
     setSending(true);
     try {
-      if (
-        await onSendMedia({
-          mediaUrl: selectedFile ? undefined : cleanUrl,
-          file: selectedFile ?? undefined,
-          messageType: mediaType,
-          mimeType: selectedFile?.type || undefined,
-          fileName: fileName.trim() || selectedFile?.name || undefined,
-          caption: caption.trim() || undefined,
-        })
-      ) {
+      if (await onSendMediaBatch(inputs)) {
+        pendingFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+        setPendingFiles([]);
         setMediaUrl("");
-        setSelectedFile(null);
         setFileName("");
         setCaption("");
         setAttachmentOpen(false);
@@ -1398,23 +1562,55 @@ function Composer({
       setSending(false);
     }
   };
+
   const connectionLabel = whatsappConnected
     ? "Connected to Whatsmiau"
     : liveMode
       ? "WhatsApp not connected"
       : "Demo workspace";
   return (
-    <div className="composer">
+    <div
+      className={`composer ${dragActive ? "drag-active" : ""}`}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDragActive(true);
+      }}
+      onDragLeave={() => setDragActive(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragActive(false);
+        addFiles(Array.from(event.dataTransfer.files));
+      }}
+      onPaste={(event) => {
+        const files = Array.from(event.clipboardData.files);
+        if (files.length) {
+          event.preventDefault();
+          addFiles(files);
+        }
+      }}
+    >
       <div className="composer-toolbar">
         <button
           className="composer-tool"
           type="button"
-          disabled={!liveMode || !onSendMedia || sending}
+          disabled={!liveMode || !onSendMediaBatch || sending}
           aria-label="Attach media"
           aria-expanded={attachmentOpen}
           onClick={() => setAttachmentOpen((current) => !current)}
         >
           <Paperclip size={15} /> Attach
+        </button>
+        <button
+          className="composer-tool"
+          type="button"
+          disabled={!liveMode || sending}
+          aria-label={recording ? "Stop recording" : "Record audio"}
+          onClick={() =>
+            void (recording ? recorderRef.current?.stop() : startRecording())
+          }
+        >
+          {recording ? <Square size={14} /> : <Mic size={15} />}{" "}
+          {recording ? "Stop" : "Voice"}
         </button>
         <button
           className="composer-tool"
@@ -1426,17 +1622,15 @@ function Composer({
           <Sparkles size={15} /> Insert AI draft
         </button>
         <span className="composer-hint">
-          Enter to send · Shift + Enter for newline
+          Enter to send Â· Shift + Enter for newline
         </span>
       </div>
       {attachmentOpen && (
-        <div className="attachment-panel" aria-label="Send an attachment">
+        <div className="attachment-panel" aria-label="Send attachments">
           <div className="attachment-panel-header">
             <div>
-              <strong>Send media through WhatsApp</strong>
-              <p>
-                Choose a local file up to 8 MB or provide a public HTTPS URL.
-              </p>
+              <strong>Send through WhatsApp</strong>
+              <p>Drop files, paste an image, or choose up to 10 files.</p>
             </div>
             <button
               className="icon-button subtle"
@@ -1447,88 +1641,110 @@ function Composer({
               <X size={15} />
             </button>
           </div>
+          <input
+            ref={fileInputRef}
+            hidden
+            type="file"
+            multiple
+            accept={accepted}
+            onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
+          />
+          <button
+            className="attachment-dropzone"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Paperclip size={16} /> Choose files or drop them here
+          </button>
+          {pendingFiles.length > 0 && (
+            <div className="attachment-preview-grid">
+              {pendingFiles.map((item) => (
+                <div className="attachment-preview-card" key={item.id}>
+                  {item.type === "image" ? (
+                    <img src={item.previewUrl} alt={item.file.name} />
+                  ) : item.type === "video" ? (
+                    <video muted preload="metadata" src={item.previewUrl} />
+                  ) : item.type === "audio" ? (
+                    <audio controls preload="metadata" src={item.previewUrl} />
+                  ) : (
+                    <FileText size={24} />
+                  )}
+                  <button
+                    className="icon-button subtle attachment-remove"
+                    type="button"
+                    aria-label={`Remove ${item.file.name}`}
+                    onClick={() => removeFile(item.id)}
+                  >
+                    <X size={13} />
+                  </button>
+                  <strong title={item.file.name}>{item.file.name}</strong>
+                  <small>
+                    {(item.file.size / 1024 / 1024).toFixed(1)} MB Â·{" "}
+                    {item.progress}%
+                  </small>
+                  <input
+                    aria-label={`Caption for ${item.file.name}`}
+                    value={item.caption}
+                    onChange={(event) =>
+                      setPendingFiles((current) =>
+                        current.map((entry) =>
+                          entry.id === item.id
+                            ? { ...entry, caption: event.target.value }
+                            : entry,
+                        ),
+                      )
+                    }
+                    placeholder="Caption (optional)"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           <div className="attachment-form-grid">
-            <label className="attachment-file-field">
-              Local file
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,audio/mpeg,audio/mp4,audio/ogg,audio/opus,application/pdf,text/plain"
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  setSelectedFile(file);
-                  if (!file) return;
-                  setFileName(file.name);
-                  setMediaUrl("");
-                  if (file.type.startsWith("image/")) setMediaType("image");
-                  else if (file.type.startsWith("video/"))
-                    setMediaType("video");
-                  else if (file.type.startsWith("audio/"))
-                    setMediaType("audio");
-                  else setMediaType("document");
-                }}
-              />
-              {selectedFile && (
-                <span>
-                  {selectedFile.name} ·{" "}
-                  {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
-                </span>
-              )}
-            </label>
-            <span className="attachment-or">or</span>
             <label>
-              Type
-              <select
+              Type for public URL
+              <Select
                 value={mediaType}
-                onChange={(event) =>
-                  setMediaType(event.target.value as typeof mediaType)
+                options={[
+                  { value: "image", label: "Image" },
+                  { value: "video", label: "Video" },
+                  { value: "audio", label: "Audio" },
+                  { value: "document", label: "Document" },
+                ]}
+                onChange={(value) =>
+                  setMediaType(value as ComposerMediaInput["messageType"])
                 }
-              >
-                <option value="image">Image</option>
-                <option value="video">Video</option>
-                <option value="audio">Audio</option>
-                <option value="document">Document</option>
-              </select>
+              />
             </label>
             <label>
-              Public HTTPS URL
+              Public HTTPS URL <span className="optional-label">optional</span>
               <input
                 value={mediaUrl}
-                disabled={Boolean(selectedFile)}
+                disabled={pendingFiles.length > 0}
                 onChange={(event) => setMediaUrl(event.target.value)}
                 placeholder="https://cdn.example.com/file.pdf"
                 inputMode="url"
               />
             </label>
             <label>
-              File name <span className="optional-label">optional</span>
+              URL file name <span className="optional-label">optional</span>
               <input
                 value={fileName}
+                disabled={pendingFiles.length > 0}
                 onChange={(event) => setFileName(event.target.value)}
                 placeholder="manual.pdf"
               />
             </label>
             <label>
-              Caption <span className="optional-label">optional</span>
+              URL caption <span className="optional-label">optional</span>
               <input
                 value={caption}
+                disabled={pendingFiles.length > 0}
                 onChange={(event) => setCaption(event.target.value)}
                 placeholder="What should the customer see?"
               />
             </label>
           </div>
-          {!selectedFile && !mediaUrl.trim() ? (
-            <p className="attachment-help">
-              Paste a URL reachable by the Mend API. Nothing is sent until you
-              confirm.
-            </p>
-          ) : (
-            !selectedFile &&
-            !/^https:\/\/[^\s]+$/i.test(mediaUrl.trim()) && (
-              <p className="field-error" role="alert">
-                Use a valid public HTTPS URL.
-              </p>
-            )
-          )}
           <div className="attachment-actions">
             <button
               className="button button-ghost"
@@ -1541,14 +1757,16 @@ function Composer({
               className="button button-primary"
               type="button"
               disabled={
-                (!selectedFile &&
+                (!pendingFiles.length &&
                   !/^https:\/\/[^\s]+$/i.test(mediaUrl.trim())) ||
-                Boolean(selectedFile && selectedFile.size > 8 * 1024 * 1024) ||
                 sending
               }
-              onClick={() => void submitAttachment()}
+              onClick={() => void submitAttachments()}
             >
-              <Send size={14} /> {sending ? "Sending…" : "Send attachment"}
+              <Send size={14} />{" "}
+              {sending
+                ? "Sendingâ€¦"
+                : `Send ${pendingFiles.length || 1} attachment${pendingFiles.length === 1 ? "" : "s"}`}
             </button>
           </div>
         </div>
@@ -1567,15 +1785,15 @@ function Composer({
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              void submit();
+              void submitText();
             }
           }}
           placeholder={
             automationState === "human_paused"
               ? "AI paused - resume in three dots"
               : aiMode === "safe_auto"
-                ? "AI is handling safe replies…"
-                : "Write a reply…"
+                ? "AI is handling safe repliesâ€¦"
+                : "Write a replyâ€¦"
           }
           rows={1}
         />
@@ -1583,7 +1801,7 @@ function Composer({
           className={`send-button ${!text.trim() || sending ? "disabled" : ""}`}
           type="button"
           disabled={!text.trim() || sending}
-          onClick={() => void submit()}
+          onClick={() => void submitText()}
           aria-label="Send message"
         >
           <Send size={16} />

@@ -21,6 +21,7 @@ import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { EmptyState, Skeleton } from "../../../shared/ui/ResourceState";
 import { StatusArticle } from "../../../shared/ui/DataDisplay";
+import { Select } from "../../../shared/ui/Select";
 
 function KnowledgeSkeletonPreview() {
   return (
@@ -347,18 +348,19 @@ export function KnowledgeWorkspacePage({
               </label>
               <label>
                 Status
-                <select
+                <Select
                   value={editing.status}
-                  onChange={(event) =>
+                  options={[
+                    { value: "draft", label: "Draft" },
+                    { value: "published", label: "Published for AI" },
+                  ]}
+                  onChange={(value) =>
                     setEditing((current) => ({
                       ...current,
-                      status: event.target.value as KnowledgeDraft["status"],
+                      status: value as KnowledgeDraft["status"],
                     }))
                   }
-                >
-                  <option value="draft">Draft</option>
-                  <option value="published">Published for AI</option>
-                </select>
+                />
               </label>
             </div>
             <div className="modal-footer">

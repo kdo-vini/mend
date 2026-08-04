@@ -26,6 +26,7 @@ import {
   type AuditLogListQuery,
   type WorkspacePort,
   type WorkspaceRole,
+  type MediaPort,
 } from "./contracts/api-ports.js";
 import {
   createServerSupabaseClient,
@@ -38,6 +39,9 @@ import {
 } from "./inbox-service.js";
 import { WhatsAppService, type WhatsAppProvider } from "./whatsapp-service.js";
 import { SupabaseMediaStorage, validateRemoteMediaUrl } from "./media.js";
+import { SupabaseMediaPipeline } from "./media-pipeline.js";
+import type { JobStore } from "./jobs.js";
+import type { WhatsmiauMessageJobPayload } from "./worker.js";
 import {
   WhatsmiauMessagingProvider,
   type MessagingInstance,
@@ -128,6 +132,7 @@ export interface SupabaseApiAdapterOptions {
   whatsMiau?: WhatsmiauProviderPort;
   aiProvider?: SupportAiProvider;
   codexService?: CodexService;
+  jobStore?: JobStore<WhatsmiauMessageJobPayload>;
 }
 
 export type SupabaseApiPortDependencies = {
@@ -139,6 +144,7 @@ export type SupabaseApiPortDependencies = {
   knowledge: KnowledgePort;
   repositories: RepositoryPort;
   codingRuns: CodingRunPort;
+  media: MediaPort;
 };
 
 function requireClient(
@@ -504,6 +510,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
     provider: WhatsAppProvider,
     private readonly ai: SupportAiProvider,
     mediaStorage?: SupabaseMediaStorage,
+    private readonly mediaPipeline?: SupabaseMediaPipeline,
   ) {
     this.inbox = new InboxService(
       new SupabaseInboxPort(client),
@@ -661,7 +668,98 @@ export class SupabaseConversationAdapter implements ConversationPort {
       actorUserId: context.userId,
       actorType: "user" as const,
     };
-    if (input.messageType === "text")
+    if (input.attachments?.length) {
+      if (!this.mediaPipeline) throw new Error("media_pipeline_not_configured");
+      if (input.attachments.length > 10)
+        throw new Error("media_batch_limit_exceeded");
+      for (const attachment of input.attachments) {
+        const asset = await this.mediaPipeline.findAsset(
+          context,
+          attachment.assetId,
+        );
+        if (!asset || asset.conversationId !== conversationId)
+          throw new Error("media_asset_not_found");
+        if (input.mediaBatchId && asset.batchId !== input.mediaBatchId)
+          throw new Error("media_batch_mismatch");
+        if (asset.status !== "ready")
+          throw new Error(`media_asset_${asset.status}`);
+        const requestKey = attachment.idempotencyKey;
+        const existingRequest = await this.client
+          .from("media_send_requests")
+          .select("id, status, attempts")
+          .eq("workspace_id", context.workspaceId)
+          .eq("idempotency_key", requestKey)
+          .maybeSingle();
+        if (existingRequest.error)
+          throw new Error(
+            `media_send_request:${existingRequest.error.message}`,
+          );
+        if (existingRequest.data?.status === "sent") continue;
+        const request = await this.client.from("media_send_requests").upsert(
+          {
+            workspace_id: context.workspaceId,
+            conversation_id: conversationId,
+            batch_id: input.mediaBatchId ?? asset.batchId ?? null,
+            asset_id: attachment.assetId,
+            idempotency_key: requestKey,
+            status: "sending",
+            attempts: Number(existingRequest.data?.attempts ?? 0) + 1,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "workspace_id,idempotency_key" },
+        );
+        if (request.error)
+          throw new Error(`media_send_request:${request.error.message}`);
+        const providerUrl = await this.mediaPipeline.signedUrl(
+          context,
+          attachment.assetId,
+          "provider",
+        );
+        try {
+          const sent = await this.whatsapp.sendMedia(actor, conversationId, {
+            media: providerUrl.url,
+            mimeType: asset.detectedMimeType ?? asset.declaredMimeType,
+            fileName: asset.originalFileName,
+            caption: attachment.caption,
+            mediaType: attachment.messageType,
+            mediaStoragePathOverride: asset.originalStoragePath,
+          });
+          await this.client
+            .from("messages")
+            .update({
+              media_asset_id: attachment.assetId,
+              media_batch_id: input.mediaBatchId ?? asset.batchId ?? null,
+              media_status: "ready",
+            })
+            .eq("id", sent.message.id)
+            .eq("workspace_id", context.workspaceId);
+          await this.client
+            .from("media_send_requests")
+            .update({
+              status: "sent",
+              provider_message_id: sent.providerMessageId,
+              message_id: sent.message.id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("workspace_id", context.workspaceId)
+            .eq("idempotency_key", requestKey);
+        } catch (error) {
+          await this.client
+            .from("media_send_requests")
+            .update({
+              status: "failed",
+              error_code:
+                error instanceof Error
+                  ? error.message.slice(0, 160)
+                  : "media_send_failed",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("workspace_id", context.workspaceId)
+            .eq("idempotency_key", requestKey);
+          throw error;
+        }
+      }
+    } else if (input.messageType === "text")
       await this.whatsapp.sendText(actor, conversationId, {
         text: input.text ?? "",
       });
@@ -1549,11 +1647,16 @@ export function createSupabaseApiAdapters(
   const workspaces = new SupabaseWorkspaceAdapter(client);
   const channels = new SupabaseChannelAdapter(client, provider);
   const mediaStorage = new SupabaseMediaStorage(client);
+  const media = new SupabaseMediaPipeline(
+    client,
+    options.jobStore as unknown as import("./media-pipeline.js").MediaJobEnqueuer,
+  );
   const conversations = new SupabaseConversationAdapter(
     client,
     provider,
     ai,
     mediaStorage,
+    media,
   );
   const issues = new SupabaseIssueAdapter(
     client,
@@ -1579,6 +1682,7 @@ export function createSupabaseApiAdapters(
     knowledge,
     repositories,
     codingRuns,
+    media,
   };
 }
 

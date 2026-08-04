@@ -1,6 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import {
-  ChevronDown,
   Filter,
   Keyboard,
   ListFilter,
@@ -21,6 +20,7 @@ import {
 } from "../../../shared/ui/DataDisplay";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
+import { Select } from "../../../shared/ui/Select";
 
 const issueStatuses: IssueStatus[] = [
   "Triage",
@@ -57,24 +57,15 @@ function FilterSelect({
 }) {
   return (
     <div className="select-control">
-      <select
-        aria-label={label}
+      <Select
+        ariaLabel={label}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => {
-          const optionValue =
-            typeof option === "string" ? option : option.value;
-          const optionLabel =
-            typeof option === "string" ? option : option.label;
-          return (
-            <option key={optionValue} value={optionValue}>
-              {optionLabel}
-            </option>
-          );
-        })}
-      </select>
-      <ChevronDown size={14} aria-hidden="true" />
+        options={options.map((option) => ({
+          value: typeof option === "string" ? option : option.value,
+          label: typeof option === "string" ? option : option.label,
+        }))}
+        onChange={onChange}
+      />
     </div>
   );
 }
@@ -179,19 +170,18 @@ export function IssuesPage({
         </label>
         <div className="select-control">
           <ListFilter size={14} />
-          <select
-            aria-label="Filter issues by status"
+          <Select
+            ariaLabel="Filter issues by status"
             value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value as IssueStatus | "All")
-            }
-          >
-            <option value="All">All statuses</option>
-            {issueStatuses.map((status) => (
-              <option key={status}>{status}</option>
-            ))}
-          </select>
-          <ChevronDown size={14} />
+            options={[
+              { value: "All", label: "All statuses" },
+              ...issueStatuses.map((status) => ({
+                value: status,
+                label: status,
+              })),
+            ]}
+            onChange={(value) => setStatusFilter(value as IssueStatus | "All")}
+          />
         </div>
         <FilterSelect
           label="Filter issues by priority"

@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { Upload } from "tus-js-client";
 import type { Database } from "../lib/database.types";
 import { supabase, type MendSupabaseClient } from "../lib/supabase";
 import type {
@@ -43,6 +44,23 @@ type RunRow = Tables["coding_runs"]["Row"];
 type KnowledgeRow = Tables["knowledge_articles"]["Row"];
 type AiDraftRow = Tables["ai_drafts"]["Row"];
 type AiDraftKnowledgeRow = Tables["ai_draft_knowledge"]["Row"];
+
+async function hydrateMessageMediaUrls(
+  client: MendSupabaseClient,
+  records: Message[],
+): Promise<Message[]> {
+  return Promise.all(
+    records.map(async (record) => {
+      if (!record.media_storage_path || record.media_remote_url) return record;
+      const signed = await client.storage
+        .from("private-media")
+        .createSignedUrl(record.media_storage_path, 900);
+      return signed.data?.signedUrl
+        ? { ...record, media_remote_url: signed.data.signedUrl }
+        : record;
+    }),
+  );
+}
 
 export interface LiveRepository {
   id: string;
@@ -268,8 +286,9 @@ export async function loadLiveWorkspace(
       .filter((issue) => issue.conversation_id)
       .map((issue) => [issue.conversation_id!, issue]),
   );
+  const hydratedMessages = await hydrateMessageMediaUrls(db, messages);
   const messagesByConversation = new Map<string, Message[]>();
-  for (const message of messages)
+  for (const message of hydratedMessages)
     messagesByConversation.set(message.conversation_id, [
       ...(messagesByConversation.get(message.conversation_id) ?? []),
       message,
@@ -362,6 +381,10 @@ export async function loadLiveConversationSnapshot(
     throw new LiveActionError(messagesResult.error.message);
   if (!conversationResult.data) return null;
 
+  const hydratedMessages = await hydrateMessageMediaUrls(
+    db,
+    messagesResult.data ?? [],
+  );
   const [contactResult, issueResult, aiStateResult, aiDraftResult] =
     await Promise.all([
       db
@@ -425,7 +448,7 @@ export async function loadLiveConversationSnapshot(
   return toUiConversation(
     conversationResult.data,
     contactResult.data ?? undefined,
-    messagesResult.data ?? [],
+    hydratedMessages,
     issueResult.data ?? undefined,
     aiStateResult.data ?? undefined,
     aiDraft,
@@ -669,6 +692,158 @@ export async function sendLiveMedia(input: {
         ...(input.idempotencyKey
           ? { idempotencyKey: input.idempotencyKey }
           : {}),
+      }),
+    },
+    input.workspaceId,
+  );
+}
+
+export interface LiveMediaUploadProgress {
+  loaded: number;
+  total: number;
+  percent: number;
+}
+
+export interface LiveMediaUploadInput {
+  workspaceId: string;
+  conversationId: string;
+  file: File;
+  batchId?: string;
+  onProgress?: (progress: LiveMediaUploadProgress) => void;
+  signal?: AbortSignal;
+}
+
+export async function uploadLiveMediaAsset(input: LiveMediaUploadInput) {
+  if (!mendApiBaseUrl) throw new LiveActionError("Mend API is not configured.");
+  const metadata = await apiRequest<{
+    assetId: string;
+    batchId: string;
+    path: string;
+    token: string;
+    bucket: string;
+    uploadEndpoint?: string;
+  }>(
+    "/api/media/uploads",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        conversationId: input.conversationId,
+        ...(input.batchId ? { batchId: input.batchId } : {}),
+        fileName: input.file.name,
+        declaredMimeType: input.file.type || undefined,
+        sizeBytes: input.file.size,
+      }),
+    },
+    input.workspaceId,
+  );
+  const client = requireClient(supabase);
+  const session = await client.auth.getSession();
+  const accessToken = session.data.session?.access_token;
+  if (!accessToken)
+    throw new LiveActionError("A signed-in session is required.");
+  const endpoint = metadata.uploadEndpoint;
+  if (!endpoint)
+    throw new LiveActionError("Media resumable upload is not configured.");
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const upload = new Upload(input.file, {
+        endpoint,
+        retryDelays: [0, 1000, 3000, 5000],
+        headers: { Authorization: `Bearer ${accessToken}` },
+        metadata: {
+          bucketName: metadata.bucket,
+          objectName: metadata.path,
+          contentType: input.file.type || "application/octet-stream",
+          cacheControl: "3600",
+        },
+        onError: reject,
+        onProgress: (loaded, total) =>
+          input.onProgress?.({
+            loaded,
+            total,
+            percent: total ? Math.round((loaded / total) * 100) : 0,
+          }),
+        onSuccess: () => resolve(),
+      });
+      if (input.signal) {
+        if (input.signal.aborted) {
+          void upload.abort();
+          reject(new LiveActionError("Upload cancelled."));
+          return;
+        }
+        input.signal.addEventListener(
+          "abort",
+          () => {
+            void upload.abort();
+            reject(new LiveActionError("Upload cancelled."));
+          },
+          { once: true },
+        );
+      }
+      upload.start();
+    });
+  } catch (error) {
+    if (input.signal?.aborted) throw error;
+    const fallback = await client.storage
+      .from(metadata.bucket)
+      .uploadToSignedUrl(metadata.path, metadata.token, input.file);
+    if (fallback.error) throw error;
+    input.onProgress?.({
+      loaded: input.file.size,
+      total: input.file.size,
+      percent: 100,
+    });
+  }
+  const completed = await apiRequest<{
+    assetId: string;
+    batchId: string;
+    status: string;
+  }>(
+    `/api/media/assets/${encodeURIComponent(metadata.assetId)}/complete`,
+    { method: "POST", body: JSON.stringify({}) },
+    input.workspaceId,
+  );
+  const deadline = Date.now() + 120_000;
+  while (completed.status === "processing" || completed.status === "uploaded") {
+    if (Date.now() > deadline)
+      throw new LiveActionError("Media processing timed out.");
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const status = await apiRequest<{
+      data: Array<{ id: string; status: string }>;
+    }>(
+      `/api/media/assets?ids=${encodeURIComponent(metadata.assetId)}`,
+      { method: "GET" },
+      input.workspaceId,
+    );
+    const asset = status.data[0];
+    if (!asset)
+      throw new LiveActionError("Uploaded media asset was not found.");
+    if (asset.status === "failed" || asset.status === "unsupported")
+      throw new LiveActionError(`Media processing failed: ${asset.status}.`);
+    if (asset.status === "ready") return { ...completed, ...asset };
+  }
+  return completed;
+}
+
+export async function sendLiveMediaBatch(input: {
+  workspaceId: string;
+  conversationId: string;
+  batchId: string;
+  attachments: Array<{
+    assetId: string;
+    messageType: "image" | "video" | "audio" | "document";
+    caption?: string;
+    idempotencyKey: string;
+  }>;
+}) {
+  return apiRequest<{ message?: unknown }>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        messageType: "document",
+        mediaBatchId: input.batchId,
+        attachments: input.attachments,
       }),
     },
     input.workspaceId,

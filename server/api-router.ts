@@ -27,6 +27,7 @@ import { registerIssueRoutes } from "./routes/issue-routes.js";
 import { registerKnowledgeRoutes } from "./routes/knowledge-routes.js";
 import { registerRepositoryRoutes } from "./routes/repository-routes.js";
 import { registerWorkspaceRoutes } from "./routes/workspace-routes.js";
+import { registerMediaRoutes } from "./routes/media-routes.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -147,6 +148,18 @@ const mediaInputErrorPrefixes = [
   "media_mime_type_required",
   "unsupported_media_input",
   "media_storage_not_configured",
+  "media_pipeline_disabled",
+  "media_file_name_required",
+  "media_size_invalid",
+  "media_checksum_invalid",
+  "media_batch_limit_exceeded",
+  "media_asset_not_found",
+  "media_batch_mismatch",
+  "media_asset_processing",
+  "media_asset_failed",
+  "media_asset_unsupported",
+  "media_type_unknown",
+  "unsafe_svg_blocked",
 ];
 
 function mediaApiError(error: unknown): ApiHttpError | null {
@@ -165,7 +178,14 @@ function mediaApiError(error: unknown): ApiHttpError | null {
   }
   if (
     reason.startsWith("media_upload_failed:") ||
-    reason.startsWith("media_signed_url_failed:")
+    reason.startsWith("media_signed_url_failed:") ||
+    reason.startsWith("media_upload_url:") ||
+    reason.startsWith("media_batch:") ||
+    reason.startsWith("media_asset:") ||
+    reason.startsWith("media_variants:") ||
+    reason.startsWith("media_variant:") ||
+    reason.startsWith("media_variant_upload:") ||
+    reason.startsWith("media_download:")
   ) {
     return new ApiHttpError(
       502,
@@ -297,6 +317,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
     }),
   );
   registerWorkspaceRoutes(routeContext);
+  registerMediaRoutes(routeContext);
   registerChannelRoutes(routeContext);
   registerConversationRoutes(routeContext);
   registerIssueRoutes(routeContext);
@@ -330,6 +351,11 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
               message: issue.message,
             })),
           },
+        });
+      const mediaError = mediaApiError(error);
+      if (mediaError)
+        return send(response, mediaError.status, {
+          error: { code: mediaError.code, message: mediaError.message },
         });
       // Do not reflect provider, database or authentication errors to clients.
       console.error("[mend-api] unhandled request error", error);

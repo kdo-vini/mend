@@ -157,9 +157,25 @@ export const sendMessageSchema = z
     fileName: z.string().trim().max(240).optional(),
     mimeType: z.string().trim().max(160).optional(),
     idempotencyKey: z.string().trim().min(8).max(200).optional(),
+    mediaBatchId: uuid.optional(),
+    assetId: uuid.optional(),
+    attachments: z
+      .array(
+        z
+          .object({
+            assetId: uuid,
+            messageType: z.enum(["image", "video", "audio", "document"]),
+            caption: z.string().trim().max(4_000).optional(),
+            idempotencyKey: z.string().trim().min(8).max(200),
+          })
+          .strict(),
+      )
+      .max(10)
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.attachments?.length) return;
     if (value.messageType === "text" && !value.text)
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -179,6 +195,37 @@ export const sendMessageSchema = z
         message: "mediaDataUrl must be a data URL",
       });
   });
+
+export const mediaUploadSchema = z
+  .object({
+    conversationId: uuid,
+    batchId: uuid.optional(),
+    fileName: z.string().trim().min(1).max(240),
+    declaredMimeType: z.string().trim().max(160).optional(),
+    sizeBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(200 * 1024 * 1024),
+    checksum: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/i)
+      .optional(),
+  })
+  .strict();
+
+export const mediaAssetIdsQuerySchema = z
+  .object({
+    ids: z.string().trim().min(1).max(8_000),
+  })
+  .strict();
+
+export const mediaPurposeSchema = z.enum([
+  "original",
+  "browser",
+  "provider",
+  "preview",
+]);
 export const aiDraftSchema = z
   .object({ instruction: z.string().trim().max(4_000).optional() })
   .strict();

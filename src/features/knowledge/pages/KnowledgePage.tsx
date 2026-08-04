@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import {
   BookOpen,
-  ChevronDown,
   ChevronRight,
   ListFilter,
   Plus,
@@ -14,6 +13,7 @@ import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { StatusArticle } from "../../../shared/ui/DataDisplay";
+import { Select } from "../../../shared/ui/Select";
 
 export function KnowledgePage() {
   const [articles, setArticles] = useState<KnowledgeArticle[]>(seedKnowledge);
@@ -74,18 +74,15 @@ export function KnowledgePage() {
         </label>
         <div className="select-control">
           <ListFilter size={14} />
-          <select
-            aria-label="Filter knowledge by category"
+          <Select
+            ariaLabel="Filter knowledge by category"
             value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
-          >
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category === "All" ? "All categories" : category}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={14} />
+            options={categories.map((category) => ({
+              value: category,
+              label: category === "All" ? "All categories" : category,
+            }))}
+            onChange={setCategoryFilter}
+          />
         </div>
       </div>
       <div className="knowledge-list">

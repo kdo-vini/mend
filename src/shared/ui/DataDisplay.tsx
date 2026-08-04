@@ -6,6 +6,7 @@ import type {
   KnowledgeArticle,
   Priority,
 } from "../../types";
+import { Select } from "./Select";
 
 export interface AssigneeOption {
   value: string;
@@ -61,35 +62,21 @@ export function InlineSelect({
   onChange: (value: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const selectRef = useRef<HTMLSelectElement>(null);
-  useEffect(() => {
-    if (editing) selectRef.current?.focus();
-  }, [editing]);
   if (editing)
     return (
-      <select
-        ref={selectRef}
+      <Select
         className="inline-edit-select"
-        aria-label={`Edit ${label}`}
         value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
+        ariaLabel={`Edit ${label}`}
+        options={options.map((option) => ({
+          value: typeof option === "string" ? option : option.value,
+          label: typeof option === "string" ? option : option.label,
+        }))}
+        onChange={(nextValue) => {
+          onChange(nextValue);
           setEditing(false);
         }}
-        onBlur={() => setEditing(false)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") setEditing(false);
-        }}
-      >
-        {options.map((option) => (
-          <option
-            key={typeof option === "string" ? option : option.value}
-            value={typeof option === "string" ? option : option.value}
-          >
-            {typeof option === "string" ? option : option.label}
-          </option>
-        ))}
-      </select>
+      />
     );
   return (
     <button

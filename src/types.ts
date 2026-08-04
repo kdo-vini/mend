@@ -47,7 +47,19 @@ export interface Message {
   type: MessageType;
   status?: "sending" | "sent" | "delivered" | "read" | "failed";
   aiGenerated?: boolean;
-  attachment?: { name: string; meta: string; url?: string };
+  mediaStatus?: "processing" | "ready" | "failed" | "unsupported";
+  mediaAssetId?: string;
+  mediaBatchId?: string;
+  attachment?: {
+    name: string;
+    meta: string;
+    url?: string;
+    previewUrl?: string;
+    sizeBytes?: number;
+    durationSeconds?: number;
+    width?: number;
+    height?: number;
+  };
   quotedMessageId?: string;
   deleted?: boolean;
 }

@@ -41,9 +41,9 @@ describe("media boundaries", () => {
   });
 
   it("applies the handoff limits by media category and blocks executable signatures", () => {
-    expect(mediaMaxBytesForMime("image/png")).toBe(10 * 1024 * 1024);
-    expect(mediaMaxBytesForMime("audio/ogg")).toBe(20 * 1024 * 1024);
-    expect(mediaMaxBytesForMime("video/mp4")).toBe(50 * 1024 * 1024);
+    expect(mediaMaxBytesForMime("image/png")).toBe(20 * 1024 * 1024);
+    expect(mediaMaxBytesForMime("audio/ogg")).toBe(25 * 1024 * 1024);
+    expect(mediaMaxBytesForMime("video/mp4")).toBe(100 * 1024 * 1024);
     expect(() =>
       validateMedia(Uint8Array.from([0x4d, 0x5a, 0x00]), "image/png"),
     ).toThrow("executable_media_blocked");

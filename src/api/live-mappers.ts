@@ -147,12 +147,29 @@ export function toUiMessage(record: MessageRecord): Message {
               ? "sent"
               : undefined,
     aiGenerated: record.ai_generated,
+    mediaStatus:
+      record.media_status === "processing" ||
+      record.media_status === "failed" ||
+      record.media_status === "unsupported"
+        ? record.media_status
+        : record.message_type === "text"
+          ? undefined
+          : "ready",
+    mediaAssetId: record.media_asset_id ?? undefined,
+    mediaBatchId: record.media_batch_id ?? undefined,
     attachment:
-      record.file_name || record.media_remote_url
+      record.file_name || record.media_remote_url || record.media_storage_path
         ? {
             name: record.file_name ?? "Attachment",
             meta: record.mime_type ?? "Attachment",
             url: record.media_remote_url ?? undefined,
+            ...(record.file_size !== null && record.file_size !== undefined
+              ? { sizeBytes: record.file_size }
+              : {}),
+            ...(record.duration_seconds !== null &&
+            record.duration_seconds !== undefined
+              ? { durationSeconds: record.duration_seconds }
+              : {}),
           }
         : undefined,
     quotedMessageId: record.quoted_message_id ?? undefined,

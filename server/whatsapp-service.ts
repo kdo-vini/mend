@@ -49,6 +49,8 @@ export interface SendMediaRequest {
   fileName?: string;
   caption?: string;
   mediaType?: "image" | "video" | "audio" | "document";
+  /** Existing private-media path used when the provider receives a temporary signed URL. */
+  mediaStoragePathOverride?: string;
   aiGenerated?: boolean;
 }
 
@@ -203,8 +205,13 @@ export class WhatsAppService {
       providerMessageId: id,
       messageType: type,
       caption: input.caption,
-      mediaStoragePath: storagePath,
-      mediaRemoteUrl: "url" in media ? media.url : undefined,
+      mediaStoragePath: input.mediaStoragePathOverride ?? storagePath,
+      mediaRemoteUrl:
+        input.mediaStoragePathOverride || storagePath
+          ? undefined
+          : "url" in media
+            ? media.url
+            : undefined,
       mimeType: "mimeType" in media ? media.mimeType : input.mimeType,
       fileName: "fileName" in media ? media.fileName : input.fileName,
       fileSize: "size" in media ? media.size : undefined,

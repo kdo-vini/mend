@@ -18,7 +18,7 @@ RUN test -n "$VITE_SUPABASE_URL" \
 
 FROM node:22-alpine AS production
 
-RUN apk add --no-cache git openssh-client
+RUN apk add --no-cache git openssh-client ffmpeg
 ENV NODE_ENV=production
 ENV PORT=8787
 WORKDIR /app
