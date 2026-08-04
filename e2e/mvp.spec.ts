@@ -8,6 +8,11 @@ async function openCommandPalette(page: Page, projectName: string) {
     .click();
 }
 
+async function chooseOption(page: Page, label: string, option: string) {
+  await page.getByRole("combobox", { name: label }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
 test("operator can move from inbox to issues and create an issue", async ({
   page,
 }, testInfo) => {
@@ -81,15 +86,17 @@ test("operator can assign and resolve a conversation", async ({
     .first()
     .click();
 
-  const assignee = page.getByLabel("Conversation assignee");
   if (testInfo.project.name === "mobile") {
     await page.getByRole("button", { name: "Conversation actions" }).click();
     await page
       .getByRole("menu")
-      .getByLabel("Conversation assignee")
-      .selectOption("Unassigned");
+      .getByRole("combobox", {
+        name: "Conversation assignee",
+      })
+      .click();
+    await page.getByRole("option", { name: "Unassigned", exact: true }).click();
   } else {
-    await assignee.selectOption("Unassigned");
+    await chooseOption(page, "Conversation assignee", "Unassigned");
   }
   await expect(page.getByRole("status")).toContainText("Assigned to");
 
@@ -107,9 +114,7 @@ test("operator can update an issue and return to its conversation", async ({
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Edit Status" }).click();
-  await page
-    .getByRole("combobox", { name: "Edit Status" })
-    .selectOption("Review");
+  await chooseOption(page, "Edit Status", "Review");
   await expect(page.getByText("Review", { exact: true }).first()).toBeVisible();
 
   await page

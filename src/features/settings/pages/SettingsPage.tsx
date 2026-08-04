@@ -49,6 +49,7 @@ import {
 import { supabase } from "../api";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
+import { Select } from "../../../shared/ui/Select";
 
 const triageIntentLabels: Record<TriageIntent, string> = {
   question: "Question / pricing",
@@ -812,19 +813,18 @@ export function SettingsPage({
                           drafts · {aiPolicy.counts.safe_auto} auto-reply
                         </p>
                       </div>
-                      <select
+                      <Select
                         className="settings-inline-select"
-                        aria-label="AI mode for live conversations"
+                        ariaLabel="AI mode for live conversations"
                         value={aiMode}
+                        options={[
+                          { value: "draft", label: "Copilot" },
+                          { value: "safe_auto", label: "Auto-reply" },
+                          { value: "off", label: "Manual" },
+                        ]}
                         disabled={aiSaving}
-                        onChange={(event) =>
-                          setAiMode(event.target.value as AiMode)
-                        }
-                      >
-                        <option value="draft">Copilot</option>
-                        <option value="safe_auto">Auto-reply</option>
-                        <option value="off">Manual</option>
-                      </select>
+                        onChange={(value) => setAiMode(value as AiMode)}
+                      />
                     </div>
                     <div className="settings-note">
                       <Sparkles size={14} />
@@ -857,49 +857,44 @@ export function SettingsPage({
                       {triageIntentValues.map((intent) => (
                         <label key={intent}>
                           {triageIntentLabels[intent]}
-                          <select
-                            aria-label={`AI route for ${triageIntentLabels[intent]}`}
+                          <Select
+                            ariaLabel={`AI route for ${triageIntentLabels[intent]}`}
                             value={aiPolicy.routes[intent]}
+                            options={aiTriageRouteValues.map((route) => ({
+                              value: route,
+                              label: triageRouteLabels[route],
+                            }))}
                             disabled={aiPolicySaving}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               updateAutomationRoute(
                                 intent,
-                                event.target.value as AiTriageRoute,
+                                value as AiTriageRoute,
                               )
                             }
-                          >
-                            {aiTriageRouteValues.map((route) => (
-                              <option key={route} value={route}>
-                                {triageRouteLabels[route]}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </label>
                       ))}
                       <label>
                         Unknown or unmatched fallback
-                        <select
-                          aria-label="AI fallback route"
+                        <Select
+                          ariaLabel="AI fallback route"
                           value={aiPolicy.fallbackRoute}
+                          options={aiTriageRouteValues.map((route) => ({
+                            value: route,
+                            label: triageRouteLabels[route],
+                          }))}
                           disabled={aiPolicySaving}
-                          onChange={(event) =>
+                          onChange={(value) =>
                             setAiPolicy((current) =>
                               current
                                 ? {
                                     ...current,
-                                    fallbackRoute: event.target
-                                      .value as AiTriageRoute,
+                                    fallbackRoute: value as AiTriageRoute,
                                   }
                                 : current,
                             )
                           }
-                        >
-                          {aiTriageRouteValues.map((route) => (
-                            <option key={route} value={route}>
-                              {triageRouteLabels[route]}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </label>
                     </div>
                     <div className="settings-form-grid automation-toggles">

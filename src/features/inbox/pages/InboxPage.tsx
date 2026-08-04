@@ -47,6 +47,7 @@ import { EmptyState } from "../../../shared/ui/ResourceState";
 import { useConversationScroll } from "../hooks/useConversationScroll";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PriorityDot } from "../../../shared/ui/DataDisplay";
+import { Select } from "../../../shared/ui/Select";
 
 interface AssigneeOption {
   value: string;
@@ -723,7 +724,6 @@ export function InboxPage({
             onResolve={() => void setConversationState("resolved")}
             onAssign={assignConversation}
             assigneeOptions={assigneeOptions}
-            assigneeLabel={assigneeLabel}
             aiDetailsOpen={aiDetailsOpen}
             onToggleAiDetails={() => setAiDetailsOpen((current) => !current)}
           />
@@ -1024,7 +1024,6 @@ function ConversationHeader({
   onResolve,
   onAssign,
   assigneeOptions,
-  assigneeLabel,
   aiDetailsOpen,
   onToggleAiDetails,
 }: {
@@ -1036,7 +1035,6 @@ function ConversationHeader({
   onResolve: () => void;
   onAssign: (assignee: string) => void;
   assigneeOptions: AssigneeOption[];
-  assigneeLabel: (value: string) => string;
   aiDetailsOpen: boolean;
   onToggleAiDetails: () => void;
 }) {
@@ -1069,20 +1067,12 @@ function ConversationHeader({
         <label className="conversation-assignee conversation-desktop-control">
           <UserRound size={13} aria-hidden="true" />
           <span className="sr-only">Conversation assignee</span>
-          <select
-            aria-label="Conversation assignee"
+          <Select
+            ariaLabel="Conversation assignee"
             value={conversation.assignee}
-            onChange={(event) => onAssign(event.target.value)}
-          >
-            {assigneeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <span className="conversation-assignee-label">
-            {assigneeLabel(conversation.assignee)}
-          </span>
+            options={assigneeOptions}
+            onChange={onAssign}
+          />
         </label>
         <span
           className={`mode-label ${conversation.aiMode} ${conversation.automationState}`}
@@ -1135,20 +1125,15 @@ function ConversationHeader({
               <label className="context-menu-select mobile-menu-control">
                 <UserRound size={14} />
                 <span>Assignee</span>
-                <select
-                  aria-label="Conversation assignee"
+                <Select
+                  ariaLabel="Conversation assignee"
                   value={conversation.assignee}
-                  onChange={(event) => {
-                    onAssign(event.target.value);
+                  options={assigneeOptions}
+                  onChange={(value) => {
+                    onAssign(value);
                     setMenuOpen(false);
                   }}
-                >
-                  {assigneeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
               <button
                 className="mobile-menu-control"
@@ -1477,17 +1462,16 @@ function Composer({
             <span className="attachment-or">or</span>
             <label>
               Type
-              <select
+              <Select
                 value={mediaType}
-                onChange={(event) =>
-                  setMediaType(event.target.value as typeof mediaType)
-                }
-              >
-                <option value="image">Image</option>
-                <option value="video">Video</option>
-                <option value="audio">Audio</option>
-                <option value="document">Document</option>
-              </select>
+                options={[
+                  { value: "image", label: "Image" },
+                  { value: "video", label: "Video" },
+                  { value: "audio", label: "Audio" },
+                  { value: "document", label: "Document" },
+                ]}
+                onChange={(value) => setMediaType(value as typeof mediaType)}
+              />
             </label>
             <label>
               Public HTTPS URL

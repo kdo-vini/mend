@@ -20,6 +20,7 @@ import {
 } from "../api/auth";
 import { supabase } from "../lib/supabase";
 import { ErrorState, LoadingState } from "../shared/ui/ResourceState";
+import { Select } from "../shared/ui/Select";
 
 type ProfileTab = "profile" | "workspace" | "subscription" | "security";
 
@@ -120,7 +121,7 @@ export function ProfileWorkspacePage({
         slug: nextWorkspace.slug,
         issuePrefix: nextWorkspace.issue_prefix,
         timezone: nextWorkspace.timezone,
-        defaultLanguage: nextWorkspace.default_language,
+        defaultLanguage: "pt-BR",
       });
       onIdentityUpdated({ name: nextName, email: nextUser.email ?? "" });
     } catch (reason) {
@@ -206,7 +207,7 @@ export function ProfileWorkspacePage({
         slug: updated.slug,
         issuePrefix: updated.issue_prefix,
         timezone: updated.timezone,
-        defaultLanguage: updated.default_language,
+        defaultLanguage: "pt-BR",
       });
       onWorkspaceUpdated(updated);
       onToast("Workspace saved");
@@ -415,36 +416,37 @@ export function ProfileWorkspacePage({
                 </label>
                 <label>
                   Timezone
-                  <select
+                  <Select
                     value={workspaceForm.timezone}
+                    options={[
+                      {
+                        value: "America/Sao_Paulo",
+                        label: "America/Sao_Paulo",
+                      },
+                      { value: "UTC", label: "UTC" },
+                    ]}
                     disabled={!canEditWorkspace}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setWorkspaceForm((current) => ({
                         ...current,
-                        timezone: event.target.value,
+                        timezone: value,
                       }))
                     }
-                  >
-                    <option value="America/Sao_Paulo">America/Sao_Paulo</option>
-                    <option value="UTC">UTC</option>
-                  </select>
+                  />
                 </label>
                 <label>
                   Default language
-                  <select
+                  <Select
                     value={workspaceForm.defaultLanguage}
+                    options={[{ value: "pt-BR", label: "Português (Brasil)" }]}
                     disabled={!canEditWorkspace}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setWorkspaceForm((current) => ({
                         ...current,
-                        defaultLanguage: event.target.value,
+                        defaultLanguage: value,
                       }))
                     }
-                  >
-                    <option value="pt-BR">Português (Brasil)</option>
-                    <option value="en">English</option>
-                    <option value="es">Español</option>
-                  </select>
+                  />
                 </label>
               </div>
               <div className="profile-actions">

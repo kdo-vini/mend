@@ -30,6 +30,7 @@ import type {
 import { listLiveRepositories } from "../api";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
+import { Select } from "../../../shared/ui/Select";
 
 export function CommandPalette({
   conversations,
@@ -307,11 +308,9 @@ export function CreateIssueDialog({
           <div className="form-row">
             <label>
               Type
-              <select
+              <Select
                 value={type}
-                onChange={(event) => setType(event.target.value as IssueType)}
-              >
-                {[
+                options={[
                   "Production Bug",
                   "Bug",
                   "Incident",
@@ -321,40 +320,34 @@ export function CreateIssueDialog({
                   "Commercial",
                   "Question",
                   "Other",
-                ].map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
+                ].map((item) => ({ value: item, label: item }))}
+                onChange={(value) => setType(value as IssueType)}
+              />
             </label>
             <label>
               Priority
-              <select
+              <Select
                 value={priority}
-                onChange={(event) =>
-                  setPriority(event.target.value as Priority)
-                }
-              >
-                {["Urgent", "High", "Medium", "Low", "No priority"].map(
-                  (item) => (
-                    <option key={item}>{item}</option>
-                  ),
+                options={["Urgent", "High", "Medium", "Low", "No priority"].map(
+                  (item) => ({ value: item, label: item }),
                 )}
-              </select>
+                onChange={(value) => setPriority(value as Priority)}
+              />
             </label>
           </div>
           <label>
             Link conversation{" "}
-            <select
+            <Select
               value={conversationId}
-              onChange={(event) => setConversationId(event.target.value)}
-            >
-              <option value="">Internal issue</option>
-              {conversations.map((conversation) => (
-                <option key={conversation.id} value={conversation.id}>
-                  {conversation.name} · {conversation.lastMessage.slice(0, 42)}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: "Internal issue" },
+                ...conversations.map((conversation) => ({
+                  value: conversation.id,
+                  label: `${conversation.name} · ${conversation.lastMessage.slice(0, 42)}`,
+                })),
+              ]}
+              onChange={setConversationId}
+            />
           </label>
           <div className="modal-note">
             <Info size={14} />
@@ -457,11 +450,9 @@ export function EditIssueDialog({
           <div className="form-row">
             <label>
               Type
-              <select
+              <Select
                 value={type}
-                onChange={(event) => setType(event.target.value as IssueType)}
-              >
-                {[
+                options={[
                   "Production Bug",
                   "Bug",
                   "Incident",
@@ -471,34 +462,26 @@ export function EditIssueDialog({
                   "Commercial",
                   "Question",
                   "Other",
-                ].map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
+                ].map((item) => ({ value: item, label: item }))}
+                onChange={(value) => setType(value as IssueType)}
+              />
             </label>
             <label>
               Priority
-              <select
+              <Select
                 value={priority}
-                onChange={(event) =>
-                  setPriority(event.target.value as Priority)
-                }
-              >
-                {["Urgent", "High", "Medium", "Low", "No priority"].map(
-                  (item) => (
-                    <option key={item}>{item}</option>
-                  ),
+                options={["Urgent", "High", "Medium", "Low", "No priority"].map(
+                  (item) => ({ value: item, label: item }),
                 )}
-              </select>
+                onChange={(value) => setPriority(value as Priority)}
+              />
             </label>
           </div>
           <label>
             Status
-            <select
+            <Select
               value={status}
-              onChange={(event) => setStatus(event.target.value as IssueStatus)}
-            >
-              {[
+              options={[
                 "Triage",
                 "Backlog",
                 "Todo",
@@ -506,10 +489,9 @@ export function EditIssueDialog({
                 "Review",
                 "Done",
                 "Canceled",
-              ].map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
+              ].map((item) => ({ value: item, label: item }))}
+              onChange={(value) => setStatus(value as IssueStatus)}
+            />
           </label>
         </div>
         <div className="modal-footer">
@@ -606,37 +588,34 @@ export function RunCodexDialog({
           </div>
           <label>
             Mode
-            <select
+            <Select
               value={mode}
-              onChange={(event) =>
-                setMode(event.target.value as CodingRun["mode"])
-              }
-            >
-              <option>Investigate</option>
-              <option>Propose fix</option>
-              <option>Implement fix</option>
-            </select>
+              options={["Investigate", "Propose fix", "Implement fix"].map(
+                (item) => ({ value: item, label: item }),
+              )}
+              onChange={(value) => setMode(value as CodingRun["mode"])}
+            />
           </label>
           <label>
             Repository
-            <select
-              aria-label="Codex repository"
+            <Select
+              ariaLabel="Codex repository"
               value={repositoryId}
+              options={[
+                ...(!liveMode
+                  ? [{ value: "demo-repository", label: "Demo repository" }]
+                  : []),
+                ...(liveMode && !repositories.length
+                  ? [{ value: "", label: "No repository configured" }]
+                  : []),
+                ...repositories.map((repository) => ({
+                  value: repository.id,
+                  label: `${repository.name} · ${repository.localPath}`,
+                })),
+              ]}
               disabled={!liveMode || loadingRepositories}
-              onChange={(event) => setRepositoryId(event.target.value)}
-            >
-              {!liveMode && (
-                <option value="demo-repository">Demo repository</option>
-              )}
-              {liveMode && !repositories.length && (
-                <option value="">No repository configured</option>
-              )}
-              {repositories.map((repository) => (
-                <option key={repository.id} value={repository.id}>
-                  {repository.name} · {repository.localPath}
-                </option>
-              ))}
-            </select>
+              onChange={setRepositoryId}
+            />
           </label>
           {liveMode && !loadingRepositories && !repositories.length && (
             <div className="inline-empty">
