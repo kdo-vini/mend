@@ -25,6 +25,16 @@ export class ErrorBoundary extends Component<
   }
 
   reset = () => {
+    if (
+      /dynamically imported module|module script/i.test(
+        this.state.message ?? "",
+      )
+    ) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("_mend_chunk_recovery", String(Date.now()));
+      window.location.replace(url.toString());
+      return;
+    }
     this.setState({ hasError: false, message: undefined });
   };
 
