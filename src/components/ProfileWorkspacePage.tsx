@@ -19,7 +19,7 @@ import {
   type WorkspaceWithRole,
 } from "../api/auth";
 import { supabase } from "../lib/supabase";
-import { ErrorState, LoadingState } from "./ResourceState";
+import { ErrorState, LoadingState } from "../shared/ui/ResourceState";
 
 type ProfileTab = "profile" | "workspace" | "subscription" | "security";
 

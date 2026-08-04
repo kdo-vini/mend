@@ -8,28 +8,21 @@ import express, {
 import { z, ZodError, type ZodType } from "zod";
 import {
   IssueService,
-  issueCreateSchema,
   issueListQuerySchema,
   issueSourceSchema,
   issueTypeSchema,
-  issuePatchSchema,
   issueIdentifierSchema,
-  issueCommentSchema,
-  issueEvidenceSchema,
-  issueLinkMessageSchema,
-  resolveAndNotifySchema,
   type IssuePort,
-  type IssueRequestContext,
 } from "./issue-service.js";
-import {
-  KnowledgeService,
-  knowledgeCreateSchema,
-  knowledgeListQuerySchema,
-  knowledgePatchSchema,
-  type KnowledgePort,
-  type KnowledgeRequestContext,
-} from "./knowledge-service.js";
+import { KnowledgeService, type KnowledgePort } from "./knowledge-service.js";
 import { validateRemoteMediaUrl } from "./media.js";
+import { registerChannelRoutes } from "./routes/channel-routes.js";
+import { registerCodingRunRoutes } from "./routes/coding-run-routes.js";
+import { registerConversationRoutes } from "./routes/conversation-routes.js";
+import { registerIssueRoutes } from "./routes/issue-routes.js";
+import { registerKnowledgeRoutes } from "./routes/knowledge-routes.js";
+import { registerRepositoryRoutes } from "./routes/repository-routes.js";
+import { registerWorkspaceRoutes } from "./routes/workspace-routes.js";
 
 export type WorkspaceRole = "owner" | "admin" | "agent" | "viewer";
 
@@ -612,13 +605,63 @@ function mediaApiError(error: unknown): ApiHttpError | null {
   return null;
 }
 
+export interface ApiRouteModuleContext {
+  router: Router;
+  dependencies: ApiRouterDependencies;
+  access(
+    response: Response,
+    workspaceId: string,
+    minimumRole?: WorkspaceRole,
+  ): Promise<RequestContext>;
+  scoped(
+    request: Request,
+    response: Response,
+    minimumRole?: WorkspaceRole,
+  ): Promise<RequestContext>;
+  pathId(request: Request): string;
+  pathIssue(request: Request): string;
+  parse<T>(schema: ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T;
+  asyncRoute: typeof asyncRoute;
+  send: typeof send;
+  noContent: typeof noContent;
+  requireFound: typeof requireFound;
+  mediaApiError: typeof mediaApiError;
+  issueService: IssueService;
+  knowledgeService: KnowledgeService;
+  userFrom: typeof userFrom;
+  ApiHttpError: typeof ApiHttpError;
+  uuid: typeof uuid;
+  schemas: {
+    workspaceParamSchema: typeof workspaceParamSchema;
+    workspaceCreateSchema: typeof workspaceCreateSchema;
+    workspacePatchSchema: typeof workspacePatchSchema;
+    workspaceMemberListQuerySchema: typeof workspaceMemberListQuerySchema;
+    workspaceMemberCreateSchema: typeof workspaceMemberCreateSchema;
+    workspaceMemberRolePatchSchema: typeof workspaceMemberRolePatchSchema;
+    auditLogListQuerySchema: typeof auditLogListQuerySchema;
+    channelListQuerySchema: typeof channelListQuerySchema;
+    channelCreateSchema: typeof channelCreateSchema;
+    conversationListQuerySchema: typeof conversationListQuerySchema;
+    conversationPatchSchema: typeof conversationPatchSchema;
+    conversationSnoozeSchema: typeof conversationSnoozeSchema;
+    conversationAiPauseSchema: typeof conversationAiPauseSchema;
+    sendMessageSchema: typeof sendMessageSchema;
+    aiDraftSchema: typeof aiDraftSchema;
+    issueListApiQuerySchema: typeof issueListApiQuerySchema;
+    repositoryListQuerySchema: typeof repositoryListQuerySchema;
+    repositoryInputSchema: typeof repositoryInputSchema;
+    repositoryPatchSchema: typeof repositoryPatchSchema;
+    codingRunListQuerySchema: typeof codingRunListQuerySchema;
+    codingRunCreateSchema: typeof codingRunCreateSchema;
+  };
+}
+
 export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   const router = express.Router();
   const issueService = new IssueService(dependencies.issues);
   const knowledgeService = new KnowledgeService(dependencies.knowledge);
 
   const access = async (
-    request: Request,
     response: Response,
     workspaceId: string,
     minimumRole: WorkspaceRole = "viewer",
@@ -655,10 +698,53 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
     response: Response,
     minimumRole: WorkspaceRole = "viewer",
   ): Promise<RequestContext> =>
-    access(request, response, workspaceIdFromRequest(request), minimumRole);
+    access(response, workspaceIdFromRequest(request), minimumRole);
   const pathId = (request: Request) => parse(idParamSchema, request.params).id;
   const pathIssue = (request: Request) =>
     parse(issueParamSchema, request.params).identifier;
+
+  const routeContext: ApiRouteModuleContext = {
+    router,
+    dependencies,
+    access,
+    scoped,
+    pathId,
+    pathIssue,
+    parse,
+    asyncRoute,
+    send,
+    noContent,
+    requireFound,
+    mediaApiError,
+    issueService,
+    knowledgeService,
+    userFrom,
+    ApiHttpError,
+    uuid,
+    schemas: {
+      workspaceParamSchema,
+      workspaceCreateSchema,
+      workspacePatchSchema,
+      workspaceMemberListQuerySchema,
+      workspaceMemberCreateSchema,
+      workspaceMemberRolePatchSchema,
+      auditLogListQuerySchema,
+      channelListQuerySchema,
+      channelCreateSchema,
+      conversationListQuerySchema,
+      conversationPatchSchema,
+      conversationSnoozeSchema,
+      conversationAiPauseSchema,
+      sendMessageSchema,
+      aiDraftSchema,
+      issueListApiQuerySchema,
+      repositoryListQuerySchema,
+      repositoryInputSchema,
+      repositoryPatchSchema,
+      codingRunListQuerySchema,
+      codingRunCreateSchema,
+    },
+  };
 
   router.use(
     asyncRoute(async (request, response, next) => {
@@ -685,797 +771,13 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
       send(response, 200, { user });
     }),
   );
-
-  router.get(
-    "/api/workspaces",
-    asyncRoute(async (_request, response) => {
-      const user = userFrom(response);
-      send(response, 200, {
-        data: await dependencies.workspaces.list(user.id),
-      });
-    }),
-  );
-  router.post(
-    "/api/workspaces",
-    asyncRoute(async (request, response) => {
-      const user = userFrom(response);
-      send(
-        response,
-        201,
-        await dependencies.workspaces.create(
-          user.id,
-          parse(workspaceCreateSchema, request.body),
-        ),
-      );
-    }),
-  );
-  router.get(
-    "/api/workspaces/:id",
-    asyncRoute(async (request, response) => {
-      const workspaceId = parse(workspaceParamSchema, request.params).id;
-      const context = await access(request, response, workspaceId);
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.workspaces.get(context, workspaceId),
-          "workspace",
-        ),
-      );
-    }),
-  );
-  router.patch(
-    "/api/workspaces/:id",
-    asyncRoute(async (request, response) => {
-      const workspaceId = parse(workspaceParamSchema, request.params).id;
-      const context = await access(request, response, workspaceId, "admin");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.workspaces.update(
-            context,
-            workspaceId,
-            parse(workspacePatchSchema, request.body),
-          ),
-          "workspace",
-        ),
-      );
-    }),
-  );
-  router.get(
-    "/api/workspaces/:id/members",
-    asyncRoute(async (request, response) => {
-      const workspaceId = parse(workspaceParamSchema, request.params).id;
-      const context = await access(request, response, workspaceId);
-      send(response, 200, {
-        data: await dependencies.workspaces.listMembers(
-          context,
-          parse(workspaceMemberListQuerySchema, request.query),
-        ),
-      });
-    }),
-  );
-  router.post(
-    "/api/workspaces/:id/members",
-    asyncRoute(async (request, response) => {
-      const workspaceId = parse(workspaceParamSchema, request.params).id;
-      const context = await access(request, response, workspaceId, "admin");
-      send(
-        response,
-        201,
-        await dependencies.workspaces.addMember(
-          context,
-          parse(workspaceMemberCreateSchema, request.body),
-        ),
-      );
-    }),
-  );
-  router.patch(
-    "/api/workspaces/:id/members/:userId",
-    asyncRoute(async (request, response) => {
-      const params = parse(
-        z.object({ id: uuid, userId: uuid }).strict(),
-        request.params,
-      );
-      const context = await access(request, response, params.id, "admin");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.workspaces.updateMemberRole(
-            context,
-            params.userId,
-            parse(workspaceMemberRolePatchSchema, request.body),
-          ),
-          "workspace_member",
-        ),
-      );
-    }),
-  );
-  router.delete(
-    "/api/workspaces/:id/members/:userId",
-    asyncRoute(async (request, response) => {
-      const params = parse(
-        z.object({ id: uuid, userId: uuid }).strict(),
-        request.params,
-      );
-      const context = await access(request, response, params.id, "admin");
-      if (!(await dependencies.workspaces.removeMember(context, params.userId)))
-        throw new ApiHttpError(
-          404,
-          "workspace_member_not_found",
-          "workspace member was not found",
-        );
-      noContent(response);
-    }),
-  );
-  router.get(
-    "/api/workspaces/:id/audit-log",
-    asyncRoute(async (request, response) => {
-      const workspaceId = parse(workspaceParamSchema, request.params).id;
-      const context = await access(request, response, workspaceId, "admin");
-      send(response, 200, {
-        data: await dependencies.workspaces.listAuditLog(
-          context,
-          parse(auditLogListQuerySchema, request.query),
-        ),
-      });
-    }),
-  );
-
-  router.get(
-    "/api/channels",
-    asyncRoute(async (request, response) => {
-      send(response, 200, {
-        data: await dependencies.channels.list(
-          await scoped(request, response),
-          parse(channelListQuerySchema, request.query),
-        ),
-      });
-    }),
-  );
-  router.post(
-    "/api/channels/whatsmiau",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        201,
-        await dependencies.channels.createWhatsmiau(
-          await scoped(request, response, "agent"),
-          parse(channelCreateSchema, request.body),
-        ),
-      );
-    }),
-  );
-  router.get(
-    "/api/channels/:id",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response);
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.channels.get(context, pathId(request)),
-          "channel",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/channels/:id/connect",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.channels.connect(context, pathId(request)),
-          "channel",
-        ),
-      );
-    }),
-  );
-  router.get(
-    "/api/channels/:id/qr",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response);
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.channels.qr(context, pathId(request)),
-          "qr",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/channels/:id/disconnect",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.channels.disconnect(context, pathId(request)),
-          "channel",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/channels/:id/refresh",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.channels.refresh(context, pathId(request)),
-          "channel",
-        ),
-      );
-    }),
-  );
-
-  router.get(
-    "/api/conversations",
-    asyncRoute(async (request, response) => {
-      send(response, 200, {
-        data: await dependencies.conversations.list(
-          await scoped(request, response),
-          parse(conversationListQuerySchema, request.query),
-        ),
-      });
-    }),
-  );
-  router.get(
-    "/api/conversations/:id",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response);
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.conversations.get(context, pathId(request)),
-          "conversation",
-        ),
-      );
-    }),
-  );
-  router.patch(
-    "/api/conversations/:id",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.conversations.update(
-            context,
-            pathId(request),
-            parse(conversationPatchSchema, request.body),
-          ),
-          "conversation",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/conversations/:id/read",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.conversations.markRead(context, pathId(request)),
-          "conversation",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/conversations/:id/snooze",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.conversations.snooze(
-            context,
-            pathId(request),
-            parse(conversationSnoozeSchema, request.body),
-          ),
-          "conversation",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/conversations/:id/resolve",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.conversations.resolve(context, pathId(request)),
-          "conversation",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/conversations/:id/ai/pause",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.conversations.pauseAi(
-            context,
-            pathId(request),
-            parse(conversationAiPauseSchema, request.body ?? {}).reason,
-          ),
-          "conversation",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/conversations/:id/ai/resume",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.conversations.resumeAi(context, pathId(request)),
-          "conversation",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/conversations/:id/messages",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      const input = parse(sendMessageSchema, request.body);
-      try {
-        send(
-          response,
-          201,
-          requireFound(
-            await dependencies.conversations.sendMessage(
-              context,
-              pathId(request),
-              input,
-            ),
-            "message",
-          ),
-        );
-      } catch (error) {
-        throw mediaApiError(error) ?? error;
-      }
-    }),
-  );
-  router.post(
-    "/api/conversations/:id/ai-draft",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.conversations.aiDraft(
-            context,
-            pathId(request),
-            parse(aiDraftSchema, request.body ?? {}),
-          ),
-          "ai_draft",
-        ),
-      );
-    }),
-  );
-
-  router.get(
-    "/api/issues",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response);
-      send(response, 200, {
-        data: await dependencies.issues.list(
-          context as IssueRequestContext,
-          parse(issueListApiQuerySchema, request.query),
-        ),
-      });
-    }),
-  );
-  router.post(
-    "/api/issues",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        201,
-        await issueService.create(
-          context as IssueRequestContext,
-          parse(issueCreateSchema, request.body),
-        ),
-      );
-    }),
-  );
-  router.get(
-    "/api/issues/:identifier",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response);
-      send(
-        response,
-        200,
-        requireFound(
-          await issueService.get(
-            context as IssueRequestContext,
-            pathIssue(request),
-          ),
-          "issue",
-        ),
-      );
-    }),
-  );
-  router.get(
-    "/api/issues/:identifier/history",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response);
-      const value = requireFound(
-        await issueService.get(
-          context as IssueRequestContext,
-          pathIssue(request),
-        ),
-        "issue",
-      ) as Record<string, unknown>;
-      send(response, 200, {
-        issue: value,
-        comments: Array.isArray(value.comments) ? value.comments : [],
-        evidence: Array.isArray(value.evidence) ? value.evidence : [],
-        timeline: Array.isArray(value.timeline) ? value.timeline : [],
-      });
-    }),
-  );
-  router.patch(
-    "/api/issues/:identifier",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await issueService.update(
-            context as IssueRequestContext,
-            pathIssue(request),
-            parse(issuePatchSchema, request.body),
-          ),
-          "issue",
-        ),
-      );
-    }),
-  );
-  router.delete(
-    "/api/issues/:identifier",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "admin");
-      if (
-        !(await issueService.remove(
-          context as IssueRequestContext,
-          pathIssue(request),
-        ))
-      )
-        throw new ApiHttpError(404, "issue_not_found", "issue was not found");
-      noContent(response);
-    }),
-  );
-  router.post(
-    "/api/issues/:identifier/comments",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        201,
-        requireFound(
-          await issueService.addComment(
-            context as IssueRequestContext,
-            pathIssue(request),
-            parse(issueCommentSchema, request.body),
-          ),
-          "issue_comment",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/issues/:identifier/evidence",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        201,
-        requireFound(
-          await issueService.addEvidence(
-            context as IssueRequestContext,
-            pathIssue(request),
-            parse(issueEvidenceSchema, request.body),
-          ),
-          "issue_evidence",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/issues/:identifier/link-message",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        201,
-        requireFound(
-          await issueService.linkMessage(
-            context as IssueRequestContext,
-            pathIssue(request),
-            parse(issueLinkMessageSchema, request.body),
-          ),
-          "issue_message_link",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/issues/:identifier/resolve-and-notify",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await issueService.resolveAndNotify(
-            context as IssueRequestContext,
-            pathIssue(request),
-            parse(resolveAndNotifySchema, request.body ?? {}),
-          ),
-          "issue",
-        ),
-      );
-    }),
-  );
-
-  router.get(
-    "/api/knowledge",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response);
-      send(response, 200, {
-        data: await knowledgeService.list(
-          context as KnowledgeRequestContext,
-          parse(knowledgeListQuerySchema, request.query),
-        ),
-      });
-    }),
-  );
-  router.post(
-    "/api/knowledge",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        201,
-        await knowledgeService.create(
-          context as KnowledgeRequestContext,
-          parse(knowledgeCreateSchema, request.body),
-        ),
-      );
-    }),
-  );
-  router.patch(
-    "/api/knowledge/:id",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "agent");
-      send(
-        response,
-        200,
-        requireFound(
-          await knowledgeService.update(
-            context as KnowledgeRequestContext,
-            pathId(request),
-            parse(knowledgePatchSchema, request.body),
-          ),
-          "knowledge_article",
-        ),
-      );
-    }),
-  );
-  router.delete(
-    "/api/knowledge/:id",
-    asyncRoute(async (request, response) => {
-      const context = await scoped(request, response, "admin");
-      if (
-        !(await knowledgeService.remove(
-          context as KnowledgeRequestContext,
-          pathId(request),
-        ))
-      )
-        throw new ApiHttpError(
-          404,
-          "knowledge_article_not_found",
-          "knowledge article was not found",
-        );
-      noContent(response);
-    }),
-  );
-
-  router.get(
-    "/api/repositories",
-    asyncRoute(async (request, response) => {
-      send(response, 200, {
-        data: await dependencies.repositories.list(
-          await scoped(request, response),
-          parse(repositoryListQuerySchema, request.query),
-        ),
-      });
-    }),
-  );
-  router.post(
-    "/api/repositories",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        201,
-        await dependencies.repositories.create(
-          await scoped(request, response, "admin"),
-          parse(repositoryInputSchema, request.body),
-        ),
-      );
-    }),
-  );
-  router.patch(
-    "/api/repositories/:id",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.repositories.update(
-            await scoped(request, response, "admin"),
-            pathId(request),
-            parse(repositoryPatchSchema, request.body),
-          ),
-          "repository",
-        ),
-      );
-    }),
-  );
-  router.delete(
-    "/api/repositories/:id",
-    asyncRoute(async (request, response) => {
-      if (
-        !(await dependencies.repositories.remove(
-          await scoped(request, response, "admin"),
-          pathId(request),
-        ))
-      )
-        throw new ApiHttpError(
-          404,
-          "repository_not_found",
-          "repository was not found",
-        );
-      noContent(response);
-    }),
-  );
-
-  router.get(
-    "/api/coding-runs",
-    asyncRoute(async (request, response) => {
-      send(response, 200, {
-        data: await dependencies.codingRuns.list(
-          await scoped(request, response),
-          parse(codingRunListQuerySchema, request.query),
-        ),
-      });
-    }),
-  );
-  router.post(
-    "/api/issues/:identifier/coding-runs",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        201,
-        await dependencies.codingRuns.create(
-          await scoped(request, response, "agent"),
-          pathIssue(request),
-          parse(codingRunCreateSchema, request.body),
-        ),
-      );
-    }),
-  );
-  router.get(
-    "/api/coding-runs/:id",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.codingRuns.get(
-            await scoped(request, response),
-            pathId(request),
-          ),
-          "coding_run",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/coding-runs/:id/cancel",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.codingRuns.cancel(
-            await scoped(request, response, "agent"),
-            pathId(request),
-          ),
-          "coding_run",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/coding-runs/:id/approve",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.codingRuns.approve(
-            await scoped(request, response, "agent"),
-            pathId(request),
-          ),
-          "coding_run",
-        ),
-      );
-    }),
-  );
-  router.post(
-    "/api/coding-runs/:id/reject",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.codingRuns.reject(
-            await scoped(request, response, "agent"),
-            pathId(request),
-          ),
-          "coding_run",
-        ),
-      );
-    }),
-  );
-  router.get(
-    "/api/coding-runs/:id/patch",
-    asyncRoute(async (request, response) => {
-      send(
-        response,
-        200,
-        requireFound(
-          await dependencies.codingRuns.patch(
-            await scoped(request, response),
-            pathId(request),
-          ),
-          "coding_run_patch",
-        ),
-      );
-    }),
-  );
+  registerWorkspaceRoutes(routeContext);
+  registerChannelRoutes(routeContext);
+  registerConversationRoutes(routeContext);
+  registerIssueRoutes(routeContext);
+  registerKnowledgeRoutes(routeContext);
+  registerRepositoryRoutes(routeContext);
+  registerCodingRunRoutes(routeContext);
 
   router.use(
     (

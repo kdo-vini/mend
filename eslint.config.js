@@ -35,6 +35,24 @@ export default tseslint.config(
     },
   },
   {
+    files: [
+      "src/features/**/pages/**/*.{ts,tsx}",
+      "src/features/**/components/**/*.{ts,tsx}",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            "**/lib/supabase",
+            "**/api/live-actions",
+            "**/api/live-mappers",
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["server/**/*.ts"],
     languageOptions: { globals: { ...globals.node, ...globals.es2022 } },
     rules: {

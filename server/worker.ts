@@ -95,10 +95,7 @@ export function eventDedupeKey(payload: unknown): string {
 export class DebouncedWhatsmiauQueue {
   private readonly queue: DebouncedJobQueue<WhatsmiauMessageJobPayload>;
 
-  constructor(
-    private readonly store: JobStore<WhatsmiauMessageJobPayload>,
-    debounceMs = 1_000,
-  ) {
+  constructor(store: JobStore<WhatsmiauMessageJobPayload>, debounceMs = 1_000) {
     this.queue = new DebouncedJobQueue(store, debounceMs);
   }
 
