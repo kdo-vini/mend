@@ -325,6 +325,22 @@ async function markConnectionEvent(
     throw new Error(`connection_update_failed:${error.code ?? "database"}`);
 }
 
+async function isAiGeneratedProviderMessage(
+  client: ReturnType<typeof createClient>,
+  binding: { workspace_id: string },
+  providerMessageId: string,
+): Promise<boolean> {
+  const { data, error } = await client
+    .from("ai_outbound_messages")
+    .select("id")
+    .eq("workspace_id", binding.workspace_id)
+    .eq("provider_message_id", providerMessageId)
+    .maybeSingle();
+  if (error)
+    throw new Error(`ai_outbound_lookup_failed:${error.code ?? "database"}`);
+  return Boolean(data);
+}
+
 async function recordAndIngest(
   client: ReturnType<typeof createClient>,
   binding: { id: string; workspace_id: string },
@@ -334,6 +350,13 @@ async function recordAndIngest(
   const now = new Date();
   const workerId = `edge-whatsmiau:${crypto.randomUUID()}`;
   const dedupeKey = `whatsmiau:${message.instanceName}:${message.providerMessageId}`;
+  const aiGenerated = await isAiGeneratedProviderMessage(
+    client,
+    binding,
+    message.providerMessageId,
+  );
+  const senderType =
+    message.direction === "inbound" ? "contact" : aiGenerated ? "ai" : "system";
   const { data: job, error: jobError } = await client
     .from("jobs")
     .insert({
@@ -367,7 +390,7 @@ async function recordAndIngest(
       p_provider_contact_id: message.remoteJid,
       p_provider_message_id: message.providerMessageId,
       p_direction: message.direction,
-      p_sender_type: message.direction === "inbound" ? "contact" : "system",
+      p_sender_type: senderType,
       p_message_type: message.messageType,
       p_text: message.text ?? null,
       p_caption: message.caption ?? null,
@@ -379,15 +402,16 @@ async function recordAndIngest(
       p_duration_seconds: message.durationSeconds ?? null,
       p_quoted_provider_message_id: message.quotedProviderMessageId ?? null,
       p_provider_timestamp: message.providerTimestamp ?? null,
-      p_ai_generated: false,
+      p_ai_generated: aiGenerated,
       p_sent_by_user_id: null,
-      p_actor_type: message.direction === "inbound" ? "contact" : "system",
+      p_actor_type: senderType,
       p_actor_user_id: null,
       p_timeline_key: `whatsapp:${binding.id}:${message.providerMessageId}`,
       p_metadata: {
         source: "whatsmiau",
         direction: message.direction,
         message_type: message.messageType,
+        ai_generated: aiGenerated,
       },
     });
     if (error)

@@ -85,8 +85,8 @@ Uma conversa em `human_paused` nunca pode receber auto-reply, mesmo que `ai_mode
 - [x] Criar migration para os campos de controle humano em `conversation_ai_state`.
 - [x] Criar funções server-side para pausar e retomar a IA de uma conversa.
 - [x] Ao enviar mensagem pelo Mend, marcar a conversa como `human_paused`.
-- [ ] Ao receber mensagem outbound do WhatsApp com `fromMe`, marcar como intervenção humana, exceto quando a mensagem tiver sido enviada pelo worker da IA.
-- [ ] Garantir que mensagens com `ai_generated = true` não pausam a IA.
+- [x] Ao receber mensagem outbound do WhatsApp com `fromMe`, marcar como intervenção humana, exceto quando a mensagem tiver sido enviada pelo worker da IA.
+- [x] Garantir que mensagens com `ai_generated = true` não pausam a IA.
 - [ ] Salvar o motivo: `human_message`, `customer_requested_human`, `unsafe_intent`, `low_confidence` ou `manual_pause`.
 - [x] Fazer o worker revalidar o estado imediatamente antes de qualquer futuro envio automático.
 - [ ] Criar operação idempotente para evitar duas pausas concorrentes.
