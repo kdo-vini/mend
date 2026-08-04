@@ -167,6 +167,9 @@ class SendStageAutomation implements LiveWorkerAutomation {
 class FakeSupabaseHandoff {
   state: Record<string, unknown> | null = null;
   issue: Record<string, unknown> | null = null;
+  policy: Record<string, unknown> | null = null;
+  notifications: Record<string, unknown>[] = [];
+  draftId = "draft-1";
 
   from(table: string) {
     const builder = {
@@ -178,14 +181,21 @@ class FakeSupabaseHandoff {
       maybeSingle: async () => {
         if (table === "conversations")
           return { data: { ai_mode: "draft" }, error: null };
+        if (table === "workspaces")
+          return { data: { ai_policy_json: this.policy }, error: null };
         if (table === "conversation_ai_state")
           return { data: this.state, error: null };
+        if (table === "ai_drafts")
+          return { data: { id: this.draftId }, error: null };
+        if (table === "ai_draft_knowledge")
+          return { data: { draft_id: this.draftId }, error: null };
         if (table === "issues") return { data: this.issue, error: null };
         return { data: null, error: null };
       },
       insert: (values: Record<string, unknown>) => {
         if (table === "issues")
           this.issue = { id: "issue-1", identifier: values.identifier };
+        if (table === "notifications") this.notifications.push(values);
         return builder;
       },
       update: () => builder,
@@ -491,6 +501,117 @@ describe("live Whatsmiau worker", () => {
       issue: { identifier: "TEC-1", operation: "created" },
     });
     expect(result).not.toHaveProperty("draft");
+    expect(provider.draftReply).not.toHaveBeenCalled();
+  });
+
+  it("answers a known question without creating an issue", async () => {
+    const client = new FakeSupabaseHandoff();
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply: vi.fn(async () => "O preço está no artigo publicado."),
+      triage: vi.fn(async () =>
+        JSON.stringify({
+          intent: "billing",
+          priority: "low",
+          confidence: 0.98,
+          summary: "Customer asks about ZeloPDV pricing",
+          unsafe: false,
+        }),
+      ),
+    };
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+    );
+    const persisted: InboxMessageRecord = {
+      id: "message-price",
+      workspaceId: binding.workspaceId,
+      conversationId: "conversation-price",
+      contactId: "contact-1",
+      providerMessageId: message.providerMessageId,
+      direction: "inbound",
+      messageType: "text",
+      unreadCount: 1,
+      inserted: true,
+    };
+    const result = await automation.process({
+      binding,
+      idempotencyKey: "price-key",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "unused-price",
+      ),
+      knowledge: [
+        {
+          id: "article-price",
+          title: "Preço e planos do ZeloPDV",
+          category: "Comercial",
+          body: "Consulte os preços e planos do ZeloPDV.",
+        },
+      ],
+      message: { ...message, text: "Qual o preço do ZeloPDV?" },
+      persisted,
+    });
+    expect(result).toMatchObject({
+      draft: { knowledgeArticleIds: ["article-price"] },
+    });
+    expect(client.issue).toBeNull();
+    expect(client.notifications).toEqual([]);
+  });
+
+  it("escalates an unanswered question without creating a generic task", async () => {
+    const client = new FakeSupabaseHandoff();
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply: vi.fn(async () => "must not be called"),
+      triage: vi.fn(async () =>
+        JSON.stringify({
+          intent: "question",
+          priority: "low",
+          confidence: 0.98,
+          summary: "Customer asks about an undocumented product",
+          unsafe: false,
+        }),
+      ),
+    };
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+    );
+    const persisted: InboxMessageRecord = {
+      id: "message-unknown",
+      workspaceId: binding.workspaceId,
+      conversationId: "conversation-unknown",
+      contactId: "contact-1",
+      providerMessageId: message.providerMessageId,
+      direction: "inbound",
+      messageType: "text",
+      unreadCount: 1,
+      inserted: true,
+    };
+    const result = await automation.process({
+      binding,
+      idempotencyKey: "unknown-key",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "unused-unknown",
+      ),
+      knowledge: [
+        {
+          id: "article-price",
+          title: "Preço e planos do ZeloPDV",
+          category: "Comercial",
+          body: "Consulte os preços e planos do ZeloPDV.",
+        },
+      ],
+      message: { ...message, text: "Como funciona a integração de estoque?" },
+      persisted,
+    });
+    expect(result).toBeUndefined();
+    expect(client.issue).toBeNull();
+    expect(client.notifications).toMatchObject([
+      { kind: "ai.human_escalation" },
+    ]);
     expect(provider.draftReply).not.toHaveBeenCalled();
   });
 });

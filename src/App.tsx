@@ -55,11 +55,13 @@ import {
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import {
   EmptyState,
   ErrorState,
   LoadingState,
+  Skeleton,
 } from "./components/ResourceState";
 import { ProfileWorkspacePage } from "./components/ProfileWorkspacePage";
 import { seedConversations, seedIssues, seedKnowledge, seedRuns } from "./data";
@@ -76,6 +78,12 @@ import type {
   CodingRun,
   Message,
 } from "./types";
+import {
+  aiTriageRouteValues,
+  triageIntentValues,
+  type AiTriageRoute,
+  type TriageIntent,
+} from "./ai-policy";
 import { supabase } from "./lib/supabase";
 import {
   listMessagesSince,
@@ -93,6 +101,7 @@ import {
   createLiveIssue,
   createLiveRepository,
   createWhatsAppInstance,
+  deleteLiveIssue,
   deleteLiveKnowledge,
   disconnectLiveChannel,
   disconnectWhatsAppInstance,
@@ -129,8 +138,9 @@ import {
   listLiveWorkspaceMembers,
   loadLiveAiConversationPolicy,
   saveLiveConversationAiPolicy,
-  type AiConversationPolicy,
+  saveLiveWorkspaceAiPolicy,
   type AuditLogRecord,
+  type LiveWorkspaceAiPolicy,
   type WorkspaceMemberRecord,
 } from "./api/settings-actions";
 
@@ -141,6 +151,25 @@ const navItems = [
   { to: "/knowledge", label: "Knowledge", icon: BookOpen },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
+
+const triageIntentLabels: Record<TriageIntent, string> = {
+  question: "Question / pricing",
+  how_to: "How-to",
+  status: "Status",
+  bug: "Bug report",
+  incident: "Incident",
+  billing: "Billing",
+  feature: "Feature request",
+  other: "Other / unknown",
+};
+
+const triageRouteLabels: Record<AiTriageRoute, string> = {
+  knowledge_auto_reply: "Answer from published knowledge",
+  draft_for_review: "Draft for human review",
+  human_escalation: "Escalate and notify human",
+  bug_triage: "Bug triage",
+  no_action: "No action",
+};
 
 const normalizeSearch = (value: string) =>
   value
@@ -263,7 +292,25 @@ function App() {
   const [workspaceMemberIds, setWorkspaceMemberIds] = useState<string[]>([]);
   const [inspectorIssueId, setInspectorIssueId] = useState<string | null>(null);
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
+  const [editIssueId, setEditIssueId] = useState<string | null>(null);
   const [runDialogIssueId, setRunDialogIssueId] = useState<string | null>(null);
+  const handleProfileWorkspaceUpdated = useCallback(
+    (workspace: { id: string; name: string }) => {
+      setWorkspaceId(workspace.id);
+      setWorkspaceName(workspace.name);
+      setLiveDataRetry((current) => current + 1);
+    },
+    [],
+  );
+  const handleProfileIdentityUpdated = useCallback(
+    (identity: { name: string; email: string }) => {
+      setOperatorIdentity((current) => ({
+        ...current,
+        ...identity,
+      }));
+    },
+    [],
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -616,6 +663,46 @@ function App() {
     );
   };
 
+  const deleteIssue = async (issueId: string) => {
+    const issue = issues.find((item) => item.id === issueId);
+    if (!issue) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Delete ${issue.identifier}? This cannot be undone.`)
+    )
+      return;
+    try {
+      if (!demoMode && workspaceId) {
+        await deleteLiveIssue({
+          workspaceId,
+          issueId: issue.id,
+          issueIdentifier: issue.identifier,
+        });
+        setLiveDataRetry((current) => current + 1);
+      }
+      setIssues((current) => current.filter((item) => item.id !== issueId));
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.issueId === issueId
+            ? {
+                ...conversation,
+                issueId: undefined,
+                issueLabel: undefined,
+                priority: undefined,
+              }
+            : conversation,
+        ),
+      );
+      if (inspectorIssueId === issueId) setInspectorIssueId(null);
+      if (editIssueId === issueId) setEditIssueId(null);
+      setToast(`${issue.identifier} deleted`);
+    } catch (error) {
+      setToast(
+        error instanceof Error ? error.message : "Issue could not be deleted.",
+      );
+    }
+  };
+
   const resolveIssueAndNotify = async (
     issueId: string,
     message: string,
@@ -881,6 +968,8 @@ function App() {
                     assigneeLabel={assigneeLabel}
                     onOpenIssue={setInspectorIssueId}
                     onNewIssue={() => setCreateIssueOpen(true)}
+                    onEditIssue={setEditIssueId}
+                    onDeleteIssue={(issueId) => void deleteIssue(issueId)}
                   />
                 }
               />
@@ -952,17 +1041,8 @@ function App() {
                   <ProfileWorkspacePage
                     workspaceId={workspaceId}
                     onToast={setToast}
-                    onWorkspaceUpdated={(workspace) => {
-                      setWorkspaceId(workspace.id);
-                      setWorkspaceName(workspace.name);
-                      setLiveDataRetry((current) => current + 1);
-                    }}
-                    onIdentityUpdated={(identity) =>
-                      setOperatorIdentity((current) => ({
-                        ...current,
-                        ...identity,
-                      }))
-                    }
+                    onWorkspaceUpdated={handleProfileWorkspaceUpdated}
+                    onIdentityUpdated={handleProfileIdentityUpdated}
                   />
                 }
               />
@@ -1049,6 +1129,16 @@ function App() {
           conversations={conversations}
           onClose={() => setCreateIssueOpen(false)}
           onCreate={createIssue}
+        />
+      )}
+      {editIssueId && (
+        <EditIssueDialog
+          issue={issues.find((item) => item.id === editIssueId)}
+          onClose={() => setEditIssueId(null)}
+          onSave={(patch) => {
+            updateIssue(editIssueId, patch);
+            setEditIssueId(null);
+          }}
         />
       )}
       {runDialogIssueId && (
@@ -1436,6 +1526,61 @@ function InboxPage({
   const selected =
     conversations.find((item) => item.id === selectedConversationId) ??
     conversations[0];
+  const messageCanvasRef = useRef<HTMLDivElement>(null);
+  const previousConversationIdRef = useRef<string | undefined>(undefined);
+  const previousMessageSignatureRef = useRef<string | undefined>(undefined);
+  const isAtMessageBottomRef = useRef(true);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const messageSignature = selected?.messages
+    .map((message) => message.id)
+    .join("|");
+
+  const scrollMessagesToBottom = useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      const canvas = messageCanvasRef.current;
+      if (!canvas) return;
+      const scroll = () => {
+        if (typeof canvas.scrollTo === "function")
+          canvas.scrollTo({ top: canvas.scrollHeight, behavior });
+        else canvas.scrollTop = canvas.scrollHeight;
+        isAtMessageBottomRef.current = true;
+        setShowScrollDown(false);
+      };
+      if (typeof window !== "undefined" && window.requestAnimationFrame)
+        window.requestAnimationFrame(scroll);
+      else scroll();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const canvas = messageCanvasRef.current;
+    if (!canvas) return;
+    const updateBottomState = () => {
+      const atBottom =
+        canvas.scrollHeight - canvas.scrollTop - canvas.clientHeight <= 48;
+      isAtMessageBottomRef.current = atBottom;
+      if (atBottom) setShowScrollDown(false);
+    };
+    updateBottomState();
+    canvas.addEventListener("scroll", updateBottomState, { passive: true });
+    return () => canvas.removeEventListener("scroll", updateBottomState);
+  }, [selected?.id]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const conversationChanged =
+      previousConversationIdRef.current !== selected.id;
+    const messagesChanged =
+      previousMessageSignatureRef.current !== messageSignature;
+    previousConversationIdRef.current = selected.id;
+    previousMessageSignatureRef.current = messageSignature;
+    if (!conversationChanged && !messagesChanged) return;
+
+    if (conversationChanged || isAtMessageBottomRef.current)
+      scrollMessagesToBottom(conversationChanged ? "auto" : "smooth");
+    else if (messagesChanged) setShowScrollDown(true);
+  }, [messageSignature, scrollMessagesToBottom, selected]);
   const filtered = useMemo(
     () =>
       conversations.filter((conversation) => {
@@ -2041,38 +2186,51 @@ function InboxPage({
               />
             )}
           </div>
-          <div className="message-canvas">
-            <div className="day-divider">
-              <span>Today</span>
+          <div className="message-canvas-shell">
+            <div className="message-canvas" ref={messageCanvasRef}>
+              <div className="day-divider">
+                <span>Today</span>
+              </div>
+              {selected.messages.length ? (
+                selected.messages.map((message) => (
+                  <MessageBubble key={message.id} message={message} />
+                ))
+              ) : (
+                <EmptyState
+                  title="No messages yet"
+                  description="The first customer message will appear here."
+                />
+              )}
+              {activeIssue && (
+                <button
+                  className="issue-event"
+                  type="button"
+                  onClick={() => onOpenIssue(activeIssue.id)}
+                >
+                  <span className="issue-event-icon">
+                    <CircleDot size={14} />
+                  </span>
+                  <span>
+                    <strong>
+                      {activeIssue.identifier} · {activeIssue.title}
+                    </strong>
+                    <small>
+                      Issue linked · {activeIssue.status} ·{" "}
+                      {activeIssue.priority}
+                    </small>
+                  </span>
+                  <ChevronRight size={15} />
+                </button>
+              )}
             </div>
-            {selected.messages.length ? (
-              selected.messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))
-            ) : (
-              <EmptyState
-                title="No messages yet"
-                description="The first customer message will appear here."
-              />
-            )}
-            {activeIssue && (
+            {showScrollDown && (
               <button
-                className="issue-event"
+                className="scroll-down-cta"
                 type="button"
-                onClick={() => onOpenIssue(activeIssue.id)}
+                aria-label="Scroll to latest messages"
+                onClick={() => scrollMessagesToBottom("smooth")}
               >
-                <span className="issue-event-icon">
-                  <CircleDot size={14} />
-                </span>
-                <span>
-                  <strong>
-                    {activeIssue.identifier} · {activeIssue.title}
-                  </strong>
-                  <small>
-                    Issue linked · {activeIssue.status} · {activeIssue.priority}
-                  </small>
-                </span>
-                <ChevronRight size={15} />
+                <ChevronDown size={14} /> New messages
               </button>
             )}
           </div>
@@ -2889,18 +3047,101 @@ function Composer({
   );
 }
 
+function ActionMenu({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, right: 8 });
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !menuRef.current?.contains(target) &&
+        !triggerRef.current?.contains(target)
+      )
+        setOpen(false);
+    };
+    const closeOnViewportChange = () => setOpen(false);
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    window.addEventListener("resize", closeOnViewportChange);
+    window.addEventListener("scroll", closeOnViewportChange, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      window.removeEventListener("resize", closeOnViewportChange);
+      window.removeEventListener("scroll", closeOnViewportChange, true);
+    };
+  }, [open]);
+
+  const toggle = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!open) {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect)
+        setPosition({
+          top: rect.bottom + 4,
+          right: Math.max(8, window.innerWidth - rect.right),
+        });
+    }
+    setOpen((current) => !current);
+  };
+
+  return (
+    <div className="row-actions">
+      <button
+        ref={triggerRef}
+        className="icon-button subtle"
+        type="button"
+        aria-label={`Actions for ${label}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={toggle}
+      >
+        <Ellipsis size={16} />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="context-menu row-actions-menu"
+            role="menu"
+            style={{ top: position.top, right: position.right }}
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen(false);
+            }}
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 function IssuesPage({
   issues,
   assigneeOptions,
   assigneeLabel,
   onOpenIssue,
   onNewIssue,
+  onEditIssue,
+  onDeleteIssue,
 }: {
   issues: Issue[];
   assigneeOptions: AssigneeOption[];
   assigneeLabel: (value: string) => string;
   onOpenIssue: (id: string) => void;
   onNewIssue: () => void;
+  onEditIssue: (id: string) => void;
+  onDeleteIssue: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<IssueStatus | "All">("All");
@@ -3086,6 +3327,7 @@ function IssuesPage({
                 <th>Labels</th>
                 <th>Customer</th>
                 <th>Updated</th>
+                <th className="actions-column">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -3140,6 +3382,25 @@ function IssuesPage({
                     {issue.customer ?? "Internal"}
                   </td>
                   <td className="updated-cell">{issue.updatedAt}</td>
+                  <td className="actions-cell">
+                    <ActionMenu label={issue.identifier}>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => onEditIssue(issue.id)}
+                      >
+                        <PenLine size={14} /> Edit issue
+                      </button>
+                      <button
+                        className="danger"
+                        type="button"
+                        role="menuitem"
+                        onClick={() => onDeleteIssue(issue.id)}
+                      >
+                        <Trash2 size={14} /> Delete issue
+                      </button>
+                    </ActionMenu>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -4142,6 +4403,27 @@ function RunsPage({
   );
 }
 
+function KnowledgeSkeletonPreview() {
+  return (
+    <div
+      className="knowledge-list-skeleton"
+      role="status"
+      aria-label="Loading knowledge"
+    >
+      {[0, 1, 2].map((item) => (
+        <div className="knowledge-skeleton-row" key={item} aria-hidden="true">
+          <Skeleton className="knowledge-icon" />
+          <div className="knowledge-skeleton-copy">
+            <Skeleton className="knowledge-skeleton-title" />
+            <Skeleton className="knowledge-skeleton-line" />
+            <Skeleton className="knowledge-skeleton-meta" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function KnowledgeWorkspacePage({
   workspaceId,
   onToast,
@@ -4305,7 +4587,9 @@ function KnowledgeWorkspacePage({
             </button>
           </div>
           <div className="knowledge-list">
-            {filtered.length ? (
+            {loading ? (
+              <KnowledgeSkeletonPreview />
+            ) : filtered.length ? (
               filtered.map((article) => (
                 <article className="knowledge-row" key={article.id}>
                   <div className="knowledge-icon">
@@ -4322,34 +4606,35 @@ function KnowledgeWorkspacePage({
                       <span>Updated {article.updatedAt}</span>
                     </div>
                   </div>
-                  <button
-                    className="icon-button subtle"
-                    type="button"
-                    aria-label={`Edit ${article.title}`}
-                    onClick={() => {
-                      setEditing({
-                        id: article.id,
-                        title: article.title,
-                        category: article.category,
-                        body: article.excerpt,
-                        status:
-                          article.status === "Published"
-                            ? "published"
-                            : "draft",
-                      });
-                      setEditorOpen(true);
-                    }}
-                  >
-                    <PenLine size={14} />
-                  </button>
-                  <button
-                    className="icon-button subtle"
-                    type="button"
-                    aria-label={`Delete ${article.title}`}
-                    onClick={() => void remove(article.id)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <ActionMenu label={article.title}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setEditing({
+                          id: article.id,
+                          title: article.title,
+                          category: article.category,
+                          body: article.excerpt,
+                          status:
+                            article.status === "Published"
+                              ? "published"
+                              : "draft",
+                        });
+                        setEditorOpen(true);
+                      }}
+                    >
+                      <PenLine size={14} /> Edit article
+                    </button>
+                    <button
+                      className="danger"
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void remove(article.id)}
+                    >
+                      <Trash2 size={14} /> Delete article
+                    </button>
+                  </ActionMenu>
                 </article>
               ))
             ) : (
@@ -4685,13 +4970,14 @@ function LiveSettingsWorkspace({
   const [channelAction, setChannelAction] = useState(false);
   const [members, setMembers] = useState<WorkspaceMemberRecord[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLogRecord[]>([]);
-  const [aiPolicy, setAiPolicy] = useState<AiConversationPolicy | null>(null);
+  const [aiPolicy, setAiPolicy] = useState<LiveWorkspaceAiPolicy | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [aiMode, setAiMode] = useState<AiMode>("draft");
   const [aiSaving, setAiSaving] = useState(false);
+  const [aiPolicySaving, setAiPolicySaving] = useState(false);
   const [repositories, setRepositories] = useState<
     Array<{
       id: string;
@@ -5034,6 +5320,43 @@ function LiveSettingsWorkspace({
     }
   };
 
+  const saveAutomationPolicy = async () => {
+    if (!workspaceId || !aiPolicy) return;
+    if (
+      aiPolicy.safeAutoSendEnabled &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Enable automatic customer replies for this workspace? Only configured routes with relevant published knowledge can send.",
+      )
+    )
+      return;
+    setAiPolicySaving(true);
+    try {
+      await saveLiveWorkspaceAiPolicy(workspaceId, aiPolicy);
+      onToast("Workspace AI routing saved");
+      await loadSettingsData();
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Workspace AI routing could not be saved.",
+      );
+    } finally {
+      setAiPolicySaving(false);
+    }
+  };
+
+  const updateAutomationRoute = (
+    intent: TriageIntent,
+    route: AiTriageRoute,
+  ) => {
+    setAiPolicy((current) =>
+      current
+        ? { ...current, routes: { ...current.routes, [intent]: route } }
+        : current,
+    );
+  };
+
   const tabs: Array<{
     id: SettingsTab;
     label: string;
@@ -5358,63 +5681,194 @@ function LiveSettingsWorkspace({
                 )}
                 {settingsLoading ? (
                   <LoadingState label="Loading conversation policy…" />
-                ) : !settingsError && aiPolicy?.totalConversations === 0 ? (
-                  <EmptyState
-                    title="No live conversations yet"
-                    description="AI behavior becomes configurable after WhatsApp creates a conversation. No policy record is fabricated."
-                  />
-                ) : (
-                  !settingsError &&
-                  aiPolicy && (
-                    <>
-                      <div className="policy-row">
-                        <div>
-                          <strong>Apply mode to current conversations</strong>
-                          <p>
-                            {aiPolicy.totalConversations} live conversation
-                            {aiPolicy.totalConversations === 1
-                              ? ""
-                              : "s"} · {aiPolicy.counts.off} off ·{" "}
-                            {aiPolicy.counts.draft} drafts ·{" "}
-                            {aiPolicy.counts.safe_auto} auto-reply
-                          </p>
-                        </div>
+                ) : !settingsError && aiPolicy ? (
+                  <>
+                    <div className="policy-row">
+                      <div>
+                        <strong>Apply mode to current conversations</strong>
+                        <p>
+                          {aiPolicy.totalConversations} live conversation
+                          {aiPolicy.totalConversations === 1 ? "" : "s"} ·{" "}
+                          {aiPolicy.counts.off} off · {aiPolicy.counts.draft}{" "}
+                          drafts · {aiPolicy.counts.safe_auto} auto-reply
+                        </p>
+                      </div>
+                      <select
+                        className="settings-inline-select"
+                        aria-label="AI mode for live conversations"
+                        value={aiMode}
+                        disabled={aiSaving}
+                        onChange={(event) =>
+                          setAiMode(event.target.value as AiMode)
+                        }
+                      >
+                        <option value="draft">Copilot</option>
+                        <option value="safe_auto">Auto-reply</option>
+                        <option value="off">Manual</option>
+                      </select>
+                    </div>
+                    <div className="settings-note">
+                      <Sparkles size={14} />
+                      <span>
+                        The mode is per conversation. The routing rules below
+                        are workspace-wide and apply to every new inbound
+                        message.
+                      </span>
+                    </div>
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      disabled={aiSaving || aiMode === aiPolicy.dominantMode}
+                      onClick={() => void saveAiPolicy()}
+                    >
+                      <Save size={14} />{" "}
+                      {aiSaving ? "Saving…" : "Save conversation policy"}
+                    </button>
+                    <div className="settings-section-header settings-subsection-header">
+                      <div>
+                        <h3>AI triage routing</h3>
+                        <p>
+                          The company decides what the AI does for each type of
+                          situation. A knowledge route without a relevant
+                          published article falls back to human escalation.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="automation-route-grid">
+                      {triageIntentValues.map((intent) => (
+                        <label key={intent}>
+                          {triageIntentLabels[intent]}
+                          <select
+                            aria-label={`AI route for ${triageIntentLabels[intent]}`}
+                            value={aiPolicy.routes[intent]}
+                            disabled={aiPolicySaving}
+                            onChange={(event) =>
+                              updateAutomationRoute(
+                                intent,
+                                event.target.value as AiTriageRoute,
+                              )
+                            }
+                          >
+                            {aiTriageRouteValues.map((route) => (
+                              <option key={route} value={route}>
+                                {triageRouteLabels[route]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                      <label>
+                        Unknown or unmatched fallback
                         <select
-                          className="settings-inline-select"
-                          aria-label="AI mode for live conversations"
-                          value={aiMode}
-                          disabled={aiSaving}
+                          aria-label="AI fallback route"
+                          value={aiPolicy.fallbackRoute}
+                          disabled={aiPolicySaving}
                           onChange={(event) =>
-                            setAiMode(event.target.value as AiMode)
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    fallbackRoute: event.target
+                                      .value as AiTriageRoute,
+                                  }
+                                : current,
+                            )
                           }
                         >
-                          <option value="draft">Copilot</option>
-                          <option value="safe_auto">Auto-reply</option>
-                          <option value="off">Manual</option>
+                          {aiTriageRouteValues.map((route) => (
+                            <option key={route} value={route}>
+                              {triageRouteLabels[route]}
+                            </option>
+                          ))}
                         </select>
-                      </div>
-                      <div className="settings-note">
-                        <Sparkles size={14} />
-                        <span>
-                          The current schema stores <code>ai_mode</code> per
-                          conversation; saving updates only the live rows
-                          returned by Supabase. New conversations use the
-                          database default until a workspace-level policy
-                          exists.
-                        </span>
-                      </div>
-                      <button
-                        className="button button-primary"
-                        type="button"
-                        disabled={aiSaving || aiMode === aiPolicy.dominantMode}
-                        onClick={() => void saveAiPolicy()}
-                      >
-                        <Save size={14} />{" "}
-                        {aiSaving ? "Saving…" : "Save conversation policy"}
-                      </button>
-                    </>
-                  )
-                )}
+                      </label>
+                    </div>
+                    <div className="settings-form-grid automation-toggles">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={aiPolicy.requirePublishedKnowledge}
+                          disabled={aiPolicySaving}
+                          onChange={(event) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    requirePublishedKnowledge:
+                                      event.target.checked,
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                        Require published knowledge for AI answers
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={aiPolicy.notifyOnHumanEscalation}
+                          disabled={aiPolicySaving}
+                          onChange={(event) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    notifyOnHumanEscalation:
+                                      event.target.checked,
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                        Notify the company on human escalation
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={aiPolicy.notifyOnBug}
+                          disabled={aiPolicySaving}
+                          onChange={(event) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    notifyOnBug: event.target.checked,
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                        Notify the company immediately on bug reports
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={aiPolicy.safeAutoSendEnabled}
+                          disabled={aiPolicySaving}
+                          onChange={(event) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    safeAutoSendEnabled: event.target.checked,
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                        Allow configured knowledge auto-replies
+                      </label>
+                    </div>
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      disabled={aiPolicySaving}
+                      onClick={() => void saveAutomationPolicy()}
+                    >
+                      <Save size={14} /> Save AI triage rules
+                    </button>
+                  </>
+                ) : null}
               </section>
             </div>
           )}
@@ -6082,6 +6536,154 @@ function CreateIssueDialog({
             onClick={submit}
           >
             Create issue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditIssueDialog({
+  issue,
+  onClose,
+  onSave,
+}: {
+  issue?: Issue;
+  onClose: () => void;
+  onSave: (
+    patch: Pick<Issue, "title" | "type" | "priority" | "status">,
+  ) => void;
+}) {
+  const [title, setTitle] = useState(issue?.title ?? "");
+  const [type, setType] = useState<IssueType>(issue?.type ?? "Task");
+  const [priority, setPriority] = useState<Priority>(
+    issue?.priority ?? "Medium",
+  );
+  const [status, setStatus] = useState<IssueStatus>(issue?.status ?? "Triage");
+  const [error, setError] = useState("");
+  if (!issue) return null;
+
+  const submit = () => {
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      setError("Add a short title so the issue remains actionable.");
+      return;
+    }
+    onSave({ title: cleanTitle, type, priority, status });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-issue-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <span className="page-kicker">{issue.identifier}</span>
+            <h2 id="edit-issue-title">Edit issue</h2>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close edit issue dialog"
+          >
+            <X size={17} />
+          </button>
+        </div>
+        <div className="modal-body">
+          <label>
+            Title
+            <input
+              autoFocus
+              required
+              maxLength={240}
+              aria-invalid={Boolean(error)}
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                if (event.target.value.trim()) setError("");
+              }}
+            />
+            {error && <span className="field-error">{error}</span>}
+          </label>
+          <div className="form-row">
+            <label>
+              Type
+              <select
+                value={type}
+                onChange={(event) => setType(event.target.value as IssueType)}
+              >
+                {[
+                  "Production Bug",
+                  "Bug",
+                  "Incident",
+                  "Feature",
+                  "Task",
+                  "Billing",
+                  "Commercial",
+                  "Question",
+                  "Other",
+                ].map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Priority
+              <select
+                value={priority}
+                onChange={(event) =>
+                  setPriority(event.target.value as Priority)
+                }
+              >
+                {["Urgent", "High", "Medium", "Low", "No priority"].map(
+                  (item) => (
+                    <option key={item}>{item}</option>
+                  ),
+                )}
+              </select>
+            </label>
+          </div>
+          <label>
+            Status
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as IssueStatus)}
+            >
+              {[
+                "Triage",
+                "Backlog",
+                "Todo",
+                "In Progress",
+                "Review",
+                "Done",
+                "Canceled",
+              ].map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="modal-footer">
+          <button
+            className="button button-ghost"
+            type="button"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={!title.trim()}
+            onClick={submit}
+          >
+            <Save size={14} /> Save changes
           </button>
         </div>
       </div>

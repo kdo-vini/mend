@@ -1071,6 +1071,31 @@ export async function updateLiveIssue(
   );
 }
 
+export async function deleteLiveIssue(
+  input: {
+    workspaceId: string;
+    issueId: string;
+    issueIdentifier?: string;
+  },
+  client: MendSupabaseClient | null = supabase,
+) {
+  if (mendApiBaseUrl)
+    return apiRequest<void>(
+      `/api/issues/${encodeURIComponent(input.issueIdentifier ?? input.issueId)}`,
+      { method: "DELETE" },
+      input.workspaceId,
+    );
+  return unwrap(
+    requireClient(client)
+      .from("issues")
+      .delete()
+      .eq("workspace_id", input.workspaceId)
+      .eq("id", input.issueId)
+      .select("id")
+      .single(),
+  );
+}
+
 export async function createLiveIssueComment(
   input: {
     workspaceId: string;

@@ -1,10 +1,8 @@
-import {
-  AlertCircle,
-  Inbox,
-  LoaderCircle,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { AlertCircle, Inbox, RefreshCw, Search } from "lucide-react";
+
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <span className={`skeleton ${className}`} aria-hidden="true" />;
+}
 
 export function LoadingState({
   label = "Loading workspace data…",
@@ -12,12 +10,18 @@ export function LoadingState({
   label?: string;
 }) {
   return (
-    <div className="resource-state" role="status" aria-live="polite">
-      <LoaderCircle
-        className="resource-state-spinner"
-        size={20}
-        aria-hidden="true"
-      />
+    <div
+      className="resource-state resource-state-loading"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="skeleton-preview" aria-hidden="true">
+        <Skeleton className="skeleton-preview-icon" />
+        <div className="skeleton-preview-copy">
+          <Skeleton className="skeleton-preview-title" />
+          <Skeleton className="skeleton-preview-line" />
+        </div>
+      </div>
       <strong>{label}</strong>
       <span>Keeping the current workspace context ready.</span>
     </div>

@@ -1,12 +1,23 @@
 import type { Database } from "../lib/database.types";
 import { supabase, type MendSupabaseClient } from "../lib/supabase";
 import type { AiMode } from "../types";
+import {
+  normalizeWorkspaceAiPolicy,
+  workspaceAiPolicyJson,
+  type WorkspaceAiPolicy,
+} from "../ai-policy";
 
 type Tables = Database["public"]["Tables"];
 export type WorkspaceMemberRecord = Tables["workspace_members"]["Row"];
 export type AuditLogRecord = Tables["audit_log"]["Row"];
 
 export interface AiConversationPolicy {
+  totalConversations: number;
+  counts: Record<AiMode, number>;
+  dominantMode: AiMode | "mixed";
+}
+
+export interface LiveWorkspaceAiPolicy extends WorkspaceAiPolicy {
   totalConversations: number;
   counts: Record<AiMode, number>;
   dominantMode: AiMode | "mixed";
@@ -57,13 +68,22 @@ export function listLiveAuditLog(
 export async function loadLiveAiConversationPolicy(
   workspaceId: string,
   client: MendSupabaseClient | null = supabase,
-): Promise<AiConversationPolicy> {
-  const rows = await unwrap(
-    requireClient(client)
-      .from("conversations")
-      .select("id, ai_mode")
-      .eq("workspace_id", workspaceId),
-  );
+): Promise<LiveWorkspaceAiPolicy> {
+  const [rows, workspace] = await Promise.all([
+    unwrap(
+      requireClient(client)
+        .from("conversations")
+        .select("id, ai_mode")
+        .eq("workspace_id", workspaceId),
+    ),
+    unwrap(
+      requireClient(client)
+        .from("workspaces")
+        .select("ai_policy_json")
+        .eq("id", workspaceId)
+        .single(),
+    ),
+  ]);
   const counts: Record<AiMode, number> = { off: 0, draft: 0, safe_auto: 0 };
   for (const row of rows) {
     if (
@@ -78,7 +98,32 @@ export async function loadLiveAiConversationPolicy(
   );
   const dominantMode =
     modes.length === 1 ? modes[0] : modes.length === 0 ? "draft" : "mixed";
-  return { totalConversations: rows.length, counts, dominantMode };
+  return {
+    ...normalizeWorkspaceAiPolicy(
+      (workspace as { ai_policy_json?: unknown } | null)?.ai_policy_json,
+    ),
+    totalConversations: rows.length,
+    counts,
+    dominantMode,
+  };
+}
+
+export async function saveLiveWorkspaceAiPolicy(
+  workspaceId: string,
+  policy: WorkspaceAiPolicy,
+  client: MendSupabaseClient | null = supabase,
+) {
+  const rows = await unwrap(
+    requireClient(client)
+      .from("workspaces")
+      .update({
+        ai_policy_json: workspaceAiPolicyJson(policy),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", workspaceId)
+      .select("id"),
+  );
+  return { updatedCount: rows.length, policy };
 }
 
 /**

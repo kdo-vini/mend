@@ -262,6 +262,17 @@ O MVP de automação estará pronto quando:
 7. Cada decisão puder ser auditada.
 8. O comportamento for coberto por testes de concorrência, idempotência e falha do provider.
 
+## Atualização de regras por workspace
+
+- [x] A política de triagem agora é configurável por workspace; o worker não fixa regras de negócio de uma empresa.
+- [x] Cada intenção pode seguir cinco rotas: responder com conhecimento publicado, gerar draft, escalar e notificar humano, abrir triagem de bug ou não agir.
+- [x] Pergunta com artigo relevante não cria issue genérica.
+- [x] Pergunta sem artigo relevante cai no fallback da empresa e pode escalar/notificar sem criar task.
+- [x] Bug pode abrir triagem e notificar a empresa imediatamente, com deduplicação.
+- [x] Flags de auto-reply, auto-fix e auto-deploy são controladas pelo workspace; auto-fix/auto-deploy permanecem desligadas por padrão.
+
+Próximo bloco: coletar dados de reprodução de bugs, reconhecer usuário existente, iniciar investigação Codex com evidências, validar testes e somente então permitir deploy com gate, health check e rollback.
+
 ## Ordem recomendada de implementação
 
 1. Human takeover e origem das mensagens.

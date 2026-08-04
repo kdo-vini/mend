@@ -1073,6 +1073,7 @@ export type Database = {
       }
       workspaces: {
         Row: {
+          ai_policy_json: Json
           created_at: string
           default_language: string
           id: string
@@ -1084,6 +1085,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_policy_json?: Json
           created_at?: string
           default_language?: string
           id?: string
@@ -1095,6 +1097,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_policy_json?: Json
           created_at?: string
           default_language?: string
           id?: string

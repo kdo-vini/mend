@@ -10,11 +10,13 @@ import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
 import type { SupportAiProvider } from "./providers.js";
 import { SupabaseMediaStorage } from "./media.js";
 import { WhatsAppService, type WhatsAppProvider } from "./whatsapp-service.js";
+import { triageConversation, type TriageResult } from "./triage.js";
 import {
-  gateAiAction,
-  triageConversation,
-  type TriageResult,
-} from "./triage.js";
+  normalizeWorkspaceAiPolicy,
+  workspaceAiPolicyJson,
+  type AiTriageRoute,
+  type WorkspaceAiPolicy,
+} from "../src/ai-policy.js";
 import type { NormalizedWhatsmiauMessage } from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
 
@@ -70,14 +72,7 @@ interface UncheckedSupabaseClient {
   from(table: string): UncheckedSupabaseQuery;
 }
 
-export interface LiveWorkerAiPolicy {
-  draftEnabled: boolean;
-  safeAutoEnabled: boolean;
-  safeAutoMinConfidence: number;
-  safeAutoIntents: readonly TriageResult["intent"][];
-  safeAutoSendEnabled: boolean;
-  requirePublishedKnowledge: boolean;
-}
+export type LiveWorkerAiPolicy = WorkspaceAiPolicy;
 
 export interface LiveChannelBinding {
   channelConnectionId: string;
@@ -574,52 +569,12 @@ function triageConversationInput(
 
 type LiveWorkerAiMode = "off" | "draft" | "safe_auto";
 
-const DEFAULT_AI_POLICY: LiveWorkerAiPolicy = {
-  draftEnabled: true,
-  safeAutoEnabled: true,
-  safeAutoMinConfidence: 0.85,
-  safeAutoIntents: ["question", "how_to", "status"],
-  safeAutoSendEnabled: false,
-  requirePublishedKnowledge: false,
-};
-
-function asObject(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
 function normalizeAiPolicy(value: unknown): LiveWorkerAiPolicy {
-  const raw = asObject(value);
-  const intents = Array.isArray(raw.safe_auto_intents)
-    ? raw.safe_auto_intents.filter((item): item is TriageResult["intent"] =>
-        ["question", "how_to", "status"].includes(String(item)),
-      )
-    : [];
-  const confidence = Number(raw.safe_auto_min_confidence);
-  return {
-    draftEnabled: raw.draft_enabled !== false,
-    safeAutoEnabled: raw.safe_auto_enabled !== false,
-    safeAutoMinConfidence: Number.isFinite(confidence)
-      ? Math.min(1, Math.max(0, confidence))
-      : DEFAULT_AI_POLICY.safeAutoMinConfidence,
-    safeAutoIntents: intents.length
-      ? intents
-      : DEFAULT_AI_POLICY.safeAutoIntents,
-    safeAutoSendEnabled: raw.safe_auto_send_enabled === true,
-    requirePublishedKnowledge: raw.require_published_knowledge === true,
-  };
+  return normalizeWorkspaceAiPolicy(value);
 }
 
 function policyJson(policy: LiveWorkerAiPolicy): Record<string, unknown> {
-  return {
-    draft_enabled: policy.draftEnabled,
-    safe_auto_enabled: policy.safeAutoEnabled,
-    safe_auto_min_confidence: policy.safeAutoMinConfidence,
-    safe_auto_intents: [...policy.safeAutoIntents],
-    safe_auto_send_enabled: policy.safeAutoSendEnabled,
-    require_published_knowledge: policy.requirePublishedKnowledge,
-  };
+  return workspaceAiPolicyJson(policy);
 }
 
 function policyDecision(
@@ -627,38 +582,145 @@ function policyDecision(
   triage: TriageResult,
   policy: LiveWorkerAiPolicy,
   hasKnowledge: boolean,
+  route: AiTriageRoute,
 ) {
-  if (mode === "draft" && !policy.draftEnabled)
+  if (mode === "off")
+    return {
+      action: "off" as const,
+      allowed: false,
+      reason: "AI is disabled for this conversation.",
+    };
+  if (triage.unsafe)
+    return {
+      action: "blocked" as const,
+      allowed: false,
+      reason: triage.unsafeReason ?? "Unsafe request requires a human.",
+    };
+  if (route === "no_action")
+    return {
+      action: "blocked" as const,
+      allowed: false,
+      reason: "Workspace policy selected no action for this intent.",
+    };
+  if (route === "human_escalation")
+    return {
+      action: "blocked" as const,
+      allowed: false,
+      reason: "Workspace policy routes this intent to a human.",
+    };
+  if (route === "bug_triage")
+    return {
+      action: "blocked" as const,
+      allowed: false,
+      reason: "Workspace policy routes this intent to bug triage.",
+    };
+  if (route === "draft_for_review" && !policy.draftEnabled)
     return {
       action: "blocked" as const,
       allowed: false,
       reason: "AI draft generation is disabled by workspace policy.",
     };
-  if (mode === "safe_auto" && !policy.safeAutoEnabled)
+  if (route === "draft_for_review")
+    return {
+      action: "draft" as const,
+      allowed: true,
+      reason: "Workspace policy requires human review.",
+    };
+  if (
+    (route === "knowledge_auto_reply" || policy.requirePublishedKnowledge) &&
+    !hasKnowledge
+  )
+    return {
+      action: "blocked" as const,
+      allowed: false,
+      reason: "No relevant published knowledge was found.",
+    };
+  if (mode === "draft")
+    return policy.draftEnabled
+      ? {
+          action: "draft" as const,
+          allowed: true,
+          reason: "Draft is available for human review.",
+        }
+      : {
+          action: "blocked" as const,
+          allowed: false,
+          reason: "AI draft generation is disabled by workspace policy.",
+        };
+  if (!policy.safeAutoEnabled)
     return {
       action: "blocked" as const,
       allowed: false,
       reason: "Safe auto-reply is disabled by workspace policy.",
     };
-  if (policy.requirePublishedKnowledge && !hasKnowledge)
+  if (triage.confidence < policy.safeAutoMinConfidence) {
     return {
       action: "blocked" as const,
       allowed: false,
-      reason: "Published knowledge is required by workspace policy.",
-    };
-  const decision = gateAiAction(mode, triage, policy.safeAutoMinConfidence);
-  if (
-    mode === "safe_auto" &&
-    decision.allowed &&
-    !policy.safeAutoIntents.includes(triage.intent)
-  ) {
-    return {
-      action: "blocked" as const,
-      allowed: false,
-      reason: `Intent ${triage.intent} is not enabled by workspace policy.`,
+      reason: `Confidence ${triage.confidence.toFixed(2)} is below the safe-auto threshold.`,
     };
   }
-  return decision;
+  return {
+    action: "auto_reply" as const,
+    allowed: true,
+    reason: "Published knowledge and workspace policy allow auto-reply.",
+  };
+}
+
+const knowledgeStopWords = new Set([
+  "a",
+  "as",
+  "ao",
+  "aos",
+  "com",
+  "da",
+  "das",
+  "de",
+  "do",
+  "dos",
+  "e",
+  "em",
+  "isso",
+  "me",
+  "na",
+  "no",
+  "o",
+  "os",
+  "para",
+  "por",
+  "que",
+  "qual",
+  "se",
+  "um",
+  "uma",
+  "voce",
+  "você",
+]);
+
+function knowledgeTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLocaleLowerCase("pt-BR")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split(/[^a-z0-9]+/)
+      .map((token) => (token.endsWith("s") ? token.slice(0, -1) : token))
+      .filter((token) => token.length >= 3 && !knowledgeStopWords.has(token)),
+  );
+}
+
+function relevantKnowledge(
+  message: NormalizedWhatsmiauMessage,
+  articles: readonly LiveWorkerKnowledgeArticle[],
+): readonly LiveWorkerKnowledgeArticle[] {
+  const query = knowledgeTokens(messageText(message));
+  if (!query.size) return [];
+  return articles.filter((article) => {
+    const articleTerms = knowledgeTokens(
+      `${article.title} ${article.category} ${article.body}`,
+    );
+    return [...query].some((token) => articleTerms.has(token));
+  });
 }
 
 function aiStateInput(
@@ -667,23 +729,24 @@ function aiStateInput(
   mode: LiveWorkerAiMode,
   policy: LiveWorkerAiPolicy,
   hasKnowledge: boolean,
+  route: AiTriageRoute,
 ) {
-  const decision = policyDecision(mode, triage, policy, hasKnowledge);
+  const decision = policyDecision(mode, triage, policy, hasKnowledge, route);
   const autoSendReady =
-    mode === "safe_auto" && decision.allowed && policy.safeAutoSendEnabled;
+    decision.action === "auto_reply" && policy.safeAutoSendEnabled;
   const needsHumanReview =
-    mode === "draft" ||
+    decision.action === "draft" ||
     !decision.allowed ||
-    (mode === "safe_auto" && !autoSendReady);
+    (decision.action === "auto_reply" && !autoSendReady);
   const lastDecision = !decision.allowed
     ? "blocked"
     : autoSendReady
       ? "auto_reply"
       : "draft";
   const lastDecisionReason =
-    mode === "draft"
-      ? "AI draft requires human review."
-      : decision.allowed && mode === "safe_auto" && !policy.safeAutoSendEnabled
+    decision.action === "draft"
+      ? decision.reason
+      : decision.action === "auto_reply" && !policy.safeAutoSendEnabled
         ? "Auto-reply requires explicit workspace confirmation."
         : decision.reason;
   return {
@@ -698,11 +761,9 @@ function aiStateInput(
     last_decision_at: new Date().toISOString(),
     needs_human: needsHumanReview,
     needs_human_reason:
-      mode === "draft"
-        ? "AI draft requires human review."
-        : decision.allowed &&
-            mode === "safe_auto" &&
-            !policy.safeAutoSendEnabled
+      decision.action === "draft"
+        ? decision.reason
+        : decision.action === "auto_reply" && !policy.safeAutoSendEnabled
           ? "Auto-reply requires explicit workspace confirmation."
           : decision.allowed
             ? null
@@ -713,9 +774,6 @@ function aiStateInput(
 
 function issueType(intent: TriageResult["intent"]): string | null {
   if (intent === "bug") return "bug";
-  if (intent === "incident") return "incident";
-  if (intent === "feature") return "feature";
-  if (intent === "billing") return "billing";
   return null;
 }
 
@@ -803,16 +861,33 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       return;
     }
 
-    const issue = await this.upsertIssue(input, triage);
+    const matchedKnowledge = relevantKnowledge(input.message, input.knowledge);
+    const configuredRoute = modePolicy.policy.routes[triage.intent];
+    const route =
+      configuredRoute === "knowledge_auto_reply" && !matchedKnowledge.length
+        ? modePolicy.policy.fallbackRoute
+        : configuredRoute;
     const decision = policyDecision(
       modePolicy.mode,
       triage,
       modePolicy.policy,
-      input.knowledge.length > 0,
+      matchedKnowledge.length > 0,
+      route,
     );
-    const draft = issue
-      ? undefined
-      : await this.buildDraft(input, triage, modePolicy.mode, decision);
+    const issue =
+      route === "bug_triage"
+        ? await this.upsertIssue(input, triage)
+        : undefined;
+    const draft =
+      decision.allowed && route !== "bug_triage"
+        ? await this.buildDraft(
+            input,
+            triage,
+            modePolicy.mode,
+            decision,
+            matchedKnowledge,
+          )
+        : undefined;
     if (draft)
       await this.persistDraft(
         input,
@@ -821,7 +896,33 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         modePolicy.mode,
         modePolicy.policy,
         decision,
+        matchedKnowledge,
       );
+    if (
+      (route === "human_escalation" ||
+        (route === "knowledge_auto_reply" && !matchedKnowledge.length)) &&
+      modePolicy.policy.notifyOnHumanEscalation
+    ) {
+      await this.notifyWorkspace(
+        input,
+        triage,
+        "ai.human_escalation",
+        "AI escalated a conversation",
+        `The AI could not safely answer: ${triage.summary}`,
+        `ai-human-escalation:${input.persisted.conversationId}:${input.persisted.id}`,
+      );
+    }
+    if (route === "bug_triage" && modePolicy.policy.notifyOnBug && issue) {
+      await this.notifyWorkspace(
+        input,
+        triage,
+        "ai.bug_reported",
+        `Bug reported in ${issue.identifier}`,
+        `A customer reported a possible bug: ${triage.summary}`,
+        `ai-bug-reported:${issue.id}:${input.persisted.id}`,
+        issue.id,
+      );
+    }
     await this.auditDecision(
       input,
       triage,
@@ -829,7 +930,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       {
         mode: modePolicy.mode,
         decision: decision.action,
-        hasKnowledge: input.knowledge.length > 0,
+        route,
+        hasKnowledge: matchedKnowledge.length > 0,
       },
     );
     const { error } = await this.client
@@ -840,7 +942,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           triage,
           modePolicy.mode,
           modePolicy.policy,
-          input.knowledge.length > 0,
+          matchedKnowledge.length > 0,
+          route,
         ),
         { onConflict: "conversation_id" },
       );
@@ -865,10 +968,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     }
     const canSend =
       Boolean(draft) &&
-      modePolicy.mode === "safe_auto" &&
-      decision.allowed &&
+      decision.action === "auto_reply" &&
       modePolicy.policy.safeAutoSendEnabled;
-    return {
+    const result: LiveWorkerAutomationResult = {
       ...(issue ? { issue } : {}),
       ...(draft ? { draft } : {}),
       ...(canSend && draft
@@ -884,6 +986,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           }
         : {}),
     };
+    return Object.keys(result).length ? result : undefined;
   }
 
   async sendAiReply(input: LiveWorkerSendAiReplyInput): Promise<void> {
@@ -1072,17 +1175,53 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     return { id: issueId, identifier, operation };
   }
 
+  private async notifyWorkspace(
+    input: LiveWorkerAutomationInput,
+    triage: TriageResult,
+    kind: string,
+    title: string,
+    body: string,
+    dedupeKey: string,
+    entityId = input.persisted.conversationId,
+  ): Promise<void> {
+    const result = await this.metadataClient
+      .from("notifications")
+      .insert({
+        workspace_id: input.binding.workspaceId,
+        user_id: null,
+        kind,
+        title: boundedText(title, 240),
+        body: boundedText(body, 2_000),
+        entity_type:
+          entityId === input.persisted.conversationId
+            ? "conversation"
+            : "issue",
+        entity_id: entityId,
+        payload_json: {
+          intent: triage.intent,
+          confidence: triage.confidence,
+          summary: triage.summary,
+        },
+        dedupe_key: dedupeKey,
+      })
+      .select("id")
+      .maybeSingle();
+    if (result.error && !/duplicate|unique/i.test(result.error.message))
+      throw new Error(`supabase:notifications:${result.error.message}`);
+  }
+
   private async buildDraft(
     input: LiveWorkerAutomationInput,
     triage: TriageResult,
     mode: LiveWorkerAiMode,
     decision: ReturnType<typeof policyDecision>,
+    knowledge: readonly LiveWorkerKnowledgeArticle[],
   ): Promise<LiveWorkerDraft | undefined> {
     if (triage.unsafe || !decision.allowed || mode === "off") return undefined;
     const body = boundedText(
       await this.provider.draftReply(
         messageText(input.message),
-        safeKnowledgeContext(input.knowledge),
+        safeKnowledgeContext(knowledge),
       ),
       12_000,
     );
@@ -1092,7 +1231,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       messageId: input.persisted.id,
       idempotencyKey: input.idempotencyKey,
       body,
-      knowledgeArticleIds: input.knowledge.map((article) => article.id),
+      knowledgeArticleIds: knowledge.map((article) => article.id),
       triage,
     };
   }
@@ -1104,6 +1243,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     mode: LiveWorkerAiMode,
     policy: LiveWorkerAiPolicy,
     decision: ReturnType<typeof policyDecision>,
+    knowledge: readonly LiveWorkerKnowledgeArticle[],
   ): Promise<void> {
     const client = this.metadataClient;
     const status =
@@ -1145,7 +1285,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     }
     if (!draftId) throw new Error("supabase:ai_drafts:missing_id");
 
-    for (const [rank, article] of input.knowledge.entries()) {
+    for (const [rank, article] of knowledge.entries()) {
       const reference = await client
         .from("ai_draft_knowledge")
         .insert({
