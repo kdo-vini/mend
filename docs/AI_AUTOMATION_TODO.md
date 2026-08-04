@@ -130,13 +130,13 @@ mensagem inbound
   - Manual;
   - Copilot;
   - Auto-reply.
-- [ ] Mostrar estado separado:
+- [x] Mostrar estado separado:
   - `AI active`;
   - `Human takeover — AI paused`;
   - `AI blocked — needs human`.
 - [x] Adicionar botão `Resume AI` quando a conversa estiver pausada.
 - [x] Adicionar botão `Pause AI` para pausa manual.
-- [ ] Exibir a razão da pausa.
+- [x] Exibir a razão da pausa.
 - [ ] Exibir confiança, intenção e artigos usados pelo draft.
 - [ ] Permitir editar o draft antes de inserir no composer.
 - [ ] Mostrar claramente quando uma mensagem foi gerada pela IA.

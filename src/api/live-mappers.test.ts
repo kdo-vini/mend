@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { toUiMessage, toUiRun } from "./live-mappers";
-import type { CodingRunRecord, MessageRecord } from "./workspace-data";
+import { toUiConversation, toUiMessage, toUiRun } from "./live-mappers";
+import type {
+  CodingRunRecord,
+  ConversationRecord,
+  MessageRecord,
+} from "./workspace-data";
 
 const baseMessage: MessageRecord = {
   id: "message-1",
@@ -43,6 +47,80 @@ describe("live message mapper", () => {
     expect(toUiMessage({ ...baseMessage, is_deleted: true }).deleted).toBe(
       true,
     );
+  });
+});
+
+describe("live conversation mapper", () => {
+  it("exposes the latest AI decision and triage context", () => {
+    const conversation = {
+      id: "conversation-1",
+      workspace_id: "workspace-1",
+      contact_id: "contact-1",
+      channel_connection_id: "channel-1",
+      status: "open",
+      attention_state: "needs_attention",
+      ai_mode: "safe_auto",
+      assigned_user_id: null,
+      unread_count: 0,
+      last_message_at: "2026-08-04T00:00:00.000Z",
+      last_inbound_at: "2026-08-04T00:00:00.000Z",
+      last_outbound_at: null,
+      resolved_at: null,
+      snoozed_until: null,
+      created_at: "2026-08-03T00:00:00.000Z",
+      updated_at: "2026-08-04T00:00:00.000Z",
+    } satisfies ConversationRecord;
+
+    const result = toUiConversation(
+      conversation,
+      {
+        id: "contact-1",
+        workspace_id: "workspace-1",
+        channel_connection_id: "channel-1",
+        display_name: "Ana",
+        phone_number: "5511999999999",
+        company_name: "Acme",
+        notes: null,
+        profile_picture_url: null,
+        provider_contact_id: null,
+        created_at: "2026-08-03T00:00:00.000Z",
+        updated_at: "2026-08-03T00:00:00.000Z",
+      },
+      [],
+      undefined,
+      {
+        id: "state-1",
+        workspace_id: "workspace-1",
+        conversation_id: "conversation-1",
+        automation_state: "ai_active",
+        human_takeover_at: null,
+        human_takeover_by: null,
+        human_takeover_reason: null,
+        last_human_message_id: null,
+        last_triaged_message_id: "message-1",
+        last_triaged_at: "2026-08-04T00:00:00.000Z",
+        latest_intent: "status",
+        latest_confidence: 0.94,
+        current_summary: "Customer is asking about an open request.",
+        needs_human: false,
+        needs_human_reason: null,
+        last_decision: "auto_reply",
+        last_decision_reason: "High-confidence low-risk intent is eligible.",
+        last_decision_at: "2026-08-04T00:00:00.000Z",
+        paused_until: null,
+        sentiment: "neutral",
+        created_at: "2026-08-03T00:00:00.000Z",
+        updated_at: "2026-08-04T00:00:00.000Z",
+      },
+    );
+
+    expect(result).toMatchObject({
+      aiDecision: "auto_reply",
+      aiDecisionReason: "High-confidence low-risk intent is eligible.",
+      aiIntent: "status",
+      aiConfidence: 0.94,
+      aiSummary: "Customer is asking about an open request.",
+    });
   });
 });
 

@@ -850,6 +850,59 @@ h1 {
   font-size: 10px;
   text-transform: capitalize;
 }
+.ai-decision-card {
+  display: grid;
+  gap: 6px;
+  margin: 0 15px 10px;
+  padding: 9px 11px;
+  border: 1px solid oklch(0.7 0.15 258 / 0.22);
+  border-radius: 7px;
+  background: oklch(0.7 0.15 258 / 0.06);
+}
+.ai-decision-card.paused {
+  border-color: oklch(0.72 0.16 55 / 0.28);
+  background: oklch(0.72 0.16 55 / 0.07);
+}
+.ai-decision-card.blocked {
+  border-color: oklch(0.62 0.18 25 / 0.32);
+  background: oklch(0.62 0.18 25 / 0.07);
+}
+.ai-decision-heading,
+.ai-decision-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.ai-decision-heading {
+  justify-content: space-between;
+}
+.ai-decision-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ai-confidence,
+.ai-decision-meta,
+.ai-decision-summary {
+  color: var(--muted);
+  font-size: 10px;
+}
+.ai-decision-meta {
+  flex-wrap: wrap;
+}
+.ai-decision-meta span + span::before {
+  content: "·";
+  margin-right: 9px;
+  color: var(--line-strong);
+}
+.ai-decision-summary {
+  margin: 0;
+  line-height: 1.45;
+}
 .menu-wrap {
   position: relative;
 }

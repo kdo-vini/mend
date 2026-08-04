@@ -304,6 +304,9 @@ export type Database = {
           id: string
           last_triaged_at: string | null
           last_human_message_id: string | null
+          last_decision: string | null
+          last_decision_at: string | null
+          last_decision_reason: string | null
           last_triaged_message_id: string | null
           latest_confidence: number | null
           latest_intent: string | null
@@ -323,6 +326,9 @@ export type Database = {
           human_takeover_by?: string | null
           human_takeover_reason?: string | null
           id?: string
+          last_decision?: string | null
+          last_decision_at?: string | null
+          last_decision_reason?: string | null
           last_triaged_at?: string | null
           last_human_message_id?: string | null
           last_triaged_message_id?: string | null
@@ -344,6 +350,9 @@ export type Database = {
           human_takeover_by?: string | null
           human_takeover_reason?: string | null
           id?: string
+          last_decision?: string | null
+          last_decision_at?: string | null
+          last_decision_reason?: string | null
           last_triaged_at?: string | null
           last_human_message_id?: string | null
           last_triaged_message_id?: string | null

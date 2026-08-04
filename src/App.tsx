@@ -2002,6 +2002,7 @@ function InboxPage({
             assigneeOptions={assigneeOptions}
             assigneeLabel={assigneeLabel}
           />
+          <AiDecisionSummary conversation={selected} />
           <div className="message-canvas">
             <div className="day-divider">
               <span>Today</span>
@@ -2127,6 +2128,56 @@ function ConversationRow({
       </div>
       <div className={`attention-marker ${conversation.attention}`} />
     </button>
+  );
+}
+
+function AiDecisionSummary({ conversation }: { conversation: Conversation }) {
+  if (
+    !conversation.aiDecision &&
+    !conversation.aiIntent &&
+    !conversation.aiSummary &&
+    conversation.automationState !== "human_paused"
+  )
+    return null;
+
+  const blocked =
+    conversation.automationState !== "human_paused" &&
+    conversation.aiDecision === "blocked";
+  const title =
+    conversation.automationState === "human_paused"
+      ? "Human takeover — AI paused"
+      : blocked
+        ? "AI blocked — needs human"
+        : conversation.aiDecision === "auto_reply"
+          ? "AI active — auto-reply eligible"
+          : "AI active — Copilot";
+  return (
+    <aside
+      className={`ai-decision-card ${blocked ? "blocked" : ""} ${conversation.automationState === "human_paused" ? "paused" : ""}`}
+      aria-label="AI decision summary"
+    >
+      <div className="ai-decision-heading">
+        <span className="ai-decision-title">
+          <Sparkles size={13} /> {title}
+        </span>
+        {conversation.aiConfidence !== undefined && (
+          <span className="ai-confidence">
+            {Math.round(conversation.aiConfidence * 100)}% confidence
+          </span>
+        )}
+      </div>
+      <div className="ai-decision-meta">
+        {conversation.aiIntent && (
+          <span>Intent: {conversation.aiIntent.replaceAll("_", " ")}</span>
+        )}
+        {conversation.aiDecisionReason && (
+          <span>{conversation.aiDecisionReason}</span>
+        )}
+      </div>
+      {conversation.aiSummary && (
+        <p className="ai-decision-summary">{conversation.aiSummary}</p>
+      )}
+    </aside>
   );
 }
 

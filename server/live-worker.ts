@@ -675,6 +675,17 @@ function aiStateInput(
     mode === "draft" ||
     !decision.allowed ||
     (mode === "safe_auto" && !autoSendReady);
+  const lastDecision = !decision.allowed
+    ? "blocked"
+    : autoSendReady
+      ? "auto_reply"
+      : "draft";
+  const lastDecisionReason =
+    mode === "draft"
+      ? "AI draft requires human review."
+      : decision.allowed && mode === "safe_auto" && !policy.safeAutoSendEnabled
+        ? "Auto-reply requires explicit workspace confirmation."
+        : decision.reason;
   return {
     workspace_id: input.binding.workspaceId,
     conversation_id: input.persisted.conversationId,
@@ -682,6 +693,9 @@ function aiStateInput(
     latest_intent: triage.intent,
     latest_confidence: triage.confidence,
     current_summary: triage.summary,
+    last_decision: lastDecision,
+    last_decision_reason: lastDecisionReason,
+    last_decision_at: new Date().toISOString(),
     needs_human: needsHumanReview,
     needs_human_reason:
       mode === "draft"

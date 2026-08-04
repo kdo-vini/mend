@@ -6,6 +6,7 @@ export type AttentionState =
   | "none";
 export type AiMode = "off" | "draft" | "safe_auto";
 export type AutomationState = "ai_active" | "human_paused";
+export type AiDecision = "draft" | "auto_reply" | "blocked" | "human_paused";
 export type HumanTakeoverReason =
   | "human_message"
   | "customer_requested_human"
@@ -65,6 +66,11 @@ export interface Conversation {
   humanTakeoverAt?: string;
   humanTakeoverBy?: string;
   humanTakeoverReason?: HumanTakeoverReason;
+  aiDecision?: AiDecision;
+  aiDecisionReason?: string;
+  aiIntent?: string;
+  aiConfidence?: number;
+  aiSummary?: string;
   unread: number;
   lastMessage: string;
   lastTime: string;

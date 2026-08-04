@@ -18,6 +18,7 @@ import type {
   IssueStatus,
   IssueType,
   AutomationState,
+  AiDecision,
   HumanTakeoverReason,
 } from "../types";
 
@@ -192,6 +193,18 @@ export function toUiConversation(
             aiState.human_takeover_reason as HumanTakeoverReason,
         }
       : {}),
+    ...(aiState?.last_decision
+      ? { aiDecision: aiState.last_decision as AiDecision }
+      : {}),
+    ...(aiState?.last_decision_reason
+      ? { aiDecisionReason: aiState.last_decision_reason }
+      : {}),
+    ...(aiState?.latest_intent ? { aiIntent: aiState.latest_intent } : {}),
+    ...(aiState?.latest_confidence !== null &&
+    aiState?.latest_confidence !== undefined
+      ? { aiConfidence: aiState.latest_confidence }
+      : {}),
+    ...(aiState?.current_summary ? { aiSummary: aiState.current_summary } : {}),
     unread: record.unread_count,
     lastMessage: last?.text || "No messages yet",
     lastTime: displayTime(record.last_message_at ?? last?.time),
