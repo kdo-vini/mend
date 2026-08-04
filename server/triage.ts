@@ -104,7 +104,10 @@ export function parseTriageOutput(raw: unknown): TriageResult {
 }
 
 export function isUnsafeRequest(conversation: string): boolean {
-  return unsafeRequestPattern.test(conversation);
+  const customerMessage = conversation.match(
+    /<customer_message>\s*([\s\S]*?)\s*<\/customer_message>/i,
+  )?.[1];
+  return unsafeRequestPattern.test(customerMessage ?? conversation);
 }
 
 export async function triageConversation(

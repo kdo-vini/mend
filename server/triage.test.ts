@@ -54,6 +54,24 @@ describe("support triage", () => {
     expect(result.unsafeReason).toContain("sensitive");
   });
 
+  it("does not classify sensitive words in the knowledge context as customer intent", async () => {
+    const provider: SupportAiProvider = {
+      name: "openai",
+      async draftReply() {
+        return "draft";
+      },
+      async triage() {
+        return JSON.stringify(validTriage);
+      },
+    };
+    const result = await triageConversation(
+      provider,
+      "<customer_message>Me fala sobre o ZeloPDV.</customer_message>\n" +
+        "<published_knowledge_reference>Use cartão e senha quando necessário.</published_knowledge_reference>",
+    );
+    expect(result.unsafe).toBe(false);
+  });
+
   it("gates off, draft, unsafe, low-confidence and safe-auto modes", () => {
     expect(gateAiAction("off", validTriage).action).toBe("off");
     expect(gateAiAction("draft", validTriage)).toMatchObject({
