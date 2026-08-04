@@ -3,13 +3,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function useConversationScroll({
   conversationId,
   messageSignature,
+  viewKey,
 }: {
   conversationId?: string;
   messageSignature?: string;
+  viewKey?: string;
 }) {
   const messageCanvasRef = useRef<HTMLDivElement>(null);
   const previousConversationIdRef = useRef<string | undefined>(undefined);
   const previousMessageSignatureRef = useRef<string | undefined>(undefined);
+  const previousViewKeyRef = useRef<string | undefined>(undefined);
   const isAtMessageBottomRef = useRef(true);
   const [showScrollDown, setShowScrollDown] = useState(false);
 
@@ -42,8 +45,24 @@ export function useConversationScroll({
     };
     updateBottomState();
     canvas.addEventListener("scroll", updateBottomState, { passive: true });
-    return () => canvas.removeEventListener("scroll", updateBottomState);
-  }, [conversationId]);
+
+    // The takeover/AI cards sit above the message list. When one changes
+    // height, the canvas viewport can shrink without any new message being
+    // added. Keep a conversation that was already at the bottom anchored to
+    // the latest message in that case.
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            if (isAtMessageBottomRef.current) scrollMessagesToBottom("auto");
+          })
+        : undefined;
+    resizeObserver?.observe(canvas);
+
+    return () => {
+      canvas.removeEventListener("scroll", updateBottomState);
+      resizeObserver?.disconnect();
+    };
+  }, [conversationId, scrollMessagesToBottom]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -51,14 +70,18 @@ export function useConversationScroll({
       previousConversationIdRef.current !== conversationId;
     const messagesChanged =
       previousMessageSignatureRef.current !== messageSignature;
+    const viewChanged = previousViewKeyRef.current !== viewKey;
     previousConversationIdRef.current = conversationId;
     previousMessageSignatureRef.current = messageSignature;
-    if (!conversationChanged && !messagesChanged) return;
+    previousViewKeyRef.current = viewKey;
+    if (!conversationChanged && !messagesChanged && !viewChanged) return;
 
-    if (conversationChanged || isAtMessageBottomRef.current)
-      scrollMessagesToBottom(conversationChanged ? "auto" : "smooth");
+    if (conversationChanged || viewChanged || isAtMessageBottomRef.current)
+      scrollMessagesToBottom(
+        conversationChanged || viewChanged ? "auto" : "smooth",
+      );
     else if (messagesChanged) setShowScrollDown(true);
-  }, [conversationId, messageSignature, scrollMessagesToBottom]);
+  }, [conversationId, messageSignature, scrollMessagesToBottom, viewKey]);
 
   return { messageCanvasRef, showScrollDown, scrollMessagesToBottom };
 }

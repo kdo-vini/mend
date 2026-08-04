@@ -76,6 +76,13 @@ function sortConversations(items: Conversation[]) {
   });
 }
 
+function shouldShowConversationAiDetails() {
+  return (
+    typeof window === "undefined" ||
+    !window.matchMedia("(max-width: 650px)").matches
+  );
+}
+
 function mergeConversationSnapshot(
   current: Conversation[],
   snapshot: Conversation,
@@ -149,7 +156,11 @@ export function InboxPage({
     requestId: number;
     conversationId: string;
   }>();
-  const [aiDetailsOpen, setAiDetailsOpen] = useState(false);
+  const [aiDetailsOpen, setAiDetailsOpen] = useState(
+    shouldShowConversationAiDetails,
+  );
+  const [showAiDecision, setShowAiDecision] = useState(true);
+  const [showAiDraft, setShowAiDraft] = useState(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const selected =
     conversations.find((item) => item.id === selectedConversationId) ??
@@ -161,6 +172,7 @@ export function InboxPage({
     useConversationScroll({
       conversationId: selected?.id,
       messageSignature,
+      viewKey: mobileConversationOpen ? "open" : "closed",
     });
   const filtered = useMemo(
     () =>
@@ -195,6 +207,21 @@ export function InboxPage({
     setSelectedConversationId(conversationId);
     setMobileConversationOpen(true);
   }, [conversations, location.search, setSelectedConversationId]);
+
+  useEffect(() => {
+    if (!filtered.length) {
+      setMobileConversationOpen(false);
+      return;
+    }
+    if (!filtered.some((conversation) => conversation.id === selected?.id))
+      setSelectedConversationId(filtered[0].id);
+  }, [filtered, selected?.id, setSelectedConversationId]);
+
+  useEffect(() => {
+    setAiDetailsOpen(shouldShowConversationAiDetails());
+    setShowAiDecision(true);
+    setShowAiDraft(true);
+  }, [selected?.id]);
 
   if (!selected) {
     return (
@@ -245,7 +272,6 @@ export function InboxPage({
   const selectConversation = (conversation: Conversation) => {
     setSelectedConversationId(conversation.id);
     setMobileConversationOpen(true);
-    setAiDetailsOpen(false);
     if (conversation.unread)
       setConversations((current) =>
         current.map((item) =>
@@ -669,7 +695,7 @@ export function InboxPage({
         </div>
       </div>
       <div
-        className={`inbox-layout ${mobileConversationOpen ? "mobile-conversation-open" : ""}`}
+        className={`inbox-layout ${mobileConversationOpen ? "mobile-conversation-open" : ""} ${filtered.length === 0 ? "no-visible-conversation" : ""}`}
       >
         <section className="conversation-rail">
           <div className="rail-heading">
@@ -780,14 +806,17 @@ export function InboxPage({
           />
           <div
             className={
-              "conversation-insights " + (aiDetailsOpen ? "mobile-open" : "")
+              "conversation-insights " +
+              (aiDetailsOpen ? "ai-details-open" : "")
             }
           >
-            <AiDecisionSummary
-              conversation={selected}
-              onDismiss={() => setAiDetailsOpen(false)}
-            />
-            {selected.aiDraft && (
+            {showAiDecision && (
+              <AiDecisionSummary
+                conversation={selected}
+                onDismiss={() => setShowAiDecision(false)}
+              />
+            )}
+            {showAiDraft && selected.aiDraft && (
               <AiDraftCard
                 draft={selected.aiDraft}
                 onInsert={(text) =>
@@ -797,7 +826,7 @@ export function InboxPage({
                     conversationId: selected.id,
                   })
                 }
-                onDismiss={() => setAiDetailsOpen(false)}
+                onDismiss={() => setShowAiDraft(false)}
               />
             )}
           </div>
