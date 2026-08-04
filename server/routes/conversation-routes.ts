@@ -1,4 +1,12 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
+import {
+  aiDraftSchema,
+  conversationAiPauseSchema,
+  conversationListQuerySchema,
+  conversationPatchSchema,
+  conversationSnoozeSchema,
+  sendMessageSchema,
+} from "./schemas.js";
 
 export function registerConversationRoutes(context: ApiRouteModuleContext) {
   const {
@@ -12,13 +20,6 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
     requireFound,
     mediaApiError,
   } = context;
-  const conversationListQuerySchema =
-    context.schemas.conversationListQuerySchema;
-  const conversationPatchSchema = context.schemas.conversationPatchSchema;
-  const conversationSnoozeSchema = context.schemas.conversationSnoozeSchema;
-  const conversationAiPauseSchema = context.schemas.conversationAiPauseSchema;
-  const sendMessageSchema = context.schemas.sendMessageSchema;
-  const aiDraftSchema = context.schemas.aiDraftSchema;
   router.get(
     "/api/conversations",
     asyncRoute(async (request, response) => {

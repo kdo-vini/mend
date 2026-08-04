@@ -20,8 +20,9 @@ import {
 } from "./supabase.js";
 import { SupabaseJobStore } from "./persistence.js";
 import { authenticateRequest } from "./auth.js";
-import { createApiRouter, type AuthAdapter } from "./api-router.js";
-import { SupabaseApiAdapters } from "./supabase-api-adapters.js";
+import { createApiRouter } from "./api-router.js";
+import type { AuthAdapter } from "./contracts/api-ports.js";
+import { createSupabaseApiAdapters } from "./supabase-api-adapters.js";
 import { createSupabaseLiveWorker, type LiveWorker } from "./live-worker.js";
 import { getVapidPublicKey } from "./push.js";
 
@@ -446,7 +447,7 @@ app.get("/api/runtime", async (_request, response) =>
     supabase: hasServerSupabaseConfig(),
     whatsMiau: Boolean(process.env.WHATSMIAU_API_KEY),
     openai: Boolean(process.env.OPENAI_API_KEY),
-    aiProvider: process.env.SUPPORT_AI_PROVIDER ?? "openai",
+    aiProvider: "openai",
     jobs: (await messageJobs.list()).length,
   }),
 );
@@ -462,10 +463,10 @@ if (serverSupabase) {
     const client = token ? createServerSupabaseClient(token) : serverSupabase;
     if (!client) return next();
     try {
-      const apiAdapters = new SupabaseApiAdapters({
+      const apiAdapters = createSupabaseApiAdapters({
         client,
         privilegedClient: serverSupabase,
-      }).dependencies();
+      });
       return createApiRouter({ auth: apiAuth, ...apiAdapters })(
         request,
         response,

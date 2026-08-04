@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  AiProviderUnavailableError,
-  ClaudeSupportProvider,
-  GeminiSupportProvider,
   OpenAiSupportProvider,
   type OpenAiResponsesClient,
-  createSupportAiProviderRegistry,
+  createSupportAiProvider,
 } from "./providers.js";
 
 describe("support AI providers", () => {
@@ -36,24 +33,13 @@ describe("support AI providers", () => {
     expect(calls[0]).toContain("Checkout closes at 18:00.");
   });
 
-  it("registers future providers without requiring their keys at startup", () => {
-    const registry = createSupportAiProviderRegistry({
-      claude: {},
-      gemini: {},
-    });
-    expect(registry.has("openai")).toBe(true);
-    expect(registry.has("claude")).toBe(true);
-    expect(registry.has("gemini")).toBe(true);
-    expect(registry.create("claude")).toBeInstanceOf(ClaudeSupportProvider);
-    expect(registry.create("gemini")).toBeInstanceOf(GeminiSupportProvider);
-  });
-
-  it("fails clearly when an unconfigured future provider is used", async () => {
-    await expect(
-      new ClaudeSupportProvider().draftReply("hello"),
-    ).rejects.toBeInstanceOf(AiProviderUnavailableError);
-    await expect(
-      new GeminiSupportProvider().triage("hello"),
-    ).rejects.toMatchObject({ message: "gemini: API key is missing" });
+  it("creates the configured OpenAI provider without a registry", () => {
+    expect(
+      createSupportAiProvider({
+        client: {
+          responses: { create: async () => ({ output_text: "" }) },
+        },
+      }),
+    ).toBeInstanceOf(OpenAiSupportProvider);
   });
 });

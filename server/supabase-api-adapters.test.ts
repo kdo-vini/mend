@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  SupabaseApiAdapters,
+  createSupabaseApiAdapters,
   type WhatsmiauProviderPort,
 } from "./supabase-api-adapters.js";
 import { issueCreateSchema } from "./issue-service.js";
@@ -239,7 +239,7 @@ const fakeProvider = (): WhatsmiauProviderPort => ({
 });
 
 function adapters(client: FakeClient) {
-  return new SupabaseApiAdapters({
+  return createSupabaseApiAdapters({
     client: client as unknown as SupabaseClient,
     whatsMiau: fakeProvider(),
     aiProvider: {
@@ -247,7 +247,7 @@ function adapters(client: FakeClient) {
       draftReply: async () => "draft",
       triage: async () => "{}",
     },
-  }).dependencies();
+  });
 }
 
 describe("Supabase API adapters", () => {
@@ -596,7 +596,7 @@ describe("Supabase API adapters", () => {
     delete process.env.WHATSMIAU_WEBHOOK_URL;
 
     try {
-      const dependencies = new SupabaseApiAdapters({
+      const dependencies = createSupabaseApiAdapters({
         client: client as unknown as SupabaseClient,
         whatsMiau: provider,
         aiProvider: {
@@ -604,7 +604,7 @@ describe("Supabase API adapters", () => {
           draftReply: async () => "draft",
           triage: async () => "{}",
         },
-      }).dependencies();
+      });
       await expect(
         dependencies.channels.createWhatsmiau(
           { userId, workspaceId, role: "agent" },
@@ -645,7 +645,7 @@ describe("Supabase API adapters", () => {
     const provider = fakeProvider();
     const create = vi.fn(provider.createInstance);
     provider.createInstance = create;
-    const dependencies = new SupabaseApiAdapters({
+    const dependencies = createSupabaseApiAdapters({
       client: client as unknown as SupabaseClient,
       whatsMiau: provider,
       aiProvider: {
@@ -653,7 +653,7 @@ describe("Supabase API adapters", () => {
         draftReply: async () => "draft",
         triage: async () => "{}",
       },
-    }).dependencies();
+    });
 
     await expect(
       dependencies.channels.createWhatsmiau(
@@ -691,7 +691,7 @@ describe("Supabase API adapters", () => {
       "https://hooks.example.test/mend/webhooks/whatsmiau";
 
     try {
-      const dependencies = new SupabaseApiAdapters({
+      const dependencies = createSupabaseApiAdapters({
         client: client as unknown as SupabaseClient,
         whatsMiau: provider,
         aiProvider: {
@@ -699,7 +699,7 @@ describe("Supabase API adapters", () => {
           draftReply: async () => "draft",
           triage: async () => "{}",
         },
-      }).dependencies();
+      });
       const context = { userId, workspaceId, role: "agent" as const };
 
       await dependencies.channels.createWhatsmiau(context, {
@@ -757,7 +757,7 @@ describe("Supabase API adapters", () => {
     const provider = fakeProvider();
     const sendMedia = vi.fn(provider.sendMedia);
     provider.sendMedia = sendMedia;
-    const dependencies = new SupabaseApiAdapters({
+    const dependencies = createSupabaseApiAdapters({
       client: client as unknown as SupabaseClient,
       whatsMiau: provider,
       aiProvider: {
@@ -765,7 +765,7 @@ describe("Supabase API adapters", () => {
         draftReply: async () => "draft",
         triage: async () => "{}",
       },
-    }).dependencies();
+    });
 
     await dependencies.conversations.sendMessage(
       { userId, workspaceId, role: "agent" },

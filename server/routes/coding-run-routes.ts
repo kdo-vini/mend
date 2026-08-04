@@ -1,4 +1,5 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
+import { codingRunCreateSchema, codingRunListQuerySchema } from "./schemas.js";
 
 export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
   const {
@@ -12,8 +13,6 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
     send,
     requireFound,
   } = context;
-  const codingRunListQuerySchema = context.schemas.codingRunListQuerySchema;
-  const codingRunCreateSchema = context.schemas.codingRunCreateSchema;
   router.get(
     "/api/coding-runs",
     asyncRoute(async (request, response) => {

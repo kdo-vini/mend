@@ -8,6 +8,7 @@ import {
   resolveAndNotifySchema,
   type IssueRequestContext,
 } from "../issue-service.js";
+import { issueListApiQuerySchema } from "./schemas.js";
 
 export function registerIssueRoutes(context: ApiRouteModuleContext) {
   const {
@@ -23,7 +24,6 @@ export function registerIssueRoutes(context: ApiRouteModuleContext) {
     issueService,
     ApiHttpError,
   } = context;
-  const issueListApiQuerySchema = context.schemas.issueListApiQuerySchema;
   router.get(
     "/api/issues",
     asyncRoute(async (request, response) => {

@@ -1,5 +1,14 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
 import { z } from "zod";
+import {
+  auditLogListQuerySchema,
+  workspaceCreateSchema,
+  workspaceMemberCreateSchema,
+  workspaceMemberListQuerySchema,
+  workspaceMemberRolePatchSchema,
+  workspaceParamSchema,
+  workspacePatchSchema,
+} from "./schemas.js";
 
 export function registerWorkspaceRoutes(context: ApiRouteModuleContext) {
   const {
@@ -15,16 +24,6 @@ export function registerWorkspaceRoutes(context: ApiRouteModuleContext) {
     ApiHttpError,
     uuid,
   } = context;
-  const workspaceParamSchema = context.schemas.workspaceParamSchema;
-  const workspaceCreateSchema = context.schemas.workspaceCreateSchema;
-  const workspacePatchSchema = context.schemas.workspacePatchSchema;
-  const workspaceMemberListQuerySchema =
-    context.schemas.workspaceMemberListQuerySchema;
-  const workspaceMemberCreateSchema =
-    context.schemas.workspaceMemberCreateSchema;
-  const workspaceMemberRolePatchSchema =
-    context.schemas.workspaceMemberRolePatchSchema;
-  const auditLogListQuerySchema = context.schemas.auditLogListQuerySchema;
   router.get(
     "/api/workspaces",
     asyncRoute(async (_request, response) => {

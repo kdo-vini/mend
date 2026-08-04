@@ -1,21 +1,11 @@
 import OpenAI from "openai";
 
-export type SupportAiProviderName = "openai" | "claude" | "gemini";
+export type SupportAiProviderName = "openai";
 
 export interface SupportAiProvider {
   readonly name: SupportAiProviderName;
   draftReply(conversation: string, knowledgeContext?: string): Promise<string>;
   triage(conversation: string): Promise<string>;
-}
-
-export class AiProviderUnavailableError extends Error {
-  constructor(
-    provider: SupportAiProviderName,
-    message = "Provider is not configured",
-  ) {
-    super(`${provider}: ${message}`);
-    this.name = "AiProviderUnavailableError";
-  }
 }
 
 export interface OpenAiResponsesClient {
@@ -93,136 +83,11 @@ export class OpenAiSupportProvider implements SupportAiProvider {
   }
 }
 
-export interface ConfigurableProviderOptions {
-  apiKey?: string;
-  endpoint?: string;
-}
-
-/**
- * A deliberately small adapter seam for providers that are planned but not
- * enabled yet. They can be registered and selected without making startup
- * depend on a vendor key. A transport can be added behind this class later.
- */
-export abstract class ConfigurableSupportAiProvider
-  implements SupportAiProvider
-{
-  abstract readonly name: Exclude<SupportAiProviderName, "openai">;
-  protected readonly apiKey?: string;
-  protected readonly endpoint?: string;
-
-  constructor(options: ConfigurableProviderOptions = {}) {
-    this.apiKey = options.apiKey;
-    this.endpoint = options.endpoint;
-  }
-
-  draftReply(
-    _conversation: string,
-    _knowledgeContext?: string,
-  ): Promise<string> {
-    return Promise.reject(this.unavailable());
-  }
-
-  triage(_conversation: string): Promise<string> {
-    return Promise.reject(this.unavailable());
-  }
-
-  private unavailable(): AiProviderUnavailableError {
-    if (!this.apiKey)
-      return new AiProviderUnavailableError(this.name, "API key is missing");
-    return new AiProviderUnavailableError(
-      this.name,
-      this.endpoint
-        ? "adapter transport is not enabled"
-        : "endpoint is missing",
-    );
-  }
-}
-
-export class ClaudeSupportProvider extends ConfigurableSupportAiProvider {
-  readonly name = "claude" as const;
-}
-
-export class GeminiSupportProvider extends ConfigurableSupportAiProvider {
-  readonly name = "gemini" as const;
-}
-
-export type SupportAiProviderFactory = () => SupportAiProvider;
-
-export class SupportAiProviderRegistry {
-  private readonly factories = new Map<
-    SupportAiProviderName,
-    SupportAiProviderFactory
-  >();
-
-  register(
-    name: SupportAiProviderName,
-    factory: SupportAiProviderFactory,
-  ): this {
-    this.factories.set(name, factory);
-    return this;
-  }
-
-  create(name: SupportAiProviderName): SupportAiProvider {
-    const factory = this.factories.get(name);
-    if (!factory)
-      throw new AiProviderUnavailableError(name, "provider is not registered");
-    return factory();
-  }
-
-  has(name: SupportAiProviderName): boolean {
-    return this.factories.has(name);
-  }
-}
-
-export interface SupportAiProviderRegistryOptions {
-  openai?: { client?: OpenAiResponsesClient; model?: string };
-  claude?: ConfigurableProviderOptions;
-  gemini?: ConfigurableProviderOptions;
-}
-
-export function createSupportAiProviderRegistry(
-  options: SupportAiProviderRegistryOptions = {},
-): SupportAiProviderRegistry {
-  return new SupportAiProviderRegistry()
-    .register(
-      "openai",
-      () =>
-        new OpenAiSupportProvider(options.openai?.client, {
-          model: options.openai?.model,
-        }),
-    )
-    .register(
-      "claude",
-      () =>
-        new ClaudeSupportProvider(
-          options.claude ?? {
-            apiKey: process.env.ANTHROPIC_API_KEY,
-            endpoint: process.env.ANTHROPIC_ENDPOINT,
-          },
-        ),
-    )
-    .register(
-      "gemini",
-      () =>
-        new GeminiSupportProvider(
-          options.gemini ?? {
-            apiKey: process.env.GEMINI_API_KEY,
-            endpoint: process.env.GEMINI_ENDPOINT,
-          },
-        ),
-    );
-}
-
 export function createSupportAiProvider(
   options: {
-    provider?: SupportAiProviderName;
-    registry?: SupportAiProviderRegistry;
+    client?: OpenAiResponsesClient;
+    model?: string;
   } = {},
 ): SupportAiProvider {
-  const providerName =
-    options.provider ??
-    (process.env.SUPPORT_AI_PROVIDER as SupportAiProviderName | undefined) ??
-    "openai";
-  const registry = options.registry ?? createSupportAiProviderRegistry();
-  return registry.create(providerName);
+  return new OpenAiSupportProvider(options.client, { model: options.model });
 }

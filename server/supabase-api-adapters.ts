@@ -1,14 +1,32 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  ChannelPort,
-  ConversationPort,
-  CodingRunPort,
-  MembershipAdapter,
-  RepositoryPort,
-  RequestContext,
-  WorkspacePort,
-  WorkspaceRole,
-} from "./api-router.js";
+import {
+  type ChannelPort,
+  type ChannelCreateInput,
+  type ChannelListQuery,
+  type ConversationPort,
+  type ConversationListQuery,
+  type ConversationPatchInput,
+  type ConversationSnoozeInput,
+  type SendMessageInput,
+  type AiDraftInput,
+  type CodingRunPort,
+  type CodingRunCreateInput,
+  type CodingRunListQuery,
+  type MembershipAdapter,
+  type RepositoryPort,
+  type RepositoryInput,
+  type RepositoryListQuery,
+  type RepositoryPatchInput,
+  type RequestContext,
+  type WorkspaceCreateInput,
+  type WorkspacePatchInput,
+  type WorkspaceMemberCreateInput,
+  type WorkspaceMemberListQuery,
+  type WorkspaceMemberRolePatchInput,
+  type AuditLogListQuery,
+  type WorkspacePort,
+  type WorkspaceRole,
+} from "./contracts/api-ports.js";
 import {
   createServerSupabaseClient,
   type MendServerSupabaseClient,
@@ -46,14 +64,9 @@ import {
   createSupportAiProvider,
   type SupportAiProvider,
 } from "./providers.js";
-import {
-  CodexService,
-  type RepositoryConfig,
-  type RepositoryConfigPort,
-} from "./codex-service.js";
+import { CodexService, type RepositoryConfigPort } from "./codex-service.js";
 import {
   redactSecrets,
-  type CodexRunRecord,
   type CodexRunStore,
   type CreateCodexRunInput,
   type SafeTool,
@@ -61,87 +74,29 @@ import {
 } from "./codex.js";
 import type { CodexRunEvent, CodexRunEventInput } from "./codex-events.js";
 import type { AllowedCommand } from "../src/core.js";
+import {
+  article,
+  auditLog,
+  channel,
+  checked,
+  conversation,
+  issue,
+  issueDbPayload,
+  providerStatus,
+  repository,
+  repositoryDbPayload,
+  rpcRow,
+  row,
+  rows,
+  run,
+  str,
+  workspace,
+  workspaceMember,
+  type DbResult,
+  type Row,
+} from "./adapters/supabase-mappers.js";
 
 type AnySupabaseClient = SupabaseClient;
-type Row = Record<string, unknown>;
-type DbResult = { data: unknown; error: { message?: string } | null };
-
-type WorkspaceCreateInput = {
-  name: string;
-  slug: string;
-  issuePrefix?: string;
-  timezone?: string;
-  defaultLanguage?: string;
-};
-type WorkspacePatchInput = Partial<WorkspaceCreateInput>;
-type WorkspaceMemberListQuery = {
-  role?: string;
-  limit: number;
-  cursor?: string;
-};
-type WorkspaceMemberCreateInput = { userId: string; role: string };
-type WorkspaceMemberRolePatchInput = { role: string };
-type AuditLogListQuery = {
-  action?: string;
-  entityType?: string;
-  limit: number;
-  cursor?: string;
-};
-type ChannelListQuery = { status?: string; limit: number; cursor?: string };
-type ChannelCreateInput = {
-  name: string;
-  providerInstanceName: string;
-  phoneNumber?: string;
-  profileName?: string;
-};
-type ConversationListQuery = {
-  status?: string;
-  attentionState?: string;
-  aiMode?: string;
-  assignedUserId?: string;
-  limit: number;
-  cursor?: string;
-};
-type ConversationPatchInput = {
-  status?: string;
-  attentionState?: string;
-  aiMode?: string;
-  assignedUserId?: string | null;
-  snoozedUntil?: string | null;
-};
-type ConversationSnoozeInput = { until: string };
-type SendMessageInput = {
-  messageType: string;
-  text?: string;
-  caption?: string;
-  mediaUrl?: string;
-  mediaDataUrl?: string;
-  fileName?: string;
-  mimeType?: string;
-};
-type AiDraftInput = { instruction?: string };
-type RepositoryListQuery = { limit: number; cursor?: string };
-type RepositoryInput = {
-  name: string;
-  localPath: string;
-  defaultBranch?: string;
-  allowedCommands?: string[];
-};
-type RepositoryPatchInput = Partial<RepositoryInput>;
-type CodingRunListQuery = {
-  issueId?: string;
-  status?: string;
-  limit: number;
-  cursor?: string;
-};
-type CodingRunCreateInput = {
-  repositoryId?: string;
-  mode: "investigate" | "propose_fix" | "implement_fix";
-  branchBase?: string;
-  instructions?: string;
-  allowChanges?: boolean;
-  commands?: string[];
-};
 
 export interface WhatsmiauProviderPort extends WhatsAppProvider {
   createInstance(input: {
@@ -191,338 +146,6 @@ function requireClient(
 ): AnySupabaseClient {
   if (!value) throw new Error("supabase_server_not_configured");
   return value;
-}
-
-function row(value: unknown): Row {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Row)
-    : {};
-}
-
-function rows(value: unknown): Row[] {
-  return Array.isArray(value) ? value.map(row) : [];
-}
-
-function str(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function nullable(value: unknown): string | null {
-  return value == null ? null : String(value);
-}
-
-function num(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function rpcRow(value: unknown): Row {
-  const result = row(Array.isArray(value) ? value[0] : value);
-  if (!Object.keys(result).length) throw new Error("supabase_empty_result");
-  return result;
-}
-
-function checked(scope: string, result: DbResult): unknown {
-  if (result.error)
-    throw new Error(
-      `supabase:${scope}:${result.error.message ?? "unknown_error"}`,
-    );
-  return result.data;
-}
-
-function workspace(rowValue: Row): Row {
-  return {
-    id: str(rowValue.id),
-    name: str(rowValue.name),
-    slug: str(rowValue.slug),
-    issuePrefix: str(rowValue.issue_prefix, "MEND"),
-    timezone: str(rowValue.timezone, "UTC"),
-    defaultLanguage: str(rowValue.default_language, "en"),
-    createdAt: nullable(rowValue.created_at),
-    updatedAt: nullable(rowValue.updated_at),
-  };
-}
-
-function workspaceMember(rowValue: Row): Row {
-  return {
-    id: str(rowValue.id),
-    workspaceId: str(rowValue.workspace_id),
-    userId: str(rowValue.user_id),
-    role: str(rowValue.role, "viewer"),
-    createdAt: nullable(rowValue.created_at),
-  };
-}
-
-function auditLog(rowValue: Row): Row {
-  return {
-    id: str(rowValue.id),
-    workspaceId: nullable(rowValue.workspace_id),
-    actorUserId: nullable(rowValue.actor_user_id),
-    action: str(rowValue.action),
-    entityType: str(rowValue.entity_type),
-    entityId: nullable(rowValue.entity_id),
-    metadata: row(rowValue.metadata_json),
-    createdAt: nullable(rowValue.created_at),
-  };
-}
-
-function channel(rowValue: Row): Row {
-  return {
-    id: str(rowValue.id),
-    workspaceId: str(rowValue.workspace_id),
-    provider: str(rowValue.provider, "whatsmiau"),
-    name: str(rowValue.name),
-    providerInstanceName: str(rowValue.provider_instance_name),
-    phoneNumber: nullable(rowValue.phone_number),
-    profileName: nullable(rowValue.profile_name),
-    status: str(rowValue.status, "closed"),
-    connectedAt: nullable(rowValue.connected_at),
-    lastEventAt: nullable(rowValue.last_event_at),
-    createdAt: nullable(rowValue.created_at),
-    updatedAt: nullable(rowValue.updated_at),
-  };
-}
-
-function message(rowValue: Row): Row {
-  return {
-    id: str(rowValue.id),
-    workspaceId: str(rowValue.workspace_id),
-    conversationId: str(rowValue.conversation_id),
-    channelConnectionId: str(rowValue.channel_connection_id),
-    providerMessageId: str(rowValue.provider_message_id),
-    direction: str(rowValue.direction),
-    senderType: str(rowValue.sender_type),
-    messageType: str(rowValue.message_type, "text"),
-    text: nullable(rowValue.text),
-    caption: nullable(rowValue.caption),
-    mediaStoragePath: nullable(rowValue.media_storage_path),
-    mimeType: nullable(rowValue.mime_type),
-    fileName: nullable(rowValue.file_name),
-    providerStatus: nullable(rowValue.provider_status),
-    aiGenerated: rowValue.ai_generated === true,
-    sentByUserId: nullable(rowValue.sent_by_user_id),
-    providerTimestamp: nullable(rowValue.provider_timestamp),
-    createdAt: nullable(rowValue.created_at),
-  };
-}
-
-function conversation(rowValue: Row): Row {
-  const contact = row(rowValue.contact);
-  const linkedChannel = row(rowValue.channel);
-  const aiState = row(rowValue.ai_state);
-  return {
-    id: str(rowValue.id),
-    workspaceId: str(rowValue.workspace_id),
-    channelConnectionId: str(rowValue.channel_connection_id),
-    contactId: str(rowValue.contact_id),
-    status: str(rowValue.status, "open"),
-    attentionState: str(rowValue.attention_state, "needs_attention"),
-    assignedUserId: nullable(rowValue.assigned_user_id),
-    aiMode: str(rowValue.ai_mode, "draft"),
-    automationState: str(aiState.automation_state, "ai_active"),
-    humanTakeoverAt: nullable(aiState.human_takeover_at),
-    humanTakeoverBy: nullable(aiState.human_takeover_by),
-    humanTakeoverReason: nullable(aiState.human_takeover_reason),
-    unreadCount: num(rowValue.unread_count),
-    lastReadAt: nullable(rowValue.last_read_at),
-    lastMessageAt: nullable(rowValue.last_message_at),
-    lastInboundAt: nullable(rowValue.last_inbound_at),
-    lastOutboundAt: nullable(rowValue.last_outbound_at),
-    resolvedAt: nullable(rowValue.resolved_at),
-    snoozedUntil: nullable(rowValue.snoozed_until),
-    createdAt: nullable(rowValue.created_at),
-    updatedAt: nullable(rowValue.updated_at),
-    ...(Object.keys(contact).length
-      ? {
-          contact: {
-            id: str(contact.id),
-            phoneNumber: str(contact.phone_number),
-            displayName: str(contact.display_name),
-          },
-        }
-      : {}),
-    ...(Object.keys(linkedChannel).length
-      ? { channel: channel(linkedChannel) }
-      : {}),
-    ...(Array.isArray(rowValue.messages)
-      ? { messages: rows(rowValue.messages).map(message) }
-      : {}),
-  };
-}
-
-function issue(rowValue: Row): Row {
-  return {
-    id: str(rowValue.id),
-    workspaceId: str(rowValue.workspace_id),
-    number: num(rowValue.number),
-    identifier: str(rowValue.identifier),
-    conversationId: nullable(rowValue.conversation_id),
-    contactId: nullable(rowValue.contact_id),
-    source: str(rowValue.source, "internal"),
-    type: str(rowValue.type, "task"),
-    priority: str(rowValue.priority, "none"),
-    status: str(rowValue.status, "triage"),
-    title: str(rowValue.title),
-    description: nullable(rowValue.description),
-    aiSummary: nullable(rowValue.ai_summary),
-    impact: nullable(rowValue.impact),
-    reproductionSteps: Array.isArray(rowValue.reproduction_steps_json)
-      ? rowValue.reproduction_steps_json
-      : [],
-    expectedBehavior: nullable(rowValue.expected_behavior),
-    actualBehavior: nullable(rowValue.actual_behavior),
-    affectedProduct: nullable(rowValue.affected_product),
-    affectedEnvironment: nullable(rowValue.affected_environment),
-    confidence: rowValue.confidence == null ? null : num(rowValue.confidence),
-    createdByUserId: nullable(rowValue.created_by_user_id),
-    assignedUserId: nullable(rowValue.assigned_user_id),
-    parentIssueId: nullable(rowValue.parent_issue_id),
-    duplicateOfIssueId: nullable(rowValue.duplicate_of_issue_id),
-    resolvedAt: nullable(rowValue.resolved_at),
-    customerNotifiedAt: nullable(rowValue.customer_notified_at),
-    createdAt: nullable(rowValue.created_at),
-    updatedAt: nullable(rowValue.updated_at),
-    ...(Array.isArray(rowValue.labels) ? { labels: rowValue.labels } : {}),
-    ...(Array.isArray(rowValue.comments)
-      ? { comments: rowValue.comments }
-      : {}),
-    ...(Array.isArray(rowValue.evidence)
-      ? { evidence: rowValue.evidence }
-      : {}),
-    ...(Array.isArray(rowValue.timeline)
-      ? { timeline: rowValue.timeline }
-      : {}),
-  };
-}
-
-function article(rowValue: Row): Row {
-  return {
-    id: str(rowValue.id),
-    workspaceId: str(rowValue.workspace_id),
-    title: str(rowValue.title),
-    category: str(rowValue.category, "Support"),
-    body: str(rowValue.body),
-    status: str(rowValue.status, "draft"),
-    createdByUserId: nullable(rowValue.created_by_user_id),
-    createdAt: nullable(rowValue.created_at),
-    updatedAt: nullable(rowValue.updated_at),
-  };
-}
-
-function repository(
-  rowValue: Row,
-): RepositoryConfig & { allowedCommands: string[] } {
-  return {
-    id: str(rowValue.id),
-    workspaceId: str(rowValue.workspace_id),
-    name: str(rowValue.name),
-    localPath: str(rowValue.local_path),
-    defaultBranch: str(rowValue.default_branch, "main"),
-    allowedCommands: Array.isArray(rowValue.allowed_commands)
-      ? rowValue.allowed_commands.filter(
-          (value): value is string => typeof value === "string",
-        )
-      : [],
-  };
-}
-
-function run(rowValue: Row): CodexRunRecord {
-  return {
-    id: str(rowValue.id),
-    workspaceId: str(rowValue.workspace_id),
-    issueId: str(rowValue.issue_id),
-    ...(rowValue.repository_id
-      ? { repositoryId: String(rowValue.repository_id) }
-      : {}),
-    mode: str(rowValue.mode, "investigate") as CodexRunRecord["mode"],
-    status: str(rowValue.status, "queued") as CodexRunRecord["status"],
-    progress: num(rowValue.progress),
-    ...(rowValue.branch_name
-      ? { branchName: String(rowValue.branch_name) }
-      : {}),
-    ...(rowValue.commit_sha ? { commitSha: String(rowValue.commit_sha) } : {}),
-    result: row(rowValue.result_json),
-    ...(rowValue.started_at ? { startedAt: String(rowValue.started_at) } : {}),
-    ...(rowValue.finished_at
-      ? { finishedAt: String(rowValue.finished_at) }
-      : {}),
-    ...(rowValue.created_by_user_id
-      ? { createdByUserId: String(rowValue.created_by_user_id) }
-      : {}),
-    createdAt: str(rowValue.created_at),
-    updatedAt: str(rowValue.updated_at),
-  };
-}
-
-function providerStatus(
-  value: unknown,
-): "open" | "closed" | "connecting" | "qr-code" {
-  const state = String(value ?? "").toLowerCase();
-  if (state === "open" || state === "connected") return "open";
-  if (state === "qr" || state === "qrcode" || state === "qr-code")
-    return "qr-code";
-  if (state === "connecting" || state === "pending") return "connecting";
-  return "closed";
-}
-
-function issueDbPayload(value: IssueCreateInput | IssuePatchInput): Row {
-  const input = value as unknown as Row;
-  return {
-    ...(input.title !== undefined ? { title: input.title } : {}),
-    ...(input.type !== undefined ? { type: input.type } : {}),
-    ...(input.priority !== undefined ? { priority: input.priority } : {}),
-    ...(input.status !== undefined ? { status: input.status } : {}),
-    ...(input.source !== undefined ? { source: input.source } : {}),
-    ...(input.description !== undefined
-      ? { description: input.description }
-      : {}),
-    ...(input.aiSummary !== undefined ? { ai_summary: input.aiSummary } : {}),
-    ...(input.impact !== undefined ? { impact: input.impact } : {}),
-    ...(input.reproductionSteps !== undefined
-      ? { reproduction_steps_json: input.reproductionSteps }
-      : {}),
-    ...(input.expectedBehavior !== undefined
-      ? { expected_behavior: input.expectedBehavior }
-      : {}),
-    ...(input.actualBehavior !== undefined
-      ? { actual_behavior: input.actualBehavior }
-      : {}),
-    ...(input.affectedProduct !== undefined
-      ? { affected_product: input.affectedProduct }
-      : {}),
-    ...(input.affectedEnvironment !== undefined
-      ? { affected_environment: input.affectedEnvironment }
-      : {}),
-    ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
-    ...(input.conversationId !== undefined
-      ? { conversation_id: input.conversationId }
-      : {}),
-    ...(input.contactId !== undefined ? { contact_id: input.contactId } : {}),
-    ...(input.assignedUserId !== undefined
-      ? { assigned_user_id: input.assignedUserId }
-      : {}),
-    ...(input.parentIssueId !== undefined
-      ? { parent_issue_id: input.parentIssueId }
-      : {}),
-    ...(input.duplicateOfIssueId !== undefined
-      ? { duplicate_of_issue_id: input.duplicateOfIssueId }
-      : {}),
-  };
-}
-
-function repositoryDbPayload(
-  value: RepositoryInput | RepositoryPatchInput,
-): Row {
-  const input = value as unknown as Row;
-  return {
-    ...(input.name !== undefined ? { name: input.name } : {}),
-    ...(input.localPath !== undefined ? { local_path: input.localPath } : {}),
-    ...(input.defaultBranch !== undefined
-      ? { default_branch: input.defaultBranch }
-      : {}),
-    ...(input.allowedCommands !== undefined
-      ? { allowed_commands: input.allowedCommands }
-      : {}),
-  };
 }
 
 export class SupabaseMembershipAdapter implements MembershipAdapter {
@@ -1957,19 +1580,6 @@ export function createSupabaseApiAdapters(
     repositories,
     codingRuns,
   };
-}
-
-/** Compatibility wrapper for the server bootstrap; authentication stays outside this factory. */
-export class SupabaseApiAdapters {
-  private readonly ports: SupabaseApiPortDependencies;
-
-  constructor(options: SupabaseApiAdapterOptions = {}) {
-    this.ports = createSupabaseApiAdapters(options);
-  }
-
-  dependencies(): SupabaseApiPortDependencies {
-    return this.ports;
-  }
 }
 
 export type { MendServerSupabaseClient };

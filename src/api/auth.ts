@@ -152,8 +152,6 @@ export async function getMyWorkspace(
   return workspace;
 }
 
-export const getMeWorkspace = getMyWorkspace;
-
 export function createWorkspace(
   input: WorkspaceCreateInput,
   client?: MendSupabaseClient,

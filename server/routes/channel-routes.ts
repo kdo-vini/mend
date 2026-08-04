@@ -1,4 +1,5 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
+import { channelCreateSchema, channelListQuerySchema } from "./schemas.js";
 
 export function registerChannelRoutes(context: ApiRouteModuleContext) {
   const {
@@ -11,8 +12,6 @@ export function registerChannelRoutes(context: ApiRouteModuleContext) {
     send,
     requireFound,
   } = context;
-  const channelListQuerySchema = context.schemas.channelListQuerySchema;
-  const channelCreateSchema = context.schemas.channelCreateSchema;
   router.get(
     "/api/channels",
     asyncRoute(async (request, response) => {

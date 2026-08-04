@@ -191,10 +191,6 @@ export async function getMyWorkspace(
   return workspace;
 }
 
-// Aliases make the intended HTTP resource name explicit for future route wiring.
-export const listMeWorkspaces = listMyWorkspaces;
-export const getMeWorkspace = getMyWorkspace;
-
 export async function createWorkspace(
   auth: MendAuthContext,
   input: z.input<typeof workspaceCreateSchema>,

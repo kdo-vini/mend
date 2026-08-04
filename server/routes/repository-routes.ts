@@ -1,4 +1,9 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
+import {
+  repositoryInputSchema,
+  repositoryListQuerySchema,
+  repositoryPatchSchema,
+} from "./schemas.js";
 
 export function registerRepositoryRoutes(context: ApiRouteModuleContext) {
   const {
@@ -13,9 +18,6 @@ export function registerRepositoryRoutes(context: ApiRouteModuleContext) {
     requireFound,
     ApiHttpError,
   } = context;
-  const repositoryListQuerySchema = context.schemas.repositoryListQuerySchema;
-  const repositoryInputSchema = context.schemas.repositoryInputSchema;
-  const repositoryPatchSchema = context.schemas.repositoryPatchSchema;
   router.get(
     "/api/repositories",
     asyncRoute(async (request, response) => {
