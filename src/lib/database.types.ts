@@ -900,6 +900,9 @@ export type Database = {
           is_deleted: boolean
           media_remote_url: string | null
           media_storage_path: string | null
+          media_asset_id?: string | null
+          media_batch_id?: string | null
+          media_status?: string
           message_type: string
           origin?: string
           mime_type: string | null
@@ -927,6 +930,9 @@ export type Database = {
           is_deleted?: boolean
           media_remote_url?: string | null
           media_storage_path?: string | null
+          media_asset_id?: string | null
+          media_batch_id?: string | null
+          media_status?: string
           message_type?: string
           origin?: string
           mime_type?: string | null
@@ -954,6 +960,9 @@ export type Database = {
           is_deleted?: boolean
           media_remote_url?: string | null
           media_storage_path?: string | null
+          media_asset_id?: string | null
+          media_batch_id?: string | null
+          media_status?: string
           message_type?: string
           origin?: string
           mime_type?: string | null

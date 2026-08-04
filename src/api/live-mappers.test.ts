@@ -40,6 +40,7 @@ describe("live message mapper", () => {
       name: "screenshot.png",
       meta: "image/png",
       url: "https://cdn.example.com/screenshot.png",
+      sizeBytes: 1024,
     });
     expect(message.quotedMessageId).toBe("message-0");
     expect(message.deleted).toBe(false);

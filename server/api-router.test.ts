@@ -209,6 +209,17 @@ function createFakeDependencies(
         id === runId ? { patch: "diff --git a/a b/a" } : null,
       ),
     },
+    media: {
+      createUpload: vi.fn(async (_context, input) => ({
+        assetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        batchId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        input,
+      })),
+      complete: vi.fn(async () => ({ id: "asset-1", status: "processing" })),
+      findAsset: vi.fn(async () => null),
+      listAssets: vi.fn(async () => []),
+      signedUrl: vi.fn(async () => ({ url: "https://media.example/signed" })),
+    },
   };
 }
 
@@ -233,6 +244,27 @@ describe("Mend API router", () => {
     expect(response.body).toEqual({
       error: { code: "unauthenticated", message: "Authentication is required" },
     });
+  });
+
+  it("scopes media upload and completion endpoints through the workspace", async () => {
+    const app = makeApp();
+    const upload = await request(app)
+      .post("/api/media/uploads")
+      .set(scoped(true))
+      .send({
+        conversationId,
+        fileName: "proof.png",
+        declaredMimeType: "image/png",
+        sizeBytes: 1_024,
+      });
+    expect(upload.status).toBe(201);
+    expect(upload.body.assetId).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+
+    const complete = await request(app)
+      .post(`/api/media/assets/${upload.body.assetId}/complete`)
+      .set(scoped(true))
+      .send({});
+    expect(complete.status).toBe(202);
   });
 
   it("returns the authenticated user and never exposes sensitive provider fields", async () => {

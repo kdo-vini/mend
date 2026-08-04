@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  allowedMediaMimeTypes,
+  normalizeMediaMime,
+  safeMediaFileName,
+} from "./media-policy.js";
 
 export interface MediaLimits {
   maxBytes?: number;
@@ -25,45 +30,20 @@ export interface MediaStorage {
   createSignedUrl(path: string, expiresInSeconds?: number): Promise<string>;
 }
 
-const defaultMimeTypes = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "video/mp4",
-  "video/webm",
-  "audio/mpeg",
-  "audio/mp4",
-  "audio/ogg",
-  "audio/opus",
-  "application/pdf",
-  "text/plain",
-]);
-
 const megabyte = 1024 * 1024;
-const defaultMaxBytes = Number(process.env.MEDIA_MAX_BYTES ?? 50 * megabyte);
+const defaultMaxBytes = Number(process.env.MEDIA_MAX_BYTES ?? 100 * megabyte);
 const defaultMaxBytesByMime = {
-  image: 10 * megabyte,
-  audio: 20 * megabyte,
-  video: 50 * megabyte,
-  other: 25 * megabyte,
+  image: 20 * megabyte,
+  audio: 25 * megabyte,
+  video: 100 * megabyte,
+  other: 100 * megabyte,
 } as const;
-const safeName = (value: string) =>
-  value
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^[-.]+|[-.]+$/g, "")
-    .slice(0, 120) || "file";
-
-function normalizedMime(value: string): string {
-  return value.toLowerCase().split(";")[0].trim();
-}
-
 export function mediaMaxBytesForMime(
   mimeType: string,
   requestedMaxBytes?: number,
 ): number {
   if (requestedMaxBytes !== undefined) return requestedMaxBytes;
-  const mime = normalizedMime(mimeType);
+  const mime = normalizeMediaMime(mimeType);
   const category = mime.startsWith("image/")
     ? "image"
     : mime.startsWith("audio/")
@@ -87,6 +67,12 @@ function isExecutable(data: Uint8Array): boolean {
       prefix[2] === 0xed &&
       prefix[3] === 0xfe) || // Mach-O
     Buffer.from(data.subarray(0, 32)).toString("utf8").startsWith("#!")
+  );
+}
+
+function isUnsafeSvg(data: Uint8Array): boolean {
+  return /<script\b|on[a-z]+\s*=|javascript:/i.test(
+    Buffer.from(data).toString("utf8"),
   );
 }
 
@@ -153,17 +139,19 @@ export function validateMedia(
   fileName = "file",
   limits: MediaLimits = {},
 ): ValidatedMedia {
-  const mime = normalizedMime(mimeType);
-  const allowed = limits.allowedMimeTypes ?? defaultMimeTypes;
+  const mime = normalizeMediaMime(mimeType);
+  const allowed = limits.allowedMimeTypes ?? allowedMediaMimeTypes;
   const maxBytes = mediaMaxBytesForMime(mime, limits.maxBytes);
   if (!allowed.has(mime)) throw new Error(`unsupported_media_type:${mime}`);
+  if (mime === "image/svg+xml" && isUnsafeSvg(data))
+    throw new Error("unsafe_svg_blocked");
   if (isExecutable(data)) throw new Error("executable_media_blocked");
   if (data.byteLength === 0 || data.byteLength > maxBytes)
     throw new Error("media_size_limit_exceeded");
   return {
     data,
     mimeType: mime,
-    fileName: safeName(fileName),
+    fileName: safeMediaFileName(fileName, 120),
     size: data.byteLength,
   };
 }
@@ -192,7 +180,7 @@ export function parseMediaInput(
   return {
     url: url.toString(),
     ...(mimeType ? { mimeType } : {}),
-    fileName: safeName(fileName),
+    fileName: safeMediaFileName(fileName, 120),
   };
 }
 
@@ -227,10 +215,10 @@ export async function fetchRemoteMedia(
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`media_fetch_failed:${response.status}`);
-    const responseMime = normalizedMime(
+    const responseMime = normalizeMediaMime(
       reference.mimeType ?? response.headers.get("content-type") ?? "",
     );
-    const allowed = limits.allowedMimeTypes ?? defaultMimeTypes;
+    const allowed = limits.allowedMimeTypes ?? allowedMediaMimeTypes;
     if (!allowed.has(responseMime))
       throw new Error(`unsupported_media_type:${responseMime}`);
     const maxBytes = mediaMaxBytesForMime(responseMime, limits.maxBytes);

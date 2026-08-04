@@ -177,6 +177,12 @@ export interface InboxPort {
     fileName?: string;
     sizeBytes?: number;
   }): Promise<void>;
+  setMessageMediaStatus?(input: {
+    workspaceId: string;
+    messageId: string;
+    status: "processing" | "ready" | "failed" | "unsupported";
+    errorCode?: string;
+  }): Promise<void>;
   linkIssueMessage(input: {
     workspaceId: string;
     issueId: string;
@@ -548,10 +554,30 @@ export class SupabaseInboxPort implements InboxPort {
         mime_type: input.mimeType ?? null,
         file_name: input.fileName ?? null,
         file_size: input.sizeBytes ?? null,
+        media_status: "ready",
       })
       .eq("id", input.messageId)
       .eq("workspace_id", input.workspaceId);
     if (error) throw new Error(`supabase:messages_media:${error.message}`);
+  }
+
+  async setMessageMediaStatus(input: {
+    workspaceId: string;
+    messageId: string;
+    status: "processing" | "ready" | "failed" | "unsupported";
+    errorCode?: string;
+  }): Promise<void> {
+    const { error } = await this.client
+      .from("messages")
+      .update({
+        media_status: input.status,
+        ...(input.errorCode ? { media_error_code: input.errorCode } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.messageId)
+      .eq("workspace_id", input.workspaceId);
+    if (error)
+      throw new Error(`supabase:messages_media_status:${error.message}`);
   }
 
   async linkIssueMessage(
@@ -739,6 +765,13 @@ export class InboxService {
       }),
     });
 
+    if (result.inserted && message.mediaUrl)
+      await this.port.setMessageMediaStatus?.({
+        workspaceId: context.workspaceId,
+        messageId: result.id,
+        status: "processing",
+      });
+
     let mediaStoragePath: string | undefined;
     if (
       result.inserted &&
@@ -772,6 +805,12 @@ export class InboxService {
       } catch {
         // The message remains usable without media; never persist a provider
         // exception or a signed URL in a customer-visible timeline.
+        await this.port.setMessageMediaStatus?.({
+          workspaceId: context.workspaceId,
+          messageId: result.id,
+          status: "failed",
+          errorCode: "media_fetch_failed",
+        });
       }
     }
     return {

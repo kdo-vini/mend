@@ -6,9 +6,11 @@ import {
   resolveLiveConversation,
   resumeLiveConversationAi,
   sendLiveMedia,
+  sendLiveMediaBatch,
   sendLiveMessage,
   snoozeLiveConversation,
   updateLiveConversation,
+  uploadLiveMediaAsset,
 } from "../../api/live-actions";
 import { supabase } from "../../lib/supabase";
 
@@ -19,9 +21,11 @@ export {
   resolveLiveConversation,
   resumeLiveConversationAi,
   sendLiveMedia,
+  sendLiveMediaBatch,
   sendLiveMessage,
   snoozeLiveConversation,
   updateLiveConversation,
+  uploadLiveMediaAsset,
 };
 
 export function loadLiveConversationSnapshot(

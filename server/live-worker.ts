@@ -9,6 +9,11 @@ import {
 import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
 import type { SupportAiProvider } from "./providers.js";
 import { SupabaseMediaStorage } from "./media.js";
+import {
+  MEDIA_PROCESS_JOB_TYPE,
+  SupabaseMediaPipeline,
+  type MediaProcessJobPayload,
+} from "./media-pipeline.js";
 import { WhatsAppService, type WhatsAppProvider } from "./whatsapp-service.js";
 import { WorkspacePushNotifier } from "./push.js";
 import { triageConversation, type TriageResult } from "./triage.js";
@@ -66,7 +71,8 @@ interface SendAiReplyJobPayload extends LiveWorkerSendAiReplyInput {
 type LiveWorkerJobPayload =
   | WhatsmiauMessageJobPayload
   | ProcessInboundMessageJobPayload
-  | SendAiReplyJobPayload;
+  | SendAiReplyJobPayload
+  | MediaProcessJobPayload;
 
 interface UncheckedSupabaseQuery {
   select(columns?: string): UncheckedSupabaseQuery;
@@ -161,6 +167,7 @@ export interface LiveWorkerOptions {
   channelResolver: LiveWorkerChannelResolver;
   inbox: LiveWorkerInbox;
   jobStore: JobStore<WhatsmiauMessageJobPayload>;
+  mediaPipeline?: SupabaseMediaPipeline;
   knowledge?: LiveWorkerKnowledge;
   onDraftReady?: (draft: LiveWorkerDraft) => Promise<void> | void;
   onIssueReady?: (issue: LiveWorkerIssue) => Promise<void> | void;
@@ -320,6 +327,15 @@ export class LiveWorker {
       if (payload.stage !== "send_ai_reply" || !payload.binding?.workspaceId)
         throw new Error("invalid_send_ai_reply_job");
       await this.options.automation.sendAiReply(payload);
+      return;
+    }
+    if (job.type === MEDIA_PROCESS_JOB_TYPE) {
+      if (!this.options.mediaPipeline)
+        throw new Error("media_pipeline_not_configured");
+      const payload = job.payload as MediaProcessJobPayload;
+      if (!payload?.assetId || !payload.workspaceId)
+        throw new Error("invalid_media_process_job");
+      await this.options.mediaPipeline.processAsset(payload);
       return;
     }
     throw new Error(`unsupported_job_type:${job.type}`);
@@ -1117,6 +1133,10 @@ export function createSupabaseLiveWorker(
   options: CreateSupabaseLiveWorkerOptions,
 ): LiveWorker {
   const mediaStorage = new SupabaseMediaStorage(options.client);
+  const mediaPipeline = new SupabaseMediaPipeline(
+    options.client,
+    options.jobStore as unknown as import("./media-pipeline.js").MediaJobEnqueuer,
+  );
   const inboxService = new InboxService(new SupabaseInboxPort(options.client), {
     mediaStorage,
   });
@@ -1133,6 +1153,7 @@ export function createSupabaseLiveWorker(
     jobStore: options.jobStore,
     channelResolver: new SupabaseLiveWorkerChannelResolver(options.client),
     inbox,
+    mediaPipeline,
     knowledge,
     automation,
     ...(options.onDraftReady ? { onDraftReady: options.onDraftReady } : {}),

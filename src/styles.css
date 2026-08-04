@@ -1306,6 +1306,22 @@ h1 {
   color: var(--muted);
   font-size: 10px;
 }
+.media-unavailable {
+  color: var(--muted);
+}
+.media-static-preview {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
 .issue-event {
   display: flex;
   align-items: center;
@@ -1357,6 +1373,10 @@ h1 {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: var(--surface);
+}
+.composer.drag-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-wash);
 }
 .attachment-panel {
   display: grid;
@@ -1423,6 +1443,79 @@ h1 {
 }
 .attachment-actions {
   justify-content: flex-end;
+}
+.attachment-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 58px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+}
+.attachment-dropzone:hover,
+.attachment-dropzone:focus-visible {
+  border-color: var(--accent);
+  color: var(--ink-soft);
+}
+.attachment-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+.attachment-preview-card {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+}
+.attachment-preview-card > img,
+.attachment-preview-card > video {
+  width: 100%;
+  height: 74px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--bg);
+}
+.attachment-preview-card > audio {
+  width: 100%;
+  margin: 20px 0;
+}
+.attachment-preview-card > strong {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-preview-card > small {
+  color: var(--muted-2);
+  font-size: 9px;
+}
+.attachment-preview-card > input {
+  min-width: 0;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+.attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
 }
 .composer-toolbar {
   display: flex;
