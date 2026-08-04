@@ -861,10 +861,12 @@ function App() {
     );
   };
 
-  const channelHealthy =
-    channel?.state === "open" &&
-    (!channel.lastEventAt ||
-      Date.now() - new Date(channel.lastEventAt).getTime() <= 90_000);
+  // `lastEventAt` is a delivery/freshness signal, not the connection state.
+  // A quiet WhatsApp number can stay connected for minutes without receiving
+  // an event; treating that silence as offline makes the composer lie about
+  // the real provider state. Connection health is surfaced separately in
+  // Settings, while Inbox only needs the authoritative open/closed state.
+  const channelHealthy = channel?.state === "open";
 
   return (
     <div
