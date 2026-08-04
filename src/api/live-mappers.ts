@@ -187,9 +187,25 @@ export function toUiConversation(
 ): Conversation {
   const name =
     contact?.display_name || contact?.phone_number || "Unknown contact";
-  const messages = records
-    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const orderedRecords = records.sort((a, b) =>
+    a.created_at.localeCompare(b.created_at),
+  );
+  const messages = orderedRecords
+    .filter((record) => record.message_type !== "reaction")
     .map(toUiMessage);
+  for (const reaction of orderedRecords.filter(
+    (record) => record.message_type === "reaction",
+  )) {
+    const target = messages.find(
+      (message) => message.id === reaction.quoted_message_id,
+    );
+    const emoji = reaction.text ?? reaction.caption;
+    if (!target || !emoji) continue;
+    target.reactions = [
+      ...(target.reactions ?? []),
+      { emoji, mine: reaction.direction === "outbound" },
+    ];
+  }
   const last = messages.at(-1);
   return {
     id: record.id,
@@ -360,6 +376,18 @@ export function toUiRun(
           : "Persisted Codex run",
     branch: record.branch_name ?? undefined,
     commit: record.commit_sha ?? undefined,
+    published: Boolean(
+      result.publication &&
+        typeof result.publication === "object" &&
+        !Array.isArray(result.publication) &&
+        (result.publication as Record<string, unknown>).status === "published",
+    ),
+    deployed: Boolean(
+      result.deployment &&
+        typeof result.deployment === "object" &&
+        !Array.isArray(result.deployment) &&
+        (result.deployment as Record<string, unknown>).status === "deployed",
+    ),
     files: fileNames,
     diff: typeof result.patch === "string" ? result.patch : undefined,
     diffTruncated: result.diffTruncated === true,

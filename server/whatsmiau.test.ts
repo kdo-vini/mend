@@ -59,6 +59,31 @@ describe("Whatsmiau normalization", () => {
     });
   });
 
+  it("preserves Whatsmiau's documented top-level mediaUrl", () => {
+    const [message] = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        key: {
+          id: "video-1",
+          remoteJid: "5511999999999@s.whatsapp.net",
+          fromMe: false,
+        },
+        message: {
+          videoMessage: {
+            mimetype: "video/mp4",
+            caption: "pedido",
+          },
+        },
+        mediaUrl: "https://media.example/video.mp4",
+      },
+    });
+    expect(message).toMatchObject({
+      messageType: "video",
+      mediaUrl: "https://media.example/video.mp4",
+    });
+  });
+
   it("creates a stable id when the provider omits an id", () => {
     const payload = {
       event: "messages.upsert",
@@ -91,6 +116,31 @@ describe("Whatsmiau normalization", () => {
       providerMessageId: "wamid-1",
       direction: "outbound",
       phoneNumber: "5511999999999",
+    });
+  });
+
+  it("normalizes button and list selections for flow automation", () => {
+    const messages = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        key: {
+          id: "wamid-choice",
+          remoteJid: "5511999999999@s.whatsapp.net",
+        },
+        message: {
+          listResponseMessage: {
+            singleSelectReply: {
+              selectedRowId: "billing",
+              title: "Billing",
+            },
+          },
+        },
+      },
+    });
+    expect(messages[0]).toMatchObject({
+      interactionId: "billing",
+      text: "Billing",
     });
   });
 
@@ -175,6 +225,88 @@ describe("Whatsmiau normalization", () => {
           base64: false,
         },
       });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("revokes a message for everyone with the documented Whatsmiau payload", async () => {
+    const originalFetch = globalThis.fetch;
+    let request: { method?: string; body?: Record<string, unknown> } = {};
+    globalThis.fetch = async (_input, init) => {
+      request = {
+        method: init?.method,
+        body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      };
+      return new Response(null, { status: 204 });
+    };
+
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await provider.deleteMessageForEveryone({
+        instanceName: "mend-test",
+        id: "wamid-1",
+        remoteJid: "5511999999999@s.whatsapp.net",
+        fromMe: true,
+      });
+      expect(request).toEqual({
+        method: "DELETE",
+        body: {
+          id: "wamid-1",
+          remoteJid: "5511999999999@s.whatsapp.net",
+          fromMe: true,
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("sends documented reactions and interactive buttons", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
+    globalThis.fetch = async (input, init) => {
+      calls.push({
+        url: String(input),
+        method: init?.method,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      return new Response(JSON.stringify({ key: { id: "wamid-out" } }), {
+        status: 200,
+      });
+    };
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await provider.sendReaction({
+        instanceName: "mend-test",
+        remoteJid: "5511999999999@s.whatsapp.net",
+        id: "wamid-1",
+        fromMe: false,
+        reaction: "👍",
+      });
+      await provider.sendButtons({
+        instanceName: "mend-test",
+        number: "5511999999999",
+        title: "Choose",
+        description: "Pick one",
+        buttons: [{ type: "reply", displayText: "Help", id: "help" }],
+      });
+      expect(calls).toMatchObject([
+        {
+          url: "https://provider.test/v2/message/sendReaction/mend-test",
+          method: "POST",
+        },
+        {
+          url: "https://provider.test/v2/message/sendButtons/mend-test",
+          method: "POST",
+        },
+      ]);
     } finally {
       globalThis.fetch = originalFetch;
     }

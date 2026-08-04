@@ -8,11 +8,13 @@ import {
   FileText,
   Info,
   MessageCircle,
+  PenLine,
   Plus,
   RefreshCw,
   Send,
   Tag,
   TerminalSquare,
+  Trash2,
   UserRound,
   UsersRound,
   X,
@@ -38,6 +40,7 @@ import {
 } from "../../../shared/ui/DataDisplay";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
+import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import {
   addLiveTextEvidence,
   createLiveIssueComment,
@@ -56,6 +59,8 @@ export function IssueDetailPage({
   onOpenIssue,
   onOpenConversation,
   onStartRun,
+  onEditIssue,
+  onDeleteIssue,
   onUpdateIssue,
   onResolveAndNotify,
 }: {
@@ -69,6 +74,8 @@ export function IssueDetailPage({
   onOpenIssue: (id: string) => void;
   onOpenConversation: (id: string) => void;
   onStartRun: (id: string) => void;
+  onEditIssue: (id: string) => void;
+  onDeleteIssue: (id: string) => void;
   onUpdateIssue: (id: string, patch: Partial<Issue>) => void;
   onResolveAndNotify: (issueId: string, message: string) => Promise<boolean>;
 }) {
@@ -289,6 +296,23 @@ export function IssueDetailPage({
             >
               <TerminalSquare size={15} /> Run Codex
             </button>
+            <ActionMenu label={issue.identifier}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => onEditIssue(issue.id)}
+              >
+                <PenLine size={14} /> Edit issue
+              </button>
+              <button
+                className="danger"
+                type="button"
+                role="menuitem"
+                onClick={() => onDeleteIssue(issue.id)}
+              >
+                <Trash2 size={14} /> Delete issue
+              </button>
+            </ActionMenu>
           </>
         }
       />

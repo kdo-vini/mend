@@ -124,6 +124,15 @@ export interface ChannelPort {
     channelId: string,
   ): Promise<unknown | null>;
   refresh(context: RequestContext, channelId: string): Promise<unknown | null>;
+  getSettings(
+    context: RequestContext,
+    channelId: string,
+  ): Promise<unknown | null>;
+  updateSettings(
+    context: RequestContext,
+    channelId: string,
+    settings: Record<string, unknown>,
+  ): Promise<unknown | null>;
 }
 
 export interface ConversationListQuery {
@@ -181,6 +190,23 @@ export interface AiDraftInput {
 export interface ConversationPort {
   list(context: RequestContext, query: ConversationListQuery): Promise<unknown>;
   get(context: RequestContext, conversationId: string): Promise<unknown | null>;
+  delete(context: RequestContext, conversationId: string): Promise<boolean>;
+  deleteMessage(
+    context: RequestContext,
+    conversationId: string,
+    messageId: string,
+  ): Promise<unknown | null>;
+  reactToMessage(
+    context: RequestContext,
+    conversationId: string,
+    messageId: string,
+    reaction: string,
+  ): Promise<unknown | null>;
+  sendPresence(
+    context: RequestContext,
+    conversationId: string,
+    presence: "composing" | "recording" | "paused",
+  ): Promise<void>;
   update(
     context: RequestContext,
     conversationId: string,
@@ -302,6 +328,8 @@ export interface CodingRunPort {
   get(context: RequestContext, runId: string): Promise<unknown | null>;
   cancel(context: RequestContext, runId: string): Promise<unknown | null>;
   approve(context: RequestContext, runId: string): Promise<unknown | null>;
+  publish(context: RequestContext, runId: string): Promise<unknown | null>;
+  deploy(context: RequestContext, runId: string): Promise<unknown | null>;
   reject(context: RequestContext, runId: string): Promise<unknown | null>;
   patch(
     context: RequestContext,

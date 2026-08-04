@@ -37,6 +37,16 @@ import {
 } from "./automation/decision.js";
 import type { NormalizedWhatsmiauMessage } from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
+import {
+  flowFromChannelSettings,
+  type SupportFlowNode,
+} from "../src/shared/support-flow.js";
+import type { SafeTool } from "./codex.js";
+import { CodexService } from "./codex-service.js";
+import {
+  SupabaseCodexRunStore,
+  SupabaseRepositoryAdapter,
+} from "./supabase-api-adapters.js";
 
 type LiveWorkerSupabaseClient = SupabaseClient<Database>;
 type KnowledgeArticleRow =
@@ -62,6 +72,22 @@ export interface LiveWorkerSendAiReplyInput {
   idempotencyKey: string;
   body: string;
   triage: TriageResult;
+}
+
+export interface LiveWorkerCodexStarterInput {
+  workspaceId: string;
+  issueId: string;
+  issueIdentifier: string;
+  issueTitle: string;
+  summary: string;
+  customerMessage: string;
+}
+
+export interface LiveWorkerCodexStarter {
+  start(input: LiveWorkerCodexStarterInput): Promise<{
+    runId: string;
+    completion: Promise<unknown>;
+  } | null>;
 }
 
 interface SendAiReplyJobPayload extends LiveWorkerSendAiReplyInput {
@@ -556,6 +582,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     private readonly provider: SupportAiProvider,
     inbox?: InboxService,
     whatsappProvider?: WhatsAppProvider,
+    private readonly codexStarter?: LiveWorkerCodexStarter,
   ) {
     this.inbox = inbox ?? new InboxService(new SupabaseInboxPort(client));
     if (whatsappProvider)
@@ -583,6 +610,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   async process(
     input: LiveWorkerAutomationInput,
   ): Promise<LiveWorkerAutomationResult | void> {
+    if (await this.processSupportFlow(input)) return;
     const current = await this.currentState(input);
     if (current?.lastTriagedMessageId === input.persisted.id) {
       return;
@@ -674,6 +702,16 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         issue.id,
       );
     }
+    if (
+      route === "bug_triage" &&
+      issue &&
+      modePolicy.policy.bugAutoFixEnabled &&
+      !triage.unsafe &&
+      triage.confidence >= modePolicy.policy.safeAutoMinConfidence &&
+      this.codexStarter
+    ) {
+      await this.startCodexForBug(input, issue, triage);
+    }
     await this.auditDecision(
       input,
       triage,
@@ -738,6 +776,129 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         : {}),
     };
     return Object.keys(result).length ? result : undefined;
+  }
+
+  private async processSupportFlow(
+    input: LiveWorkerAutomationInput,
+  ): Promise<boolean> {
+    const channelResult = await this.client
+      .from("channel_connections")
+      .select("settings_json")
+      .eq("id", input.binding.channelConnectionId)
+      .eq("workspace_id", input.binding.workspaceId)
+      .maybeSingle();
+    if (channelResult.error)
+      throw new Error(
+        `supabase:channel_connections:flow:${channelResult.error.message}`,
+      );
+    const channel = channelResult.data as { settings_json?: unknown } | null;
+    const flow = flowFromChannelSettings(channel?.settings_json);
+    if (!flow.enabled) return false;
+
+    const conversationResult = await this.client
+      .from("conversations")
+      .select("support_flow_state_json")
+      .eq("id", input.persisted.conversationId)
+      .eq("workspace_id", input.binding.workspaceId)
+      .maybeSingle();
+    if (conversationResult.error)
+      throw new Error(
+        `supabase:conversations:flow:${conversationResult.error.message}`,
+      );
+    const stateValue = (
+      conversationResult.data as { support_flow_state_json?: unknown } | null
+    )?.support_flow_state_json;
+    const state =
+      stateValue && typeof stateValue === "object" && !Array.isArray(stateValue)
+        ? (stateValue as { started?: boolean; nodeId?: string })
+        : {};
+    const currentNode = state.nodeId
+      ? flow.nodes.find((node) => node.id === state.nodeId)
+      : undefined;
+    const normalizedText = input.message.text?.trim().toLocaleLowerCase() ?? "";
+    let target: SupportFlowNode | undefined;
+    if (!state.started) {
+      const triggered =
+        flow.trigger.type === "first_message" ||
+        flow.trigger.keywords.some((keyword) =>
+          normalizedText.includes(keyword.toLocaleLowerCase()),
+        );
+      if (!triggered) return false;
+      target = flow.nodes.find((node) => node.id === flow.rootNodeId);
+    } else if (currentNode?.type === "menu") {
+      const option = currentNode.options.find(
+        (item) =>
+          item.id === input.message.interactionId ||
+          item.label.toLocaleLowerCase() === normalizedText,
+      );
+      if (!option) {
+        await this.sendFlowNode(input, currentNode);
+        return true;
+      }
+      target = option.nextNodeId
+        ? flow.nodes.find((node) => node.id === option.nextNodeId)
+        : undefined;
+      if (!target) {
+        await this.updateFlowState(input, { started: true });
+        return true;
+      }
+    } else {
+      return false;
+    }
+    if (!target) return false;
+    await this.sendFlowNode(input, target);
+    await this.updateFlowState(
+      input,
+      target.type === "menu"
+        ? { started: true, nodeId: target.id }
+        : { started: true },
+    );
+    if (target.type === "handoff") {
+      await this.client
+        .from("conversations")
+        .update({
+          attention_state: "needs_attention",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.persisted.conversationId)
+        .eq("workspace_id", input.binding.workspaceId);
+    }
+    return true;
+  }
+
+  private async sendFlowNode(
+    input: LiveWorkerAutomationInput,
+    node: SupportFlowNode,
+  ): Promise<void> {
+    if (!this.whatsapp) return;
+    await this.whatsapp.sendFlowNode(
+      { workspaceId: input.binding.workspaceId, actorType: "system" },
+      input.persisted.conversationId,
+      node,
+    );
+  }
+
+  private async updateFlowState(
+    input: LiveWorkerAutomationInput,
+    state: { started: boolean; nodeId?: string },
+  ): Promise<void> {
+    const result = await this.client
+      .from("conversations")
+      .update({
+        support_flow_state_json: {
+          ...state,
+          updatedAt: new Date().toISOString(),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.persisted.conversationId)
+      .eq("workspace_id", input.binding.workspaceId)
+      .select("id")
+      .maybeSingle();
+    if (result.error)
+      throw new Error(
+        `supabase:conversations:flow_update:${result.error.message}`,
+      );
   }
 
   async sendAiReply(input: LiveWorkerSendAiReplyInput): Promise<void> {
@@ -972,6 +1133,65 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     }
   }
 
+  private async startCodexForBug(
+    input: LiveWorkerAutomationInput,
+    issue: { id: string; identifier: string; operation: "created" | "updated" },
+    triage: TriageResult,
+  ): Promise<void> {
+    try {
+      const started = await this.codexStarter?.start({
+        workspaceId: input.binding.workspaceId,
+        issueId: issue.id,
+        issueIdentifier: issue.identifier,
+        issueTitle: triage.summary,
+        summary: triage.summary,
+        customerMessage: input.message.text ?? "",
+      });
+      if (!started) return;
+      await this.notifyWorkspace(
+        input,
+        triage,
+        "ai.codex_started",
+        `Codex started for ${issue.identifier}`,
+        `Codex is investigating this bug automatically. Run ${started.runId} will stop for approval before publication.`,
+        `ai-codex-started:${started.runId}`,
+        issue.id,
+      );
+      void started.completion.then(
+        async () =>
+          this.notifyWorkspace(
+            input,
+            triage,
+            "ai.codex_ready",
+            `Codex result ready for ${issue.identifier}`,
+            "The proposed fix and checks are ready for human approval.",
+            `ai-codex-ready:${started.runId}`,
+            issue.id,
+          ),
+        async (error) =>
+          this.notifyWorkspace(
+            input,
+            triage,
+            "ai.codex_failed",
+            `Codex failed for ${issue.identifier}`,
+            `The automatic fix could not be completed: ${error instanceof Error ? error.message : String(error)}`,
+            `ai-codex-failed:${started.runId}`,
+            issue.id,
+          ),
+      );
+    } catch (error) {
+      await this.notifyWorkspace(
+        input,
+        triage,
+        "ai.codex_failed",
+        `Codex could not start for ${issue.identifier}`,
+        `Configure a repository before automatic fixes: ${error instanceof Error ? error.message : String(error)}`,
+        `ai-codex-start-failed:${issue.id}:${input.persisted.id}`,
+        issue.id,
+      );
+    }
+  }
+
   private async buildDraft(
     input: LiveWorkerAutomationInput,
     triage: TriageResult,
@@ -1126,8 +1346,83 @@ export interface CreateSupabaseLiveWorkerOptions {
   onDraftReady?: LiveWorkerOptions["onDraftReady"];
   onIssueReady?: LiveWorkerOptions["onIssueReady"];
   onUnmappedMessage?: LiveWorkerOptions["onUnmappedMessage"];
+  codexStarter?: LiveWorkerCodexStarter;
   pollIntervalMs?: number;
   workerId?: string;
+}
+
+class SupabaseCodexStarter implements LiveWorkerCodexStarter {
+  constructor(private readonly client: LiveWorkerSupabaseClient) {}
+
+  async start(input: LiveWorkerCodexStarterInput) {
+    const existing = await this.client
+      .from("coding_runs")
+      .select("id, status")
+      .eq("workspace_id", input.workspaceId)
+      .eq("issue_id", input.issueId)
+      .in("status", ["queued", "running", "completed", "approved"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing.error)
+      throw new Error(
+        `supabase:coding_runs:existing:${existing.error.message}`,
+      );
+    if (existing.data) return null;
+
+    const repositoryRow = await this.client
+      .from("repositories")
+      .select("id")
+      .eq("workspace_id", input.workspaceId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (repositoryRow.error)
+      throw new Error(
+        `supabase:repositories:auto_fix:${repositoryRow.error.message}`,
+      );
+    const repositoryId = repositoryRow.data?.id;
+    if (!repositoryId)
+      throw new Error("No repository is configured for this workspace");
+
+    const repositories = new SupabaseRepositoryAdapter(this.client);
+    const repository = await repositories.getRepository(
+      input.workspaceId,
+      String(repositoryId),
+    );
+    if (!repository) throw new Error("Repository is unavailable");
+    const commands = ["lint", "test", "build"].filter((name) =>
+      repository.allowedCommands?.includes(name),
+    ) as unknown as SafeTool[];
+    const service = new CodexService({
+      repositories,
+      runs: new SupabaseCodexRunStore(this.client),
+      openAi: { enabled: Boolean(process.env.OPENAI_API_KEY) },
+    });
+    const handle = await service.start({
+      workspaceId: input.workspaceId,
+      issueId: input.issueId,
+      repositoryId: String(repositoryId),
+      issueIdentifier: input.issueIdentifier,
+      issueTitle: input.issueTitle,
+      mode: "implement_fix",
+      tools: commands,
+      context: {
+        issue: {
+          id: input.issueId,
+          identifier: input.issueIdentifier,
+          title: input.issueTitle,
+          summary: input.summary,
+          description: `Customer report:\n${input.customerMessage}`,
+        },
+        conversation: {
+          summary: input.summary,
+          messages: [{ direction: "inbound", text: input.customerMessage }],
+        },
+      },
+    });
+    return { runId: handle.runId, completion: handle.completion };
+  }
 }
 
 /** Compose the production Supabase worker without changing server/index.ts. */
@@ -1150,6 +1445,7 @@ export function createSupabaseLiveWorker(
     options.provider,
     inboxService,
     options.whatsappProvider,
+    options.codexStarter ?? new SupabaseCodexStarter(options.client),
   );
   return new LiveWorker({
     jobStore: options.jobStore,

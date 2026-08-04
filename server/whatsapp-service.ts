@@ -14,13 +14,29 @@ import {
 } from "./inbox-service.js";
 import type {
   ProviderMessage,
+  SendButtonsInput,
+  SendListInput,
+  SendReactionInput,
   SendAudioInput,
   SendMediaInput,
   SendTextInput,
 } from "./whatsmiau.js";
+import type { SupportFlowNode } from "../src/shared/support-flow.js";
 
 export interface WhatsAppProvider {
-  sendPresence?(instanceName: string, number: string): Promise<unknown>;
+  sendPresence?(
+    instanceName: string,
+    number: string,
+    presence?: "composing" | "recording" | "paused",
+    delay?: number,
+  ): Promise<unknown>;
+  sendReaction?(input: SendReactionInput): Promise<unknown>;
+  sendList?(
+    input: SendListInput,
+  ): Promise<ProviderMessage | Record<string, unknown>>;
+  sendButtons?(
+    input: SendButtonsInput,
+  ): Promise<ProviderMessage | Record<string, unknown>>;
   sendText(
     input: SendTextInput,
   ): Promise<ProviderMessage | Record<string, unknown>>;
@@ -35,6 +51,13 @@ export interface WhatsAppProvider {
     remoteJid: string,
     providerMessageId: string,
   ): Promise<unknown>;
+  deleteMessageForEveryone?(input: {
+    instanceName: string;
+    id: string;
+    remoteJid: string;
+    fromMe: boolean;
+    participant?: string;
+  }): Promise<unknown>;
 }
 
 export interface SendTextRequest {
@@ -238,6 +261,141 @@ export class WhatsAppService {
         latest.providerMessageId,
       );
     await this.inbox.readConversation(context, conversationId);
+  }
+
+  async sendReaction(
+    context: InboxContext,
+    conversationId: string,
+    input: { providerMessageId: string; fromMe: boolean; reaction: string },
+  ): Promise<InboxMessageRecord> {
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    if (!this.provider.sendReaction)
+      throw new Error("whatsmiau_reaction_not_supported");
+    const reaction = input.reaction.trim();
+    if (!reaction || reaction.length > 16) throw new Error("reaction_invalid");
+    const response = await this.provider.sendReaction({
+      instanceName: conversation.providerInstanceName,
+      remoteJid: conversation.remoteJid,
+      id: input.providerMessageId,
+      fromMe: input.fromMe,
+      reaction,
+    });
+    const id = providerMessageId(response) || `reaction-${randomUUID()}`;
+    return this.inbox.recordOutbound(context, conversationId, {
+      providerMessageId: id,
+      messageType: "reaction",
+      text: reaction,
+      quotedProviderMessageId: input.providerMessageId,
+    });
+  }
+
+  async sendPresence(
+    context: InboxContext,
+    conversationId: string,
+    presence: "composing" | "recording" | "paused" = "composing",
+  ): Promise<void> {
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    if (!this.provider.sendPresence)
+      throw new Error("whatsmiau_presence_not_supported");
+    await this.provider.sendPresence(
+      conversation.providerInstanceName,
+      conversation.phoneNumber,
+      presence,
+      3_000,
+    );
+  }
+
+  async sendFlowNode(
+    context: InboxContext,
+    conversationId: string,
+    node: SupportFlowNode,
+  ): Promise<InboxMessageRecord> {
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    const visibleText =
+      node.type === "menu"
+        ? `${node.message}\n\n${node.options
+            .map((option, index) => `${index + 1}. ${option.label}`)
+            .join("\n")}`
+        : node.message;
+    let response: unknown;
+    if (
+      node.type === "menu" &&
+      node.options.length <= 3 &&
+      this.provider.sendButtons
+    ) {
+      response = await this.provider.sendButtons({
+        instanceName: conversation.providerInstanceName,
+        number: conversation.phoneNumber,
+        title: node.title,
+        description: node.message,
+        buttons: node.options.map((option) => ({
+          type: "reply" as const,
+          displayText: option.label,
+          id: option.id,
+        })),
+      });
+    } else if (node.type === "menu" && this.provider.sendList) {
+      response = await this.provider.sendList({
+        instanceName: conversation.providerInstanceName,
+        number: conversation.phoneNumber,
+        title: node.title,
+        description: node.message,
+        buttonText: "Ver opções",
+        sections: [
+          {
+            title: node.title,
+            rows: node.options.map((option) => ({
+              rowId: option.id,
+              title: option.label,
+            })),
+          },
+        ],
+      });
+    } else {
+      response = await this.provider.sendText({
+        instanceName: conversation.providerInstanceName,
+        number: conversation.phoneNumber,
+        text: visibleText,
+      });
+    }
+    return this.inbox.recordOutbound(context, conversationId, {
+      providerMessageId: providerMessageId(response),
+      messageType: "text",
+      text: visibleText,
+    });
+  }
+
+  async deleteMessageForEveryone(
+    context: InboxContext,
+    conversationId: string,
+    input: { id: string; fromMe: boolean; participant?: string },
+  ): Promise<void> {
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    if (!this.provider.deleteMessageForEveryone)
+      throw new Error("whatsmiau_message_delete_not_supported");
+    await this.provider.deleteMessageForEveryone({
+      instanceName: conversation.providerInstanceName,
+      id: input.id,
+      remoteJid: conversation.remoteJid,
+      fromMe: input.fromMe,
+      ...(input.participant ? { participant: input.participant } : {}),
+    });
   }
 }
 

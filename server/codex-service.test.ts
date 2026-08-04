@@ -110,6 +110,11 @@ class FakeGit implements GitLocalPort {
       paths: [...paths],
     };
   }
+
+  async push(repositoryRoot: string, remote: string, branch: string) {
+    this.calls.push(`push:${repositoryRoot}:${remote}:${branch}`);
+    return { remote, branch };
+  }
 }
 
 function repository(root: string, localPath = "repo"): RepositoryConfig {
@@ -277,7 +282,7 @@ describe("Codex application service", () => {
     }
   });
 
-  it("creates only a local branch and commit for implement_fix", async () => {
+  it("withholds the local branch and commit until implement_fix is approved", async () => {
     const root = await tempDirectory();
     try {
       await mkdir(path.join(root, "repo"));
@@ -307,14 +312,28 @@ describe("Codex application service", () => {
       );
       const result = await handle.completion;
       expect(result.run.status).toBe("completed");
-      expect(result.run.commitSha).toBe("local-commit-sha");
-      expect(result.run.branchName).toBe("ops/TEC-2-fix");
+      expect(result.run.commitSha).toBeUndefined();
+      expect(git.calls.some((call) => call.startsWith("branch:"))).toBe(false);
+      expect(git.calls.some((call) => call.startsWith("patch:"))).toBe(false);
+      expect(git.calls.some((call) => call.startsWith("commit:"))).toBe(false);
+      const approved = await withWorkspaceRoot(root, () =>
+        service.approve(handle.runId),
+      );
+      expect(approved.commitSha).toBe("local-commit-sha");
+      expect(approved.branchName).toBe("ops/TEC-2-fix");
       expect(git.calls.some((call) => call.startsWith("branch:"))).toBe(true);
       expect(git.calls.some((call) => call.startsWith("patch:"))).toBe(true);
       expect(git.calls.some((call) => call.startsWith("commit:"))).toBe(true);
       expect(git.calls.some((call) => /push|merge|deploy/i.test(call))).toBe(
         false,
       );
+      const published = await withWorkspaceRoot(root, () =>
+        service.publish(handle.runId),
+      );
+      expect(published.result).toMatchObject({
+        publication: { status: "published", remote: "origin" },
+      });
+      expect(git.calls.some((call) => call.startsWith("push:"))).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

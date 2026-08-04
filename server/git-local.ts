@@ -40,6 +40,11 @@ export interface GitCommitResult {
   paths: string[];
 }
 
+export interface GitPushResult {
+  remote: string;
+  branch: string;
+}
+
 export interface GitLocalPort {
   inspect(repositoryRoot: string): Promise<GitRepositoryState>;
   createBranch(
@@ -53,6 +58,11 @@ export interface GitLocalPort {
     paths: readonly string[],
     message: string,
   ): Promise<GitCommitResult>;
+  push?(
+    repositoryRoot: string,
+    remote: string,
+    branch: string,
+  ): Promise<GitPushResult>;
 }
 
 export class GitLocalError extends Error {
@@ -335,6 +345,18 @@ export class LocalGit implements GitLocalPort {
         "Local commit did not produce a branch and commit SHA",
       );
     return { sha: after.head, branch: after.branch, paths: expectedPaths };
+  }
+
+  async push(
+    repositoryRoot: string,
+    remote: string,
+    branch: string,
+  ): Promise<GitPushResult> {
+    const root = await resolvedDirectory(repositoryRoot);
+    const safeRemote = validRef(remote, "Git remote");
+    const safeBranch = validRef(branch, "Git branch");
+    await runGit(root, ["push", "--set-upstream", safeRemote, safeBranch]);
+    return { remote: safeRemote, branch: safeBranch };
   }
 }
 

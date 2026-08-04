@@ -615,7 +615,7 @@ describe("Supabase API adapters", () => {
         providerInstanceName: "mend-local",
       });
       expect(createInput).toEqual([
-        { instanceName: "mend-local", qrcode: true },
+        { instanceName: "mend-local", qrcode: true, syncFullHistory: true },
       ]);
     } finally {
       if (previousBaseUrl === undefined) delete process.env.APP_BASE_URL;
@@ -666,6 +666,34 @@ describe("Supabase API adapters", () => {
       providerInstanceName: "mend-existing",
     });
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("merges support flow settings without dropping existing channel settings", async () => {
+    const client = new FakeClient({
+      channel_connections: [
+        {
+          id: "channel-settings",
+          workspace_id: workspaceId,
+          settings_json: {
+            aiPolicy: { mode: "safe_auto" },
+            timezone: "America/Sao_Paulo",
+          },
+        },
+      ],
+    });
+    const dependencies = adapters(client);
+
+    await dependencies.channels.updateSettings(
+      { userId, workspaceId, role: "admin" },
+      "channel-settings",
+      { supportFlow: { enabled: true } },
+    );
+
+    expect(client.rows.get("channel_connections")?.[0].settings_json).toEqual({
+      aiPolicy: { mode: "safe_auto" },
+      timezone: "America/Sao_Paulo",
+      supportFlow: { enabled: true },
+    });
   });
 
   it("repairs an existing channel webhook during setup, connect and refresh", async () => {

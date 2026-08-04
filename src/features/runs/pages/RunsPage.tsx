@@ -15,7 +15,10 @@ export function RunsPage({
   runs: CodingRun[];
   onOpenIssue: (id: string) => void;
   onStartRun: (id: string) => void;
-  onUpdateRun: (runId: string, action: "cancel" | "approve" | "reject") => void;
+  onUpdateRun: (
+    runId: string,
+    action: "cancel" | "approve" | "reject" | "publish" | "deploy",
+  ) => void;
   onRefresh: () => void;
 }) {
   const [selectedRunId, setSelectedRunId] = useState(runs[0]?.id ?? "");
@@ -184,7 +187,8 @@ export function RunsPage({
             {selectedRun.status === "Completed" && (
               <div className="run-review-actions">
                 <span>
-                  Review the diff and checks before creating a local commit.
+                  Review the diff and checks. Approval creates the local commit;
+                  publication is a separate action.
                 </span>
                 <button
                   className="button button-ghost"
@@ -196,13 +200,50 @@ export function RunsPage({
                 <button
                   className="button button-primary"
                   type="button"
-                  disabled={!selectedRun.diff?.trim()}
+                  disabled={
+                    !selectedRun.diff?.trim() ||
+                    selectedRun.checks?.some((check) => check.exitCode !== 0)
+                  }
                   onClick={() => onUpdateRun(selectedRun.id, "approve")}
                 >
                   <Check size={14} /> Approve local commit
                 </button>
               </div>
             )}
+            {selectedRun.status === "Approved" &&
+              selectedRun.branch &&
+              !selectedRun.published && (
+                <div className="run-review-actions">
+                  <span>
+                    This branch is approved and committed locally. Publish it
+                    only when you are ready for the configured remote.
+                  </span>
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    onClick={() => onUpdateRun(selectedRun.id, "publish")}
+                  >
+                    Publish branch
+                  </button>
+                </div>
+              )}
+            {selectedRun.status === "Approved" &&
+              selectedRun.published &&
+              !selectedRun.deployed && (
+                <div className="run-review-actions">
+                  <span>
+                    The approved branch is published. Deploying is gated by the
+                    workspace AI policy and Dokploy configuration.
+                  </span>
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    onClick={() => onUpdateRun(selectedRun.id, "deploy")}
+                  >
+                    Deploy approved branch
+                  </button>
+                </div>
+              )}
             <section className="run-section">
               <SectionTitle title="Operational timeline" action="Live" />
               <div className="run-timeline">

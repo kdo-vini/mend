@@ -6,6 +6,7 @@ import {
   issueTypeSchema,
 } from "../issue-service.js";
 import { validateRemoteMediaUrl } from "../media.js";
+import { supportFlowSchema } from "../../src/shared/support-flow.js";
 
 export const workspaceRoleSchema = z.enum([
   "owner",
@@ -83,6 +84,7 @@ export const channelCreateSchema = z
     profileName: z.string().trim().max(160).optional(),
   })
   .strict();
+export const channelFlowSchema = supportFlowSchema;
 
 export const conversationListQuerySchema = z
   .object({
@@ -125,6 +127,14 @@ export const conversationAiPauseSchema = z
         "manual_pause",
       ])
       .default("manual_pause"),
+  })
+  .strict();
+export const messageReactionSchema = z
+  .object({ reaction: z.string().trim().min(1).max(16) })
+  .strict();
+export const messagePresenceSchema = z
+  .object({
+    presence: z.enum(["composing", "recording", "paused"]).default("composing"),
   })
   .strict();
 export const sendMessageSchema = z

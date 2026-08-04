@@ -69,6 +69,7 @@ import {
   type SupportAiProvider,
 } from "./providers.js";
 import { CodexService, type RepositoryConfigPort } from "./codex-service.js";
+import { createDokployDeploymentFromEnv } from "./deployment.js";
 import {
   redactSecrets,
   type CodexRunStore,
@@ -78,6 +79,7 @@ import {
 } from "./codex.js";
 import type { CodexRunEvent, CodexRunEventInput } from "./codex-events.js";
 import type { AllowedCommand } from "../src/core.js";
+import { normalizeWorkspaceAiPolicy } from "../src/ai-policy.js";
 import {
   article,
   auditLog,
@@ -106,6 +108,7 @@ export interface WhatsmiauProviderPort extends WhatsAppProvider {
   createInstance(input: {
     instanceName: string;
     qrcode?: boolean;
+    syncFullHistory?: boolean;
     webhookUrl?: string;
     webhookSecret?: string;
   }): Promise<MessagingInstance>;
@@ -388,6 +391,7 @@ export class SupabaseChannelAdapter implements ChannelPort {
       const instance = await this.provider.createInstance({
         instanceName: input.providerInstanceName,
         qrcode: true,
+        syncFullHistory: true,
         ...(webhook
           ? { webhookUrl: webhook.url, webhookSecret: webhook.secret }
           : {}),
@@ -434,6 +438,34 @@ export class SupabaseChannelAdapter implements ChannelPort {
   async get(context: RequestContext, channelId: string) {
     const value = await this.getRow(context, channelId);
     return value ? channel(value) : null;
+  }
+
+  async getSettings(context: RequestContext, channelId: string) {
+    const value = await this.getRow(context, channelId);
+    if (!value) return null;
+    return { channelId, settings: row(value.settings_json) };
+  }
+
+  async updateSettings(
+    context: RequestContext,
+    channelId: string,
+    settings: Record<string, unknown>,
+  ) {
+    const current = await this.getRow(context, channelId);
+    if (!current) return null;
+    const currentSettings = row(current.settings_json);
+    const result = await this.client
+      .from("channel_connections")
+      .update({
+        settings_json: { ...currentSettings, ...settings },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", channelId)
+      .eq("workspace_id", context.workspaceId)
+      .select("*")
+      .maybeSingle();
+    const data = checked("channel_connections.settings", result);
+    return data ? channel(row(data)) : null;
   }
 
   async connect(context: RequestContext, channelId: string) {
@@ -561,6 +593,114 @@ export class SupabaseConversationAdapter implements ConversationPort {
       ...row(data),
       messages: rows(checked("messages.list", messages)),
     });
+  }
+
+  async delete(context: RequestContext, conversationId: string) {
+    const result = await this.client
+      .from("conversations")
+      .delete()
+      .eq("id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .select("id")
+      .maybeSingle();
+    return Boolean(checked("conversations.delete", result));
+  }
+
+  async deleteMessage(
+    context: RequestContext,
+    conversationId: string,
+    messageId: string,
+  ) {
+    const result = await this.client
+      .from("messages")
+      .select("id, provider_message_id, direction, is_deleted")
+      .eq("id", messageId)
+      .eq("conversation_id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const message = checked("messages.get_for_delete", result) as Record<
+      string,
+      unknown
+    > | null;
+    if (!message) return null;
+    if (message.is_deleted === true) return this.get(context, conversationId);
+    await this.whatsapp.deleteMessageForEveryone(
+      {
+        workspaceId: context.workspaceId,
+        actorUserId: context.userId,
+        actorType: "user",
+      },
+      conversationId,
+      {
+        id: String(message.provider_message_id),
+        fromMe: message.direction === "outbound",
+      },
+    );
+    const updated = await this.client
+      .from("messages")
+      .update({ is_deleted: true, updated_at: new Date().toISOString() })
+      .eq("id", messageId)
+      .eq("conversation_id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .select("id")
+      .maybeSingle();
+    checked("messages.mark_deleted", updated);
+    return this.get(context, conversationId);
+  }
+
+  async reactToMessage(
+    context: RequestContext,
+    conversationId: string,
+    messageId: string,
+    reaction: string,
+  ) {
+    const result = await this.client
+      .from("messages")
+      .select("id, provider_message_id, direction, is_deleted, message_type")
+      .eq("id", messageId)
+      .eq("conversation_id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const message = checked("messages.get_for_reaction", result) as Record<
+      string,
+      unknown
+    > | null;
+    if (
+      !message ||
+      message.is_deleted === true ||
+      message.message_type === "reaction"
+    )
+      return message ? this.get(context, conversationId) : null;
+    await this.whatsapp.sendReaction(
+      {
+        workspaceId: context.workspaceId,
+        actorUserId: context.userId,
+        actorType: "user",
+      },
+      conversationId,
+      {
+        providerMessageId: String(message.provider_message_id),
+        fromMe: message.direction === "outbound",
+        reaction,
+      },
+    );
+    return this.get(context, conversationId);
+  }
+
+  async sendPresence(
+    context: RequestContext,
+    conversationId: string,
+    presence: "composing" | "recording" | "paused",
+  ) {
+    await this.whatsapp.sendPresence(
+      {
+        workspaceId: context.workspaceId,
+        actorUserId: context.userId,
+        actorType: "user",
+      },
+      conversationId,
+      presence,
+    );
   }
 
   async update(
@@ -1435,7 +1575,12 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     codexService?: CodexService,
   ) {
     this.codex =
-      codexService ?? new CodexService({ repositories, runs: store });
+      codexService ??
+      new CodexService({
+        repositories,
+        runs: store,
+        deployment: createDokployDeploymentFromEnv(),
+      });
   }
 
   async list(context: RequestContext, query: CodingRunListQuery) {
@@ -1620,6 +1765,27 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
   async approve(context: RequestContext, id: string) {
     if (!(await this.scoped(context, id))) return null;
     return this.codex.approve(id);
+  }
+  async publish(context: RequestContext, id: string) {
+    if (!(await this.scoped(context, id))) return null;
+    return this.codex.publish(id);
+  }
+  async deploy(context: RequestContext, id: string) {
+    if (!(await this.scoped(context, id))) return null;
+    const workspace = await this.client
+      .from("workspaces")
+      .select("ai_policy_json")
+      .eq("id", context.workspaceId)
+      .maybeSingle();
+    const workspaceData = checked("coding_runs.deploy_policy", workspace);
+    const workspaceRow = workspaceData ? row(workspaceData) : null;
+    if (
+      !workspaceRow ||
+      !normalizeWorkspaceAiPolicy(workspaceRow.ai_policy_json)
+        .bugAutoDeployEnabled
+    )
+      throw new Error("deployment_not_enabled_in_ai_policy");
+    return this.codex.deploy(id);
   }
   async reject(context: RequestContext, id: string) {
     if (!(await this.scoped(context, id))) return null;

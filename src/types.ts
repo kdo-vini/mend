@@ -62,6 +62,7 @@ export interface Message {
   };
   quotedMessageId?: string;
   deleted?: boolean;
+  reactions?: Array<{ emoji: string; mine: boolean }>;
 }
 
 export interface AiDraftSource {
@@ -149,6 +150,8 @@ export interface CodingRun {
   summary: string;
   branch?: string;
   commit?: string;
+  published?: boolean;
+  deployed?: boolean;
   files: string[];
   diff?: string;
   diffTruncated?: boolean;

@@ -1,5 +1,9 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
-import { channelCreateSchema, channelListQuerySchema } from "./schemas.js";
+import {
+  channelCreateSchema,
+  channelFlowSchema,
+  channelListQuerySchema,
+} from "./schemas.js";
 
 export function registerChannelRoutes(context: ApiRouteModuleContext) {
   const {
@@ -32,6 +36,36 @@ export function registerChannelRoutes(context: ApiRouteModuleContext) {
         await dependencies.channels.createWhatsmiau(
           await scoped(request, response, "agent"),
           parse(channelCreateSchema, request.body),
+        ),
+      );
+    }),
+  );
+  router.get(
+    "/api/channels/:id/flow",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response);
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.channels.getSettings(context, pathId(request)),
+          "channel",
+        ),
+      );
+    }),
+  );
+  router.put(
+    "/api/channels/:id/flow",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "admin");
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.channels.updateSettings(context, pathId(request), {
+            supportFlow: parse(channelFlowSchema, request.body),
+          }),
+          "channel",
         ),
       );
     }),

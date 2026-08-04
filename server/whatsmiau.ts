@@ -16,6 +16,7 @@ export interface ProviderMessage {
 export interface CreateInstanceInput {
   instanceName: string;
   qrcode?: boolean;
+  syncFullHistory?: boolean;
   webhookUrl?: string;
   webhookSecret?: string;
 }
@@ -37,6 +38,40 @@ export interface SendAudioInput {
   instanceName: string;
   number: string;
   audio: string;
+}
+export interface DeleteMessageInput {
+  instanceName: string;
+  id: string;
+  remoteJid: string;
+  fromMe: boolean;
+  participant?: string;
+}
+export interface SendReactionInput {
+  instanceName: string;
+  remoteJid: string;
+  id: string;
+  fromMe: boolean;
+  reaction: string;
+}
+export interface SendListInput {
+  instanceName: string;
+  number: string;
+  title: string;
+  description: string;
+  buttonText: string;
+  footerText?: string;
+  sections: Array<{
+    title: string;
+    rows: Array<{ title: string; description?: string; rowId: string }>;
+  }>;
+}
+export interface SendButtonsInput {
+  instanceName: string;
+  number: string;
+  title: string;
+  description: string;
+  footer?: string;
+  buttons: Array<{ type: "reply"; displayText: string; id: string }>;
 }
 export interface ConfigureWebhookInput {
   instanceName: string;
@@ -67,6 +102,7 @@ export interface NormalizedWhatsmiauMessage {
   fileSize?: number;
   durationSeconds?: number;
   quotedProviderMessageId?: string;
+  interactionId?: string;
   providerTimestamp?: string;
   contactName?: string;
   raw: Record<string, unknown>;
@@ -193,19 +229,35 @@ export function normalizeWhatsmiauEvent(
     const type = messageType(message);
     const extended = asRecord(message.extendedTextMessage);
     const quoted = asRecord(extended.contextInfo).quotedMessage;
+    const quotedProviderMessageId = stringValue(
+      asRecord(asRecord(quoted).key).id,
+      asRecord(asRecord(message.reactionMessage).key).id,
+    );
     const timestamp = numberValue(value.messageTimestamp, value.timestamp);
     const timestampMs =
       timestamp && timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
+    const listResponse = asRecord(
+      asRecord(message.listResponseMessage).singleSelectReply,
+    );
+    const buttonResponse = asRecord(message.buttonsResponseMessage);
+    const interactionId = stringValue(
+      listResponse.selectedRowId,
+      buttonResponse.selectedButtonId,
+    );
     const text = stringValue(
       message.conversation,
       extended.text,
       content.caption,
       asRecord(message.reactionMessage).text,
+      listResponse.title,
+      buttonResponse.selectedDisplayText,
     );
     const mediaUrl = stringValue(
+      value.mediaUrl,
       content.url,
       content.directPath,
       content.mediaUrl,
+      asRecord(value.media).url,
     );
     const fromMe = key.fromMe === true || value.fromMe === true;
 
@@ -234,13 +286,8 @@ export function normalizeWhatsmiauEvent(
         ...(numberValue(content.seconds, content.duration)
           ? { durationSeconds: numberValue(content.seconds, content.duration) }
           : {}),
-        ...(stringValue(asRecord(asRecord(quoted).key).id)
-          ? {
-              quotedProviderMessageId: stringValue(
-                asRecord(asRecord(quoted).key).id,
-              ),
-            }
-          : {}),
+        ...(quotedProviderMessageId ? { quotedProviderMessageId } : {}),
+        ...(interactionId ? { interactionId } : {}),
         ...(timestampMs
           ? { providerTimestamp: new Date(timestampMs).toISOString() }
           : {}),
@@ -316,6 +363,7 @@ export class WhatsmiauMessagingProvider {
       body: JSON.stringify({
         instanceName: input.instanceName,
         qrcode: input.qrcode ?? true,
+        syncFullHistory: input.syncFullHistory ?? true,
       }),
     });
     // Creating the instance and configuring its webhook are two provider calls.
@@ -422,16 +470,21 @@ export class WhatsmiauMessagingProvider {
       },
     );
   }
-  sendPresence(instanceName: string, number: string) {
+  sendPresence(
+    instanceName: string,
+    number: string,
+    presence: "composing" | "recording" | "paused" = "composing",
+    delay = 1_200,
+  ) {
     return this.request<void>(
       `/chat/sendPresence/${encodeURIComponent(instanceName)}`,
       {
         method: "POST",
         body: JSON.stringify({
           number: normalizePhoneNumber(number),
-          presence: "composing",
+          presence,
           type: "text",
-          delay: 1200,
+          delay,
         }),
       },
     );
@@ -442,6 +495,67 @@ export class WhatsmiauMessagingProvider {
       {
         method: "POST",
         body: JSON.stringify({ readMessages: [{ remoteJid, id }] }),
+      },
+    );
+  }
+  deleteMessageForEveryone(input: DeleteMessageInput) {
+    return this.request<void>(
+      `/chat/deleteMessageForEveryone/${encodeURIComponent(input.instanceName)}`,
+      {
+        method: "DELETE",
+        body: JSON.stringify({
+          id: input.id,
+          remoteJid: input.remoteJid,
+          fromMe: input.fromMe,
+          ...(input.participant ? { participant: input.participant } : {}),
+        }),
+      },
+    );
+  }
+  sendReaction(input: SendReactionInput) {
+    return this.request<void>(
+      `/message/sendReaction/${encodeURIComponent(input.instanceName)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          reaction: input.reaction,
+          key: {
+            remoteJid: input.remoteJid,
+            id: input.id,
+            fromMe: input.fromMe,
+          },
+        }),
+      },
+    );
+  }
+  sendList(input: SendListInput) {
+    return this.request<ProviderMessage>(
+      `/message/sendList/${encodeURIComponent(input.instanceName)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          number: normalizePhoneNumber(input.number),
+          title: input.title,
+          description: input.description,
+          buttonText: input.buttonText,
+          footerText: input.footerText,
+          sections: input.sections,
+        }),
+      },
+    );
+  }
+  sendButtons(input: SendButtonsInput) {
+    return this.request<ProviderMessage>(
+      `/message/sendButtons/${encodeURIComponent(input.instanceName)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          number: normalizePhoneNumber(input.number),
+          title: input.title,
+          description: input.description,
+          footer: input.footer,
+          buttons: input.buttons,
+        }),
       },
     );
   }

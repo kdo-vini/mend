@@ -11,6 +11,7 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  Trash2,
   UsersRound,
 } from "lucide-react";
 import type { AiMode } from "../../../types";
@@ -25,10 +26,12 @@ import {
   disconnectWhatsAppInstance,
   getLiveChannelQr,
   getWhatsAppQr,
+  loadLiveChannelFlow,
   listLiveChannels,
   listLiveRepositories,
   listWhatsAppInstances,
   refreshLiveChannel,
+  saveLiveChannelFlow,
 } from "../api";
 import {
   listLiveAuditLog,
@@ -40,6 +43,11 @@ import {
   type LiveWorkspaceAiPolicy,
   type WorkspaceMemberRecord,
 } from "../api";
+import {
+  defaultSupportFlow,
+  supportFlowSchema,
+  type SupportFlow,
+} from "../../../shared/support-flow";
 import {
   aiTriageRouteValues,
   triageIntentValues,
@@ -79,7 +87,13 @@ export function SettingsPage({
   onToast: (message: string) => void;
   onChannelChange: (channel: WhatsAppInstance | null) => void;
 }) {
-  type SettingsTab = "whatsapp" | "members" | "ai" | "repositories" | "audit";
+  type SettingsTab =
+    | "whatsapp"
+    | "members"
+    | "ai"
+    | "flows"
+    | "repositories"
+    | "audit";
   const [activeTab, setActiveTab] = useState<SettingsTab>("whatsapp");
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selected, setSelected] = useState<WhatsAppInstance | null>(null);
@@ -109,6 +123,9 @@ export function SettingsPage({
   const [repositoryName, setRepositoryName] = useState("");
   const [repositoryPath, setRepositoryPath] = useState("");
   const [repositoryBranch, setRepositoryBranch] = useState("main");
+  const [flow, setFlow] = useState<SupportFlow | null>(null);
+  const [flowNodeId, setFlowNodeId] = useState<string>();
+  const [flowSaving, setFlowSaving] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -206,6 +223,36 @@ export function SettingsPage({
   ]);
 
   useEffect(() => {
+    if (!workspaceId || !selected?.channelId) return;
+    let stopped = false;
+    const refreshHealth = async () => {
+      try {
+        const next = await refreshLiveChannel({
+          workspaceId,
+          channelId: selected.channelId!,
+        });
+        if (stopped) return;
+        setSelected((current) =>
+          current?.channelId === next.channelId ? next : current,
+        );
+        setInstances((current) =>
+          current.map((item) =>
+            item.channelId === next.channelId ? next : item,
+          ),
+        );
+        onChannelChange(next);
+      } catch {
+        // The visible health state stays on the last confirmed value.
+      }
+    };
+    const timer = setInterval(() => void refreshHealth(), 15_000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [onChannelChange, selected?.channelId, workspaceId]);
+
+  useEffect(() => {
     let active = true;
     if (!supabase) return undefined;
     void supabase.auth.getUser().then(({ data }) => {
@@ -238,6 +285,14 @@ export function SettingsPage({
         setAiPolicy(policy);
         if (policy.dominantMode !== "mixed") setAiMode(policy.dominantMode);
       }
+      if (activeTab === "flows" && selected?.channelId) {
+        setFlow(
+          (await loadLiveChannelFlow({
+            workspaceId,
+            channelId: selected.channelId,
+          })) ?? defaultSupportFlow(),
+        );
+      }
     } catch (reason) {
       setSettingsError(
         reason instanceof Error
@@ -247,7 +302,7 @@ export function SettingsPage({
     } finally {
       setSettingsLoading(false);
     }
-  }, [activeTab, workspaceId]);
+  }, [activeTab, selected?.channelId, workspaceId]);
 
   useEffect(() => {
     void loadSettingsData();
@@ -466,6 +521,54 @@ export function SettingsPage({
     }
   };
 
+  const saveFlow = async () => {
+    if (!workspaceId || !selected?.channelId || !flow) return;
+    const parsed = supportFlowSchema.safeParse(flow);
+    if (!parsed.success) {
+      onToast(parsed.error.issues[0]?.message ?? "Flow is invalid.");
+      return;
+    }
+    setFlowSaving(true);
+    try {
+      await saveLiveChannelFlow({
+        workspaceId,
+        channelId: selected.channelId,
+        flow: parsed.data,
+      });
+      setFlow(parsed.data);
+      onToast("Support flow saved");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Support flow could not be saved.",
+      );
+    } finally {
+      setFlowSaving(false);
+    }
+  };
+
+  const updateFlow = (update: (current: SupportFlow) => SupportFlow) =>
+    setFlow((current) => (current ? update(current) : current));
+  const addFlowNode = () => {
+    updateFlow((current) => {
+      const id = `step-${Date.now()}`;
+      return {
+        ...current,
+        nodes: [
+          ...current.nodes,
+          {
+            id,
+            title: "New step",
+            type: "message",
+            message: "Write the message this step should send.",
+            options: [],
+          },
+        ],
+      };
+    });
+  };
+
   const updateAutomationRoute = (
     intent: TriageIntent,
     route: AiTriageRoute,
@@ -485,6 +588,7 @@ export function SettingsPage({
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
     { id: "members", label: "Members", icon: UsersRound },
     { id: "ai", label: "AI behavior", icon: Bot },
+    { id: "flows", label: "Flows", icon: GitBranch },
     { id: "repositories", label: "Repositories", icon: GitBranch },
     { id: "audit", label: "Audit log", icon: ShieldCheck },
   ];
@@ -501,6 +605,17 @@ export function SettingsPage({
           timeStyle: "short",
         }).format(date);
   };
+  const selectedFlowNode =
+    flow?.nodes.find((node) => node.id === flowNodeId) ?? flow?.nodes[0];
+  const health = (() => {
+    if (!selected || selected.state !== "open")
+      return { label: "Offline", tone: "offline" };
+    if (!selected.lastEventAt) return { label: "Connected", tone: "connected" };
+    const age = Date.now() - new Date(selected.lastEventAt).getTime();
+    return age > 90_000
+      ? { label: "Needs attention", tone: "warning" }
+      : { label: "Healthy", tone: "connected" };
+  })();
 
   return (
     <div className="page">
@@ -549,14 +664,8 @@ export function SettingsPage({
                       displayed.
                     </p>
                   </div>
-                  <span
-                    className={
-                      "connection-pill " +
-                      (selected?.state === "open" ? "connected" : "offline")
-                    }
-                  >
-                    <span className="live-dot" />{" "}
-                    {selected?.state === "open" ? "Connected" : "Not connected"}
+                  <span className={"connection-pill " + health.tone}>
+                    <span className="live-dot" /> {health.label}
                   </span>
                 </div>
                 {channelError && (
@@ -598,7 +707,17 @@ export function SettingsPage({
                           {selected.phoneNumber ?? "Phone not reported"} ·
                           Whatsmiau
                         </span>
-                        <small>Provider state: {selected.state}</small>
+                        <small>
+                          Provider state: {selected.state} ·{" "}
+                          {selected.lastEventAt
+                            ? `Last event ${formatDate(selected.lastEventAt)}`
+                            : "No webhook event received yet"}
+                        </small>
+                        {selected.historySyncComplete === false && (
+                          <small className="history-sync-status">
+                            Syncing history {selected.historySyncProgress ?? 0}%
+                          </small>
+                        )}
                       </div>
                     </div>
                     <div className="connection-card-actions">
@@ -999,6 +1118,42 @@ export function SettingsPage({
                       <label>
                         <input
                           type="checkbox"
+                          checked={aiPolicy.bugAutoFixEnabled}
+                          disabled={aiPolicySaving}
+                          onChange={(event) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    bugAutoFixEnabled: event.target.checked,
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                        Start Codex automatically for confirmed bugs
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={aiPolicy.bugAutoDeployEnabled}
+                          disabled={aiPolicySaving}
+                          onChange={(event) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    bugAutoDeployEnabled: event.target.checked,
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                        Allow deployment actions after explicit approval
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
                           checked={aiPolicy.safeAutoSendEnabled}
                           disabled={aiPolicySaving}
                           onChange={(event) =>
@@ -1063,6 +1218,406 @@ export function SettingsPage({
                     </button>
                   </>
                 ) : null}
+              </section>
+            </div>
+          )}
+
+          {activeTab === "flows" && (
+            <div
+              id="settings-panel-flows"
+              role="tabpanel"
+              aria-labelledby="settings-tab-flows"
+            >
+              <section className="settings-section">
+                <div className="settings-section-header">
+                  <div>
+                    <h2>Support flow</h2>
+                    <p>
+                      Build the first WhatsApp steps visually. Mend sends the
+                      menu and follows the customer&apos;s choice before AI or a
+                      human takes over.
+                    </p>
+                  </div>
+                  <span className="section-count">
+                    {flow?.nodes.length ?? 0} steps
+                  </span>
+                </div>
+                {!workspaceId || !selected?.channelId ? (
+                  <div className="inline-empty">
+                    <MessageCircle size={16} />
+                    <span>
+                      Connect a WhatsApp number before configuring its flow.
+                    </span>
+                  </div>
+                ) : settingsLoading || !flow ? (
+                  <LoadingState label="Loading support flow..." />
+                ) : (
+                  <>
+                    <div className="flow-settings-row">
+                      <label className="toggle-field">
+                        <input
+                          type="checkbox"
+                          checked={flow.enabled}
+                          onChange={(event) =>
+                            updateFlow((current) => ({
+                              ...current,
+                              enabled: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span>
+                          <strong>Enable this flow</strong>
+                          <small>
+                            When enabled, it runs before AI triage on new chats.
+                          </small>
+                        </span>
+                      </label>
+                      <label>
+                        Start flow when
+                        <Select
+                          ariaLabel="Flow trigger"
+                          value={flow.trigger.type}
+                          options={[
+                            {
+                              value: "first_message",
+                              label: "A new chat starts",
+                            },
+                            {
+                              value: "keywords",
+                              label: "A keyword is detected",
+                            },
+                          ]}
+                          onChange={(value) =>
+                            updateFlow((current) => ({
+                              ...current,
+                              trigger: {
+                                ...current.trigger,
+                                type: value as "first_message" | "keywords",
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    {flow.trigger.type === "keywords" && (
+                      <label className="flow-keywords-field">
+                        Keywords
+                        <input
+                          value={flow.trigger.keywords.join(", ")}
+                          onChange={(event) =>
+                            updateFlow((current) => ({
+                              ...current,
+                              trigger: {
+                                ...current.trigger,
+                                keywords: event.target.value
+                                  .split(",")
+                                  .map((value) => value.trim())
+                                  .filter(Boolean),
+                              },
+                            }))
+                          }
+                          placeholder="preço, pedido, ajuda"
+                        />
+                        <small>Separate keywords with commas.</small>
+                      </label>
+                    )}
+                    <div className="flow-builder">
+                      <aside className="flow-node-list" aria-label="Flow steps">
+                        <div className="flow-node-list-header">
+                          <strong>Steps</strong>
+                          <button
+                            className="icon-button subtle"
+                            type="button"
+                            aria-label="Add flow step"
+                            onClick={addFlowNode}
+                          >
+                            <Plus size={15} />
+                          </button>
+                        </div>
+                        {flow.nodes.map((node, index) => (
+                          <button
+                            className={`flow-node-item ${selectedFlowNode?.id === node.id ? "selected" : ""}`}
+                            type="button"
+                            key={node.id}
+                            onClick={() => setFlowNodeId(node.id)}
+                          >
+                            <span>{String(index + 1).padStart(2, "0")}</span>
+                            <strong>{node.title}</strong>
+                            <small>
+                              {node.type === "menu"
+                                ? `${node.options.length} options`
+                                : node.type === "handoff"
+                                  ? "Human handoff"
+                                  : "Message"}
+                            </small>
+                          </button>
+                        ))}
+                      </aside>
+                      {selectedFlowNode && (
+                        <div className="flow-node-editor">
+                          <div className="flow-node-editor-header">
+                            <div>
+                              <span className="eyebrow">Selected step</span>
+                              <h3>{selectedFlowNode.title}</h3>
+                            </div>
+                            {flow.nodes.length > 1 && (
+                              <button
+                                className="text-button danger-text-button"
+                                type="button"
+                                onClick={() => {
+                                  updateFlow((current) => ({
+                                    ...current,
+                                    rootNodeId:
+                                      current.rootNodeId === selectedFlowNode.id
+                                        ? (current.nodes.find(
+                                            (node) =>
+                                              node.id !== selectedFlowNode.id,
+                                          )?.id ?? current.rootNodeId)
+                                        : current.rootNodeId,
+                                    nodes: current.nodes.filter(
+                                      (node) => node.id !== selectedFlowNode.id,
+                                    ),
+                                  }));
+                                  setFlowNodeId(undefined);
+                                }}
+                              >
+                                <Trash2 size={13} /> Remove step
+                              </button>
+                            )}
+                          </div>
+                          <div className="settings-form-grid flow-node-fields">
+                            <label>
+                              Step name
+                              <input
+                                value={selectedFlowNode.title}
+                                onChange={(event) =>
+                                  updateFlow((current) => ({
+                                    ...current,
+                                    nodes: current.nodes.map((node) =>
+                                      node.id === selectedFlowNode.id
+                                        ? { ...node, title: event.target.value }
+                                        : node,
+                                    ),
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label>
+                              Step type
+                              <Select
+                                ariaLabel="Flow step type"
+                                value={selectedFlowNode.type}
+                                options={[
+                                  { value: "menu", label: "Menu with choices" },
+                                  { value: "message", label: "Send a message" },
+                                  {
+                                    value: "handoff",
+                                    label: "Hand off to a human",
+                                  },
+                                ]}
+                                onChange={(value) =>
+                                  updateFlow((current) => ({
+                                    ...current,
+                                    nodes: current.nodes.map((node) =>
+                                      node.id === selectedFlowNode.id
+                                        ? {
+                                            ...node,
+                                            type: value as
+                                              | "menu"
+                                              | "message"
+                                              | "handoff",
+                                            options:
+                                              value === "menu"
+                                                ? node.options
+                                                : [],
+                                          }
+                                        : node,
+                                    ),
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          <label>
+                            Message
+                            <textarea
+                              value={selectedFlowNode.message}
+                              onChange={(event) =>
+                                updateFlow((current) => ({
+                                  ...current,
+                                  nodes: current.nodes.map((node) =>
+                                    node.id === selectedFlowNode.id
+                                      ? { ...node, message: event.target.value }
+                                      : node,
+                                  ),
+                                }))
+                              }
+                              rows={4}
+                              placeholder="What should the customer see?"
+                            />
+                          </label>
+                          {selectedFlowNode.type === "menu" && (
+                            <div className="flow-options-editor">
+                              <div className="flow-options-header">
+                                <div>
+                                  <strong>Choices</strong>
+                                  <small>
+                                    Use up to 3 buttons or a list for more
+                                    choices.
+                                  </small>
+                                </div>
+                                <button
+                                  className="button button-ghost"
+                                  type="button"
+                                  disabled={
+                                    selectedFlowNode.options.length >= 10
+                                  }
+                                  onClick={() =>
+                                    updateFlow((current) => ({
+                                      ...current,
+                                      nodes: current.nodes.map((node) =>
+                                        node.id === selectedFlowNode.id
+                                          ? {
+                                              ...node,
+                                              options: [
+                                                ...node.options,
+                                                {
+                                                  id: `option-${Date.now()}`,
+                                                  label: "New choice",
+                                                },
+                                              ],
+                                            }
+                                          : node,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <Plus size={14} /> Add choice
+                                </button>
+                              </div>
+                              {selectedFlowNode.options.map((option) => (
+                                <div
+                                  className="flow-option-row"
+                                  key={option.id}
+                                >
+                                  <input
+                                    aria-label={`Choice ${option.label}`}
+                                    value={option.label}
+                                    onChange={(event) =>
+                                      updateFlow((current) => ({
+                                        ...current,
+                                        nodes: current.nodes.map((node) =>
+                                          node.id === selectedFlowNode.id
+                                            ? {
+                                                ...node,
+                                                options: node.options.map(
+                                                  (item) =>
+                                                    item.id === option.id
+                                                      ? {
+                                                          ...item,
+                                                          label:
+                                                            event.target.value,
+                                                        }
+                                                      : item,
+                                                ),
+                                              }
+                                            : node,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <Select
+                                    ariaLabel={`Next step for ${option.label}`}
+                                    value={option.nextNodeId ?? ""}
+                                    options={[
+                                      {
+                                        value: "",
+                                        label: "End or wait for human",
+                                      },
+                                      ...flow.nodes
+                                        .filter(
+                                          (node) =>
+                                            node.id !== selectedFlowNode.id,
+                                        )
+                                        .map((node) => ({
+                                          value: node.id,
+                                          label: node.title,
+                                        })),
+                                    ]}
+                                    onChange={(value) =>
+                                      updateFlow((current) => ({
+                                        ...current,
+                                        nodes: current.nodes.map((node) =>
+                                          node.id === selectedFlowNode.id
+                                            ? {
+                                                ...node,
+                                                options: node.options.map(
+                                                  (item) =>
+                                                    item.id === option.id
+                                                      ? {
+                                                          ...item,
+                                                          ...(value
+                                                            ? {
+                                                                nextNodeId:
+                                                                  value,
+                                                              }
+                                                            : {
+                                                                nextNodeId:
+                                                                  undefined,
+                                                              }),
+                                                        }
+                                                      : item,
+                                                ),
+                                              }
+                                            : node,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <button
+                                    className="icon-button subtle"
+                                    type="button"
+                                    aria-label={`Remove choice ${option.label}`}
+                                    disabled={
+                                      selectedFlowNode.options.length <= 1
+                                    }
+                                    onClick={() =>
+                                      updateFlow((current) => ({
+                                        ...current,
+                                        nodes: current.nodes.map((node) =>
+                                          node.id === selectedFlowNode.id
+                                            ? {
+                                                ...node,
+                                                options: node.options.filter(
+                                                  (item) =>
+                                                    item.id !== option.id,
+                                                ),
+                                              }
+                                            : node,
+                                        ),
+                                      }))
+                                    }
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      disabled={flowSaving}
+                      onClick={() => void saveFlow()}
+                    >
+                      <Save size={14} />{" "}
+                      {flowSaving ? "Saving..." : "Save support flow"}
+                    </button>
+                  </>
+                )}
               </section>
             </div>
           )}

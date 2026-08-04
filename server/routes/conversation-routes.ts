@@ -5,6 +5,8 @@ import {
   conversationListQuerySchema,
   conversationPatchSchema,
   conversationSnoozeSchema,
+  messageReactionSchema,
+  messagePresenceSchema,
   sendMessageSchema,
 } from "./schemas.js";
 
@@ -17,8 +19,10 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
     parse,
     asyncRoute,
     send,
+    noContent,
     requireFound,
     mediaApiError,
+    uuid,
   } = context;
   router.get(
     "/api/conversations",
@@ -61,6 +65,66 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
           "conversation",
         ),
       );
+    }),
+  );
+  router.delete(
+    "/api/conversations/:id",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      const deleted = await dependencies.conversations.delete(
+        context,
+        pathId(request),
+      );
+      requireFound(deleted ? deleted : null, "conversation");
+      noContent(response);
+    }),
+  );
+  router.post(
+    "/api/conversations/:id/messages/:messageId/reaction",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      const messageId = parse(uuid, request.params.messageId);
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.conversations.reactToMessage(
+            context,
+            pathId(request),
+            messageId,
+            parse(messageReactionSchema, request.body).reaction,
+          ),
+          "message",
+        ),
+      );
+    }),
+  );
+  router.post(
+    "/api/conversations/:id/presence",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      await dependencies.conversations.sendPresence(
+        context,
+        pathId(request),
+        parse(messagePresenceSchema, request.body).presence,
+      );
+      noContent(response);
+    }),
+  );
+  router.delete(
+    "/api/conversations/:id/messages/:messageId",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      const messageId = parse(uuid, request.params.messageId);
+      await requireFound(
+        await dependencies.conversations.deleteMessage(
+          context,
+          pathId(request),
+          messageId,
+        ),
+        "message",
+      );
+      noContent(response);
     }),
   );
   router.post(

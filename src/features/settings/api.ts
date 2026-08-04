@@ -12,7 +12,10 @@ export {
   listLiveRepositories,
   listWhatsAppInstances,
   refreshLiveChannel,
+  loadLiveChannelFlow,
+  saveLiveChannelFlow,
 } from "../../api/live-actions";
+export type { SupportFlow, SupportFlowNode } from "../../shared/support-flow";
 export type { WhatsAppInstance } from "../../api/live-actions";
 export {
   listLiveAuditLog,

@@ -7,6 +7,7 @@ import {
   type LiveWorkerAutomation,
   type LiveWorkerAutomationInput,
   type LiveWorkerChannelResolver,
+  type LiveWorkerCodexStarter,
   type LiveWorkerInbox,
   type LiveWorkerKnowledge,
   type LiveWorkerSendAiReplyInput,
@@ -502,6 +503,68 @@ describe("live Whatsmiau worker", () => {
     });
     expect(result).not.toHaveProperty("draft");
     expect(provider.draftReply).not.toHaveBeenCalled();
+  });
+
+  it("starts Codex for an enabled, confident bug and notifies when the result is ready", async () => {
+    const client = new FakeSupabaseHandoff();
+    client.policy = {
+      bug_auto_fix_enabled: true,
+      notify_on_bug: true,
+    };
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply: vi.fn(async () => "must not be generated for a bug"),
+      triage: vi.fn(async () =>
+        JSON.stringify({
+          intent: "bug",
+          priority: "high",
+          confidence: 0.98,
+          summary: "Checkout fails in production",
+          unsafe: false,
+        }),
+      ),
+    };
+    const completion = Promise.resolve({ status: "completed" });
+    const starter: LiveWorkerCodexStarter = {
+      start: vi.fn(async () => ({ runId: "run-1", completion })),
+    };
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+      undefined,
+      undefined,
+      starter,
+    );
+    const persisted: InboxMessageRecord = {
+      id: "message-auto-fix",
+      workspaceId: binding.workspaceId,
+      conversationId: "conversation-1",
+      contactId: "contact-1",
+      providerMessageId: message.providerMessageId,
+      direction: "inbound",
+      messageType: "text",
+      unreadCount: 1,
+      inserted: true,
+    };
+    await automation.process({
+      binding,
+      idempotencyKey: "bug-auto-fix",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "unused-auto-fix",
+      ),
+      knowledge: [],
+      message,
+      persisted,
+    });
+    await vi.waitFor(() =>
+      expect(client.notifications.map((item) => item.kind)).toEqual(
+        expect.arrayContaining(["ai.codex_started", "ai.codex_ready"]),
+      ),
+    );
+    expect(starter.start).toHaveBeenCalledWith(
+      expect.objectContaining({ issueIdentifier: "TEC-1" }),
+    );
   });
 
   it("answers a known question without creating an issue", async () => {

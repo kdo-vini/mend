@@ -662,6 +662,10 @@ function App() {
       );
       if (inspectorIssueId === issueId) setInspectorIssueId(null);
       if (editIssueId === issueId) setEditIssueId(null);
+      if (window.location.pathname === `/issues/${issue.identifier}`) {
+        window.history.pushState({}, "", "/issues");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
       setToast(`${issue.identifier} deleted`);
     } catch (error) {
       setToast(
@@ -810,7 +814,7 @@ function App() {
 
   const updateRun = (
     runId: string,
-    action: "cancel" | "approve" | "reject",
+    action: "cancel" | "approve" | "reject" | "publish" | "deploy",
   ) => {
     if (!demoMode && workspaceId) {
       void updateLiveCodexRun({ workspaceId, runId, action })
@@ -828,7 +832,11 @@ function App() {
         ? "Canceled"
         : action === "approve"
           ? "Approved"
-          : "Rejected";
+          : action === "publish"
+            ? "Approved"
+            : action === "deploy"
+              ? "Approved"
+              : "Rejected";
     setRuns((current) =>
       current.map((run) =>
         run.id === runId
@@ -844,10 +852,19 @@ function App() {
       action === "cancel"
         ? "Codex run canceled"
         : action === "approve"
-          ? "Codex result approved"
-          : "Codex result rejected",
+          ? "Codex result approved and committed locally"
+          : action === "publish"
+            ? "Codex branch published"
+            : action === "deploy"
+              ? "Codex deployment started"
+              : "Codex result rejected",
     );
   };
+
+  const channelHealthy =
+    channel?.state === "open" &&
+    (!channel.lastEventAt ||
+      Date.now() - new Date(channel.lastEventAt).getTime() <= 90_000);
 
   return (
     <div
@@ -926,7 +943,7 @@ function App() {
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
                     liveMode={!demoMode}
-                    whatsappConnected={channel?.state === "open"}
+                    whatsappConnected={channelHealthy}
                     knowledgeArticles={knowledgeArticles}
                     assigneeOptions={assigneeOptions}
                     assigneeLabel={assigneeLabel}
@@ -966,6 +983,8 @@ function App() {
                     window.dispatchEvent(new PopStateEvent("popstate"));
                   }}
                   onStartRun={setRunDialogIssueId}
+                  onEditIssue={setEditIssueId}
+                  onDeleteIssue={(issueId) => void deleteIssue(issueId)}
                   onUpdateIssue={updateIssue}
                   onResolveAndNotify={resolveIssueAndNotify}
                 />
@@ -1023,7 +1042,7 @@ function App() {
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
                     liveMode={!demoMode}
-                    whatsappConnected={channel?.state === "open"}
+                    whatsappConnected={channelHealthy}
                     knowledgeArticles={knowledgeArticles}
                     assigneeOptions={assigneeOptions}
                     assigneeLabel={assigneeLabel}
@@ -1096,6 +1115,7 @@ function App() {
       {editIssueId && (
         <FeatureEditIssueDialog
           issue={issues.find((item) => item.id === editIssueId)}
+          assigneeOptions={assigneeOptions}
           onClose={() => setEditIssueId(null)}
           onSave={(patch) => {
             updateIssue(editIssueId, patch);

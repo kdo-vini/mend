@@ -51,6 +51,10 @@ CODEX_FALLBACK_REASONING_EFFORT=high
 CODEX_MAX_TURNS=24
 CODEX_MAX_RUNTIME_SECONDS=1200
 CODEX_WORKSPACE_ROOT=/workspace/repos
+CODEX_GIT_REMOTE=origin
+DOKPLOY_API_URL=https://<dokploy-host>/api
+DOKPLOY_API_KEY=<Dokploy API key>
+DOKPLOY_APPLICATION_ID=<Dokploy application id>
 MEND_WORKER_POLL_MS=2000
 MEND_DEV_MODE=0
 ```
@@ -65,8 +69,19 @@ configured in Mend must resolve inside that directory. The container runs as
 the non-root `node` user, so the mounted directory must be writable by UID/GID
 `1000:1000`.
 
-The container includes Git and npm. Approval creates a local branch and commit;
-Mend does not push, merge or deploy repository changes automatically.
+The container includes Git and npm. The release flow is intentionally gated:
+
+1. Codex investigates and produces a diff plus checks.
+2. A human approves the result, which creates a local branch and commit.
+3. A separate “Publish branch” action pushes that branch to the configured Git
+   remote (`origin` by default).
+4. A separate “Deploy approved branch” action calls Dokploy only when the
+   workspace AI policy allows deployments and all three Dokploy variables are
+   configured.
+
+Mend never pushes, merges or deploys as a side effect of triage or Codex
+completion. Keep the Dokploy API key as a runtime secret; it is never stored
+in Supabase or exposed to the browser.
 
 ## Supabase and Whatsmiau
 

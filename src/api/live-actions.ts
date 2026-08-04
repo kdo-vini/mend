@@ -9,6 +9,7 @@ import type {
   IssueType,
   Priority,
 } from "../types";
+import type { SupportFlow } from "../shared/support-flow";
 import {
   toUiConversation,
   toUiAiDraft,
@@ -620,6 +621,60 @@ export async function sendLiveMessage(input: {
           ? { idempotencyKey: input.idempotencyKey }
           : {}),
       }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function deleteLiveConversation(input: {
+  workspaceId: string;
+  conversationId: string;
+}) {
+  return apiRequest<void>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}`,
+    { method: "DELETE" },
+    input.workspaceId,
+  );
+}
+
+export async function deleteLiveMessage(input: {
+  workspaceId: string;
+  conversationId: string;
+  messageId: string;
+}) {
+  return apiRequest<void>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/messages/${encodeURIComponent(input.messageId)}`,
+    { method: "DELETE" },
+    input.workspaceId,
+  );
+}
+
+export async function reactToLiveMessage(input: {
+  workspaceId: string;
+  conversationId: string;
+  messageId: string;
+  reaction: string;
+}) {
+  return apiRequest<unknown>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/messages/${encodeURIComponent(input.messageId)}/reaction`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reaction: input.reaction }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function sendLivePresence(input: {
+  workspaceId: string;
+  conversationId: string;
+  presence?: "composing" | "recording" | "paused";
+}) {
+  return apiRequest<void>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/presence`,
+    {
+      method: "POST",
+      body: JSON.stringify({ presence: input.presence ?? "composing" }),
     },
     input.workspaceId,
   );
@@ -1456,7 +1511,7 @@ export async function updateLiveCodexRun(
   input: {
     workspaceId: string;
     runId: string;
-    action: "cancel" | "approve" | "reject";
+    action: "cancel" | "approve" | "reject" | "publish" | "deploy";
   },
   client: MendSupabaseClient | null = supabase,
 ) {
@@ -1466,6 +1521,8 @@ export async function updateLiveCodexRun(
       { method: "POST", body: JSON.stringify({}) },
       input.workspaceId,
     );
+  if (input.action === "publish" || input.action === "deploy")
+    throw new Error("Codex release actions require the Mend server runtime");
   const status =
     input.action === "cancel"
       ? "canceled"
@@ -1490,6 +1547,11 @@ export interface WhatsAppInstance {
   qr?: string | null;
   channelId?: string;
   name?: string;
+  lastEventAt?: string | null;
+  connectedAt?: string | null;
+  historySyncProgress?: number;
+  historySyncComplete?: boolean;
+  historySyncUpdatedAt?: string | null;
 }
 
 type ApiRepository = {
@@ -1523,6 +1585,16 @@ type ApiChannel = {
   phoneNumber?: string | null;
   phone_number?: string | null;
   status: string;
+  lastEventAt?: string | null;
+  last_event_at?: string | null;
+  connectedAt?: string | null;
+  connected_at?: string | null;
+  historySyncProgress?: number;
+  history_sync_progress?: number;
+  historySyncComplete?: boolean;
+  history_sync_complete?: boolean;
+  historySyncUpdatedAt?: string | null;
+  history_sync_updated_at?: string | null;
 };
 
 function channelToInstance(channel: ApiChannel): WhatsAppInstance {
@@ -1535,7 +1607,39 @@ function channelToInstance(channel: ApiChannel): WhatsAppInstance {
     name: channel.name,
     phoneNumber: channel.phoneNumber ?? channel.phone_number ?? null,
     state: channel.status,
+    lastEventAt: channel.lastEventAt ?? channel.last_event_at ?? null,
+    connectedAt: channel.connectedAt ?? channel.connected_at ?? null,
+    historySyncProgress:
+      channel.historySyncProgress ?? channel.history_sync_progress ?? 100,
+    historySyncComplete:
+      channel.historySyncComplete ?? channel.history_sync_complete ?? true,
+    historySyncUpdatedAt:
+      channel.historySyncUpdatedAt ?? channel.history_sync_updated_at ?? null,
   };
+}
+
+export async function loadLiveChannelFlow(input: {
+  workspaceId: string;
+  channelId: string;
+}): Promise<SupportFlow | null> {
+  const result = await apiRequest<{ settings?: { supportFlow?: SupportFlow } }>(
+    `/api/channels/${encodeURIComponent(input.channelId)}/flow`,
+    {},
+    input.workspaceId,
+  );
+  return result.settings?.supportFlow ?? null;
+}
+
+export async function saveLiveChannelFlow(input: {
+  workspaceId: string;
+  channelId: string;
+  flow: SupportFlow;
+}) {
+  return apiRequest<unknown>(
+    `/api/channels/${encodeURIComponent(input.channelId)}/flow`,
+    { method: "PUT", body: JSON.stringify(input.flow) },
+    input.workspaceId,
+  );
 }
 
 export async function listLiveChannels(

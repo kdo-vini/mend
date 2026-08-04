@@ -5,6 +5,7 @@ import {
   Check,
   CheckCheck,
   CircleDot,
+  Copy,
   Ellipsis,
   FileText,
   Filter,
@@ -18,6 +19,7 @@ import {
   Send,
   Sparkles,
   Square,
+  Trash2,
   UserRound,
   X,
   Zap,
@@ -33,8 +35,11 @@ import type {
   Message,
 } from "../../../types";
 import {
+  deleteLiveConversation,
+  deleteLiveMessage,
   loadLiveConversationSnapshot,
   markLiveConversationRead,
+  reactToLiveMessage,
   pauseLiveConversationAi,
   requestAiDraft,
   resolveLiveConversation,
@@ -42,16 +47,27 @@ import {
   sendLiveMedia,
   sendLiveMediaBatch,
   sendLiveMessage,
+  sendLivePresence,
   snoozeLiveConversation,
   updateLiveConversation,
   uploadLiveMediaAsset,
 } from "../api";
+import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { useConversationScroll } from "../hooks/useConversationScroll";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PriorityDot } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
+import {
+  dismissAiCard,
+  getAiCardDismissalStorage,
+  isAiCardDismissed,
+  readAiCardDismissals,
+  writeAiCardDismissals,
+  type AiCardDismissals,
+  type AiCardKind,
+} from "../ai-card-dismissals";
 
 interface AssigneeOption {
   value: string;
@@ -81,6 +97,24 @@ function shouldShowConversationAiDetails() {
     typeof window === "undefined" ||
     !window.matchMedia("(max-width: 650px)").matches
   );
+}
+
+function aiDecisionDismissalSignature(conversation: Conversation) {
+  return JSON.stringify([
+    conversation.automationState,
+    conversation.aiDecision,
+    conversation.aiIntent,
+    conversation.aiDecisionReason,
+    conversation.aiConfidence,
+    conversation.aiSummary,
+    conversation.humanTakeoverAt,
+    conversation.humanTakeoverBy,
+    conversation.humanTakeoverReason,
+  ]);
+}
+
+function aiDraftDismissalSignature(draft: AiDraft) {
+  return JSON.stringify([draft.id, draft.updatedAt, draft.status, draft.body]);
 }
 
 function mergeConversationSnapshot(
@@ -159,8 +193,21 @@ export function InboxPage({
   const [aiDetailsOpen, setAiDetailsOpen] = useState(
     shouldShowConversationAiDetails,
   );
-  const [showAiDecision, setShowAiDecision] = useState(true);
-  const [showAiDraft, setShowAiDraft] = useState(true);
+  const aiCardStorageKey = `mend.ai-card-dismissals:${workspaceId ?? "local"}`;
+  const [dismissedAiCardsByScope, setDismissedAiCardsByScope] = useState<
+    Record<string, AiCardDismissals>
+  >(() => ({
+    [aiCardStorageKey]: readAiCardDismissals(
+      getAiCardDismissalStorage(),
+      aiCardStorageKey,
+    ),
+  }));
+  const dismissedAiCards = dismissedAiCardsByScope[aiCardStorageKey] ?? {};
+  const [messageActionId, setMessageActionId] = useState<string>();
+  const [conversationDeleting, setConversationDeleting] = useState(false);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const searchRef = useRef<HTMLInputElement>(null);
   const selected =
     conversations.find((item) => item.id === selectedConversationId) ??
@@ -219,9 +266,27 @@ export function InboxPage({
 
   useEffect(() => {
     setAiDetailsOpen(shouldShowConversationAiDetails());
-    setShowAiDecision(true);
-    setShowAiDraft(true);
   }, [selected?.id]);
+
+  useEffect(() => {
+    if (dismissedAiCardsByScope[aiCardStorageKey]) return;
+    setDismissedAiCardsByScope((current) => ({
+      ...current,
+      [aiCardStorageKey]: readAiCardDismissals(
+        getAiCardDismissalStorage(),
+        aiCardStorageKey,
+      ),
+    }));
+  }, [aiCardStorageKey, dismissedAiCardsByScope]);
+
+  useEffect(() => {
+    if (!dismissedAiCardsByScope[aiCardStorageKey]) return;
+    writeAiCardDismissals(
+      getAiCardDismissalStorage(),
+      aiCardStorageKey,
+      dismissedAiCardsByScope[aiCardStorageKey],
+    );
+  }, [aiCardStorageKey, dismissedAiCardsByScope]);
 
   if (!selected) {
     return (
@@ -246,6 +311,30 @@ export function InboxPage({
   const activeIssue = selected.issueId
     ? issues.find((issue) => issue.id === selected.issueId)
     : undefined;
+  const decisionSignature = aiDecisionDismissalSignature(selected);
+  const draftSignature = selected.aiDraft
+    ? aiDraftDismissalSignature(selected.aiDraft)
+    : "";
+  const showAiDecision = !isAiCardDismissed(
+    dismissedAiCards,
+    selected.id,
+    "decision",
+    decisionSignature,
+  );
+  const showAiDraft =
+    Boolean(selected.aiDraft) &&
+    !isAiCardDismissed(dismissedAiCards, selected.id, "draft", draftSignature);
+  const dismissSelectedAiCard = (kind: AiCardKind, signature: string) => {
+    setDismissedAiCardsByScope((current) => ({
+      ...current,
+      [aiCardStorageKey]: dismissAiCard(
+        current[aiCardStorageKey] ?? {},
+        selected.id,
+        kind,
+        signature,
+      ),
+    }));
+  };
   const filterItems = [
     "All conversations",
     "Needs attention",
@@ -630,6 +719,137 @@ export function InboxPage({
     }
   };
 
+  const deleteConversation = async (conversationId = selected.id) => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Delete this conversation from Mend? The WhatsApp chat will not be deleted.",
+      )
+    )
+      return;
+    const nextConversation = conversations.find(
+      (conversation) => conversation.id !== conversationId,
+    );
+    setConversationDeleting(true);
+    try {
+      if (liveMode && workspaceId)
+        await deleteLiveConversation({ workspaceId, conversationId });
+      setConversations((current) =>
+        current.filter((conversation) => conversation.id !== conversationId),
+      );
+      if (selected.id === conversationId) {
+        setSelectedConversationId(nextConversation?.id ?? "");
+        setMobileConversationOpen(false);
+      }
+      onToast("Conversation deleted from Mend");
+    } catch (error) {
+      onToast(
+        error instanceof Error
+          ? error.message
+          : "Conversation could not be deleted.",
+      );
+    } finally {
+      setConversationDeleting(false);
+    }
+  };
+
+  const deleteMessage = async (message: Message) => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Delete this message for everyone on WhatsApp?")
+    )
+      return;
+    if (liveMode && workspaceId && !message.providerMessageId) {
+      onToast("This message does not have a WhatsApp message id yet.");
+      return;
+    }
+    setMessageActionId(message.id);
+    try {
+      if (liveMode && workspaceId)
+        await deleteLiveMessage({
+          workspaceId,
+          conversationId: selected.id,
+          messageId: message.id,
+        });
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === selected.id
+            ? {
+                ...conversation,
+                messages: conversation.messages.map((item) =>
+                  item.id === message.id
+                    ? { ...item, deleted: true, text: "" }
+                    : item,
+                ),
+              }
+            : conversation,
+        ),
+      );
+      onToast("Message deleted for everyone");
+    } catch (error) {
+      onToast(
+        error instanceof Error
+          ? error.message
+          : "Message could not be deleted.",
+      );
+    } finally {
+      setMessageActionId(undefined);
+    }
+  };
+
+  const reactToMessage = async (message: Message, reaction: string) => {
+    if (liveMode && workspaceId && !message.providerMessageId) {
+      onToast("This message does not have a WhatsApp message id yet.");
+      return;
+    }
+    try {
+      if (liveMode && workspaceId)
+        await reactToLiveMessage({
+          workspaceId,
+          conversationId: selected.id,
+          messageId: message.id,
+          reaction,
+        });
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === selected.id
+            ? {
+                ...conversation,
+                messages: conversation.messages.map((item) =>
+                  item.id === message.id
+                    ? {
+                        ...item,
+                        reactions: [
+                          ...(item.reactions ?? []),
+                          { emoji: reaction, mine: true },
+                        ],
+                      }
+                    : item,
+                ),
+              }
+            : conversation,
+        ),
+      );
+      onToast(`Reaction ${reaction} sent`);
+    } catch (error) {
+      onToast(
+        error instanceof Error ? error.message : "Reaction could not be sent.",
+      );
+    }
+  };
+
+  const notifyTyping = () => {
+    if (!liveMode || !workspaceId) return;
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      void sendLivePresence({
+        workspaceId,
+        conversationId: selected.id,
+        presence: "composing",
+      }).catch(() => undefined);
+    }, 700);
+  };
+
   const assignConversation = async (assignee: string) => {
     const previous = selected.assignee;
     setConversations((current) =>
@@ -750,6 +970,7 @@ export function InboxPage({
                 conversation={conversation}
                 selected={conversation.id === selected.id}
                 onClick={() => selectConversation(conversation)}
+                onDelete={() => void deleteConversation(conversation.id)}
               />
             ))}
             {filtered.length === 0 && (
@@ -799,6 +1020,8 @@ export function InboxPage({
             onSetAiPause={(paused) => void setAiPause(paused)}
             onSnooze={() => void setConversationState("snoozed")}
             onResolve={() => void setConversationState("resolved")}
+            onDelete={() => void deleteConversation()}
+            deleting={conversationDeleting}
             onAssign={assignConversation}
             assigneeOptions={assigneeOptions}
             aiDetailsOpen={aiDetailsOpen}
@@ -813,7 +1036,9 @@ export function InboxPage({
             {showAiDecision && (
               <AiDecisionSummary
                 conversation={selected}
-                onDismiss={() => setShowAiDecision(false)}
+                onDismiss={() =>
+                  dismissSelectedAiCard("decision", decisionSignature)
+                }
               />
             )}
             {showAiDraft && selected.aiDraft && (
@@ -826,7 +1051,7 @@ export function InboxPage({
                     conversationId: selected.id,
                   })
                 }
-                onDismiss={() => setShowAiDraft(false)}
+                onDismiss={() => dismissSelectedAiCard("draft", draftSignature)}
               />
             )}
           </div>
@@ -837,7 +1062,24 @@ export function InboxPage({
               </div>
               {selected.messages.length ? (
                 selected.messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    actionPending={messageActionId === message.id}
+                    onDelete={() => void deleteMessage(message)}
+                    onCopy={async () => {
+                      if (!message.text) return;
+                      try {
+                        await navigator.clipboard.writeText(message.text);
+                        onToast("Message copied");
+                      } catch {
+                        onToast("Message could not be copied.");
+                      }
+                    }}
+                    onReact={(reaction) =>
+                      void reactToMessage(message, reaction)
+                    }
+                  />
                 ))
               ) : (
                 <EmptyState
@@ -880,6 +1122,7 @@ export function InboxPage({
           </div>
           <MediaComposer
             onSend={sendMessage}
+            onTyping={notifyTyping}
             onSendMediaBatch={sendMediaBatch}
             aiMode={selected.aiMode}
             automationState={selected.automationState}
@@ -926,54 +1169,70 @@ function ConversationRow({
   conversation,
   selected,
   onClick,
+  onDelete,
 }: {
   conversation: Conversation;
   selected: boolean;
   onClick: () => void;
+  onDelete: () => void;
 }) {
   return (
-    <button
-      className={`conversation-row ${selected ? "selected" : ""}`}
-      type="button"
-      aria-current={selected ? "true" : undefined}
-      aria-label={`Open conversation with ${conversation.name}`}
-      onClick={onClick}
-    >
-      <div
-        className="conversation-avatar"
-        style={{
-          background: `${conversation.accent}18`,
-          color: conversation.accent,
-        }}
+    <div className={`conversation-row ${selected ? "selected" : ""}`}>
+      <button
+        className="conversation-row-hit"
+        type="button"
+        aria-current={selected ? "true" : undefined}
+        aria-label={`Open conversation with ${conversation.name}`}
+        onClick={onClick}
       >
-        {conversation.initials}
-      </div>
-      <div className="conversation-row-main">
-        <div className="conversation-row-top">
-          <strong>{conversation.name}</strong>
-          <span>{conversation.lastTime}</span>
+        <div
+          className="conversation-avatar"
+          style={{
+            background: `${conversation.accent}18`,
+            color: conversation.accent,
+          }}
+        >
+          {conversation.initials}
         </div>
-        <div className="conversation-preview">{conversation.lastMessage}</div>
-        <div className="conversation-row-meta">
-          <span>
-            {conversation.issueLabel ? (
-              <>
-                <CircleDot size={11} /> {conversation.issueLabel}
-              </>
-            ) : (
-              conversation.company
+        <div className="conversation-row-main">
+          <div className="conversation-row-top">
+            <strong>{conversation.name}</strong>
+            <span>{conversation.lastTime}</span>
+          </div>
+          <div className="conversation-preview">{conversation.lastMessage}</div>
+          <div className="conversation-row-meta">
+            <span>
+              {conversation.issueLabel ? (
+                <>
+                  <CircleDot size={11} /> {conversation.issueLabel}
+                </>
+              ) : (
+                conversation.company
+              )}
+            </span>
+            {conversation.priority && (
+              <PriorityDot priority={conversation.priority} />
             )}
-          </span>
-          {conversation.priority && (
-            <PriorityDot priority={conversation.priority} />
-          )}
-          {conversation.unread > 0 && (
-            <b className="unread-count">{conversation.unread}</b>
-          )}
+            {conversation.unread > 0 && (
+              <b className="unread-count">{conversation.unread}</b>
+            )}
+          </div>
         </div>
+      </button>
+      <div className="conversation-row-actions">
+        <ActionMenu label={conversation.name}>
+          <button
+            className="danger"
+            type="button"
+            role="menuitem"
+            onClick={onDelete}
+          >
+            <Trash2 size={14} /> Delete conversation
+          </button>
+        </ActionMenu>
       </div>
       <div className={`attention-marker ${conversation.attention}`} />
-    </button>
+    </div>
   );
 }
 
@@ -1102,6 +1361,8 @@ function ConversationHeader({
   onSetAiPause,
   onSnooze,
   onResolve,
+  onDelete,
+  deleting,
   onAssign,
   assigneeOptions,
   aiDetailsOpen,
@@ -1113,6 +1374,8 @@ function ConversationHeader({
   onSetAiPause: (paused: boolean) => void;
   onSnooze: () => void;
   onResolve: () => void;
+  onDelete: () => void;
+  deleting: boolean;
   onAssign: (assignee: string) => void;
   assigneeOptions: AssigneeOption[];
   aiDetailsOpen: boolean;
@@ -1298,6 +1561,19 @@ function ConversationHeader({
                   <Check size={14} /> Resolve conversation
                 </button>
               )}
+              <hr />
+              <button
+                className="danger"
+                type="button"
+                role="menuitem"
+                disabled={deleting}
+                onClick={() => {
+                  onDelete();
+                  setMenuOpen(false);
+                }}
+              >
+                <Trash2 size={14} /> Delete conversation
+              </button>
             </div>
           )}
         </div>
@@ -1306,7 +1582,19 @@ function ConversationHeader({
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({
+  message,
+  actionPending,
+  onDelete,
+  onCopy,
+  onReact,
+}: {
+  message: Message;
+  actionPending: boolean;
+  onDelete: () => void;
+  onCopy: () => void;
+  onReact: (reaction: string) => void;
+}) {
   const attachmentUrl = message.attachment?.url;
   return (
     <div className={`message-row ${message.direction}`}>
@@ -1318,67 +1606,112 @@ function MessageBubble({ message }: { message: Message }) {
         )}
         {message.sender} Â· {message.time}
       </div>
-      <div className="message-bubble-wrap">
-        {message.deleted ? (
-          <div className="message-bubble deleted-message">Message deleted</div>
-        ) : message.type !== "text" &&
-          message.mediaStatus &&
-          message.mediaStatus !== "ready" ? (
-          <div className="message-bubble attachment-bubble media-unavailable">
-            <div className="media-static-preview" aria-hidden="true">
-              {(message.attachment?.meta ?? "media")
-                .split("/")
-                .at(-1)
-                ?.toUpperCase()}
+      <div className="message-content-row">
+        <div className="message-bubble-wrap">
+          {message.deleted ? (
+            <div className="message-bubble deleted-message">
+              Message deleted
             </div>
-            <span>
-              <strong>{message.attachment?.name ?? "Media"}</strong>
-              <small>
-                {message.mediaStatus === "processing"
-                  ? "Processing mediaâ€¦"
-                  : message.mediaStatus === "unsupported"
-                    ? `Format ${message.attachment?.meta ?? "unknown"} is not supported`
-                    : "Media unavailable"}
-              </small>
-            </span>
+          ) : message.type !== "text" &&
+            message.mediaStatus &&
+            message.mediaStatus !== "ready" ? (
+            <div className="message-bubble attachment-bubble media-unavailable">
+              <div className="media-static-preview" aria-hidden="true">
+                {(message.attachment?.meta ?? "media")
+                  .split("/")
+                  .at(-1)
+                  ?.toUpperCase()}
+              </div>
+              <span>
+                <strong>{message.attachment?.name ?? "Media"}</strong>
+                <small>
+                  {message.mediaStatus === "processing"
+                    ? "Processing mediaâ€¦"
+                    : message.mediaStatus === "unsupported"
+                      ? `Format ${message.attachment?.meta ?? "unknown"} is not supported`
+                      : "Media unavailable"}
+                </small>
+              </span>
+            </div>
+          ) : message.type === "text" ? (
+            <div className="message-bubble">{message.text}</div>
+          ) : message.type === "image" && attachmentUrl ? (
+            <div className="message-bubble media-bubble">
+              <img
+                src={attachmentUrl}
+                alt={message.attachment?.name ?? "WhatsApp image"}
+              />
+              {message.text && <span>{message.text}</span>}
+            </div>
+          ) : message.type === "video" && attachmentUrl ? (
+            <div className="message-bubble media-bubble">
+              <video controls preload="metadata" src={attachmentUrl}>
+                <track kind="captions" />
+              </video>
+              {message.text && <span>{message.text}</span>}
+            </div>
+          ) : message.type === "audio" && attachmentUrl ? (
+            <div className="message-bubble media-bubble">
+              <audio controls preload="metadata" src={attachmentUrl} />
+              {message.text && <span>{message.text}</span>}
+            </div>
+          ) : (
+            <a
+              className="message-bubble attachment-bubble"
+              href={attachmentUrl}
+              target={attachmentUrl ? "_blank" : undefined}
+              rel={attachmentUrl ? "noreferrer" : undefined}
+              aria-disabled={!attachmentUrl}
+            >
+              <FileText size={18} />
+              <span>
+                <strong>{message.attachment?.name ?? "Attachment"}</strong>
+                <small>{message.attachment?.meta ?? "File"}</small>
+              </span>
+            </a>
+          )}
+        </div>
+        {message.reactions && message.reactions.length > 0 && (
+          <div className="message-reactions" aria-label="Message reactions">
+            {message.reactions.map((reaction, index) => (
+              <span key={`${reaction.emoji}-${index}`}>{reaction.emoji}</span>
+            ))}
           </div>
-        ) : message.type === "text" ? (
-          <div className="message-bubble">{message.text}</div>
-        ) : message.type === "image" && attachmentUrl ? (
-          <div className="message-bubble media-bubble">
-            <img
-              src={attachmentUrl}
-              alt={message.attachment?.name ?? "WhatsApp image"}
-            />
-            {message.text && <span>{message.text}</span>}
-          </div>
-        ) : message.type === "video" && attachmentUrl ? (
-          <div className="message-bubble media-bubble">
-            <video controls preload="metadata" src={attachmentUrl}>
-              <track kind="captions" />
-            </video>
-            {message.text && <span>{message.text}</span>}
-          </div>
-        ) : message.type === "audio" && attachmentUrl ? (
-          <div className="message-bubble media-bubble">
-            <audio controls preload="metadata" src={attachmentUrl} />
-            {message.text && <span>{message.text}</span>}
-          </div>
-        ) : (
-          <a
-            className="message-bubble attachment-bubble"
-            href={attachmentUrl}
-            target={attachmentUrl ? "_blank" : undefined}
-            rel={attachmentUrl ? "noreferrer" : undefined}
-            aria-disabled={!attachmentUrl}
-          >
-            <FileText size={18} />
-            <span>
-              <strong>{message.attachment?.name ?? "Attachment"}</strong>
-              <small>{message.attachment?.meta ?? "File"}</small>
-            </span>
-          </a>
         )}
+        <ActionMenu label={`${message.sender} message`}>
+          {!message.deleted && message.text && (
+            <button type="button" role="menuitem" onClick={onCopy}>
+              <Copy size={14} /> Copy message
+            </button>
+          )}
+          {!message.deleted && (
+            <button
+              className="danger"
+              type="button"
+              role="menuitem"
+              disabled={actionPending}
+              onClick={onDelete}
+            >
+              <Trash2 size={14} />
+              {actionPending ? "DeletingÃ¢â‚¬Â¦" : "Delete for everyone"}
+            </button>
+          )}
+          {!message.deleted && (
+            <>
+              <hr />
+              {(["👍", "✅", "👀", "❤️", "❗"] as const).map((reaction) => (
+                <button
+                  key={reaction}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => onReact(reaction)}
+                >
+                  {reaction} React
+                </button>
+              ))}
+            </>
+          )}
+        </ActionMenu>
       </div>
       {message.direction === "outbound" && (
         <span
@@ -1402,6 +1735,7 @@ function MessageBubble({ message }: { message: Message }) {
 
 function MediaComposer({
   onSend,
+  onTyping,
   onSendMediaBatch,
   onUseDraft,
   prefillDraft,
@@ -1411,6 +1745,7 @@ function MediaComposer({
   automationState,
 }: {
   onSend: (message: string) => boolean | Promise<boolean>;
+  onTyping?: () => void;
   onSendMediaBatch?: (
     input: ComposerMediaInput[],
   ) => boolean | Promise<boolean>;
@@ -1808,6 +2143,7 @@ function MediaComposer({
           disabled={sending}
           onChange={(event) => {
             setText(event.target.value);
+            onTyping?.();
             event.currentTarget.style.height = "auto";
             event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 128)}px`;
           }}

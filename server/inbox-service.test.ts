@@ -370,6 +370,9 @@ describe("InboxService and WhatsAppService", () => {
     expect(extractProviderMessageUpdate({ update: { status: 4 } })).toEqual({
       providerStatus: "delivered",
     });
+    expect(extractProviderMessageUpdate({ status: "DELETED" })).toEqual({
+      isDeleted: true,
+    });
     expect(receipt).toMatchObject({
       inserted: false,
       providerStatus: "delivered",

@@ -31,6 +31,7 @@ import { listLiveRepositories } from "../api";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
+import type { AssigneeOption } from "../../../shared/ui/DataDisplay";
 
 export function CommandPalette({
   conversations,
@@ -381,13 +382,24 @@ export function CreateIssueDialog({
 
 export function EditIssueDialog({
   issue,
+  assigneeOptions,
   onClose,
   onSave,
 }: {
   issue?: Issue;
+  assigneeOptions: AssigneeOption[];
   onClose: () => void;
   onSave: (
-    patch: Pick<Issue, "title" | "type" | "priority" | "status">,
+    patch: Pick<
+      Issue,
+      | "title"
+      | "type"
+      | "priority"
+      | "status"
+      | "assignee"
+      | "summary"
+      | "impact"
+    >,
   ) => void;
 }) {
   const [title, setTitle] = useState(issue?.title ?? "");
@@ -396,6 +408,9 @@ export function EditIssueDialog({
     issue?.priority ?? "Medium",
   );
   const [status, setStatus] = useState<IssueStatus>(issue?.status ?? "Triage");
+  const [assignee, setAssignee] = useState(issue?.assignee ?? "Unassigned");
+  const [summary, setSummary] = useState(issue?.summary ?? "");
+  const [impact, setImpact] = useState(issue?.impact ?? "");
   const [error, setError] = useState("");
   if (!issue) return null;
 
@@ -405,7 +420,15 @@ export function EditIssueDialog({
       setError("Add a short title so the issue remains actionable.");
       return;
     }
-    onSave({ title: cleanTitle, type, priority, status });
+    onSave({
+      title: cleanTitle,
+      type,
+      priority,
+      status,
+      assignee,
+      summary,
+      impact,
+    });
   };
 
   return (
@@ -491,6 +514,34 @@ export function EditIssueDialog({
                 "Canceled",
               ].map((item) => ({ value: item, label: item }))}
               onChange={(value) => setStatus(value as IssueStatus)}
+            />
+          </label>
+          <label>
+            Assignee
+            <Select
+              value={assignee}
+              options={assigneeOptions}
+              onChange={setAssignee}
+            />
+          </label>
+          <label>
+            Summary
+            <textarea
+              maxLength={20000}
+              value={summary}
+              onChange={(event) => setSummary(event.target.value)}
+              placeholder="What is happening?"
+              rows={4}
+            />
+          </label>
+          <label>
+            Impact
+            <textarea
+              maxLength={20000}
+              value={impact}
+              onChange={(event) => setImpact(event.target.value)}
+              placeholder="Who or what is affected?"
+              rows={3}
             />
           </label>
         </div>

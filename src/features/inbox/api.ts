@@ -1,4 +1,6 @@
 import {
+  deleteLiveConversation,
+  deleteLiveMessage,
   loadLiveConversationSnapshot as loadSnapshot,
   markLiveConversationRead,
   pauseLiveConversationAi,
@@ -8,6 +10,8 @@ import {
   sendLiveMedia,
   sendLiveMediaBatch,
   sendLiveMessage,
+  sendLivePresence,
+  reactToLiveMessage,
   snoozeLiveConversation,
   updateLiveConversation,
   uploadLiveMediaAsset,
@@ -15,6 +19,8 @@ import {
 import { supabase } from "../../lib/supabase";
 
 export {
+  deleteLiveConversation,
+  deleteLiveMessage,
   markLiveConversationRead,
   pauseLiveConversationAi,
   requestAiDraft,
@@ -23,6 +29,8 @@ export {
   sendLiveMedia,
   sendLiveMediaBatch,
   sendLiveMessage,
+  sendLivePresence,
+  reactToLiveMessage,
   snoozeLiveConversation,
   updateLiveConversation,
   uploadLiveMediaAsset,

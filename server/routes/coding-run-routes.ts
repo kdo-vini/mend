@@ -102,6 +102,38 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
       );
     }),
   );
+  router.post(
+    "/api/coding-runs/:id/publish",
+    asyncRoute(async (request, response) => {
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.codingRuns.publish(
+            await scoped(request, response, "agent"),
+            pathId(request),
+          ),
+          "coding_run",
+        ),
+      );
+    }),
+  );
+  router.post(
+    "/api/coding-runs/:id/deploy",
+    asyncRoute(async (request, response) => {
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.codingRuns.deploy(
+            await scoped(request, response, "agent"),
+            pathId(request),
+          ),
+          "coding_run",
+        ),
+      );
+    }),
+  );
   router.get(
     "/api/coding-runs/:id/patch",
     asyncRoute(async (request, response) => {

@@ -287,6 +287,7 @@ export function extractProviderMessageUpdate(
   const deleted =
     raw.deleted === true ||
     raw.isDeleted === true ||
+    String(raw.status ?? "").toUpperCase() === "DELETED" ||
     ["REVOKE", "MESSAGE_REVOKE", "MESSAGE_REVOKED"].includes(
       String(update.messageStubType ?? "").toUpperCase(),
     );
@@ -837,6 +838,7 @@ export class InboxService {
       mimeType?: string;
       fileName?: string;
       fileSize?: number;
+      quotedProviderMessageId?: string;
       aiGenerated?: boolean;
     },
   ): Promise<InboxMessageRecord> {
@@ -862,6 +864,9 @@ export class InboxService {
         ...(input.mimeType ? { mimeType: input.mimeType } : {}),
         ...(input.fileName ? { fileName: input.fileName } : {}),
         ...(input.fileSize !== undefined ? { fileSize: input.fileSize } : {}),
+        ...(input.quotedProviderMessageId
+          ? { quotedProviderMessageId: input.quotedProviderMessageId }
+          : {}),
         raw: {},
       },
       {

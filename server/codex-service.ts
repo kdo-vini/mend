@@ -20,6 +20,8 @@ import {
   type GitLocalPort,
 } from "./git-local.js";
 import type { OpenAiCodexClient, OpenAiCodexOptions } from "./codex-openai.js";
+import type { CodexDeploymentPort } from "./deployment.js";
+import { createDokployDeploymentFromEnv } from "./deployment.js";
 
 const maxContextText = 4_000;
 const maxContextMessages = 6;
@@ -128,6 +130,7 @@ export interface CodexServicePorts {
     client?: OpenAiCodexClient;
     enabled?: boolean;
   };
+  deployment?: CodexDeploymentPort;
 }
 
 export interface StartCodexRunInput {
@@ -588,19 +591,174 @@ export class CodexService {
       throw new CodexServiceError(
         `Only completed runs can be approved: ${run.status}`,
       );
+    let result = asRecord(run.result);
+    if (run.mode === "implement_fix") {
+      const checks = Array.isArray(result.commandResults)
+        ? result.commandResults
+        : Array.isArray(result.checks)
+          ? result.checks
+          : [];
+      if (
+        checks.some(
+          (check) =>
+            check &&
+            typeof check === "object" &&
+            Number((check as Record<string, unknown>).exitCode ?? 1) !== 0,
+        )
+      ) {
+        throw new CodexServiceError(
+          "Cannot approve a fix while a configured check is failing",
+        );
+      }
+      const diff = this.persistedDiff(run);
+      if (diff.files.length) {
+        if (!run.repositoryId)
+          throw new CodexServiceError("Run has no repository configured");
+        const repositoryConfig = await this.ports.repositories.getRepository(
+          run.workspaceId,
+          run.repositoryId,
+        );
+        if (!repositoryConfig)
+          throw new CodexServiceError("Repository no longer exists");
+        const repository = await resolveRepository(
+          process.env.CODEX_WORKSPACE_ROOT ?? "",
+          repositoryConfig,
+        );
+        const context = asRecord(result.context);
+        const issue = asRecord(context.issue);
+        const commit = await this.commitLocalFix(
+          { run, diff },
+          repository,
+          String(issue.identifier ?? run.issueId),
+          String(issue.title ?? "Approved Codex fix"),
+        );
+        result = {
+          ...result,
+          localCommit: {
+            status: "created",
+            branch: commit.branch,
+            sha: commit.sha,
+            paths: commit.paths,
+          } satisfies CodexLocalCommit,
+        };
+        const committed = await this.update(run.id, {
+          status: "approved",
+          branchName: commit.branch,
+          commitSha: commit.sha,
+          result: {
+            ...result,
+            decision: {
+              status: "approved",
+              decidedAt: new Date().toISOString(),
+            },
+          },
+        });
+        await this.emitProgress(
+          run.id,
+          "Approved: local branch and commit created; publication remains explicit",
+          { phase: "local_commit", branch: commit.branch, sha: commit.sha },
+        );
+        return committed;
+      }
+    }
     const approved = await this.update(run.id, {
       status: "approved",
       result: {
-        ...asRecord(run.result),
+        ...result,
         decision: { status: "approved", decidedAt: new Date().toISOString() },
       },
     });
     await this.emitProgress(
       run.id,
-      "Run approved in Mend; no push, merge or deploy was performed",
+      "Run approved; no push, merge or deploy was performed",
       { phase: "approved" },
     );
     return approved;
+  }
+
+  async publish(runId: string): Promise<CodexRunRecord> {
+    const run = await this.requireRun(runId);
+    if (run.status !== "approved")
+      throw new CodexServiceError(
+        `Only approved runs can be published: ${run.status}`,
+      );
+    if (!run.repositoryId || !run.branchName)
+      throw new CodexServiceError(
+        "Approved run has no local branch to publish",
+      );
+    if (!this.git.push)
+      throw new CodexServiceError("Git publication is not configured");
+    const repositoryConfig = await this.ports.repositories.getRepository(
+      run.workspaceId,
+      run.repositoryId,
+    );
+    if (!repositoryConfig)
+      throw new CodexServiceError("Repository no longer exists");
+    const repository = await resolveRepository(
+      process.env.CODEX_WORKSPACE_ROOT ?? "",
+      repositoryConfig,
+    );
+    const remote = process.env.CODEX_GIT_REMOTE?.trim() || "origin";
+    const pushed = await this.git.push(repository.root, remote, run.branchName);
+    const published = await this.update(run.id, {
+      result: {
+        ...asRecord(run.result),
+        publication: {
+          status: "published",
+          remote: pushed.remote,
+          branch: pushed.branch,
+          publishedAt: new Date().toISOString(),
+        },
+      },
+    });
+    await this.emitProgress(
+      run.id,
+      `Approved branch published to ${pushed.remote}; no merge or deploy was performed`,
+      { phase: "published", remote: pushed.remote, branch: pushed.branch },
+    );
+    return published;
+  }
+
+  async deploy(runId: string): Promise<CodexRunRecord> {
+    const run = await this.requireRun(runId);
+    if (run.status !== "approved")
+      throw new CodexServiceError(
+        `Only approved runs can be deployed: ${run.status}`,
+      );
+    const result = asRecord(run.result);
+    const publication = asRecord(result.publication);
+    if (publication.status !== "published")
+      throw new CodexServiceError(
+        "Publish the approved branch before deploying",
+      );
+    const deployment =
+      this.ports.deployment ?? createDokployDeploymentFromEnv();
+    if (!deployment)
+      throw new CodexServiceError(
+        "Deployment is not configured. Set DOKPLOY_API_URL, DOKPLOY_API_KEY and DOKPLOY_APPLICATION_ID.",
+      );
+    const deployed = await deployment.deploy({
+      workspaceId: run.workspaceId,
+      runId: run.id,
+      branch: run.branchName ?? String(publication.branch ?? ""),
+      ...(run.commitSha ? { commitSha: run.commitSha } : {}),
+    });
+    const updated = await this.update(run.id, {
+      result: {
+        ...result,
+        deployment: {
+          status: "deployed",
+          ...deployed,
+          deployedAt: new Date().toISOString(),
+        },
+      },
+    });
+    await this.emitProgress(
+      run.id,
+      "Approved branch sent to the configured deployment provider",
+      { phase: "deployed", provider: deployed.provider },
+    );
+    return updated;
   }
 
   approveRun(runId: string): Promise<CodexRunRecord> {
@@ -777,43 +935,16 @@ export class CodexService {
           },
         );
       } else {
-        try {
-          const commit = await this.commitLocalFix(result, repository, input);
-          payload.localCommit = {
-            status: "created",
-            branch: commit.branch,
-            sha: commit.sha,
-            paths: commit.paths,
-          } satisfies CodexLocalCommit;
-          run = await this.update(run.id, {
-            branchName: commit.branch,
-            commitSha: commit.sha,
-            result: payload,
-          });
-          await this.emitProgress(
-            run.id,
-            "Local branch and commit created; no push, merge or deploy was performed",
-            { phase: "local_commit", branch: commit.branch, sha: commit.sha },
-          );
-        } catch (error) {
-          const message = redactSecrets(
-            error instanceof Error ? error.message : String(error),
-          );
-          payload.localCommit = {
-            status: "failed",
-            error: message,
-          } satisfies CodexLocalCommit;
-          run = await this.update(run.id, {
-            status: "failed",
-            finishedAt: new Date().toISOString(),
-            result: payload,
-          });
-          await this.emitProgress(
-            run.id,
-            "Local commit was refused or failed; no push, merge or deploy was performed",
-            { phase: "local_commit_failed", error: message },
-          );
-        }
+        payload.approval = {
+          required: true,
+          reason: "A human must review the diff and checks before commit",
+        };
+        run = await this.update(run.id, { result: payload });
+        await this.emitProgress(
+          run.id,
+          "Fix ready for human approval; no local commit, push or deploy was performed",
+          { phase: "awaiting_approval", files: result.diff.files.length },
+        );
       }
     }
     return {
@@ -826,15 +957,15 @@ export class CodexService {
   }
 
   private async commitLocalFix(
-    result: RunCodexResult,
+    result: Pick<RunCodexResult, "run" | "diff">,
     repository: ResolvedRepository,
-    input: StartCodexRunInput,
+    issueIdentifier: string,
+    issueTitle: string,
   ): Promise<GitCommitResult> {
     if (result.diff.truncated)
       throw new CodexServiceError("Refusing to commit a truncated diff");
     const branch =
-      result.run.branchName ??
-      createBranchName(input.issueIdentifier, input.issueTitle);
+      result.run.branchName ?? createBranchName(issueIdentifier, issueTitle);
     const branched = await this.git.createBranch(
       repository.root,
       branch,
@@ -844,8 +975,18 @@ export class CodexService {
     return this.git.commit(
       branched.root,
       result.diff.files.map((file) => file.relativePath),
-      `Fix ${input.issueIdentifier}: ${input.issueTitle}`,
+      `Fix ${issueIdentifier}: ${issueTitle}`,
     );
+  }
+
+  private persistedDiff(run: CodexRunRecord): RunCodexResult["diff"] {
+    const result = asRecord(run.result);
+    const files = Array.isArray(result.files) ? result.files : [];
+    return {
+      files: files as RunCodexResult["diff"]["files"],
+      patch: typeof result.patch === "string" ? result.patch : "",
+      truncated: result.diffTruncated === true,
+    };
   }
 }
 

@@ -18,11 +18,13 @@ interface NormalizedMessage {
   messageType: MessageType;
   text?: string;
   caption?: string;
+  mediaUrl?: string;
   mimeType?: string;
   fileName?: string;
   fileSize?: number;
   durationSeconds?: number;
   quotedProviderMessageId?: string;
+  interactionId?: string;
   providerTimestamp?: string;
   contactName?: string;
   raw: JsonRecord;
@@ -167,6 +169,83 @@ async function updateProviderMessageStatus(
   return { updated: Boolean(rows?.length), status };
 }
 
+async function markProviderMessageDeleted(
+  client: ReturnType<typeof createClient>,
+  binding: { id: string; workspace_id: string },
+  payload: JsonRecord,
+): Promise<{ updated: boolean }> {
+  const data = asRecord(payload.data);
+  const providerMessageId = stringValue(data.id, asRecord(data.key).id);
+  if (!providerMessageId) return { updated: false };
+  const { data: rows, error } = await client
+    .from("messages")
+    .update({
+      is_deleted: true,
+      provider_status: "deleted",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("workspace_id", binding.workspace_id)
+    .eq("channel_connection_id", binding.id)
+    .eq("provider_message_id", providerMessageId)
+    .select("id");
+  if (error)
+    throw new Error(`message_delete_update_failed:${error.code ?? "database"}`);
+  return { updated: Boolean(rows?.length) };
+}
+
+async function upsertProviderContacts(
+  client: ReturnType<typeof createClient>,
+  binding: { id: string; workspace_id: string },
+  payload: JsonRecord,
+): Promise<{ processed: number }> {
+  const contacts = Array.isArray(payload.data)
+    ? payload.data
+        .map(asRecord)
+        .filter((value) => Object.keys(value).length > 0)
+    : [];
+  if (contacts.length === 0) return { processed: 0 };
+
+  const now = new Date().toISOString();
+  const rows = contacts.flatMap((contact) => {
+    const remoteJid = stringValue(contact.remoteJid, contact.remote_jid);
+    // Group JIDs and LIDs do not map to a person phone number in the inbox.
+    if (!remoteJid || remoteJid.endsWith("@g.us")) return [];
+    const phoneNumber = normalizePhoneNumber(remoteJid);
+    if (phoneNumber.length < 5) return [];
+    const displayName =
+      stringValue(
+        contact.pushName,
+        contact.notifyName,
+        contact.displayName,
+        contact.name,
+      ) ?? "WhatsApp contact";
+    const profilePictureUrl = stringValue(
+      contact.profilePicUrl,
+      contact.profilePictureUrl,
+    );
+    return [
+      {
+        workspace_id: binding.workspace_id,
+        channel_connection_id: binding.id,
+        provider_contact_id: stringValue(contact.remoteLid, remoteJid),
+        phone_number: phoneNumber,
+        display_name: displayName.slice(0, 240),
+        ...(profilePictureUrl
+          ? { profile_picture_url: profilePictureUrl }
+          : {}),
+        updated_at: now,
+      },
+    ];
+  });
+  if (rows.length === 0) return { processed: 0 };
+
+  const { error } = await client
+    .from("contacts")
+    .upsert(rows, { onConflict: "workspace_id,phone_number" });
+  if (error) throw new Error(`contact_sync_failed:${error.code ?? "database"}`);
+  return { processed: rows.length };
+}
+
 async function normalizeMessages(
   payload: JsonRecord,
   canonicalInstanceName?: string,
@@ -215,19 +294,37 @@ async function normalizeMessages(
         const parsedTimestamp =
           timestampMs === undefined ? undefined : new Date(timestampMs);
         const quoted = asRecord(asRecord(extended.contextInfo).quotedMessage);
+        const listResponse = asRecord(
+          asRecord(message.listResponseMessage).singleSelectReply,
+        );
+        const buttonResponse = asRecord(message.buttonsResponseMessage);
+        const interactionId = stringValue(
+          listResponse.selectedRowId,
+          buttonResponse.selectedButtonId,
+        );
         const text = stringValue(
           message.conversation,
           extended.text,
           content.caption,
           asRecord(message.reactionMessage).text,
+          listResponse.title,
+          buttonResponse.selectedDisplayText,
         );
         const caption = stringValue(content.caption);
+        const mediaUrl = stringValue(
+          value.mediaUrl,
+          content.url,
+          content.directPath,
+          content.mediaUrl,
+          asRecord(value.media).url,
+        );
         const mimeType = stringValue(content.mimetype, content.mimeType);
         const fileName = stringValue(content.fileName, content.filename);
         const fileSize = numberValue(content.fileLength, content.fileSize);
         const durationSeconds = numberValue(content.seconds, content.duration);
         const quotedProviderMessageId = stringValue(
           asRecord(asRecord(quoted).key).id,
+          asRecord(asRecord(message.reactionMessage).key).id,
         );
         const contactName = stringValue(
           value.pushName,
@@ -245,11 +342,13 @@ async function normalizeMessages(
           messageType: type,
           ...(text ? { text } : {}),
           ...(caption ? { caption } : {}),
+          ...(mediaUrl ? { mediaUrl } : {}),
           ...(mimeType ? { mimeType } : {}),
           ...(fileName ? { fileName } : {}),
           ...(fileSize !== undefined ? { fileSize } : {}),
           ...(durationSeconds !== undefined ? { durationSeconds } : {}),
           ...(quotedProviderMessageId ? { quotedProviderMessageId } : {}),
+          ...(interactionId ? { interactionId } : {}),
           ...(parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime())
             ? { providerTimestamp: parsedTimestamp.toISOString() }
             : {}),
@@ -323,6 +422,33 @@ async function markConnectionEvent(
     .eq("provider_instance_name", instanceName);
   if (error)
     throw new Error(`connection_update_failed:${error.code ?? "database"}`);
+}
+
+async function markHistorySyncEvent(
+  client: ReturnType<typeof createClient>,
+  binding: { id: string; workspace_id: string },
+  payload: JsonRecord,
+): Promise<void> {
+  const progressValue = numberValue(
+    payload.progress,
+    asRecord(payload.data).progress,
+  );
+  const progress = Math.max(0, Math.min(100, Math.round(progressValue ?? 0)));
+  const latest = payload.isLatest === true || progress >= 100;
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from("channel_connections")
+    .update({
+      history_sync_progress: progress,
+      history_sync_complete: latest,
+      history_sync_updated_at: now,
+      last_event_at: now,
+      updated_at: now,
+    })
+    .eq("id", binding.id)
+    .eq("workspace_id", binding.workspace_id);
+  if (error)
+    throw new Error(`history_sync_update_failed:${error.code ?? "database"}`);
 }
 
 async function recordAndQueue(
@@ -469,6 +595,23 @@ Deno.serve(async (request) => {
       return response(202, { accepted: true, event, processed: 0 });
     }
 
+    if (event === "contacts.upsert") {
+      const result = await upsertProviderContacts(client, binding, payload);
+      await client
+        .from("channel_connections")
+        .update({
+          last_event_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", binding.id)
+        .eq("workspace_id", binding.workspace_id);
+      return response(202, {
+        accepted: true,
+        event,
+        processed: result.processed,
+      });
+    }
+
     if (event === "messages.update") {
       const result = await updateProviderMessageStatus(
         client,
@@ -490,6 +633,26 @@ Deno.serve(async (request) => {
         ...(result.status ? { status: result.status } : {}),
       });
     }
+
+    if (event === "messages.delete") {
+      const result = await markProviderMessageDeleted(client, binding, payload);
+      await client
+        .from("channel_connections")
+        .update({
+          last_event_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", binding.id)
+        .eq("workspace_id", binding.workspace_id);
+      return response(202, {
+        accepted: true,
+        event,
+        processed: result.updated ? 1 : 0,
+      });
+    }
+
+    if (event === "messages.set")
+      await markHistorySyncEvent(client, binding, payload);
 
     if (event !== "messages.upsert" && event !== "messages.set") {
       await client
