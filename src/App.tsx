@@ -1028,7 +1028,7 @@ function App() {
               <Route
                 path="/settings"
                 element={
-                  <LiveSettingsPage
+                  <LiveSettingsWorkspace
                     workspaceId={workspaceId}
                     onToast={setToast}
                     onChannelChange={setChannel}
@@ -3061,6 +3061,14 @@ function ActionMenu({
 
   useEffect(() => {
     if (!open) return;
+    const updatePosition = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect)
+        setPosition({
+          top: rect.bottom + 4,
+          right: Math.max(8, window.innerWidth - rect.right),
+        });
+    };
     const closeOnOutsideClick = (event: PointerEvent) => {
       const target = event.target as Node;
       if (
@@ -3069,14 +3077,13 @@ function ActionMenu({
       )
         setOpen(false);
     };
-    const closeOnViewportChange = () => setOpen(false);
     document.addEventListener("pointerdown", closeOnOutsideClick);
-    window.addEventListener("resize", closeOnViewportChange);
-    window.addEventListener("scroll", closeOnViewportChange, true);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsideClick);
-      window.removeEventListener("resize", closeOnViewportChange);
-      window.removeEventListener("scroll", closeOnViewportChange, true);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
     };
   }, [open]);
 
@@ -3117,6 +3124,7 @@ function ActionMenu({
               event.stopPropagation();
               setOpen(false);
             }}
+            onPointerDown={(event) => event.stopPropagation()}
           >
             {children}
           </div>,
@@ -4929,24 +4937,6 @@ function KnowledgePage() {
         </span>
       </div>
     </div>
-  );
-}
-
-function LiveSettingsPage({
-  workspaceId,
-  onToast,
-  onChannelChange,
-}: {
-  workspaceId: string | null;
-  onToast: (message: string) => void;
-  onChannelChange: (channel: WhatsAppInstance | null) => void;
-}) {
-  return (
-    <LiveSettingsWorkspace
-      workspaceId={workspaceId}
-      onToast={onToast}
-      onChannelChange={onChannelChange}
-    />
   );
 }
 
