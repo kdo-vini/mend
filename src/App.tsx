@@ -177,9 +177,6 @@ function App() {
   const [workspaceOptions, setWorkspaceOptions] = useState<
     Array<{ id: string; name: string }>
   >(demoMode ? [{ id: "demo", name: "Techne" }] : []);
-  const [workspaceName, setWorkspaceName] = useState(
-    demoMode ? "Techne" : "Workspace",
-  );
   const [channel, setChannel] = useState<WhatsAppInstance | null>(null);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(
@@ -213,7 +210,6 @@ function App() {
   const handleProfileWorkspaceUpdated = useCallback(
     (workspace: { id: string; name: string }) => {
       setWorkspaceId(workspace.id);
-      setWorkspaceName(workspace.name);
       setLiveDataRetry((current) => current + 1);
     },
     [],
@@ -357,7 +353,6 @@ function App() {
         }
         if (!active) return;
         setWorkspaceId(workspace.id);
-        setWorkspaceName(workspace.name);
         const liveData = await loadLiveWorkspace(client, workspace.id);
         if (!active) return;
         setConversations((current) =>
@@ -862,7 +857,6 @@ function App() {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((current) => !current)}
         onOpenCommand={() => setCommandOpen(true)}
-        workspaceName={workspaceName}
         channel={channel}
         demoMode={demoMode}
         operator={operatorIdentity}
@@ -910,7 +904,6 @@ function App() {
             <FeatureWorkspaceOnboarding
               onCreated={(workspace) => {
                 setWorkspaceId(workspace.id);
-                setWorkspaceName(workspace.name);
                 setWorkspaceOptions((current) => [
                   ...current.filter((item) => item.id !== workspace.id),
                   { id: workspace.id, name: workspace.name },
@@ -1088,7 +1081,6 @@ function App() {
             );
             if (!workspace || nextWorkspaceId === "demo") return;
             setWorkspaceId(workspace.id);
-            setWorkspaceName(workspace.name);
             setSelectedConversationId("");
             setToast(`Switched to ${workspace.name}`);
           }}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -33,7 +33,68 @@ export function NotificationCenter({
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [panelPosition, setPanelPosition] = useState<{
+    top: number;
+    left: number;
+    maxHeight: number;
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const unread = notifications.filter((notification) => !notification.read_at);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const updatePanelPosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+
+      const rect = trigger.getBoundingClientRect();
+      const viewportPadding = 12;
+      const gap = 8;
+      const panelWidth = Math.min(
+        360,
+        Math.max(0, window.innerWidth - viewportPadding * 2),
+      );
+      const left = Math.min(
+        Math.max(rect.right - panelWidth, viewportPadding),
+        Math.max(
+          viewportPadding,
+          window.innerWidth - panelWidth - viewportPadding,
+        ),
+      );
+      const desiredHeight = panelRef.current?.scrollHeight ?? 480;
+      const belowSpace = Math.max(
+        0,
+        window.innerHeight - rect.bottom - viewportPadding - gap,
+      );
+      const aboveSpace = Math.max(0, rect.top - viewportPadding - gap);
+      const openAbove = belowSpace < desiredHeight && aboveSpace > belowSpace;
+      const availableSpace = openAbove ? aboveSpace : belowSpace;
+      const panelHeight = Math.max(1, Math.floor(availableSpace));
+      const top = openAbove
+        ? Math.max(viewportPadding, rect.top - gap - panelHeight)
+        : Math.min(
+            rect.bottom + gap,
+            window.innerHeight - viewportPadding - panelHeight,
+          );
+
+      setPanelPosition({
+        top,
+        left,
+        maxHeight: panelHeight,
+      });
+    };
+
+    updatePanelPosition();
+    window.addEventListener("resize", updatePanelPosition);
+    window.addEventListener("scroll", updatePanelPosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePanelPosition);
+      window.removeEventListener("scroll", updatePanelPosition, true);
+    };
+  }, [open, notifications.length, pushStatus]);
+
   const openNotification = (notification: WorkspaceNotification) => {
     onReadNotification(notification.id);
     setOpen(false);
@@ -47,11 +108,15 @@ export function NotificationCenter({
   return (
     <div className="notification-center">
       <button
+        ref={triggerRef}
         className="icon-button subtle notification-trigger"
         type="button"
         aria-label={`Notifications${unreadNotificationCount ? ` (${unreadNotificationCount} unread)` : ""}`}
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setPanelPosition(null);
+          setOpen((current) => !current);
+        }}
       >
         <Bell size={16} />
         {unreadNotificationCount > 0 && (
@@ -60,9 +125,16 @@ export function NotificationCenter({
       </button>
       {open && (
         <div
+          ref={panelRef}
           className="notification-panel"
           role="dialog"
           aria-label="Notifications"
+          style={{
+            top: panelPosition?.top ?? 12,
+            left: panelPosition?.left ?? 12,
+            maxHeight: panelPosition?.maxHeight,
+            visibility: panelPosition ? "visible" : "hidden",
+          }}
         >
           <div className="notification-panel-header">
             <div>
@@ -136,7 +208,6 @@ export function Sidebar({
   collapsed,
   onToggle,
   onOpenCommand,
-  workspaceName,
   channel,
   demoMode,
   operator,
@@ -152,7 +223,6 @@ export function Sidebar({
   collapsed: boolean;
   onToggle: () => void;
   onOpenCommand: () => void;
-  workspaceName: string;
   channel: WhatsAppInstance | null;
   demoMode: boolean;
   operator: { name: string; email: string };
@@ -186,21 +256,6 @@ export function Sidebar({
           <Menu size={16} />
         </button>
       </div>
-      <button
-        className="workspace-switcher"
-        type="button"
-        aria-label="Open workspace profile"
-        onClick={() => navigate("/profile?tab=workspace")}
-      >
-        <span className="workspace-dot">
-          {workspaceName.slice(0, 1).toUpperCase()}
-        </span>
-        <span className="workspace-copy">
-          <strong>{workspaceName}</strong>
-          <small>{demoMode ? "demo mode" : "live workspace"}</small>
-        </span>
-        <ChevronRight size={14} />
-      </button>
       <button className="command-trigger" type="button" onClick={onOpenCommand}>
         <Search size={15} />
         <span>Search everything</span>
@@ -220,30 +275,33 @@ export function Sidebar({
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <div className="sidebar-utilities">
-          <NotificationCenter
-            notifications={notifications}
-            unreadNotificationCount={unreadNotificationCount}
-            pushStatus={pushStatus}
-            onEnablePush={onEnablePush}
-            onReadNotification={onReadNotification}
-          />
-          <button
-            className="icon-button subtle"
-            type="button"
-            aria-label={`Use ${theme === "dark" ? "light" : "dark"} theme`}
-            onClick={onToggleTheme}
-          >
-            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
-          <button
-            className="icon-button subtle"
-            type="button"
-            aria-label="Log out"
-            onClick={onSignOut}
-          >
-            <LogOut size={15} />
-          </button>
+        <div className="sidebar-bottom-header">
+          <span className="sidebar-bottom-label">Session</span>
+          <div className="sidebar-utilities">
+            <NotificationCenter
+              notifications={notifications}
+              unreadNotificationCount={unreadNotificationCount}
+              pushStatus={pushStatus}
+              onEnablePush={onEnablePush}
+              onReadNotification={onReadNotification}
+            />
+            <button
+              className="icon-button subtle"
+              type="button"
+              aria-label={`Use ${theme === "dark" ? "light" : "dark"} theme`}
+              onClick={onToggleTheme}
+            >
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+            <button
+              className="icon-button subtle"
+              type="button"
+              aria-label="Log out"
+              onClick={onSignOut}
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
         </div>
         <button
           className="live-connection"
@@ -276,6 +334,7 @@ export function Sidebar({
             {identityInitials(operator.name)}
           </div>
           <span>
+            <small className="user-row-label">Signed in as</small>
             <strong>{operator.name}</strong>
             <small>{operator.email || "Workspace member"}</small>
           </span>
