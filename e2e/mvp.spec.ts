@@ -1,0 +1,137 @@
+import { expect, test, type Page } from "@playwright/test";
+
+async function openCommandPalette(page: Page, projectName: string) {
+  await page
+    .getByRole("button", {
+      name: projectName === "mobile" ? "Search workspace" : /Search everything/,
+    })
+    .click();
+}
+
+test("operator can move from inbox to issues and create an issue", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/inbox?demo=1");
+  await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
+
+  await page
+    .getByRole("button", { name: /New issue/ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Create issue" }),
+  ).toBeVisible();
+  await page.getByLabel("Title").fill("E2E issue from Mend");
+  await page.getByRole("button", { name: "Create issue", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText(/TEC-\d+ created/);
+  await page.getByRole("button", { name: "Close issue inspector" }).click();
+
+  if (testInfo.project.name === "mobile") {
+    await page
+      .locator(".mobile-bottom-nav")
+      .getByRole("link", { name: "Issues" })
+      .click();
+  } else {
+    await openCommandPalette(page, testInfo.project.name);
+    await page.getByRole("button", { name: "Browse issues" }).click();
+  }
+  await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
+  await expect(page.getByText("E2E issue from Mend")).toBeVisible();
+});
+
+test("operator can use the command palette and navigate to runs", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/inbox?demo=1");
+  await openCommandPalette(page, testInfo.project.name);
+  await expect(
+    page.getByPlaceholder("Search actions or jump to…"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "View Codex runs" }).click();
+  await expect(page.getByRole("heading", { name: "Codex runs" })).toBeVisible();
+});
+
+test("operator can assign and resolve a conversation", async ({ page }) => {
+  await page.goto("/inbox?demo=1");
+  await page
+    .getByRole("button", { name: /Open conversation with/ })
+    .first()
+    .click();
+
+  const assignee = page.getByLabel("Conversation assignee");
+  await assignee.selectOption("Unassigned");
+  await expect(page.getByRole("status")).toContainText("Assigned to");
+
+  await page.getByRole("button", { name: "Conversation actions" }).click();
+  await page.getByRole("menuitem", { name: "Resolve conversation" }).click();
+  await expect(page.getByRole("status")).toContainText("Conversation resolved");
+});
+
+test("operator can update an issue and return to its conversation", async ({
+  page,
+}) => {
+  await page.goto("/issues/TEC-24?demo=1");
+  await expect(
+    page.getByRole("heading", { name: /Fechamento de caixa/ }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit Status" }).click();
+  await page
+    .getByRole("combobox", { name: "Edit Status" })
+    .selectOption("Review");
+  await expect(page.getByText("Review", { exact: true }).first()).toBeVisible();
+
+  await page
+    .getByLabel("Internal comment")
+    .fill("Validated in the E2E workflow");
+  await page.getByRole("button", { name: "Comment" }).click();
+  await expect(page.getByText(/Validated in the E2E workflow/)).toBeVisible();
+
+  await page.getByLabel("New issue label").fill("e2e");
+  await page.getByRole("button", { name: "Add issue label" }).click();
+  await expect(page.getByText("e2e", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Resolve & notify" }).click();
+  await page
+    .getByLabel("Resolution message")
+    .fill("E2E resolution sent to the customer");
+  await page.getByRole("button", { name: "Resolve and send" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "resolved and customer notified",
+  );
+
+  await page.getByRole("button", { name: /Cliente Exemplo/ }).click();
+  await expect(page).toHaveURL(/\/inbox\?conversation=/);
+  await expect(
+    page.locator(".message-bubble", {
+      hasText: "E2E resolution sent to the customer",
+    }),
+  ).toBeVisible();
+});
+
+test("operator can review checks and approve a Codex diff", async ({
+  page,
+}) => {
+  await page.goto("/codex-runs?demo=1");
+  await page.getByRole("button", { name: /TEC-19/ }).click();
+
+  await expect(page.getByLabel("Codex diff")).toContainText("parseInviteToken");
+  await page.getByText("test", { exact: true }).click();
+  await expect(page.getByText("12 tests passed")).toBeVisible();
+
+  await page.getByRole("button", { name: "Approve local commit" }).click();
+  await expect(page.getByRole("status")).toContainText("Codex result approved");
+  await expect(
+    page.getByText("Approved", { exact: true }).first(),
+  ).toBeVisible();
+});
+
+test("unauthenticated live mode does not render demo customer records", async ({
+  page,
+}) => {
+  await page.goto("/inbox");
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Mend" }),
+  ).toBeVisible();
+  await expect(page.getByText("Cliente Exemplo")).toHaveCount(0);
+});

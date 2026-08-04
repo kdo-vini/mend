@@ -1,0 +1,854 @@
+import { realpath, stat } from "node:fs/promises";
+import path from "node:path";
+import { allowedCommands, type AllowedCommand } from "../src/core.js";
+import {
+  CodexCancellationRegistry,
+  CodexRunRecord,
+  CodexRunStore,
+  RunCodexInput,
+  RunCodexResult,
+  SafeTool,
+  SafeToolResult,
+  createBranchName,
+  redactSecrets,
+  runCodexRun,
+} from "./codex.js";
+import type { CodexEventSink, CodexRunEventInput } from "./codex-events.js";
+import {
+  createLocalGit,
+  type GitCommitResult,
+  type GitLocalPort,
+} from "./git-local.js";
+import type { OpenAiCodexClient, OpenAiCodexOptions } from "./codex-openai.js";
+
+const maxContextText = 4_000;
+const maxContextMessages = 6;
+const maxPersistedCommandOutput = 160_000;
+
+export interface RepositoryConfig {
+  id: string;
+  workspaceId: string;
+  name: string;
+  localPath: string;
+  defaultBranch: string;
+  allowedCommands?: readonly string[];
+}
+
+export interface ResolvedRepository extends RepositoryConfig {
+  root: string;
+  allowedCommandSet: ReadonlySet<AllowedCommand>;
+}
+
+export interface RepositoryConfigPort {
+  getRepository(
+    workspaceId: string,
+    repositoryId: string,
+  ): Promise<RepositoryConfig | null>;
+}
+
+export interface CodexRunLookupPort {
+  getRun(runId: string): Promise<CodexRunRecord | null>;
+}
+
+export type CodexServiceRunStore = CodexRunStore & Partial<CodexRunLookupPort>;
+
+export interface CodexContextMessage {
+  direction?: string;
+  senderType?: string;
+  text?: string;
+  createdAt?: string;
+}
+
+export interface CodexContextInput {
+  issue: {
+    id: string;
+    identifier: string;
+    title: string;
+    summary?: string;
+    description?: string;
+    priority?: string;
+    status?: string;
+  };
+  conversation?: {
+    summary?: string;
+    messages?: readonly CodexContextMessage[];
+  };
+  goal?: string;
+}
+
+export interface CodexContext {
+  issue: {
+    id: string;
+    identifier: string;
+    title: string;
+    summary?: string;
+    description?: string;
+    priority?: string;
+    status?: string;
+  };
+  repository: {
+    id: string;
+    name: string;
+    defaultBranch: string;
+  };
+  conversation?: {
+    summary?: string;
+    messages: readonly CodexContextMessage[];
+  };
+  goal?: string;
+}
+
+export interface CodexContextPort {
+  mount(context: CodexContext): Promise<CodexContext>;
+}
+
+export class InMemoryCodexContextPort implements CodexContextPort {
+  readonly mounted: CodexContext[] = [];
+
+  async mount(context: CodexContext): Promise<CodexContext> {
+    this.mounted.push(context);
+    return context;
+  }
+}
+
+export type CodexRunExecutor = (
+  input: RunCodexInput,
+  context: CodexContext,
+) => Promise<RunCodexResult>;
+
+export interface CodexServicePorts {
+  repositories: RepositoryConfigPort;
+  runs: CodexServiceRunStore;
+  git?: GitLocalPort;
+  context?: CodexContextPort;
+  execute?: CodexRunExecutor;
+  eventSink?: CodexEventSink;
+  cancellation?: CodexCancellationRegistry;
+  openAi?: OpenAiCodexOptions & {
+    client?: OpenAiCodexClient;
+    enabled?: boolean;
+  };
+}
+
+export interface StartCodexRunInput {
+  workspaceId: string;
+  issueId: string;
+  repositoryId: string;
+  issueIdentifier: string;
+  issueTitle: string;
+  mode: RunCodexInput["mode"];
+  context: CodexContextInput;
+  tools?: readonly SafeTool[];
+  createdByUserId?: string;
+  maxRuntimeMs?: number;
+  commandTimeoutMs?: number;
+}
+
+export interface CodexCommandResultRecord {
+  name: AllowedCommand;
+  output: string;
+  exitCode: number;
+  passed: boolean;
+}
+
+export interface CodexTestResultRecord extends CodexCommandResultRecord {
+  name: "test";
+}
+
+export interface CodexLocalCommit {
+  status: "created" | "not_created" | "failed";
+  branch?: string;
+  sha?: string;
+  paths?: string[];
+  reason?: string;
+  error?: string;
+}
+
+export interface CodexServiceResult extends RunCodexResult {
+  context: CodexContext;
+  commandResults: CodexCommandResultRecord[];
+  testResults: CodexTestResultRecord[];
+}
+
+export interface CodexRunHandle {
+  runId: string;
+  run: CodexRunRecord;
+  completion: Promise<CodexServiceResult>;
+}
+
+export class CodexServiceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CodexServiceError";
+  }
+}
+
+function nonEmpty(value: string, label: string): string {
+  if (typeof value !== "string" || !value.trim())
+    throw new CodexServiceError(`${label} is required`);
+  return value.trim();
+}
+
+function boundedText(
+  value: unknown,
+  limit = maxContextText,
+): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  return redactSecrets(value.trim()).slice(0, limit);
+}
+
+function requiredBoundedText(
+  value: string,
+  label: string,
+  limit = maxContextText,
+): string {
+  const text = boundedText(nonEmpty(value, label), limit);
+  if (!text) throw new CodexServiceError(`${label} is required`);
+  return text;
+}
+
+function boundedContextMessage(
+  message: CodexContextMessage,
+): CodexContextMessage | null {
+  const text = boundedText(message.text, maxContextText);
+  if (!text) return null;
+  return {
+    ...(boundedText(message.direction, 32)
+      ? { direction: boundedText(message.direction, 32) }
+      : {}),
+    ...(boundedText(message.senderType, 32)
+      ? { senderType: boundedText(message.senderType, 32) }
+      : {}),
+    text,
+    ...(boundedText(message.createdAt, 80)
+      ? { createdAt: boundedText(message.createdAt, 80) }
+      : {}),
+  };
+}
+
+export function mountCodexContext(
+  input: CodexContextInput,
+  repository: RepositoryConfig,
+): CodexContext {
+  const issue = input.issue;
+  const messages = (input.conversation?.messages ?? [])
+    .slice(-maxContextMessages)
+    .map(boundedContextMessage)
+    .filter((message): message is CodexContextMessage => Boolean(message));
+  return {
+    issue: {
+      id: requiredBoundedText(issue.id, "issue.id"),
+      identifier: requiredBoundedText(
+        issue.identifier,
+        "issue.identifier",
+        128,
+      ),
+      title: requiredBoundedText(issue.title, "issue.title"),
+      ...(boundedText(issue.summary)
+        ? { summary: boundedText(issue.summary) }
+        : {}),
+      ...(boundedText(issue.description)
+        ? { description: boundedText(issue.description) }
+        : {}),
+      ...(boundedText(issue.priority, 32)
+        ? { priority: boundedText(issue.priority, 32) }
+        : {}),
+      ...(boundedText(issue.status, 32)
+        ? { status: boundedText(issue.status, 32) }
+        : {}),
+    },
+    repository: {
+      id: requiredBoundedText(repository.id, "repository.id"),
+      name: requiredBoundedText(repository.name, "repository.name"),
+      defaultBranch: requiredBoundedText(
+        repository.defaultBranch,
+        "repository.defaultBranch",
+        128,
+      ),
+    },
+    ...(input.conversation
+      ? {
+          conversation: {
+            ...(boundedText(input.conversation.summary)
+              ? { summary: boundedText(input.conversation.summary) }
+              : {}),
+            messages,
+          },
+        }
+      : {}),
+    ...(boundedText(input.goal) ? { goal: boundedText(input.goal) } : {}),
+  };
+}
+
+function isWithin(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === "" ||
+    (relative !== ".." &&
+      !relative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relative))
+  );
+}
+
+function normalizeAllowedCommands(
+  value: readonly string[] | undefined,
+): ReadonlySet<AllowedCommand> {
+  const names = value ?? Object.keys(allowedCommands);
+  if (!Array.isArray(names))
+    throw new CodexServiceError("Repository allowedCommands must be an array");
+  const normalized = new Set<AllowedCommand>();
+  for (const name of names) {
+    if (
+      typeof name !== "string" ||
+      !Object.prototype.hasOwnProperty.call(allowedCommands, name)
+    ) {
+      throw new CodexServiceError(
+        `Repository command is not allowed: ${String(name)}`,
+      );
+    }
+    normalized.add(name as AllowedCommand);
+  }
+  return normalized;
+}
+
+async function resolveRepository(
+  rootValue: string,
+  config: RepositoryConfig,
+): Promise<ResolvedRepository> {
+  const workspaceRoot = await realpath(
+    nonEmpty(rootValue, "CODEX_WORKSPACE_ROOT"),
+  );
+  if (!(await stat(workspaceRoot)).isDirectory())
+    throw new CodexServiceError("CODEX_WORKSPACE_ROOT must be a directory");
+  const configuredPath = path.isAbsolute(config.localPath)
+    ? config.localPath
+    : path.resolve(
+        workspaceRoot,
+        nonEmpty(config.localPath, "repository.localPath"),
+      );
+  const root = await realpath(configuredPath);
+  if (!(await stat(root)).isDirectory())
+    throw new CodexServiceError("Configured repository must be a directory");
+  if (!isWithin(workspaceRoot, root))
+    throw new CodexServiceError(
+      "Configured repository is outside CODEX_WORKSPACE_ROOT",
+    );
+  return {
+    ...config,
+    id: nonEmpty(config.id, "repository.id"),
+    workspaceId: nonEmpty(config.workspaceId, "repository.workspaceId"),
+    name: nonEmpty(config.name, "repository.name"),
+    defaultBranch: nonEmpty(config.defaultBranch, "repository.defaultBranch"),
+    localPath: config.localPath,
+    root,
+    allowedCommandSet: normalizeAllowedCommands(config.allowedCommands),
+  };
+}
+
+function validateTools(
+  tools: readonly SafeTool[] | undefined,
+  allowed: ReadonlySet<AllowedCommand>,
+): readonly SafeTool[] {
+  const requested = tools ?? [];
+  if (requested.length > 32)
+    throw new CodexServiceError("Codex tool list exceeds 32 steps");
+  return requested.map((tool) => {
+    if (!tool || typeof tool !== "object" || !("kind" in tool))
+      throw new CodexServiceError("Invalid Codex tool");
+    if (tool.kind === "command") {
+      if (
+        !Object.prototype.hasOwnProperty.call(allowedCommands, tool.name) ||
+        !allowed.has(tool.name)
+      ) {
+        throw new CodexServiceError(
+          `Command is not enabled for this repository: ${String(tool.name)}`,
+        );
+      }
+      return { kind: "command", name: tool.name };
+    }
+    if (tool.kind === "list_files") {
+      if (
+        tool.relativeDirectory !== undefined &&
+        typeof tool.relativeDirectory !== "string"
+      )
+        throw new CodexServiceError("Invalid list_files directory");
+      return {
+        kind: "list_files",
+        ...(tool.relativeDirectory !== undefined
+          ? { relativeDirectory: tool.relativeDirectory }
+          : {}),
+      };
+    }
+    if (tool.kind === "git_status" || tool.kind === "diff")
+      return { kind: tool.kind };
+    throw new CodexServiceError(
+      `Tool is not allowed: ${String((tool as { kind: string }).kind)}`,
+    );
+  });
+}
+
+function commandResults(
+  tools: readonly SafeToolResult[],
+): CodexCommandResultRecord[] {
+  return tools.flatMap((tool) =>
+    tool.kind === "command"
+      ? [
+          {
+            name: tool.name,
+            output: redactSecrets(tool.output).slice(
+              -maxPersistedCommandOutput,
+            ),
+            exitCode: tool.exitCode,
+            passed: tool.exitCode === 0,
+          },
+        ]
+      : [],
+  );
+}
+
+function testResults(
+  commands: readonly CodexCommandResultRecord[],
+): CodexTestResultRecord[] {
+  return commands.filter(
+    (command): command is CodexTestResultRecord => command.name === "test",
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+} {
+  let resolvePromise!: (value: T) => void;
+  let rejectPromise!: (error: unknown) => void;
+  const promise = new Promise<T>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  return { promise, resolve: resolvePromise, reject: rejectPromise };
+}
+
+export class CodexService {
+  private readonly cache = new Map<string, CodexRunRecord>();
+  private readonly active = new Map<string, AbortController>();
+  private readonly git: GitLocalPort;
+  private readonly contextPort: CodexContextPort;
+  private readonly execute: CodexRunExecutor;
+  private readonly cancellation: CodexCancellationRegistry;
+
+  constructor(private readonly ports: CodexServicePorts) {
+    this.git = ports.git ?? createLocalGit();
+    this.contextPort = ports.context ?? new InMemoryCodexContextPort();
+    this.execute = ports.execute ?? ((input) => runCodexRun(input));
+    this.cancellation = ports.cancellation ?? new CodexCancellationRegistry();
+  }
+
+  async start(input: StartCodexRunInput): Promise<CodexRunHandle> {
+    const workspaceId = nonEmpty(input.workspaceId, "workspaceId");
+    const issueId = nonEmpty(input.issueId, "issueId");
+    const repositoryId = nonEmpty(input.repositoryId, "repositoryId");
+    const repositoryConfig = await this.ports.repositories.getRepository(
+      workspaceId,
+      repositoryId,
+    );
+    if (!repositoryConfig)
+      throw new CodexServiceError(`Repository not found: ${repositoryId}`);
+    if (repositoryConfig.workspaceId !== workspaceId)
+      throw new CodexServiceError("Repository belongs to another workspace");
+    const repository = await resolveRepository(
+      process.env.CODEX_WORKSPACE_ROOT ?? "",
+      repositoryConfig,
+    );
+    const context = await this.contextPort.mount(
+      mountCodexContext(input.context, repository),
+    );
+    if (context.issue.id !== issueId)
+      throw new CodexServiceError("Context issue does not match run issue");
+    const tools = validateTools(input.tools, repository.allowedCommandSet);
+    const controller = new AbortController();
+    const created = deferred<CodexRunRecord>();
+    let createdRun: CodexRunRecord | undefined;
+
+    const store: CodexRunStore = {
+      createRun: async (runInput) => {
+        try {
+          const run = await this.ports.runs.createRun(runInput);
+          createdRun = run;
+          this.cache.set(run.id, run);
+          this.active.set(run.id, controller);
+          created.resolve(run);
+          return run;
+        } catch (error) {
+          created.reject(error);
+          throw error;
+        }
+      },
+      updateRun: async (runId, patch) => {
+        const updated = await this.ports.runs.updateRun(runId, patch);
+        const current = this.cache.get(runId);
+        const next =
+          updated ??
+          (current
+            ? { ...current, ...patch, updatedAt: new Date().toISOString() }
+            : undefined);
+        if (!next) throw new CodexServiceError(`Codex run not found: ${runId}`);
+        this.cache.set(runId, next);
+        return next;
+      },
+      appendEvent: (runId, event) => this.ports.runs.appendEvent(runId, event),
+    };
+    const runnerInput: RunCodexInput = {
+      workspaceId,
+      issueId,
+      repositoryId,
+      issueIdentifier: nonEmpty(input.issueIdentifier, "issueIdentifier"),
+      issueTitle: nonEmpty(input.issueTitle, "issueTitle"),
+      mode: input.mode,
+      repoRoot: repository.root,
+      tools,
+      store,
+      eventSink: this.ports.eventSink,
+      cancellation: this.cancellation,
+      signal: controller.signal,
+      maxRuntimeMs: input.maxRuntimeMs,
+      commandTimeoutMs: input.commandTimeoutMs,
+      createdByUserId: input.createdByUserId,
+      allowedCommands: [...repository.allowedCommandSet],
+      context: context as unknown as Record<string, unknown>,
+      openAiClient: this.ports.openAi?.client,
+      openAiOptions: this.ports.openAi,
+      openAiEnabled: this.ports.openAi?.enabled,
+    };
+
+    const completion = (async (): Promise<CodexServiceResult> => {
+      try {
+        const result = await this.execute(runnerInput, context);
+        return await this.finalize(result, repository, context, input);
+      } catch (error) {
+        if (createdRun) await this.markFailed(createdRun.id, error);
+        else created.reject(error);
+        throw error;
+      } finally {
+        if (createdRun) this.active.delete(createdRun.id);
+      }
+    })();
+
+    let run: CodexRunRecord;
+    try {
+      run = await created.promise;
+    } catch (error) {
+      await completion.catch(() => undefined);
+      throw error;
+    }
+    return { runId: run.id, run, completion };
+  }
+
+  startRun(input: StartCodexRunInput): Promise<CodexRunHandle> {
+    return this.start(input);
+  }
+
+  async cancel(runId: string): Promise<CodexRunRecord> {
+    const run = await this.requireRun(runId);
+    if (run.status !== "queued" && run.status !== "running")
+      throw new CodexServiceError(
+        `Run cannot be canceled from status ${run.status}`,
+      );
+    const controller = this.active.get(run.id);
+    if (!controller) {
+      if (run.status !== "queued")
+        throw new CodexServiceError("Run is not active in this process");
+      const canceled = await this.update(run.id, {
+        status: "canceled",
+        finishedAt: new Date().toISOString(),
+        result: { ...asRecord(run.result), canceledBy: "service" },
+      });
+      await this.emitProgress(run.id, "Run canceled before execution started", {
+        phase: "canceled",
+      });
+      return canceled;
+    }
+    controller.abort();
+    this.cancellation.cancel(run.id);
+    return this.requireRun(run.id);
+  }
+
+  cancelRun(runId: string): Promise<CodexRunRecord> {
+    return this.cancel(runId);
+  }
+
+  async approve(runId: string): Promise<CodexRunRecord> {
+    const run = await this.requireRun(runId);
+    if (run.status !== "completed")
+      throw new CodexServiceError(
+        `Only completed runs can be approved: ${run.status}`,
+      );
+    const approved = await this.update(run.id, {
+      status: "approved",
+      result: {
+        ...asRecord(run.result),
+        decision: { status: "approved", decidedAt: new Date().toISOString() },
+      },
+    });
+    await this.emitProgress(
+      run.id,
+      "Run approved in Mend; no push, merge or deploy was performed",
+      { phase: "approved" },
+    );
+    return approved;
+  }
+
+  approveRun(runId: string): Promise<CodexRunRecord> {
+    return this.approve(runId);
+  }
+
+  async reject(runId: string, reason?: string): Promise<CodexRunRecord> {
+    const run = await this.requireRun(runId);
+    if (run.status !== "completed")
+      throw new CodexServiceError(
+        `Only completed runs can be rejected: ${run.status}`,
+      );
+    const rejected = await this.update(run.id, {
+      status: "rejected",
+      result: {
+        ...asRecord(run.result),
+        decision: {
+          status: "rejected",
+          reason: boundedText(reason, 1_000),
+          decidedAt: new Date().toISOString(),
+        },
+      },
+    });
+    await this.emitProgress(
+      run.id,
+      "Run rejected in Mend; local branch remains local",
+      { phase: "rejected" },
+    );
+    return rejected;
+  }
+
+  rejectRun(runId: string, reason?: string): Promise<CodexRunRecord> {
+    return this.reject(runId, reason);
+  }
+
+  async getDiff(runId: string): Promise<RunCodexResult["diff"]> {
+    const run = await this.requireRun(runId);
+    const result = asRecord(run.result);
+    const candidate =
+      result.diff && typeof result.diff === "object"
+        ? asRecord(result.diff)
+        : result;
+    const files = Array.isArray(candidate.files) ? candidate.files : [];
+    return {
+      files: files as RunCodexResult["diff"]["files"],
+      patch:
+        typeof candidate.patch === "string"
+          ? redactSecrets(candidate.patch)
+          : "",
+      truncated:
+        candidate.diffTruncated === true || candidate.truncated === true,
+    };
+  }
+
+  getRunDiff(runId: string): Promise<RunCodexResult["diff"]> {
+    return this.getDiff(runId);
+  }
+
+  async getPatch(runId: string): Promise<string> {
+    return (await this.getDiff(runId)).patch;
+  }
+
+  private async requireRun(runId: string): Promise<CodexRunRecord> {
+    const id = nonEmpty(runId, "runId");
+    const persisted = await this.ports.runs.getRun?.(id);
+    if (persisted) {
+      this.cache.set(id, persisted);
+      return persisted;
+    }
+    const cached = this.cache.get(id);
+    if (cached) return cached;
+    throw new CodexServiceError(`Codex run not found: ${id}`);
+  }
+
+  private async update(
+    runId: string,
+    patch: Parameters<CodexRunStore["updateRun"]>[1],
+  ): Promise<CodexRunRecord> {
+    const updated = await this.ports.runs.updateRun(runId, patch);
+    const current = this.cache.get(runId);
+    const next =
+      updated ??
+      (current
+        ? { ...current, ...patch, updatedAt: new Date().toISOString() }
+        : undefined);
+    if (!next) throw new CodexServiceError(`Codex run not found: ${runId}`);
+    this.cache.set(runId, next);
+    return next;
+  }
+
+  private async emitProgress(
+    runId: string,
+    message: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    const input: CodexRunEventInput = {
+      eventType: "progress",
+      message,
+      metadata,
+    };
+    const event = await this.ports.runs.appendEvent(runId, input);
+    await this.ports.eventSink?.publish(event).catch(() => undefined);
+  }
+
+  private async markFailed(runId: string, error: unknown): Promise<void> {
+    const message = redactSecrets(
+      error instanceof Error ? error.message : String(error),
+    );
+    try {
+      await this.update(runId, {
+        status: "failed",
+        finishedAt: new Date().toISOString(),
+        result: {
+          ...asRecord((await this.requireRun(runId)).result),
+          error: message,
+        },
+      });
+      await this.emitProgress(
+        runId,
+        "Application service failed after the Codex runner started",
+        { phase: "service_failed", error: message },
+      );
+    } catch {
+      // The runner's persisted failure remains the source of truth if the secondary update fails.
+    }
+  }
+
+  private async finalize(
+    result: RunCodexResult,
+    repository: ResolvedRepository,
+    context: CodexContext,
+    input: StartCodexRunInput,
+  ): Promise<CodexServiceResult> {
+    // The API adapter may persist request metadata immediately after start;
+    // refresh before composing the final payload so a fast run cannot erase it.
+    let run = (await this.ports.runs.getRun?.(result.run.id)) ?? result.run;
+    this.cache.set(run.id, run);
+    const commands = commandResults(result.tools);
+    const tests = testResults(commands);
+    const payload: Record<string, unknown> = {
+      ...asRecord(run.result),
+      context,
+      commandResults: commands,
+      testResults: tests,
+      repository: {
+        id: repository.id,
+        name: repository.name,
+        defaultBranch: repository.defaultBranch,
+      },
+    };
+    run = await this.update(run.id, { result: payload });
+
+    if (run.status === "completed" && input.mode === "implement_fix") {
+      if (!result.diff.files.length) {
+        payload.localCommit = {
+          status: "not_created",
+          reason: "no_changes",
+        } satisfies CodexLocalCommit;
+        run = await this.update(run.id, { result: payload });
+      } else if (commands.some((command) => !command.passed)) {
+        payload.localCommit = {
+          status: "not_created",
+          reason: "checks_failed",
+        } satisfies CodexLocalCommit;
+        run = await this.update(run.id, { result: payload });
+        await this.emitProgress(
+          run.id,
+          "Local commit was withheld because an approved check failed",
+          {
+            phase: "local_commit_blocked",
+            failedCommands: commands
+              .filter((command) => !command.passed)
+              .map((command) => command.name),
+          },
+        );
+      } else {
+        try {
+          const commit = await this.commitLocalFix(result, repository, input);
+          payload.localCommit = {
+            status: "created",
+            branch: commit.branch,
+            sha: commit.sha,
+            paths: commit.paths,
+          } satisfies CodexLocalCommit;
+          run = await this.update(run.id, {
+            branchName: commit.branch,
+            commitSha: commit.sha,
+            result: payload,
+          });
+          await this.emitProgress(
+            run.id,
+            "Local branch and commit created; no push, merge or deploy was performed",
+            { phase: "local_commit", branch: commit.branch, sha: commit.sha },
+          );
+        } catch (error) {
+          const message = redactSecrets(
+            error instanceof Error ? error.message : String(error),
+          );
+          payload.localCommit = {
+            status: "failed",
+            error: message,
+          } satisfies CodexLocalCommit;
+          run = await this.update(run.id, {
+            status: "failed",
+            finishedAt: new Date().toISOString(),
+            result: payload,
+          });
+          await this.emitProgress(
+            run.id,
+            "Local commit was refused or failed; no push, merge or deploy was performed",
+            { phase: "local_commit_failed", error: message },
+          );
+        }
+      }
+    }
+    return {
+      ...result,
+      run,
+      context,
+      commandResults: commands,
+      testResults: tests,
+    };
+  }
+
+  private async commitLocalFix(
+    result: RunCodexResult,
+    repository: ResolvedRepository,
+    input: StartCodexRunInput,
+  ): Promise<GitCommitResult> {
+    if (result.diff.truncated)
+      throw new CodexServiceError("Refusing to commit a truncated diff");
+    const branch =
+      result.run.branchName ??
+      createBranchName(input.issueIdentifier, input.issueTitle);
+    const branched = await this.git.createBranch(
+      repository.root,
+      branch,
+      repository.defaultBranch,
+    );
+    await this.git.applyPatch(branched.root, result.diff.patch);
+    return this.git.commit(
+      branched.root,
+      result.diff.files.map((file) => file.relativePath),
+      `Fix ${input.issueIdentifier}: ${input.issueTitle}`,
+    );
+  }
+}
+
+export function createCodexService(ports: CodexServicePorts): CodexService {
+  return new CodexService(ports);
+}
