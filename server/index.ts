@@ -27,7 +27,30 @@ import { createSupabaseLiveWorker, type LiveWorker } from "./live-worker.js";
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
 
-app.use(helmet());
+const supabaseOrigin = (() => {
+  try {
+    return new URL(
+      process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "",
+    ).origin;
+  } catch {
+    return null;
+  }
+})();
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        connectSrc: [
+          "'self'",
+          ...(supabaseOrigin ? [supabaseOrigin] : []),
+          ...(supabaseOrigin
+            ? [supabaseOrigin.replace(/^https:/, "wss:")]
+            : []),
+        ],
+      },
+    },
+  }),
+);
 // The live attachment path accepts bounded base64 data URLs (validated again
 // by the API/media normalizer). Keep the parser limit just above the 12 MiB
 // data-url contract so oversized requests are rejected before route work.
