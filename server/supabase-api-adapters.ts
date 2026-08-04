@@ -308,6 +308,7 @@ function message(rowValue: Row): Row {
 function conversation(rowValue: Row): Row {
   const contact = row(rowValue.contact);
   const linkedChannel = row(rowValue.channel);
+  const aiState = row(rowValue.ai_state);
   return {
     id: str(rowValue.id),
     workspaceId: str(rowValue.workspace_id),
@@ -317,6 +318,10 @@ function conversation(rowValue: Row): Row {
     attentionState: str(rowValue.attention_state, "needs_attention"),
     assignedUserId: nullable(rowValue.assigned_user_id),
     aiMode: str(rowValue.ai_mode, "draft"),
+    automationState: str(aiState.automation_state, "ai_active"),
+    humanTakeoverAt: nullable(aiState.human_takeover_at),
+    humanTakeoverBy: nullable(aiState.human_takeover_by),
+    humanTakeoverReason: nullable(aiState.human_takeover_reason),
     unreadCount: num(rowValue.unread_count),
     lastReadAt: nullable(rowValue.last_read_at),
     lastMessageAt: nullable(rowValue.last_message_at),
@@ -888,7 +893,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
     let request = this.client
       .from("conversations")
       .select(
-        "*, contact:contacts(id, phone_number, display_name), channel:channel_connections(*)",
+        "*, contact:contacts(id, phone_number, display_name), channel:channel_connections(*), ai_state:conversation_ai_state(*)",
       )
       .eq("workspace_id", context.workspaceId);
     if (query.status) request = request.eq("status", query.status);
@@ -908,7 +913,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
     const result = await this.client
       .from("conversations")
       .select(
-        "*, contact:contacts(id, phone_number, display_name), channel:channel_connections(*)",
+        "*, contact:contacts(id, phone_number, display_name), channel:channel_connections(*), ai_state:conversation_ai_state(*)",
       )
       .eq("id", conversationId)
       .eq("workspace_id", context.workspaceId)
@@ -998,6 +1003,29 @@ export class SupabaseConversationAdapter implements ConversationPort {
   }
   resolve(context: RequestContext, conversationId: string) {
     return this.state(context, conversationId, "resolve");
+  }
+
+  async pauseAi(
+    context: RequestContext,
+    conversationId: string,
+    reason: string,
+  ) {
+    const result = await this.client.rpc("pause_conversation_ai", {
+      p_workspace_id: context.workspaceId,
+      p_conversation_id: conversationId,
+      p_reason: reason,
+    });
+    checked("conversation_ai.pause", result);
+    return this.get(context, conversationId);
+  }
+
+  async resumeAi(context: RequestContext, conversationId: string) {
+    const result = await this.client.rpc("resume_conversation_ai", {
+      p_workspace_id: context.workspaceId,
+      p_conversation_id: conversationId,
+    });
+    checked("conversation_ai.resume", result);
+    return this.get(context, conversationId);
   }
 
   async sendMessage(

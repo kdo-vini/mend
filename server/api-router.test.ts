@@ -163,6 +163,14 @@ function createFakeDependencies(
         ...input,
       })),
       resolve: vi.fn(async (_context, id) => ({ id, status: "resolved" })),
+      pauseAi: vi.fn(async (_context, id) => ({
+        id,
+        automationState: "human_paused",
+      })),
+      resumeAi: vi.fn(async (_context, id) => ({
+        id,
+        automationState: "ai_active",
+      })),
       sendMessage: vi.fn(async (_context, id, input) => ({
         id: messageId,
         conversationId: id,
@@ -492,6 +500,22 @@ describe("Mend API router", () => {
       (
         await request(app)
           .post(`/api/conversations/${conversationId}/ai-draft`)
+          .set(headers)
+          .send({})
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post(`/api/conversations/${conversationId}/ai/pause`)
+          .set(headers)
+          .send({ reason: "manual_pause" })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post(`/api/conversations/${conversationId}/ai/resume`)
           .set(headers)
           .send({})
       ).status,

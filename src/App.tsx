@@ -108,7 +108,9 @@ import {
   mendApiBaseUrl,
   refreshLiveChannel,
   requestAiDraft,
+  pauseLiveConversationAi,
   resolveLiveConversation,
+  resumeLiveConversationAi,
   sendLiveMedia,
   sendLiveMessage,
   snoozeLiveConversation,
@@ -1711,6 +1713,14 @@ function InboxPage({
   };
 
   const setAiMode = (mode: AiMode) => {
+    if (
+      mode === "safe_auto" &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Enable Auto-reply for this conversation? Only allowlisted, high-confidence messages can be sent.",
+      )
+    )
+      return;
     if (liveMode && workspaceId)
       void updateLiveConversation({
         workspaceId,
@@ -1735,6 +1745,50 @@ function InboxPage({
       ),
     );
     onToast(`AI mode: ${mode === "safe_auto" ? "safe auto" : mode}`);
+  };
+
+  const setAiPause = async (paused: boolean) => {
+    const previous = selected.automationState;
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id
+          ? {
+              ...item,
+              automationState: paused ? "human_paused" : "ai_active",
+              attention: paused ? "needs_attention" : item.attention,
+              ...(paused
+                ? { humanTakeoverReason: "manual_pause" as const }
+                : {}),
+            }
+          : item,
+      ),
+    );
+    try {
+      if (liveMode && workspaceId) {
+        if (paused)
+          await pauseLiveConversationAi({
+            workspaceId,
+            conversationId: selected.id,
+          });
+        else
+          await resumeLiveConversationAi({
+            workspaceId,
+            conversationId: selected.id,
+          });
+      }
+      onToast(paused ? "AI paused for this conversation" : "AI resumed");
+    } catch (error) {
+      setConversations((current) =>
+        current.map((item) =>
+          item.id === selected.id
+            ? { ...item, automationState: previous }
+            : item,
+        ),
+      );
+      onToast(
+        error instanceof Error ? error.message : "AI state could not be saved.",
+      );
+    }
   };
 
   const setConversationState = async (status: "snoozed" | "resolved") => {
@@ -1941,6 +1995,7 @@ function InboxPage({
               else onNewIssue();
             }}
             onSetAiMode={setAiMode}
+            onSetAiPause={(paused) => void setAiPause(paused)}
             onSnooze={() => void setConversationState("snoozed")}
             onResolve={() => void setConversationState("resolved")}
             onAssign={assignConversation}
@@ -2079,6 +2134,7 @@ function ConversationHeader({
   conversation,
   onNewIssue,
   onSetAiMode,
+  onSetAiPause,
   onSnooze,
   onResolve,
   onAssign,
@@ -2088,6 +2144,7 @@ function ConversationHeader({
   conversation: Conversation;
   onNewIssue: () => void;
   onSetAiMode: (mode: AiMode) => void;
+  onSetAiPause: (paused: boolean) => void;
   onSnooze: () => void;
   onResolve: () => void;
   onAssign: (assignee: string) => void;
@@ -2138,14 +2195,23 @@ function ConversationHeader({
             {assigneeLabel(conversation.assignee)}
           </span>
         </label>
-        <span className={`mode-label ${conversation.aiMode}`}>
+        <span
+          className={`mode-label ${conversation.aiMode} ${conversation.automationState}`}
+        >
           <Sparkles size={13} />{" "}
-          {conversation.aiMode === "safe_auto"
-            ? "Safe auto"
-            : conversation.aiMode === "draft"
-              ? "Drafts on"
-              : "AI off"}
+          {conversation.automationState === "human_paused"
+            ? "Human takeover — AI paused"
+            : conversation.aiMode === "safe_auto"
+              ? "Auto-reply"
+              : conversation.aiMode === "draft"
+                ? "Copilot"
+                : "Manual"}
         </span>
+        {conversation.humanTakeoverReason && (
+          <span className="ai-reason" title="Human takeover reason">
+            {conversation.humanTakeoverReason.replaceAll("_", " ")}
+          </span>
+        )}
         <button
           className="icon-button"
           type="button"
@@ -2174,7 +2240,7 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <PenLine size={14} /> Draft replies
+                <PenLine size={14} /> Copilot
               </button>
               <button
                 type="button"
@@ -2184,7 +2250,7 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <Zap size={14} /> Safe auto
+                <Zap size={14} /> Auto-reply
               </button>
               <button
                 type="button"
@@ -2194,7 +2260,25 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <LockKeyhole size={14} /> Turn AI off
+                <LockKeyhole size={14} /> Manual
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onSetAiPause(conversation.automationState !== "human_paused");
+                  setMenuOpen(false);
+                }}
+              >
+                {conversation.automationState === "human_paused" ? (
+                  <>
+                    <Zap size={14} /> Resume AI
+                  </>
+                ) : (
+                  <>
+                    <LockKeyhole size={14} /> Pause AI
+                  </>
+                )}
               </button>
               <hr />
               <button
@@ -2234,7 +2318,7 @@ function MessageBubble({ message }: { message: Message }) {
       <div className="message-meta">
         {message.direction === "outbound" && message.aiGenerated && (
           <span className="ai-tag">
-            <Sparkles size={11} /> AI draft
+            <Sparkles size={11} /> AI generated
           </span>
         )}
         {message.sender} · {message.time}
@@ -2572,10 +2656,10 @@ function Composer({
         <span className="composer-ai-state">
           <Sparkles size={12} />{" "}
           {aiMode === "off"
-            ? "AI off"
+            ? "Manual"
             : aiMode === "safe_auto"
-              ? "Safe auto active"
-              : "AI drafts ready"}
+              ? "Auto-reply active"
+              : "Copilot drafts ready"}
         </span>
       </div>
     </div>
@@ -4694,6 +4778,14 @@ function LiveSettingsWorkspace({
 
   const saveAiPolicy = async () => {
     if (!workspaceId || !aiPolicy?.totalConversations) return;
+    if (
+      aiMode === "safe_auto" &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Enable Auto-reply for this workspace? It remains blocked unless the explicit send policy is enabled.",
+      )
+    )
+      return;
     setAiSaving(true);
     try {
       const result = await saveLiveConversationAiPolicy(workspaceId, aiMode);
@@ -5061,7 +5153,7 @@ function LiveSettingsWorkspace({
                               ? ""
                               : "s"} · {aiPolicy.counts.off} off ·{" "}
                             {aiPolicy.counts.draft} drafts ·{" "}
-                            {aiPolicy.counts.safe_auto} safe auto
+                            {aiPolicy.counts.safe_auto} auto-reply
                           </p>
                         </div>
                         <select
@@ -5073,9 +5165,9 @@ function LiveSettingsWorkspace({
                             setAiMode(event.target.value as AiMode)
                           }
                         >
-                          <option value="draft">Draft replies</option>
-                          <option value="safe_auto">Safe auto</option>
-                          <option value="off">AI off</option>
+                          <option value="draft">Copilot</option>
+                          <option value="safe_auto">Auto-reply</option>
+                          <option value="off">Manual</option>
                         </select>
                       </div>
                       <div className="settings-note">

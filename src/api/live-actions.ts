@@ -227,6 +227,7 @@ export async function loadLiveWorkspace(
     runs,
     events,
     knowledge,
+    aiStates,
   ] = await Promise.all([
     unwrap(db.from("contacts").select("*").eq("workspace_id", workspace.id)),
     unwrap(
@@ -278,7 +279,16 @@ export async function loadLiveWorkspace(
         .eq("workspace_id", workspace.id)
         .order("updated_at", { ascending: false }),
     ),
+    unwrap(
+      db
+        .from("conversation_ai_state")
+        .select("*")
+        .eq("workspace_id", workspace.id),
+    ),
   ]);
+  const aiStateByConversation = new Map(
+    aiStates.map((state) => [state.conversation_id, state]),
+  );
   const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
   const issueByConversation = new Map(
     issues
@@ -327,6 +337,7 @@ export async function loadLiveWorkspace(
         contactById.get(conversation.contact_id),
         messagesByConversation.get(conversation.id) ?? [],
         issueByConversation.get(conversation.id),
+        aiStateByConversation.get(conversation.id),
       ),
     ),
     issues: issues.map((issue) =>
@@ -377,7 +388,7 @@ export async function loadLiveConversationSnapshot(
     throw new LiveActionError(messagesResult.error.message);
   if (!conversationResult.data) return null;
 
-  const [contactResult, issueResult] = await Promise.all([
+  const [contactResult, issueResult, aiStateResult] = await Promise.all([
     db
       .from("contacts")
       .select("*")
@@ -390,15 +401,24 @@ export async function loadLiveConversationSnapshot(
       .eq("workspace_id", workspaceId)
       .eq("conversation_id", conversationId)
       .maybeSingle(),
+    db
+      .from("conversation_ai_state")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("conversation_id", conversationId)
+      .maybeSingle(),
   ]);
   if (contactResult.error)
     throw new LiveActionError(contactResult.error.message);
   if (issueResult.error) throw new LiveActionError(issueResult.error.message);
+  if (aiStateResult.error)
+    throw new LiveActionError(aiStateResult.error.message);
   return toUiConversation(
     conversationResult.data,
     contactResult.data ?? undefined,
     messagesResult.data ?? [],
     issueResult.data ?? undefined,
+    aiStateResult.data ?? undefined,
   );
 }
 
@@ -723,6 +743,41 @@ export async function updateLiveConversation(
       .eq("id", input.conversationId)
       .select("*")
       .single(),
+  );
+}
+
+export async function pauseLiveConversationAi(input: {
+  workspaceId: string;
+  conversationId: string;
+  reason?:
+    | "human_message"
+    | "customer_requested_human"
+    | "unsafe_intent"
+    | "low_confidence"
+    | "manual_pause";
+}) {
+  if (!mendApiBaseUrl)
+    throw new LiveActionError("Pausing AI needs the Mend API endpoint.");
+  return apiRequest(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/ai/pause`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason: input.reason ?? "manual_pause" }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function resumeLiveConversationAi(input: {
+  workspaceId: string;
+  conversationId: string;
+}) {
+  if (!mendApiBaseUrl)
+    throw new LiveActionError("Resuming AI needs the Mend API endpoint.");
+  return apiRequest(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/ai/resume`,
+    { method: "POST", body: JSON.stringify({}) },
+    input.workspaceId,
   );
 }
 

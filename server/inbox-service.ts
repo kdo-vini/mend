@@ -143,6 +143,12 @@ export interface EvidenceRecord {
  */
 export interface InboxPort {
   ingestMessage(input: InboxIngestPortInput): Promise<InboxIngestPortResult>;
+  /** Lets provider echoes retain the AI origin when they arrive after send. */
+  isAiGeneratedProviderMessage?(input: {
+    workspaceId: string;
+    channelConnectionId: string;
+    providerMessageId: string;
+  }): Promise<boolean>;
   getConversationContext(
     workspaceId: string,
     conversationId: string,
@@ -296,6 +302,25 @@ type AnySupabaseClient = SupabaseClient;
 /** Supabase adapter. The RPCs keep multi-table writes atomic and are workspace-scoped in SQL. */
 export class SupabaseInboxPort implements InboxPort {
   constructor(private readonly client: AnySupabaseClient) {}
+
+  async isAiGeneratedProviderMessage(input: {
+    workspaceId: string;
+    channelConnectionId: string;
+    providerMessageId: string;
+  }): Promise<boolean> {
+    const result = await this.client
+      .from("ai_outbound_messages")
+      .select("id")
+      .eq("workspace_id", input.workspaceId)
+      .eq("provider_message_id", input.providerMessageId)
+      .maybeSingle();
+    if (
+      result.error &&
+      !/relation .* does not exist/i.test(result.error.message)
+    )
+      throw new Error(`supabase:ai_outbound_messages:${result.error.message}`);
+    return Boolean(result.data);
+  }
 
   private async rpc<T>(
     name: string,
@@ -665,10 +690,22 @@ export class InboxService {
       message.phoneNumber || message.remoteJid,
     );
     if (phoneNumber.length < 5) throw new Error("phone_number_required");
+    const providerAiGenerated =
+      options.aiGenerated === undefined &&
+      this.port.isAiGeneratedProviderMessage
+        ? await this.port.isAiGeneratedProviderMessage({
+            workspaceId: context.workspaceId,
+            channelConnectionId: connectionId,
+            providerMessageId: message.providerMessageId,
+          })
+        : false;
+    const aiGenerated = options.aiGenerated === true || providerAiGenerated;
     const actorType: InboxActorType =
       message.direction === "inbound"
         ? "contact"
-        : (context.actorType ?? "system");
+        : aiGenerated
+          ? "ai"
+          : (context.actorType ?? "system");
     const result = await this.port.ingestMessage({
       workspaceId: context.workspaceId,
       channelConnectionId: connectionId,
@@ -690,7 +727,7 @@ export class InboxService {
       durationSeconds: message.durationSeconds,
       quotedProviderMessageId: message.quotedProviderMessageId,
       providerTimestamp: message.providerTimestamp,
-      aiGenerated: options.aiGenerated ?? actorType === "ai",
+      aiGenerated,
       sentByUserId: actorType === "user" ? context.actorUserId : undefined,
       actorType,
       actorUserId: context.actorUserId,

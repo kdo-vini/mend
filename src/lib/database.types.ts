@@ -294,46 +294,64 @@ export type Database = {
       }
       conversation_ai_state: {
         Row: {
+          automation_state: string
           conversation_id: string
           created_at: string
           current_summary: string | null
+          human_takeover_at: string | null
+          human_takeover_by: string | null
+          human_takeover_reason: string | null
           id: string
           last_triaged_at: string | null
+          last_human_message_id: string | null
           last_triaged_message_id: string | null
           latest_confidence: number | null
           latest_intent: string | null
           needs_human: boolean
           needs_human_reason: string | null
+          paused_until: string | null
           sentiment: string | null
           updated_at: string
           workspace_id: string
         }
         Insert: {
+          automation_state?: string
           conversation_id: string
           created_at?: string
           current_summary?: string | null
+          human_takeover_at?: string | null
+          human_takeover_by?: string | null
+          human_takeover_reason?: string | null
           id?: string
           last_triaged_at?: string | null
+          last_human_message_id?: string | null
           last_triaged_message_id?: string | null
           latest_confidence?: number | null
           latest_intent?: string | null
           needs_human?: boolean
           needs_human_reason?: string | null
+          paused_until?: string | null
           sentiment?: string | null
           updated_at?: string
           workspace_id: string
         }
         Update: {
+          automation_state?: string
           conversation_id?: string
           created_at?: string
           current_summary?: string | null
+          human_takeover_at?: string | null
+          human_takeover_by?: string | null
+          human_takeover_reason?: string | null
           id?: string
           last_triaged_at?: string | null
+          last_human_message_id?: string | null
           last_triaged_message_id?: string | null
           latest_confidence?: number | null
           latest_intent?: string | null
           needs_human?: boolean
           needs_human_reason?: string | null
+          paused_until?: string | null
           sentiment?: string | null
           updated_at?: string
           workspace_id?: string
@@ -802,6 +820,7 @@ export type Database = {
           media_remote_url: string | null
           media_storage_path: string | null
           message_type: string
+          origin?: string
           mime_type: string | null
           provider_message_id: string
           provider_status: string | null
@@ -828,6 +847,7 @@ export type Database = {
           media_remote_url?: string | null
           media_storage_path?: string | null
           message_type?: string
+          origin?: string
           mime_type?: string | null
           provider_message_id: string
           provider_status?: string | null
@@ -854,6 +874,7 @@ export type Database = {
           media_remote_url?: string | null
           media_storage_path?: string | null
           message_type?: string
+          origin?: string
           mime_type?: string | null
           provider_message_id?: string
           provider_status?: string | null
@@ -1010,6 +1031,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_ai_reply_send: {
+        Args: {
+          p_conversation_id: string
+          p_idempotency_key: string
+          p_source_message_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       claim_issue_number: {
         Args: { target_workspace_id: string }
         Returns: string
@@ -1042,6 +1072,18 @@ export type Database = {
       is_workspace_member: {
         Args: { target_workspace_id: string }
         Returns: boolean
+      }
+      pause_conversation_ai: {
+        Args: {
+          p_conversation_id: string
+          p_reason?: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      resume_conversation_ai: {
+        Args: { p_conversation_id: string; p_workspace_id: string }
+        Returns: Json
       }
     }
     Enums: {

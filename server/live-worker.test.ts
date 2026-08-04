@@ -9,6 +9,7 @@ import {
   type LiveWorkerChannelResolver,
   type LiveWorkerInbox,
   type LiveWorkerKnowledge,
+  type LiveWorkerSendAiReplyInput,
 } from "./live-worker.js";
 import type { InboxContext, InboxMessageRecord } from "./inbox-service.js";
 import type { NormalizedWhatsmiauMessage } from "./whatsmiau.js";
@@ -133,6 +134,33 @@ class ResultAutomation implements LiveWorkerAutomation {
         },
       },
     };
+  }
+}
+
+class SendStageAutomation implements LiveWorkerAutomation {
+  sent: LiveWorkerSendAiReplyInput[] = [];
+
+  async process(input: LiveWorkerAutomationInput) {
+    return {
+      send: {
+        binding,
+        conversationId: input.persisted.conversationId,
+        sourceMessageId: input.persisted.id,
+        idempotencyKey: input.idempotencyKey,
+        body: "Approved reply",
+        triage: {
+          intent: "question" as const,
+          priority: "low" as const,
+          confidence: 0.99,
+          summary: "Question",
+          unsafe: false,
+        },
+      },
+    };
+  }
+
+  async sendAiReply(input: LiveWorkerSendAiReplyInput) {
+    this.sent.push(input);
   }
 }
 
@@ -277,6 +305,29 @@ describe("live Whatsmiau worker", () => {
     expect(drafts).toEqual(["Draft only"]);
   });
 
+  it("keeps AI sending as a separate idempotent worker stage", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const automation = new SendStageAutomation();
+    const worker = new LiveWorker({
+      jobStore: store,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      automation,
+    });
+    await enqueue(store, "send-stage");
+    await worker.poll();
+    await worker.poll();
+    await worker.poll();
+    expect(automation.sent).toHaveLength(1);
+    expect(automation.sent[0]).toMatchObject({
+      body: "Approved reply",
+      sourceMessageId: "message-1",
+    });
+    expect(
+      (await store.list()).filter((job) => job.status === "queued"),
+    ).toHaveLength(0);
+  });
+
   it("restarts its polling loop and blocks unsafe drafts in the Supabase automation", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     let processed = 0;
@@ -352,6 +403,47 @@ describe("live Whatsmiau worker", () => {
       needs_human: true,
       last_triaged_message_id: "message-unsafe",
     });
+  });
+
+  it("does not triage or create a draft while human takeover is active", async () => {
+    const client = new FakeSupabaseHandoff();
+    client.state = {
+      automation_state: "human_paused",
+      last_triaged_message_id: null,
+    };
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply: vi.fn(async () => "must not be called"),
+      triage: vi.fn(async () => "{}"),
+    };
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+    );
+    const persisted: InboxMessageRecord = {
+      id: "message-paused",
+      workspaceId: binding.workspaceId,
+      conversationId: "conversation-1",
+      contactId: "contact-1",
+      providerMessageId: message.providerMessageId,
+      direction: "inbound",
+      messageType: "text",
+      unreadCount: 1,
+      inserted: true,
+    };
+    await automation.process({
+      binding,
+      idempotencyKey: "paused-key",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "paused-job",
+      ),
+      knowledge: [],
+      message,
+      persisted,
+    });
+    expect(provider.triage).not.toHaveBeenCalled();
+    expect(provider.draftReply).not.toHaveBeenCalled();
   });
 
   it("routes an operational triage to a native issue instead of a reply draft", async () => {

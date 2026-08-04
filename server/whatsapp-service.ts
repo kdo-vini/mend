@@ -40,6 +40,7 @@ export interface WhatsAppProvider {
 export interface SendTextRequest {
   text: string;
   aiGenerated?: boolean;
+  onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
 }
 
 export interface SendMediaRequest {
@@ -137,6 +138,7 @@ export class WhatsAppService {
       text,
     });
     const id = providerMessageId(response);
+    await input.onProviderMessageId?.(id);
     const message = await this.inbox.recordOutbound(context, conversationId, {
       providerMessageId: id,
       messageType: "text",

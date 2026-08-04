@@ -17,6 +17,8 @@ import type {
   Priority,
   IssueStatus,
   IssueType,
+  AutomationState,
+  HumanTakeoverReason,
 } from "../types";
 
 type Tables = Database["public"]["Tables"];
@@ -157,6 +159,7 @@ export function toUiConversation(
   contact: ContactRecord | undefined,
   records: MessageRecord[],
   issue?: IssueRecord,
+  aiState?: Tables["conversation_ai_state"]["Row"],
 ): Conversation {
   const name =
     contact?.display_name || contact?.phone_number || "Unknown contact";
@@ -174,6 +177,21 @@ export function toUiConversation(
     status: record.status as Conversation["status"],
     attention: record.attention_state as Conversation["attention"],
     aiMode: record.ai_mode as Conversation["aiMode"],
+    automationState: (aiState?.automation_state === "human_paused"
+      ? "human_paused"
+      : "ai_active") as AutomationState,
+    ...(aiState?.human_takeover_at
+      ? { humanTakeoverAt: aiState.human_takeover_at }
+      : {}),
+    ...(aiState?.human_takeover_by
+      ? { humanTakeoverBy: aiState.human_takeover_by }
+      : {}),
+    ...(aiState?.human_takeover_reason
+      ? {
+          humanTakeoverReason:
+            aiState.human_takeover_reason as HumanTakeoverReason,
+        }
+      : {}),
     unread: record.unread_count,
     lastMessage: last?.text || "No messages yet",
     lastTime: displayTime(record.last_message_at ?? last?.time),

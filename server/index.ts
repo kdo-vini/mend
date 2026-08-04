@@ -514,6 +514,7 @@ if (workerSupabase && process.env.OPENAI_API_KEY) {
     client: workerSupabase,
     jobStore: messageJobs,
     provider: createSupportAiProvider(),
+    whatsappProvider: new WhatsmiauMessagingProvider(),
     pollIntervalMs: Number(process.env.MEND_WORKER_POLL_MS ?? 1_000),
     onUnmappedMessage: (input) =>
       logger.warn(

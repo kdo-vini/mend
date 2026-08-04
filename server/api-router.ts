@@ -130,6 +130,15 @@ export interface ConversationPort {
     context: RequestContext,
     conversationId: string,
   ): Promise<unknown | null>;
+  pauseAi(
+    context: RequestContext,
+    conversationId: string,
+    reason: string,
+  ): Promise<unknown | null>;
+  resumeAi(
+    context: RequestContext,
+    conversationId: string,
+  ): Promise<unknown | null>;
   sendMessage(
     context: RequestContext,
     conversationId: string,
@@ -300,6 +309,19 @@ const conversationPatchSchema = z
   );
 const conversationSnoozeSchema = z
   .object({ until: z.string().datetime({ offset: true }) })
+  .strict();
+const conversationAiPauseSchema = z
+  .object({
+    reason: z
+      .enum([
+        "human_message",
+        "customer_requested_human",
+        "unsafe_intent",
+        "low_confidence",
+        "manual_pause",
+      ])
+      .default("manual_pause"),
+  })
   .strict();
 const sendMessageSchema = z
   .object({
@@ -987,6 +1009,38 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
     }),
   );
   router.post(
+    "/api/conversations/:id/ai/pause",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.conversations.pauseAi(
+            context,
+            pathId(request),
+            parse(conversationAiPauseSchema, request.body ?? {}).reason,
+          ),
+          "conversation",
+        ),
+      );
+    }),
+  );
+  router.post(
+    "/api/conversations/:id/ai/resume",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.conversations.resumeAi(context, pathId(request)),
+          "conversation",
+        ),
+      );
+    }),
+  );
+  router.post(
     "/api/conversations/:id/messages",
     asyncRoute(async (request, response) => {
       const context = await scoped(request, response, "agent");
@@ -1473,6 +1527,7 @@ export {
   conversationListQuerySchema,
   conversationPatchSchema,
   conversationSnoozeSchema,
+  conversationAiPauseSchema,
   repositoryInputSchema,
   repositoryListQuerySchema,
   repositoryPatchSchema,

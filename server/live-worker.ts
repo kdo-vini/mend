@@ -9,6 +9,7 @@ import {
 import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
 import type { SupportAiProvider } from "./providers.js";
 import { SupabaseMediaStorage } from "./media.js";
+import { WhatsAppService, type WhatsAppProvider } from "./whatsapp-service.js";
 import {
   gateAiAction,
   triageConversation,
@@ -23,6 +24,7 @@ type KnowledgeArticleRow =
 
 export const WHATSAPP_INGEST_JOB_TYPE = "whatsmiau.message.received";
 export const PROCESS_INBOUND_MESSAGE_JOB_TYPE = "mend.process_inbound_message";
+export const SEND_AI_REPLY_JOB_TYPE = "mend.send_ai_reply";
 
 interface ProcessInboundMessageJobPayload {
   stage: "process_inbound_message";
@@ -33,9 +35,23 @@ interface ProcessInboundMessageJobPayload {
   persisted: InboxMessageRecord;
 }
 
+export interface LiveWorkerSendAiReplyInput {
+  binding: LiveChannelBinding;
+  conversationId: string;
+  sourceMessageId: string;
+  idempotencyKey: string;
+  body: string;
+  triage: TriageResult;
+}
+
+interface SendAiReplyJobPayload extends LiveWorkerSendAiReplyInput {
+  stage: "send_ai_reply";
+}
+
 type LiveWorkerJobPayload =
   | WhatsmiauMessageJobPayload
-  | ProcessInboundMessageJobPayload;
+  | ProcessInboundMessageJobPayload
+  | SendAiReplyJobPayload;
 
 interface UncheckedSupabaseQuery {
   select(columns?: string): UncheckedSupabaseQuery;
@@ -121,6 +137,7 @@ export interface LiveWorkerIssue {
 export interface LiveWorkerAutomationResult {
   draft?: LiveWorkerDraft;
   issue?: LiveWorkerIssue;
+  send?: LiveWorkerSendAiReplyInput;
 }
 
 export interface LiveWorkerAutomation {
@@ -131,6 +148,7 @@ export interface LiveWorkerAutomation {
   process(
     input: LiveWorkerAutomationInput,
   ): Promise<LiveWorkerAutomationResult | void>;
+  sendAiReply?(input: LiveWorkerSendAiReplyInput): Promise<void>;
 }
 
 export interface LiveWorkerUnmappedMessage {
@@ -297,6 +315,14 @@ export class LiveWorker {
       );
       return;
     }
+    if (job.type === SEND_AI_REPLY_JOB_TYPE) {
+      if (!this.options.automation?.sendAiReply) return;
+      const payload = job.payload as SendAiReplyJobPayload;
+      if (payload.stage !== "send_ai_reply" || !payload.binding?.workspaceId)
+        throw new Error("invalid_send_ai_reply_job");
+      await this.options.automation.sendAiReply(payload);
+      return;
+    }
     throw new Error(`unsupported_job_type:${job.type}`);
   }
 
@@ -380,6 +406,15 @@ export class LiveWorker {
       ? await this.options.knowledge.listPublished(payload.binding.workspaceId)
       : [];
     const result = await automation.process({ ...automationBase, knowledge });
+    if (result?.send) {
+      await this.stageJobStore.enqueue({
+        workspaceId: payload.binding.workspaceId,
+        type: SEND_AI_REPLY_JOB_TYPE,
+        payload: { stage: "send_ai_reply", ...result.send },
+        dedupeKey: `mend:send-ai-reply:${payload.binding.workspaceId}:${payload.persisted.id}`,
+        maxAttempts: job.maxAttempts,
+      });
+    }
     if (result?.issue && this.options.onIssueReady)
       await this.options.onIssueReady(result.issue);
     if (result?.draft && this.options.onDraftReady)
@@ -492,6 +527,7 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
 
 export interface LiveWorkerTriageState {
   lastTriagedMessageId: string | null;
+  automationState: "ai_active" | "human_paused";
 }
 
 function messageText(message: NormalizedWhatsmiauMessage): string {
@@ -633,13 +669,12 @@ function aiStateInput(
   hasKnowledge: boolean,
 ) {
   const decision = policyDecision(mode, triage, policy, hasKnowledge);
-  // This worker deliberately has no send stage/provider call. Even a
-  // policy-approved safe-auto result therefore remains reviewable until the
-  // coordinator exposes an explicit, auditable sender.
+  const autoSendReady =
+    mode === "safe_auto" && decision.allowed && policy.safeAutoSendEnabled;
   const needsHumanReview =
     mode === "draft" ||
     !decision.allowed ||
-    (mode === "safe_auto" && decision.action === "auto_reply");
+    (mode === "safe_auto" && !autoSendReady);
   return {
     workspace_id: input.binding.workspaceId,
     conversation_id: input.persisted.conversationId,
@@ -651,8 +686,10 @@ function aiStateInput(
     needs_human_reason:
       mode === "draft"
         ? "AI draft requires human review."
-        : decision.allowed && mode === "safe_auto"
-          ? "Safe auto passed policy gates but is not dispatched by this worker."
+        : decision.allowed &&
+            mode === "safe_auto" &&
+            !policy.safeAutoSendEnabled
+          ? "Auto-reply requires explicit workspace confirmation."
           : decision.allowed
             ? null
             : decision.reason,
@@ -691,13 +728,17 @@ function issueIdentifierNumber(identifier: string): number {
  */
 export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   private readonly inbox: InboxService;
+  private readonly whatsapp?: WhatsAppService;
 
   constructor(
     private readonly client: LiveWorkerSupabaseClient,
     private readonly provider: SupportAiProvider,
     inbox?: InboxService,
+    whatsappProvider?: WhatsAppProvider,
   ) {
     this.inbox = inbox ?? new InboxService(new SupabaseInboxPort(client));
+    if (whatsappProvider)
+      this.whatsapp = new WhatsAppService(this.inbox, whatsappProvider);
   }
 
   get metadataClient(): UncheckedSupabaseClient {
@@ -725,6 +766,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (current?.lastTriagedMessageId === input.persisted.id) {
       return;
     }
+    if (current?.automationState === "human_paused") return;
     const modePolicy = await this.aiMode(input);
     if (modePolicy.mode === "off") return;
     const triage = await triageConversation(
@@ -738,6 +780,12 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     ) {
       // Another worker advanced the checkpoint while AI was running. Do not
       // overwrite its newer result; this job can complete safely.
+      return;
+    }
+    if (beforeWrite?.automationState === "human_paused") {
+      await this.auditDecision(input, triage, "ai.human_paused", {
+        stage: "triage",
+      });
       return;
     }
 
@@ -760,6 +808,16 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         modePolicy.policy,
         decision,
       );
+    await this.auditDecision(
+      input,
+      triage,
+      decision.allowed ? "ai.triage.completed" : "ai.blocked",
+      {
+        mode: modePolicy.mode,
+        decision: decision.action,
+        hasKnowledge: input.knowledge.length > 0,
+      },
+    );
     const { error } = await this.client
       .from("conversation_ai_state")
       .upsert(
@@ -774,7 +832,111 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       );
     if (error)
       throw new Error(`supabase:conversation_ai_state:${error.message}`);
-    return { ...(issue ? { issue } : {}), ...(draft ? { draft } : {}) };
+    const takeoverReason = triage.unsafe
+      ? "unsafe_intent"
+      : modePolicy.mode === "safe_auto" &&
+          triage.confidence < modePolicy.policy.safeAutoMinConfidence
+        ? "low_confidence"
+        : null;
+    if (takeoverReason) {
+      const takeover = await this.client.rpc("pause_conversation_ai", {
+        p_workspace_id: input.binding.workspaceId,
+        p_conversation_id: input.persisted.conversationId,
+        p_reason: takeoverReason,
+      });
+      if (takeover.error)
+        throw new Error(
+          `supabase:conversation_ai.pause:${takeover.error.message}`,
+        );
+    }
+    const canSend =
+      Boolean(draft) &&
+      modePolicy.mode === "safe_auto" &&
+      decision.allowed &&
+      modePolicy.policy.safeAutoSendEnabled;
+    return {
+      ...(issue ? { issue } : {}),
+      ...(draft ? { draft } : {}),
+      ...(canSend && draft
+        ? {
+            send: {
+              binding: input.binding,
+              conversationId: draft.conversationId,
+              sourceMessageId: draft.messageId,
+              idempotencyKey: draft.idempotencyKey,
+              body: draft.body,
+              triage,
+            },
+          }
+        : {}),
+    };
+  }
+
+  async sendAiReply(input: LiveWorkerSendAiReplyInput): Promise<void> {
+    if (!this.whatsapp) throw new Error("whatsapp_provider_not_configured");
+    const claim = await this.client.rpc("claim_ai_reply_send", {
+      p_workspace_id: input.binding.workspaceId,
+      p_conversation_id: input.conversationId,
+      p_source_message_id: input.sourceMessageId,
+      p_idempotency_key: input.idempotencyKey,
+    });
+    if (claim.error) {
+      if (/human_paused/i.test(claim.error.message)) {
+        await this.auditDecision(input, input.triage, "ai.human_paused", {
+          stage: "send_ai_reply",
+        });
+        return;
+      }
+      throw new Error(`supabase:claim_ai_reply_send:${claim.error.message}`);
+    }
+    const row = (
+      Array.isArray(claim.data) ? claim.data[0] : claim.data
+    ) as Record<string, unknown> | null;
+    if (!row?.id) throw new Error("supabase:claim_ai_reply_send:empty_result");
+    if (row.status === "sent") return;
+    try {
+      await this.whatsapp.sendText(
+        {
+          workspaceId: input.binding.workspaceId,
+          actorType: "ai",
+        },
+        input.conversationId,
+        {
+          text: input.body,
+          aiGenerated: true,
+          onProviderMessageId: async (providerMessageId) => {
+            const updated = await this.metadataClient
+              .from("ai_outbound_messages")
+              .update({
+                provider_message_id: providerMessageId,
+                status: "sent",
+                sent_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", String(row.id))
+              .select("id")
+              .maybeSingle();
+            if (updated.error)
+              throw new Error(
+                `supabase:ai_outbound_messages:${updated.error.message}`,
+              );
+          },
+        },
+      );
+      await this.auditDecision(input, input.triage, "ai.auto_reply.sent", {
+        sourceMessageId: input.sourceMessageId,
+      });
+    } catch (error) {
+      await this.metadataClient
+        .from("ai_outbound_messages")
+        .update({
+          status: "failed",
+          error_code: safeOperationalError(error),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", String(row.id));
+      throw error;
+    }
   }
 
   private async aiMode(
@@ -995,15 +1157,46 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   ): Promise<LiveWorkerTriageState | null> {
     const result = await this.client
       .from("conversation_ai_state")
-      .select("last_triaged_message_id")
+      .select("last_triaged_message_id, automation_state")
       .eq("workspace_id", input.binding.workspaceId)
       .eq("conversation_id", input.persisted.conversationId)
       .maybeSingle();
     if (result.error)
       throw new Error(`supabase:conversation_ai_state:${result.error.message}`);
     return result.data
-      ? { lastTriagedMessageId: result.data.last_triaged_message_id }
+      ? {
+          lastTriagedMessageId: result.data.last_triaged_message_id,
+          automationState:
+            result.data.automation_state === "human_paused"
+              ? "human_paused"
+              : "ai_active",
+        }
       : null;
+  }
+
+  private async auditDecision(
+    input:
+      | Pick<LiveWorkerAutomationInput, "binding" | "persisted">
+      | LiveWorkerSendAiReplyInput,
+    triage: TriageResult,
+    action: string,
+    metadata: Record<string, unknown>,
+  ) {
+    await this.metadataClient.from("audit_log").insert({
+      workspace_id: input.binding.workspaceId,
+      action,
+      entity_type: "conversation",
+      entity_id:
+        "persisted" in input
+          ? input.persisted.conversationId
+          : input.conversationId,
+      metadata_json: {
+        intent: triage.intent,
+        confidence: triage.confidence,
+        unsafe: triage.unsafe,
+        ...metadata,
+      },
+    });
   }
 }
 
@@ -1011,6 +1204,7 @@ export interface CreateSupabaseLiveWorkerOptions {
   client: LiveWorkerSupabaseClient;
   jobStore: JobStore<WhatsmiauMessageJobPayload>;
   provider: SupportAiProvider;
+  whatsappProvider?: WhatsAppProvider;
   inbox?: LiveWorkerInbox;
   knowledge?: LiveWorkerKnowledge;
   onDraftReady?: LiveWorkerOptions["onDraftReady"];
@@ -1035,6 +1229,7 @@ export function createSupabaseLiveWorker(
     options.client,
     options.provider,
     inboxService,
+    options.whatsappProvider,
   );
   return new LiveWorker({
     jobStore: options.jobStore,

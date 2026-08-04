@@ -5,6 +5,13 @@ export type AttentionState =
   | "waiting_customer"
   | "none";
 export type AiMode = "off" | "draft" | "safe_auto";
+export type AutomationState = "ai_active" | "human_paused";
+export type HumanTakeoverReason =
+  | "human_message"
+  | "customer_requested_human"
+  | "unsafe_intent"
+  | "low_confidence"
+  | "manual_pause";
 export type IssueStatus =
   | "Triage"
   | "Backlog"
@@ -54,6 +61,10 @@ export interface Conversation {
   status: ConversationStatus;
   attention: AttentionState;
   aiMode: AiMode;
+  automationState: AutomationState;
+  humanTakeoverAt?: string;
+  humanTakeoverBy?: string;
+  humanTakeoverReason?: HumanTakeoverReason;
   unread: number;
   lastMessage: string;
   lastTime: string;
