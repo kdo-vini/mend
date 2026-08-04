@@ -51,7 +51,9 @@ test("operator can use the command palette and navigate to runs", async ({
   await expect(page.getByRole("heading", { name: "Codex runs" })).toBeVisible();
 });
 
-test("operator can assign and resolve a conversation", async ({ page }) => {
+test("operator can assign and resolve a conversation", async ({
+  page,
+}, testInfo) => {
   await page.goto("/inbox?demo=1");
   await page
     .getByRole("button", { name: /Open conversation with/ })
@@ -59,7 +61,15 @@ test("operator can assign and resolve a conversation", async ({ page }) => {
     .click();
 
   const assignee = page.getByLabel("Conversation assignee");
-  await assignee.selectOption("Unassigned");
+  if (testInfo.project.name === "mobile") {
+    await page.getByRole("button", { name: "Conversation actions" }).click();
+    await page
+      .getByRole("menu")
+      .getByLabel("Conversation assignee")
+      .selectOption("Unassigned");
+  } else {
+    await assignee.selectOption("Unassigned");
+  }
   await expect(page.getByRole("status")).toContainText("Assigned to");
 
   await page.getByRole("button", { name: "Conversation actions" }).click();
