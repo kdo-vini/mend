@@ -14,6 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_draft_knowledge: {
+        Row: {
+          draft_id: string
+          knowledge_article_id: string
+          rank: number
+        }
+        Insert: {
+          draft_id: string
+          knowledge_article_id: string
+          rank?: number
+        }
+        Update: {
+          draft_id?: string
+          knowledge_article_id?: string
+          rank?: number
+        }
+        Relationships: []
+      }
+      ai_drafts: {
+        Row: {
+          action: string
+          body: string
+          conversation_id: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          mode: string
+          policy_json: Json
+          reviewed_at: string | null
+          safety_reason: string | null
+          source_message_id: string
+          status: string
+          triage_json: Json
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          action: string
+          body: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          mode: string
+          policy_json?: Json
+          reviewed_at?: string | null
+          safety_reason?: string | null
+          source_message_id: string
+          status: string
+          triage_json?: Json
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          action?: string
+          body?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          mode?: string
+          policy_json?: Json
+          reviewed_at?: string | null
+          safety_reason?: string | null
+          source_message_id?: string
+          status?: string
+          triage_json?: Json
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string

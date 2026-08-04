@@ -65,6 +65,7 @@ import { ProfileWorkspacePage } from "./components/ProfileWorkspacePage";
 import { seedConversations, seedIssues, seedKnowledge, seedRuns } from "./data";
 import type {
   AiMode,
+  AiDraft,
   Conversation,
   Issue,
   IssueStatus,
@@ -1424,6 +1425,11 @@ function InboxPage({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All conversations");
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
+  const [draftInsertRequest, setDraftInsertRequest] = useState<{
+    text: string;
+    requestId: number;
+    conversationId: string;
+  }>();
   const searchRef = useRef<HTMLInputElement>(null);
   const selected =
     conversations.find((item) => item.id === selectedConversationId) ??
@@ -2003,6 +2009,18 @@ function InboxPage({
             assigneeLabel={assigneeLabel}
           />
           <AiDecisionSummary conversation={selected} />
+          {selected.aiDraft && (
+            <AiDraftCard
+              draft={selected.aiDraft}
+              onInsert={(text) =>
+                setDraftInsertRequest({
+                  text,
+                  requestId: Date.now(),
+                  conversationId: selected.id,
+                })
+              }
+            />
+          )}
           <div className="message-canvas">
             <div className="day-divider">
               <span>Today</span>
@@ -2044,6 +2062,11 @@ function InboxPage({
             aiMode={selected.aiMode}
             liveMode={liveMode}
             whatsappConnected={whatsappConnected}
+            prefillDraft={
+              draftInsertRequest?.conversationId === selected.id
+                ? draftInsertRequest
+                : undefined
+            }
             onUseDraft={async () => {
               if (!liveMode)
                 return "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um próximo passo.";
@@ -2176,6 +2199,42 @@ function AiDecisionSummary({ conversation }: { conversation: Conversation }) {
       </div>
       {conversation.aiSummary && (
         <p className="ai-decision-summary">{conversation.aiSummary}</p>
+      )}
+    </aside>
+  );
+}
+
+function AiDraftCard({
+  draft,
+  onInsert,
+}: {
+  draft: AiDraft;
+  onInsert: (text: string) => void;
+}) {
+  return (
+    <aside className="ai-draft-card" aria-label="Persisted AI draft">
+      <div className="ai-draft-heading">
+        <span className="ai-decision-title">
+          <Sparkles size={13} /> AI draft ready
+        </span>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => onInsert(draft.body)}
+        >
+          Insert
+        </button>
+      </div>
+      <p className="ai-draft-body">{draft.body}</p>
+      {(draft.safetyReason || draft.sources.length > 0) && (
+        <div className="ai-draft-meta">
+          {draft.safetyReason && <span>{draft.safetyReason}</span>}
+          {draft.sources.length > 0 && (
+            <span>
+              Sources: {draft.sources.map((source) => source.title).join(", ")}
+            </span>
+          )}
+        </div>
       )}
     </aside>
   );
@@ -2439,6 +2498,7 @@ function Composer({
   onSend,
   onSendMedia,
   onUseDraft,
+  prefillDraft,
   aiMode,
   liveMode,
   whatsappConnected,
@@ -2453,6 +2513,7 @@ function Composer({
     caption?: string;
   }) => boolean | Promise<boolean>;
   onUseDraft: () => string | Promise<string>;
+  prefillDraft?: { text: string; requestId: number };
   aiMode: AiMode;
   liveMode: boolean;
   whatsappConnected?: boolean;
@@ -2468,6 +2529,11 @@ function Composer({
   const [fileName, setFileName] = useState("");
   const [caption, setCaption] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!prefillDraft) return;
+    setText(prefillDraft.text);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [prefillDraft]);
   const submit = async () => {
     if (!text.trim() || sending) return;
     setSending(true);

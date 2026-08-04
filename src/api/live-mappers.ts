@@ -11,6 +11,9 @@ import type { Database } from "../lib/database.types";
 import type {
   Conversation,
   CodingRun,
+  AiDraft,
+  AiDraftSource,
+  AiMode,
   Issue,
   KnowledgeArticle,
   Message,
@@ -25,6 +28,8 @@ import type {
 type Tables = Database["public"]["Tables"];
 export type ContactRecord = Tables["contacts"]["Row"];
 export type ChannelConnectionRecord = Tables["channel_connections"]["Row"];
+export type AiDraftRecord = Tables["ai_drafts"]["Row"];
+export type AiDraftKnowledgeRecord = Tables["ai_draft_knowledge"]["Row"];
 export interface WorkspaceData {
   workspaces: Workspace[];
   workspace: Workspace | null;
@@ -161,6 +166,7 @@ export function toUiConversation(
   records: MessageRecord[],
   issue?: IssueRecord,
   aiState?: Tables["conversation_ai_state"]["Row"],
+  aiDraft?: AiDraft,
 ): Conversation {
   const name =
     contact?.display_name || contact?.phone_number || "Unknown contact";
@@ -205,6 +211,7 @@ export function toUiConversation(
       ? { aiConfidence: aiState.latest_confidence }
       : {}),
     ...(aiState?.current_summary ? { aiSummary: aiState.current_summary } : {}),
+    ...(aiDraft ? { aiDraft } : {}),
     unread: record.unread_count,
     lastMessage: last?.text || "No messages yet",
     lastTime: displayTime(record.last_message_at ?? last?.time),
@@ -216,6 +223,22 @@ export function toUiConversation(
       : undefined,
     assignee: record.assigned_user_id ?? "Unassigned",
     messages,
+  };
+}
+
+export function toUiAiDraft(
+  record: AiDraftRecord,
+  sources: AiDraftSource[] = [],
+): AiDraft {
+  return {
+    id: record.id,
+    body: record.body,
+    mode: record.mode as AiMode,
+    action: record.action as AiDraft["action"],
+    status: record.status as AiDraft["status"],
+    ...(record.safety_reason ? { safetyReason: record.safety_reason } : {}),
+    updatedAt: record.updated_at,
+    sources,
   };
 }
 

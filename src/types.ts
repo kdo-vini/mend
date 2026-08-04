@@ -52,6 +52,23 @@ export interface Message {
   deleted?: boolean;
 }
 
+export interface AiDraftSource {
+  id: string;
+  title: string;
+  category: string;
+}
+
+export interface AiDraft {
+  id: string;
+  body: string;
+  mode: AiMode;
+  action: "draft" | "auto_reply" | "blocked";
+  status: "pending_review" | "auto_eligible" | "sent" | "rejected" | "expired";
+  safetyReason?: string;
+  updatedAt: string;
+  sources: AiDraftSource[];
+}
+
 export interface Conversation {
   id: string;
   name: string;
@@ -71,6 +88,7 @@ export interface Conversation {
   aiIntent?: string;
   aiConfidence?: number;
   aiSummary?: string;
+  aiDraft?: AiDraft;
   unread: number;
   lastMessage: string;
   lastTime: string;

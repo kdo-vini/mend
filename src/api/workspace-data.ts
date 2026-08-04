@@ -21,6 +21,8 @@ export const workspaceRealtimeTables = [
   "coding_runs",
   "channel_connections",
   "conversation_ai_state",
+  "ai_drafts",
+  "ai_draft_knowledge",
   "issue_comments",
   "coding_run_events",
   "knowledge_articles",

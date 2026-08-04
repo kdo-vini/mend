@@ -14,6 +14,7 @@ import type {
 } from "../types";
 import {
   toUiConversation,
+  toUiAiDraft,
   toUiIssue,
   toUiKnowledge,
   toUiRun,
@@ -27,6 +28,8 @@ type Message = Tables["messages"]["Row"];
 type IssueRow = Tables["issues"]["Row"];
 type RunRow = Tables["coding_runs"]["Row"];
 type KnowledgeRow = Tables["knowledge_articles"]["Row"];
+type AiDraftRow = Tables["ai_drafts"]["Row"];
+type AiDraftKnowledgeRow = Tables["ai_draft_knowledge"]["Row"];
 
 export interface LiveRepository {
   id: string;
@@ -40,8 +43,8 @@ const env =
   (import.meta as ImportMeta & { env?: Record<string, string | undefined> })
     .env ?? {};
 export const mendApiBaseUrl = (
-  env.VITE_MEND_API_URL ??
-  env.VITE_API_BASE_URL ??
+  env.VITE_MEND_API_URL?.trim() ||
+  env.VITE_API_BASE_URL?.trim() ||
   (typeof window !== "undefined" ? window.location.origin : "")
 ).replace(/\/$/, "");
 export const mendApiToken = env.VITE_MEND_API_TOKEN;
@@ -83,6 +86,45 @@ async function unwrap<T>(
   if (data === null)
     throw new LiveActionError("The live workspace returned no data.");
   return data;
+}
+
+function mapLatestAiDrafts(
+  drafts: AiDraftRow[],
+  links: AiDraftKnowledgeRow[],
+  knowledge: Pick<KnowledgeRow, "id" | "title" | "category">[],
+) {
+  const articleById = new Map(
+    knowledge.map((article) => [article.id, article]),
+  );
+  const linksByDraft = new Map<string, AiDraftKnowledgeRow[]>();
+  for (const link of links)
+    linksByDraft.set(link.draft_id, [
+      ...(linksByDraft.get(link.draft_id) ?? []),
+      link,
+    ]);
+  const latestByConversation = new Map<
+    string,
+    ReturnType<typeof toUiAiDraft>
+  >();
+  for (const draft of drafts) {
+    if (latestByConversation.has(draft.conversation_id)) continue;
+    const sources = (linksByDraft.get(draft.id) ?? [])
+      .sort((a, b) => a.rank - b.rank)
+      .map((link) => articleById.get(link.knowledge_article_id))
+      .filter((article): article is (typeof knowledge)[number] =>
+        Boolean(article),
+      )
+      .map((article) => ({
+        id: article.id,
+        title: article.title,
+        category: article.category,
+      }));
+    latestByConversation.set(
+      draft.conversation_id,
+      toUiAiDraft(draft, sources),
+    );
+  }
+  return latestByConversation;
 }
 
 function requireClient(client: MendSupabaseClient | null) {
@@ -228,6 +270,7 @@ export async function loadLiveWorkspace(
     events,
     knowledge,
     aiStates,
+    aiDrafts,
   ] = await Promise.all([
     unwrap(db.from("contacts").select("*").eq("workspace_id", workspace.id)),
     unwrap(
@@ -285,7 +328,30 @@ export async function loadLiveWorkspace(
         .select("*")
         .eq("workspace_id", workspace.id),
     ),
+    unwrap(
+      db
+        .from("ai_drafts")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .order("created_at", { ascending: false }),
+    ),
   ]);
+  const aiDraftLinks = aiDrafts.length
+    ? await unwrap(
+        db
+          .from("ai_draft_knowledge")
+          .select("*")
+          .in(
+            "draft_id",
+            aiDrafts.map((draft) => draft.id),
+          ),
+      )
+    : [];
+  const aiDraftByConversation = mapLatestAiDrafts(
+    aiDrafts,
+    aiDraftLinks,
+    knowledge,
+  );
   const aiStateByConversation = new Map(
     aiStates.map((state) => [state.conversation_id, state]),
   );
@@ -338,6 +404,7 @@ export async function loadLiveWorkspace(
         messagesByConversation.get(conversation.id) ?? [],
         issueByConversation.get(conversation.id),
         aiStateByConversation.get(conversation.id),
+        aiDraftByConversation.get(conversation.id),
       ),
     ),
     issues: issues.map((issue) =>
@@ -388,37 +455,73 @@ export async function loadLiveConversationSnapshot(
     throw new LiveActionError(messagesResult.error.message);
   if (!conversationResult.data) return null;
 
-  const [contactResult, issueResult, aiStateResult] = await Promise.all([
-    db
-      .from("contacts")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .eq("id", conversationResult.data.contact_id)
-      .maybeSingle(),
-    db
-      .from("issues")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .eq("conversation_id", conversationId)
-      .maybeSingle(),
-    db
-      .from("conversation_ai_state")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .eq("conversation_id", conversationId)
-      .maybeSingle(),
-  ]);
+  const [contactResult, issueResult, aiStateResult, aiDraftResult] =
+    await Promise.all([
+      db
+        .from("contacts")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("id", conversationResult.data.contact_id)
+        .maybeSingle(),
+      db
+        .from("issues")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("conversation_id", conversationId)
+        .maybeSingle(),
+      db
+        .from("conversation_ai_state")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("conversation_id", conversationId)
+        .maybeSingle(),
+      db
+        .from("ai_drafts")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
   if (contactResult.error)
     throw new LiveActionError(contactResult.error.message);
   if (issueResult.error) throw new LiveActionError(issueResult.error.message);
   if (aiStateResult.error)
     throw new LiveActionError(aiStateResult.error.message);
+  if (aiDraftResult.error)
+    throw new LiveActionError(aiDraftResult.error.message);
+  let aiDraft: ReturnType<typeof toUiAiDraft> | undefined;
+  if (aiDraftResult.data) {
+    const linksResult = await db
+      .from("ai_draft_knowledge")
+      .select("*")
+      .eq("draft_id", aiDraftResult.data.id);
+    if (linksResult.error) throw new LiveActionError(linksResult.error.message);
+    const articleIds = linksResult.data.map(
+      (link) => link.knowledge_article_id,
+    );
+    const articlesResult = articleIds.length
+      ? await db
+          .from("knowledge_articles")
+          .select("id, title, category")
+          .in("id", articleIds)
+      : { data: [], error: null };
+    if (articlesResult.error)
+      throw new LiveActionError(articlesResult.error.message);
+    aiDraft = mapLatestAiDrafts(
+      [aiDraftResult.data],
+      linksResult.data,
+      articlesResult.data,
+    ).get(conversationId);
+  }
   return toUiConversation(
     conversationResult.data,
     contactResult.data ?? undefined,
     messagesResult.data ?? [],
     issueResult.data ?? undefined,
     aiStateResult.data ?? undefined,
+    aiDraft,
   );
 }
 

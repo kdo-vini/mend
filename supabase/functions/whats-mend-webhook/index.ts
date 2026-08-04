@@ -325,51 +325,24 @@ async function markConnectionEvent(
     throw new Error(`connection_update_failed:${error.code ?? "database"}`);
 }
 
-async function isAiGeneratedProviderMessage(
-  client: ReturnType<typeof createClient>,
-  binding: { workspace_id: string },
-  providerMessageId: string,
-): Promise<boolean> {
-  const { data, error } = await client
-    .from("ai_outbound_messages")
-    .select("id")
-    .eq("workspace_id", binding.workspace_id)
-    .eq("provider_message_id", providerMessageId)
-    .maybeSingle();
-  if (error)
-    throw new Error(`ai_outbound_lookup_failed:${error.code ?? "database"}`);
-  return Boolean(data);
-}
-
-async function recordAndIngest(
+async function recordAndQueue(
   client: ReturnType<typeof createClient>,
   binding: { id: string; workspace_id: string },
   event: string,
   message: NormalizedMessage,
 ): Promise<{ inserted: boolean; messageId: string }> {
   const now = new Date();
-  const workerId = `edge-whatsmiau:${crypto.randomUUID()}`;
   const dedupeKey = `whatsmiau:${message.instanceName}:${message.providerMessageId}`;
-  const aiGenerated = await isAiGeneratedProviderMessage(
-    client,
-    binding,
-    message.providerMessageId,
-  );
-  const senderType =
-    message.direction === "inbound" ? "contact" : aiGenerated ? "ai" : "system";
   const { data: job, error: jobError } = await client
     .from("jobs")
     .insert({
       workspace_id: binding.workspace_id,
       type: "whatsmiau.message.received",
       payload: { event, message },
-      status: "running",
-      attempts: 1,
+      status: "queued",
+      attempts: 0,
       max_attempts: 5,
       available_at: now.toISOString(),
-      locked_at: now.toISOString(),
-      locked_by: workerId,
-      lease_expires_at: new Date(now.getTime() + 300_000).toISOString(),
       dedupe_key: dedupeKey,
     })
     .select("id")
@@ -381,111 +354,19 @@ async function recordAndIngest(
     throw new Error(`job_insert_failed:${jobError.code ?? "database"}`);
   }
 
-  try {
-    const { data, error } = await client.rpc("inbox_ingest_message", {
-      p_workspace_id: binding.workspace_id,
-      p_channel_connection_id: binding.id,
-      p_phone_number: message.phoneNumber,
-      p_display_name: message.contactName ?? null,
-      p_provider_contact_id: message.remoteJid,
-      p_provider_message_id: message.providerMessageId,
-      p_direction: message.direction,
-      p_sender_type: senderType,
-      p_message_type: message.messageType,
-      p_text: message.text ?? null,
-      p_caption: message.caption ?? null,
-      p_media_storage_path: null,
-      p_media_remote_url: null,
-      p_mime_type: message.mimeType ?? null,
-      p_file_name: message.fileName ?? null,
-      p_file_size: message.fileSize ?? null,
-      p_duration_seconds: message.durationSeconds ?? null,
-      p_quoted_provider_message_id: message.quotedProviderMessageId ?? null,
-      p_provider_timestamp: message.providerTimestamp ?? null,
-      p_ai_generated: aiGenerated,
-      p_sent_by_user_id: null,
-      p_actor_type: senderType,
-      p_actor_user_id: null,
-      p_timeline_key: `whatsapp:${binding.id}:${message.providerMessageId}`,
-      p_metadata: {
-        source: "whatsmiau",
-        direction: message.direction,
-        message_type: message.messageType,
-        ai_generated: aiGenerated,
-      },
-    });
-    if (error)
-      throw new Error(`message_ingest_failed:${error.code ?? "database"}`);
-
-    const result = asRecord(data);
-    const messageId = String(result.message_id ?? "");
-    const completedAt = new Date().toISOString();
-    const [
-      { error: completionError },
-      { error: eventError },
-      { error: channelError },
-    ] = await Promise.all([
-      client
-        .from("jobs")
-        .update({
-          status: "completed",
-          locked_at: null,
-          locked_by: null,
-          lease_expires_at: null,
-          completed_at: completedAt,
-          updated_at: completedAt,
-        })
-        .eq("id", job.id),
-      client
-        .from("webhook_events")
-        .update({
-          status: "processed",
-          message_id: messageId || null,
-          processed_at: completedAt,
-          last_error: null,
-          updated_at: completedAt,
-        })
-        .eq("provider", "whatsmiau")
-        .eq("workspace_id", binding.workspace_id)
-        .eq("instance_name", message.instanceName)
-        .eq("provider_message_id", message.providerMessageId),
-      client
-        .from("channel_connections")
-        .update({ last_event_at: completedAt, updated_at: completedAt })
-        .eq("id", binding.id)
-        .eq("workspace_id", binding.workspace_id),
-    ]);
-    if (completionError || eventError || channelError)
-      throw new Error("delivery_finalize_failed");
-    return { inserted: result.inserted === true, messageId };
-  } catch (error) {
-    const failedAt = new Date().toISOString();
-    await Promise.all([
-      client
-        .from("jobs")
-        .update({
-          status: "failed",
-          locked_at: null,
-          locked_by: null,
-          lease_expires_at: null,
-          last_error: "edge_webhook_ingest_failed",
-          updated_at: failedAt,
-        })
-        .eq("id", job.id),
-      client
-        .from("webhook_events")
-        .update({
-          status: "retrying",
-          last_error: "edge_webhook_ingest_failed",
-          updated_at: failedAt,
-        })
-        .eq("provider", "whatsmiau")
-        .eq("workspace_id", binding.workspace_id)
-        .eq("instance_name", message.instanceName)
-        .eq("provider_message_id", message.providerMessageId),
-    ]);
-    throw error;
-  }
+  if (!job?.id) throw new Error("job_insert_empty");
+  const { error: channelError } = await client
+    .from("channel_connections")
+    .update({ last_event_at: now.toISOString(), updated_at: now.toISOString() })
+    .eq("id", binding.id)
+    .eq("workspace_id", binding.workspace_id);
+  if (channelError)
+    throw new Error(
+      `channel_event_update_failed:${channelError.code ?? "database"}`,
+    );
+  // The API live worker owns ingestion and automation. This edge function only
+  // acknowledges the provider and places the durable job in that queue.
+  return { inserted: true, messageId: "" };
 }
 
 Deno.serve(async (request) => {
@@ -626,7 +507,7 @@ Deno.serve(async (request) => {
       return response(400, { error: "message_required" });
     const results = [];
     for (const message of messages)
-      results.push(await recordAndIngest(client, binding, event, message));
+      results.push(await recordAndQueue(client, binding, event, message));
     return response(202, {
       accepted: true,
       event,

@@ -903,6 +903,35 @@ h1 {
   margin: 0;
   line-height: 1.45;
 }
+.ai-draft-card {
+  display: grid;
+  gap: 6px;
+  margin: 0 15px 10px;
+  padding: 9px 11px;
+  border: 1px solid oklch(0.7 0.15 145 / 0.24);
+  border-radius: 7px;
+  background: oklch(0.7 0.15 145 / 0.06);
+}
+.ai-draft-heading,
+.ai-draft-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+.ai-draft-body {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.ai-draft-meta {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  color: var(--muted);
+  font-size: 10px;
+}
 .menu-wrap {
   position: relative;
 }
