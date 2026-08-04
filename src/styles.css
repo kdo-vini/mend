@@ -877,6 +877,16 @@ h1 {
 .ai-decision-heading {
   justify-content: space-between;
 }
+.ai-decision-heading-actions,
+.ai-draft-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-card-dismiss {
+  width: 24px;
+  height: 24px;
+}
 .ai-decision-title {
   display: inline-flex;
   align-items: center;
@@ -962,6 +972,31 @@ h1 {
 .context-menu button:hover {
   background: var(--surface-3);
   color: var(--ink);
+}
+.context-menu-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.context-menu-select span {
+  flex: 1;
+}
+.context-menu-select select {
+  max-width: 108px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: right;
+}
+.mobile-menu-control {
+  display: none !important;
 }
 .context-menu hr {
   border: 0;
@@ -3516,6 +3551,54 @@ h1 {
   .conversation-header {
     min-height: 62px;
     padding: 10px 12px;
+    gap: 8px;
+  }
+  .conversation-identity {
+    flex: 1;
+  }
+  .conversation-identity > div:last-child {
+    min-width: 0;
+  }
+  .conversation-identity p {
+    display: none;
+  }
+  .identity-name h2 {
+    max-width: 145px;
+  }
+  .conversation-controls {
+    flex: 0 0 auto;
+  }
+  .conversation-desktop-control,
+  .conversation-controls .mode-label {
+    display: none !important;
+  }
+  .mobile-menu-control {
+    display: flex !important;
+  }
+  .context-menu hr.mobile-menu-control {
+    display: block !important;
+  }
+  .context-menu-select select {
+    min-height: 28px;
+  }
+  .conversation-insights {
+    display: none;
+  }
+  .conversation-insights.mobile-open {
+    display: block;
+  }
+  .conversation-insights .ai-decision-card,
+  .conversation-insights .ai-draft-card {
+    margin: 8px 12px;
+  }
+  .composer-tool {
+    width: 32px;
+    justify-content: center;
+    padding-inline: 6px;
+    font-size: 0;
+  }
+  .composer-tool svg {
+    flex: 0 0 auto;
   }
   .conversation-avatar.large {
     width: 32px;

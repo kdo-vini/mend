@@ -66,6 +66,7 @@ import { seedConversations, seedIssues, seedKnowledge, seedRuns } from "./data";
 import type {
   AiMode,
   AiDraft,
+  AutomationState,
   Conversation,
   Issue,
   IssueStatus,
@@ -1430,6 +1431,7 @@ function InboxPage({
     requestId: number;
     conversationId: string;
   }>();
+  const [aiDetailsOpen, setAiDetailsOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const selected =
     conversations.find((item) => item.id === selectedConversationId) ??
@@ -1517,6 +1519,7 @@ function InboxPage({
   const selectConversation = (conversation: Conversation) => {
     setSelectedConversationId(conversation.id);
     setMobileConversationOpen(true);
+    setAiDetailsOpen(false);
     if (conversation.unread)
       setConversations((current) =>
         current.map((item) =>
@@ -1587,7 +1590,12 @@ function InboxPage({
           setConversations((current) =>
             mergeConversationSnapshot(current, snapshot),
           );
-        onToast("Message accepted by WhatsApp");
+        onToast(
+          selected.aiMode === "safe_auto" &&
+            selected.automationState === "ai_active"
+            ? "Message sent. AI paused after your reply - choose Resume AI in the three dots menu to continue."
+            : "Message accepted by WhatsApp",
+        );
         return true;
       } catch (error) {
         setConversations((current) =>
@@ -2007,20 +2015,32 @@ function InboxPage({
             onAssign={assignConversation}
             assigneeOptions={assigneeOptions}
             assigneeLabel={assigneeLabel}
+            aiDetailsOpen={aiDetailsOpen}
+            onToggleAiDetails={() => setAiDetailsOpen((current) => !current)}
           />
-          <AiDecisionSummary conversation={selected} />
-          {selected.aiDraft && (
-            <AiDraftCard
-              draft={selected.aiDraft}
-              onInsert={(text) =>
-                setDraftInsertRequest({
-                  text,
-                  requestId: Date.now(),
-                  conversationId: selected.id,
-                })
-              }
+          <div
+            className={
+              "conversation-insights " + (aiDetailsOpen ? "mobile-open" : "")
+            }
+          >
+            <AiDecisionSummary
+              conversation={selected}
+              onDismiss={() => setAiDetailsOpen(false)}
             />
-          )}
+            {selected.aiDraft && (
+              <AiDraftCard
+                draft={selected.aiDraft}
+                onInsert={(text) =>
+                  setDraftInsertRequest({
+                    text,
+                    requestId: Date.now(),
+                    conversationId: selected.id,
+                  })
+                }
+                onDismiss={() => setAiDetailsOpen(false)}
+              />
+            )}
+          </div>
           <div className="message-canvas">
             <div className="day-divider">
               <span>Today</span>
@@ -2060,6 +2080,7 @@ function InboxPage({
             onSend={sendMessage}
             onSendMedia={sendMedia}
             aiMode={selected.aiMode}
+            automationState={selected.automationState}
             liveMode={liveMode}
             whatsappConnected={whatsappConnected}
             prefillDraft={
@@ -2154,7 +2175,13 @@ function ConversationRow({
   );
 }
 
-function AiDecisionSummary({ conversation }: { conversation: Conversation }) {
+function AiDecisionSummary({
+  conversation,
+  onDismiss,
+}: {
+  conversation: Conversation;
+  onDismiss?: () => void;
+}) {
   if (
     !conversation.aiDecision &&
     !conversation.aiIntent &&
@@ -2183,11 +2210,23 @@ function AiDecisionSummary({ conversation }: { conversation: Conversation }) {
         <span className="ai-decision-title">
           <Sparkles size={13} /> {title}
         </span>
-        {conversation.aiConfidence !== undefined && (
-          <span className="ai-confidence">
-            {Math.round(conversation.aiConfidence * 100)}% confidence
-          </span>
-        )}
+        <span className="ai-decision-heading-actions">
+          {conversation.aiConfidence !== undefined && (
+            <span className="ai-confidence">
+              {Math.round(conversation.aiConfidence * 100)}% confidence
+            </span>
+          )}
+          {onDismiss && (
+            <button
+              className="icon-button subtle ai-card-dismiss"
+              type="button"
+              aria-label="Hide AI details"
+              onClick={onDismiss}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </span>
       </div>
       <div className="ai-decision-meta">
         {conversation.aiIntent && (
@@ -2207,9 +2246,11 @@ function AiDecisionSummary({ conversation }: { conversation: Conversation }) {
 function AiDraftCard({
   draft,
   onInsert,
+  onDismiss,
 }: {
   draft: AiDraft;
   onInsert: (text: string) => void;
+  onDismiss?: () => void;
 }) {
   return (
     <aside className="ai-draft-card" aria-label="Persisted AI draft">
@@ -2217,13 +2258,25 @@ function AiDraftCard({
         <span className="ai-decision-title">
           <Sparkles size={13} /> AI draft ready
         </span>
-        <button
-          className="text-button"
-          type="button"
-          onClick={() => onInsert(draft.body)}
-        >
-          Insert
-        </button>
+        <span className="ai-draft-actions">
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => onInsert(draft.body)}
+          >
+            Insert
+          </button>
+          {onDismiss && (
+            <button
+              className="icon-button subtle ai-card-dismiss"
+              type="button"
+              aria-label="Hide AI draft"
+              onClick={onDismiss}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </span>
       </div>
       <p className="ai-draft-body">{draft.body}</p>
       {(draft.safetyReason || draft.sources.length > 0) && (
@@ -2250,6 +2303,8 @@ function ConversationHeader({
   onAssign,
   assigneeOptions,
   assigneeLabel,
+  aiDetailsOpen,
+  onToggleAiDetails,
 }: {
   conversation: Conversation;
   onNewIssue: () => void;
@@ -2260,6 +2315,8 @@ function ConversationHeader({
   onAssign: (assignee: string) => void;
   assigneeOptions: AssigneeOption[];
   assigneeLabel: (value: string) => string;
+  aiDetailsOpen: boolean;
+  onToggleAiDetails: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
@@ -2287,7 +2344,7 @@ function ConversationHeader({
         </div>
       </div>
       <div className="conversation-controls">
-        <label className="conversation-assignee">
+        <label className="conversation-assignee conversation-desktop-control">
           <UserRound size={13} aria-hidden="true" />
           <span className="sr-only">Conversation assignee</span>
           <select
@@ -2323,7 +2380,7 @@ function ConversationHeader({
           </span>
         )}
         <button
-          className="icon-button"
+          className="icon-button conversation-desktop-control"
           type="button"
           onClick={onNewIssue}
           aria-label="Open linked issue"
@@ -2342,6 +2399,47 @@ function ConversationHeader({
           </button>
           {menuOpen && (
             <div className="context-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onToggleAiDetails();
+                  setMenuOpen(false);
+                }}
+              >
+                <Sparkles size={14} />
+                {aiDetailsOpen ? "Hide AI details" : "Show AI details"}
+              </button>
+              <label className="context-menu-select mobile-menu-control">
+                <UserRound size={14} />
+                <span>Assignee</span>
+                <select
+                  aria-label="Conversation assignee"
+                  value={conversation.assignee}
+                  onChange={(event) => {
+                    onAssign(event.target.value);
+                    setMenuOpen(false);
+                  }}
+                >
+                  {assigneeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="mobile-menu-control"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onNewIssue();
+                  setMenuOpen(false);
+                }}
+              >
+                <CircleDot size={14} /> Open linked issue
+              </button>
+              <hr className="mobile-menu-control" />
               <button
                 type="button"
                 role="menuitem"
@@ -2502,6 +2600,7 @@ function Composer({
   aiMode,
   liveMode,
   whatsappConnected,
+  automationState,
 }: {
   onSend: (message: string) => boolean | Promise<boolean>;
   onSendMedia?: (input: {
@@ -2517,6 +2616,7 @@ function Composer({
   aiMode: AiMode;
   liveMode: boolean;
   whatsappConnected?: boolean;
+  automationState: AutomationState;
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -2588,6 +2688,7 @@ function Composer({
           className="composer-tool"
           type="button"
           disabled={!liveMode || !onSendMedia || sending}
+          aria-label="Attach media"
           aria-expanded={attachmentOpen}
           onClick={() => setAttachmentOpen((current) => !current)}
         >
@@ -2597,6 +2698,7 @@ function Composer({
           className="composer-tool"
           type="button"
           disabled={sending}
+          aria-label="Insert AI draft"
           onClick={() => void Promise.resolve(onUseDraft()).then(setText)}
         >
           <Sparkles size={15} /> Insert AI draft
@@ -2747,9 +2849,11 @@ function Composer({
             }
           }}
           placeholder={
-            aiMode === "safe_auto"
-              ? "AI is handling safe replies…"
-              : "Write a reply…"
+            automationState === "human_paused"
+              ? "AI paused - resume in three dots"
+              : aiMode === "safe_auto"
+                ? "AI is handling safe replies…"
+                : "Write a reply…"
           }
           rows={1}
         />
@@ -2774,9 +2878,11 @@ function Composer({
           <Sparkles size={12} />{" "}
           {aiMode === "off"
             ? "Manual"
-            : aiMode === "safe_auto"
-              ? "Auto-reply active"
-              : "Copilot drafts ready"}
+            : automationState === "human_paused"
+              ? "AI paused"
+              : aiMode === "safe_auto"
+                ? "Auto-reply active"
+                : "Copilot drafts ready"}
         </span>
       </div>
     </div>
