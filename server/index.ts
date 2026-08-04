@@ -23,6 +23,7 @@ import { authenticateRequest } from "./auth.js";
 import { createApiRouter, type AuthAdapter } from "./api-router.js";
 import { SupabaseApiAdapters } from "./supabase-api-adapters.js";
 import { createSupabaseLiveWorker, type LiveWorker } from "./live-worker.js";
+import { getVapidPublicKey } from "./push.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -125,6 +126,13 @@ function secretMatches(
 
 app.get("/api/health", (_request, response) =>
   response.json({ ok: true, service: "mend-api" }),
+);
+
+app.get("/api/push/config", (_request, response) =>
+  response.json({
+    enabled: Boolean(getVapidPublicKey()),
+    publicKey: getVapidPublicKey(),
+  }),
 );
 
 app.get("/api/ready", (_request, response) => {

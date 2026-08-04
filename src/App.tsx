@@ -10,6 +10,7 @@ import {
   Archive,
   ArrowLeft,
   ArrowUp,
+  Bell,
   BookOpen,
   Bot,
   Check,
@@ -85,6 +86,13 @@ import {
   type TriageIntent,
 } from "./ai-policy";
 import { supabase } from "./lib/supabase";
+import {
+  enableNativePush,
+  listWorkspaceNotifications,
+  markWorkspaceNotificationRead,
+  type PushSetupResult,
+  type WorkspaceNotification,
+} from "./api/notifications";
 import {
   listMessagesSince,
   listWorkspaces,
@@ -257,6 +265,12 @@ function App() {
   const [knowledgeArticles, setKnowledgeArticles] = useState<
     KnowledgeArticle[]
   >(demoMode ? seedKnowledge : []);
+  const [notifications, setNotifications] = useState<WorkspaceNotification[]>(
+    [],
+  );
+  const [pushStatus, setPushStatus] = useState<PushSetupResult | "idle">(
+    "idle",
+  );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [workspaceOptions, setWorkspaceOptions] = useState<
     Array<{ id: string; name: string }>
@@ -457,6 +471,11 @@ function App() {
         setIssues(liveData.issues);
         setKnowledgeArticles(liveData.knowledge);
         setRuns(liveData.runs);
+        const workspaceNotifications = await listWorkspaceNotifications(
+          client,
+          workspace.id,
+        );
+        if (active) setNotifications(workspaceNotifications);
         lastKnownEventAt = new Date().toISOString();
         if (!workspaceSubscribed) {
           workspaceSubscribed = true;
@@ -630,6 +649,57 @@ function App() {
     setCreateIssueOpen(false);
     setToast(`${issue.identifier} created`);
   };
+
+  const markNotificationRead = async (notificationId: string) => {
+    if (!workspaceId || !supabase) return;
+    setNotifications((current) =>
+      current.map((notification) =>
+        notification.id === notificationId
+          ? { ...notification, read_at: new Date().toISOString() }
+          : notification,
+      ),
+    );
+    try {
+      await markWorkspaceNotificationRead(
+        supabase,
+        workspaceId,
+        notificationId,
+      );
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "Notification could not be marked as read.",
+      );
+    }
+  };
+
+  const enablePushNotifications = async () => {
+    if (!workspaceId || !supabase) return;
+    try {
+      const status = await enableNativePush(supabase, workspaceId);
+      setPushStatus(status);
+      setToast(
+        status === "enabled"
+          ? "Native notifications enabled"
+          : status === "denied"
+            ? "Browser notifications are blocked"
+            : status === "unsupported"
+              ? "This browser does not support native notifications here"
+              : "Native notifications are not configured yet",
+      );
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "Native notifications could not be enabled.",
+      );
+    }
+  };
+
+  const unreadNotificationCount = notifications.filter(
+    (notification) => !notification.read_at,
+  ).length;
 
   const updateIssue = (issueId: string, patch: Partial<Issue>) => {
     const previous = issues.find((item) => item.id === issueId);
@@ -905,11 +975,21 @@ function App() {
           }
           void supabase?.auth.signOut().then(() => window.location.reload());
         }}
+        notifications={notifications}
+        unreadNotificationCount={unreadNotificationCount}
+        pushStatus={pushStatus}
+        onEnablePush={() => void enablePushNotifications()}
+        onReadNotification={(id) => void markNotificationRead(id)}
       />
       <main className="main-shell">
         <MobileTopbar
           operator={operatorIdentity}
           onOpenCommand={() => setCommandOpen(true)}
+          notifications={notifications}
+          unreadNotificationCount={unreadNotificationCount}
+          pushStatus={pushStatus}
+          onEnablePush={() => void enablePushNotifications()}
+          onReadNotification={(id) => void markNotificationRead(id)}
         />
         {liveDataError && (
           <div className="live-data-error">
@@ -1264,6 +1344,120 @@ function WorkspaceOnboarding({
   );
 }
 
+function NotificationCenter({
+  notifications,
+  unreadNotificationCount,
+  pushStatus,
+  onEnablePush,
+  onReadNotification,
+}: {
+  notifications: WorkspaceNotification[];
+  unreadNotificationCount: number;
+  pushStatus: PushSetupResult | "idle";
+  onEnablePush: () => void;
+  onReadNotification: (id: string) => void;
+}) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const unread = notifications.filter((notification) => !notification.read_at);
+  const openNotification = (notification: WorkspaceNotification) => {
+    onReadNotification(notification.id);
+    setOpen(false);
+    if (notification.entity_type === "conversation" && notification.entity_id)
+      navigate(
+        `/inbox?conversation=${encodeURIComponent(notification.entity_id)}`,
+      );
+    else if (notification.entity_type === "issue") navigate("/issues");
+  };
+
+  return (
+    <div className="notification-center">
+      <button
+        className="icon-button subtle notification-trigger"
+        type="button"
+        aria-label={`Notifications${unreadNotificationCount ? ` (${unreadNotificationCount} unread)` : ""}`}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Bell size={16} />
+        {unreadNotificationCount > 0 && (
+          <span className="notification-badge">{unreadNotificationCount}</span>
+        )}
+      </button>
+      {open && (
+        <div
+          className="notification-panel"
+          role="dialog"
+          aria-label="Notifications"
+        >
+          <div className="notification-panel-header">
+            <div>
+              <strong>Notifications</strong>
+              <small>
+                {unread.length ? `${unread.length} unread` : "All caught up"}
+              </small>
+            </div>
+            {unread.length > 0 && (
+              <button
+                className="text-button"
+                type="button"
+                onClick={() =>
+                  unread.forEach((notification) =>
+                    onReadNotification(notification.id),
+                  )
+                }
+              >
+                Mark read
+              </button>
+            )}
+          </div>
+          <div className="notification-list">
+            {notifications.length === 0 ? (
+              <div className="notification-empty">
+                No workspace notifications yet.
+              </div>
+            ) : (
+              notifications.slice(0, 12).map((notification) => (
+                <button
+                  className={`notification-item${notification.read_at ? "" : " unread"}`}
+                  type="button"
+                  key={notification.id}
+                  onClick={() => openNotification(notification)}
+                >
+                  <span className="notification-item-icon">
+                    <Bell size={14} />
+                  </span>
+                  <span className="notification-item-copy">
+                    <strong>{notification.title}</strong>
+                    <span>{notification.body}</span>
+                    <small>{formatActivityTime(notification.created_at)}</small>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="notification-panel-footer">
+            <span>
+              {pushStatus === "enabled"
+                ? "Native notifications enabled"
+                : "Get alerts when you are away"}
+            </span>
+            {pushStatus !== "enabled" && (
+              <button
+                className="button button-ghost"
+                type="button"
+                onClick={onEnablePush}
+              >
+                Enable native alerts
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Sidebar({
   collapsed,
   onToggle,
@@ -1275,6 +1469,11 @@ function Sidebar({
   theme,
   onToggleTheme,
   onSignOut,
+  notifications,
+  unreadNotificationCount,
+  pushStatus,
+  onEnablePush,
+  onReadNotification,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -1286,6 +1485,11 @@ function Sidebar({
   theme: "dark" | "light";
   onToggleTheme: () => void;
   onSignOut: () => void;
+  notifications: WorkspaceNotification[];
+  unreadNotificationCount: number;
+  pushStatus: PushSetupResult | "idle";
+  onEnablePush: () => void;
+  onReadNotification: (id: string) => void;
 }) {
   const navigate = useNavigate();
   return (
@@ -1343,6 +1547,13 @@ function Sidebar({
       </nav>
       <div className="sidebar-bottom">
         <div className="sidebar-utilities">
+          <NotificationCenter
+            notifications={notifications}
+            unreadNotificationCount={unreadNotificationCount}
+            pushStatus={pushStatus}
+            onEnablePush={onEnablePush}
+            onReadNotification={onReadNotification}
+          />
           <button
             className="icon-button subtle"
             type="button"
@@ -1404,9 +1615,19 @@ function Sidebar({
 function MobileTopbar({
   operator,
   onOpenCommand,
+  notifications,
+  unreadNotificationCount,
+  pushStatus,
+  onEnablePush,
+  onReadNotification,
 }: {
   operator: { name: string; email: string };
   onOpenCommand: () => void;
+  notifications: WorkspaceNotification[];
+  unreadNotificationCount: number;
+  pushStatus: PushSetupResult | "idle";
+  onEnablePush: () => void;
+  onReadNotification: (id: string) => void;
 }) {
   return (
     <header className="mobile-topbar">
@@ -1417,6 +1638,13 @@ function MobileTopbar({
         <strong>Mend</strong>
       </NavLink>
       <div className="mobile-topbar-actions">
+        <NotificationCenter
+          notifications={notifications}
+          unreadNotificationCount={unreadNotificationCount}
+          pushStatus={pushStatus}
+          onEnablePush={onEnablePush}
+          onReadNotification={onReadNotification}
+        />
         <button
           className="mobile-command-button"
           type="button"

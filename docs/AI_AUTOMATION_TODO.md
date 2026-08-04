@@ -273,6 +273,14 @@ O MVP de automação estará pronto quando:
 
 Próximo bloco: coletar dados de reprodução de bugs, reconhecer usuário existente, iniciar investigação Codex com evidências, validar testes e somente então permitir deploy com gate, health check e rollback.
 
+## Notificações nativas e triggers
+
+- [x] Persistir subscriptions Web Push por usuário/workspace com RLS.
+- [x] Enviar escalonamentos para humano por VAPID para todos os membros da empresa.
+- [x] Exibir a notificação no centro interno do Mend e em background via service worker.
+- [x] Remover subscriptions expiradas quando o provedor retornar 404/410.
+- [ ] Adicionar triggers configuráveis por empresa para outros eventos e ações.
+
 ## Ordem recomendada de implementação
 
 1. Human takeover e origem das mensagens.

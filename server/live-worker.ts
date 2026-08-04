@@ -10,6 +10,7 @@ import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
 import type { SupportAiProvider } from "./providers.js";
 import { SupabaseMediaStorage } from "./media.js";
 import { WhatsAppService, type WhatsAppProvider } from "./whatsapp-service.js";
+import { WorkspacePushNotifier } from "./push.js";
 import { triageConversation, type TriageResult } from "./triage.js";
 import {
   normalizeWorkspaceAiPolicy,
@@ -801,6 +802,7 @@ function issueIdentifierNumber(identifier: string): number {
 export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   private readonly inbox: InboxService;
   private readonly whatsapp?: WhatsAppService;
+  private readonly push = new WorkspacePushNotifier();
 
   constructor(
     private readonly client: LiveWorkerSupabaseClient,
@@ -1208,6 +1210,17 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       .maybeSingle();
     if (result.error && !/duplicate|unique/i.test(result.error.message))
       throw new Error(`supabase:notifications:${result.error.message}`);
+    if (!result.error) {
+      await this.push.notify(this.client, input.binding.workspaceId, {
+        title: boundedText(title, 240),
+        body: boundedText(body, 2_000),
+        url:
+          entityId === input.persisted.conversationId
+            ? `/inbox?conversation=${encodeURIComponent(input.persisted.conversationId)}`
+            : `/issues/${encodeURIComponent(entityId)}`,
+        tag: kind,
+      });
+    }
   }
 
   private async buildDraft(

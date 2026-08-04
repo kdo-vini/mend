@@ -42,7 +42,9 @@ test("operator can move from inbox to issues and create an issue", async ({
     .locator("tr")
     .filter({ hasText: "E2E issue from Mend" });
   await createdIssueRow.getByRole("button", { name: /Actions for/ }).click();
-  await page.getByRole("menuitem", { name: "Edit issue" }).click();
+  const issueMenu = page.getByRole("menu");
+  await expect(issueMenu).toBeVisible();
+  await issueMenu.getByRole("menuitem", { name: "Edit issue" }).click();
   await expect(page.getByRole("heading", { name: "Edit issue" })).toBeVisible();
   await page.getByLabel("Title").fill("Edited E2E issue from Mend");
   await page.getByRole("button", { name: "Save changes" }).click();
@@ -53,7 +55,8 @@ test("operator can move from inbox to issues and create an issue", async ({
     .filter({ hasText: "Edited E2E issue from Mend" });
   await editedIssueRow.getByRole("button", { name: /Actions for/ }).click();
   page.once("dialog", (dialog) => void dialog.accept());
-  await page.getByRole("menuitem", { name: "Delete issue" }).click();
+  await expect(issueMenu).toBeVisible();
+  await issueMenu.getByRole("menuitem", { name: "Delete issue" }).click();
   await expect(page.getByText("Edited E2E issue from Mend")).toHaveCount(0);
 });
 
