@@ -559,11 +559,11 @@ describe("live Whatsmiau worker", () => {
     expect(client.notifications).toEqual([]);
   });
 
-  it("escalates an unanswered question without creating a generic task", async () => {
+  it("drafts an unanswered question without escalating it", async () => {
     const client = new FakeSupabaseHandoff();
     const provider: SupportAiProvider = {
       name: "openai",
-      draftReply: vi.fn(async () => "must not be called"),
+      draftReply: vi.fn(async () => "I will check that and get back to you."),
       triage: vi.fn(async () =>
         JSON.stringify({
           intent: "question",
@@ -607,11 +607,13 @@ describe("live Whatsmiau worker", () => {
       message: { ...message, text: "Como funciona a integração de estoque?" },
       persisted,
     });
-    expect(result).toBeUndefined();
+    expect(result).toMatchObject({
+      draft: {
+        conversationId: "conversation-unknown",
+      },
+    });
     expect(client.issue).toBeNull();
-    expect(client.notifications).toMatchObject([
-      { kind: "ai.human_escalation" },
-    ]);
-    expect(provider.draftReply).not.toHaveBeenCalled();
+    expect(client.notifications).toEqual([]);
+    expect(provider.draftReply).toHaveBeenCalled();
   });
 });

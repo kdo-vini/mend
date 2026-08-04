@@ -93,6 +93,31 @@ describe("live worker automation decisions", () => {
     });
   });
 
+  it("allows knowledge-backed routes without knowledge when the requirement is disabled", () => {
+    const policy = normalizeAiPolicy({
+      require_published_knowledge: false,
+      safe_auto_intents: ["question"],
+    });
+
+    expect(
+      policyDecision(
+        "safe_auto",
+        triage,
+        policy,
+        false,
+        "knowledge_auto_reply",
+      ),
+    ).toMatchObject({ action: "auto_reply", allowed: true });
+  });
+
+  it("blocks safe auto-reply intents that are not allowlisted", () => {
+    const policy = normalizeAiPolicy({ safe_auto_intents: ["status"] });
+
+    expect(
+      policyDecision("safe_auto", triage, policy, true, "knowledge_auto_reply"),
+    ).toMatchObject({ action: "blocked", allowed: false });
+  });
+
   it("parses native issue identifiers without accepting invalid numbers", () => {
     expect(issueIdentifierNumber("TEC-42")).toBe(42);
     expect(() => issueIdentifierNumber("TEC-zero")).toThrow(

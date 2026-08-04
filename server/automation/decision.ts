@@ -129,7 +129,8 @@ export function policyDecision(
       reason: "Workspace policy requires human review.",
     };
   if (
-    (route === "knowledge_auto_reply" || policy.requirePublishedKnowledge) &&
+    route === "knowledge_auto_reply" &&
+    policy.requirePublishedKnowledge &&
     !hasKnowledge
   )
     return {
@@ -154,6 +155,12 @@ export function policyDecision(
       action: "blocked" as const,
       allowed: false,
       reason: "Safe auto-reply is disabled by workspace policy.",
+    };
+  if (!policy.safeAutoIntents.includes(triage.intent))
+    return {
+      action: "blocked" as const,
+      allowed: false,
+      reason: `Intent ${triage.intent} is not enabled for safe auto-reply.`,
     };
   if (triage.confidence < policy.safeAutoMinConfidence) {
     return {

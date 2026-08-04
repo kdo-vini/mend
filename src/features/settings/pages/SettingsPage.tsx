@@ -901,6 +901,48 @@ export function SettingsPage({
                       <label>
                         <input
                           type="checkbox"
+                          checked={aiPolicy.safeAutoEnabled}
+                          disabled={aiPolicySaving}
+                          onChange={(event) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    safeAutoEnabled: event.target.checked,
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                        Enable safe auto-reply decisions
+                      </label>
+                      <label className="confidence-control">
+                        Minimum confidence for safe auto-reply
+                        <input
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={aiPolicy.safeAutoMinConfidence}
+                          disabled={aiPolicySaving}
+                          onChange={(event) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    safeAutoMinConfidence: Math.min(
+                                      1,
+                                      Math.max(0, Number(event.target.value)),
+                                    ),
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
                           checked={aiPolicy.requirePublishedKnowledge}
                           disabled={aiPolicySaving}
                           onChange={(event) =>
@@ -970,8 +1012,46 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Allow configured knowledge auto-replies
+                        Allow automatic customer replies
                       </label>
+                    </div>
+                    <div className="safe-auto-intents">
+                      <strong>Safe auto-reply eligible intents</strong>
+                      <p>
+                        Only these intent types can send automatically when all
+                        other policy gates pass.
+                      </p>
+                      <div className="settings-form-grid automation-toggles">
+                        {triageIntentValues.map((intent) => (
+                          <label key={intent}>
+                            <input
+                              type="checkbox"
+                              checked={aiPolicy.safeAutoIntents.includes(
+                                intent,
+                              )}
+                              disabled={aiPolicySaving}
+                              aria-label={`Safe auto-reply intent ${triageIntentLabels[intent]}`}
+                              onChange={(event) =>
+                                setAiPolicy((current) => {
+                                  if (!current) return current;
+                                  const safeAutoIntents = event.target.checked
+                                    ? [
+                                        ...new Set([
+                                          ...current.safeAutoIntents,
+                                          intent,
+                                        ]),
+                                      ]
+                                    : current.safeAutoIntents.filter(
+                                        (value) => value !== intent,
+                                      );
+                                  return { ...current, safeAutoIntents };
+                                })
+                              }
+                            />
+                            {triageIntentLabels[intent]}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                     <button
                       className="button button-primary"

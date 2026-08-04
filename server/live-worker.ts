@@ -613,7 +613,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     const matchedKnowledge = relevantKnowledge(input.message, input.knowledge);
     const configuredRoute = modePolicy.policy.routes[triage.intent];
     const route =
-      configuredRoute === "knowledge_auto_reply" && !matchedKnowledge.length
+      configuredRoute === "knowledge_auto_reply" &&
+      modePolicy.policy.requirePublishedKnowledge &&
+      !matchedKnowledge.length
         ? modePolicy.policy.fallbackRoute
         : configuredRoute;
     const decision = policyDecision(

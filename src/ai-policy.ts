@@ -29,6 +29,7 @@ export interface WorkspaceAiPolicy {
   draftEnabled: boolean;
   safeAutoEnabled: boolean;
   safeAutoMinConfidence: number;
+  safeAutoIntents: TriageIntent[];
   safeAutoSendEnabled: boolean;
   requirePublishedKnowledge: boolean;
   routes: AiRouteMap;
@@ -47,18 +48,19 @@ export const DEFAULT_AI_ROUTE_MAP: AiRouteMap = {
   bug: "bug_triage",
   incident: "human_escalation",
   billing: "knowledge_auto_reply",
-  feature: "human_escalation",
-  other: "human_escalation",
+  feature: "draft_for_review",
+  other: "draft_for_review",
 };
 
 export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   draftEnabled: true,
   safeAutoEnabled: true,
   safeAutoMinConfidence: 0.85,
+  safeAutoIntents: ["question", "how_to", "status"],
   safeAutoSendEnabled: false,
   requirePublishedKnowledge: true,
   routes: DEFAULT_AI_ROUTE_MAP,
-  fallbackRoute: "human_escalation",
+  fallbackRoute: "draft_for_review",
   notifyOnHumanEscalation: true,
   notifyOnBug: true,
   bugAutoReplyEnabled: false,
@@ -94,6 +96,9 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
     if (isAiTriageRoute(rawRoutes[intent])) routes[intent] = rawRoutes[intent];
   }
   const confidence = Number(raw.safe_auto_min_confidence);
+  const safeAutoIntents = Array.isArray(raw.safe_auto_intents)
+    ? raw.safe_auto_intents.filter(isTriageIntent)
+    : [...DEFAULT_WORKSPACE_AI_POLICY.safeAutoIntents];
   const fallbackRoute = isAiTriageRoute(raw.automation_fallback_route)
     ? raw.automation_fallback_route
     : DEFAULT_WORKSPACE_AI_POLICY.fallbackRoute;
@@ -109,6 +114,10 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
     safeAutoMinConfidence: Number.isFinite(confidence)
       ? Math.min(1, Math.max(0, confidence))
       : DEFAULT_WORKSPACE_AI_POLICY.safeAutoMinConfidence,
+    safeAutoIntents:
+      safeAutoIntents.length > 0
+        ? [...safeAutoIntents]
+        : [...DEFAULT_WORKSPACE_AI_POLICY.safeAutoIntents],
     safeAutoSendEnabled: raw.safe_auto_send_enabled === true,
     requirePublishedKnowledge:
       typeof raw.require_published_knowledge === "boolean"
@@ -131,6 +140,7 @@ export function workspaceAiPolicyJson(
     draft_enabled: policy.draftEnabled,
     safe_auto_enabled: policy.safeAutoEnabled,
     safe_auto_min_confidence: policy.safeAutoMinConfidence,
+    safe_auto_intents: [...policy.safeAutoIntents],
     safe_auto_send_enabled: policy.safeAutoSendEnabled,
     require_published_knowledge: policy.requirePublishedKnowledge,
     automation_routes: { ...policy.routes },
