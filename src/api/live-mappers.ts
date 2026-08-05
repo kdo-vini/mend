@@ -128,11 +128,12 @@ export function toUiMessage(record: MessageRecord): Message {
     providerMessageId: record.provider_message_id,
     direction: record.direction === "outbound" ? "outbound" : "inbound",
     sender:
-      record.sender_type === "contact"
+      record.participant_name ||
+      (record.sender_type === "contact"
         ? "Customer"
         : record.sender_type === "ai"
           ? "Mend AI"
-          : "Mend operator",
+          : "Mend operator"),
     text: record.text ?? record.caption ?? "",
     time: displayTime(record.created_at),
     type: messageType,
@@ -187,6 +188,9 @@ export function toUiConversation(
 ): Conversation {
   const name =
     contact?.display_name || contact?.phone_number || "Unknown contact";
+  const chatType = contact?.provider_contact_id?.endsWith("@g.us")
+    ? "group"
+    : "direct";
   const orderedRecords = records.sort((a, b) =>
     a.created_at.localeCompare(b.created_at),
   );
@@ -209,6 +213,7 @@ export function toUiConversation(
   const last = messages.at(-1);
   return {
     id: record.id,
+    chatType,
     name,
     company: contact?.company_name ?? "",
     phone: contact?.phone_number ?? "Phone unavailable",

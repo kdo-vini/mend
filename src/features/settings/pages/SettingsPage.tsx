@@ -67,11 +67,13 @@ const triageIntentLabels: Record<TriageIntent, string> = {
   incident: "Incident",
   billing: "Billing",
   feature: "Feature request",
+  social: "Greeting / thanks / farewell",
   other: "Other / unknown",
 };
 
 const triageRouteLabels: Record<AiTriageRoute, string> = {
   knowledge_auto_reply: "Answer from published knowledge",
+  safe_auto_reply: "Low-risk reply without knowledge",
   draft_for_review: "Draft for human review",
   human_escalation: "Escalate and notify human",
   bug_triage: "Bug triage",

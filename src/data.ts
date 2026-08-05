@@ -3,6 +3,7 @@ import type { Conversation, CodingRun, Issue, KnowledgeArticle } from "./types";
 export const seedConversations: Conversation[] = [
   {
     id: "conv-cliente-exemplo",
+    chatType: "direct",
     name: "Cliente Exemplo",
     company: "Workspace de demonstração",
     phone: "+55 11 90000-0000",
@@ -62,6 +63,7 @@ export const seedConversations: Conversation[] = [
   },
   {
     id: "conv-dona-batata",
+    chatType: "direct",
     name: "Dona Batata",
     company: "Dona Batata Delivery",
     phone: "+55 21 98812-4401",
@@ -112,6 +114,7 @@ export const seedConversations: Conversation[] = [
   },
   {
     id: "conv-rodrigo",
+    chatType: "direct",
     name: "Rodrigo Veículos",
     company: "Rodrigo Veículos",
     phone: "+55 31 99102-3318",
@@ -154,6 +157,7 @@ export const seedConversations: Conversation[] = [
   },
   {
     id: "conv-lucia",
+    chatType: "direct",
     name: "Lucia Carvalho",
     company: "Clínica Horizonte",
     phone: "+55 11 98110-0290",
@@ -204,6 +208,7 @@ export const seedConversations: Conversation[] = [
   },
   {
     id: "conv-otto",
+    chatType: "direct",
     name: "Otto Martins",
     company: "Otto Studio",
     phone: "+55 48 99603-7754",

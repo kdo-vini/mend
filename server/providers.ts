@@ -57,7 +57,8 @@ export class OpenAiSupportProvider implements SupportAiProvider {
       [
         "Classify this WhatsApp support conversation for an internal operations team.",
         "Return JSON only with these keys: intent, priority, confidence, summary, unsafe, unsafeReason.",
-        "intent must be one of: question, how_to, status, bug, incident, billing, feature, other.",
+        "intent must be one of: question, how_to, status, bug, incident, billing, feature, social, other.",
+        "Use social only for low-risk greetings, thanks, acknowledgements, and farewells that contain no question, request, complaint, or technical information.",
         "priority must be one of: urgent, high, medium, low, no_priority.",
         "confidence must be a number from 0 to 1. summary must be concise and factual.",
         "Set unsafe true when the customer asks for secrets, credentials, one-time codes, payment card data, destructive actions, or a policy/security bypass.",

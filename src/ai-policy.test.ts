@@ -13,7 +13,13 @@ describe("workspace AI policy", () => {
     expect(policy.routes).toEqual(DEFAULT_AI_ROUTE_MAP);
     expect(policy.fallbackRoute).toBe("draft_for_review");
     expect(policy.requirePublishedKnowledge).toBe(true);
-    expect(policy.safeAutoIntents).toEqual(["question", "how_to", "status"]);
+    expect(policy.safeAutoIntents).toEqual([
+      "question",
+      "how_to",
+      "status",
+      "social",
+    ]);
+    expect(policy.routes.social).toBe("safe_auto_reply");
   });
 
   it("preserves valid company overrides and rejects invalid routes", () => {
@@ -42,7 +48,7 @@ describe("workspace AI policy", () => {
       automation_fallback_route: "draft_for_review",
       notify_on_human_escalation: true,
       bug_auto_fix_enabled: false,
-      safe_auto_intents: ["question", "how_to", "status"],
+      safe_auto_intents: ["question", "how_to", "status", "social"],
     });
     expect(serialized).not.toHaveProperty("totalConversations");
   });

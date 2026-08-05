@@ -160,6 +160,11 @@ export interface InboxPort {
   updateProviderMessage?(
     input: ProviderMessageUpdate,
   ): Promise<InboxMessageRecord | null>;
+  setMessageParticipant?(input: {
+    workspaceId: string;
+    messageId: string;
+    participantName: string;
+  }): Promise<void>;
   setConversationState(input: {
     workspaceId: string;
     conversationId: string;
@@ -281,8 +286,11 @@ export function extractProviderMessageUpdate(
   "workspaceId" | "channelConnectionId" | "providerMessageId"
 > | null {
   const update = asRecord(raw.update);
+  const hasMessageContent = Object.keys(asRecord(raw.message)).length > 0;
   const status = providerStatus(
-    update.status ?? update.statusCode ?? raw.status,
+    update.status ??
+      update.statusCode ??
+      (hasMessageContent ? undefined : raw.status),
   );
   const deleted =
     raw.deleted === true ||
@@ -440,6 +448,20 @@ export class SupabaseInboxPort implements InboxPort {
         : null,
       isDeleted: message.is_deleted === true,
     };
+  }
+
+  async setMessageParticipant(input: {
+    workspaceId: string;
+    messageId: string;
+    participantName: string;
+  }): Promise<void> {
+    const result = await this.client
+      .from("messages")
+      .update({ participant_name: input.participantName })
+      .eq("workspace_id", input.workspaceId)
+      .eq("id", input.messageId);
+    if (result.error)
+      throw new Error(`supabase:messages:participant:${result.error.message}`);
   }
 
   async getConversationContext(
@@ -716,6 +738,12 @@ export class InboxService {
     const phoneNumber = normalizePhoneNumber(
       message.phoneNumber || message.remoteJid,
     );
+    const chatType =
+      message.chatType ??
+      (message.remoteJid.endsWith("@g.us") ? "group" : "direct");
+    const participantName =
+      message.participantName ??
+      (chatType === "group" ? message.contactName : undefined);
     if (phoneNumber.length < 5) throw new Error("phone_number_required");
     const providerAiGenerated =
       options.aiGenerated === undefined &&
@@ -738,6 +766,7 @@ export class InboxService {
       channelConnectionId: connectionId,
       phoneNumber,
       displayName: message.contactName,
+      providerContactId: message.remoteJid,
       providerMessageId: message.providerMessageId,
       direction: message.direction,
       senderType: actorType,
@@ -763,8 +792,16 @@ export class InboxService {
         source: "whatsmiau",
         direction: message.direction,
         message_type: message.messageType,
+        chat_type: chatType,
       }),
     });
+
+    if (result.inserted && chatType === "group" && participantName)
+      await this.port.setMessageParticipant?.({
+        workspaceId: context.workspaceId,
+        messageId: result.id,
+        participantName: participantName.slice(0, 240),
+      });
 
     if (result.inserted && message.mediaUrl)
       await this.port.setMessageMediaStatus?.({

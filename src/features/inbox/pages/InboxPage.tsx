@@ -1098,10 +1098,10 @@ export function InboxPage({
                   </span>
                   <span>
                     <strong>
-                      {activeIssue.identifier} Â· {activeIssue.title}
+                      {activeIssue.identifier} · {activeIssue.title}
                     </strong>
                     <small>
-                      Issue linked Â· {activeIssue.status} Â·{" "}
+                      Issue linked · {activeIssue.status} ·{" "}
                       {activeIssue.priority}
                     </small>
                   </span>
@@ -1135,7 +1135,7 @@ export function InboxPage({
             }
             onUseDraft={async () => {
               if (!liveMode)
-                return "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um prÃ³ximo passo.";
+                return "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um próximo passo.";
               try {
                 const result = await requestAiDraft(
                   selected.messages
@@ -1196,7 +1196,12 @@ function ConversationRow({
         </div>
         <div className="conversation-row-main">
           <div className="conversation-row-top">
-            <strong>{conversation.name}</strong>
+            <strong>
+              {conversation.name}
+              {conversation.chatType === "group" && (
+                <span className="group-badge">Group</span>
+              )}
+            </strong>
             <span>{conversation.lastTime}</span>
           </div>
           <div className="conversation-preview">{conversation.lastMessage}</div>
@@ -1256,12 +1261,12 @@ function AiDecisionSummary({
     conversation.aiDecision === "blocked";
   const title =
     conversation.automationState === "human_paused"
-      ? "Human takeover â€” AI paused"
+      ? "Human takeover — AI paused"
       : blocked
-        ? "AI blocked â€” needs human"
+        ? "AI blocked — needs human"
         : conversation.aiDecision === "auto_reply"
-          ? "AI active â€” auto-reply eligible"
-          : "AI active â€” Copilot";
+          ? "AI active — auto-reply eligible"
+          : "AI active — Copilot (drafts only)";
   return (
     <aside
       className={`ai-decision-card ${blocked ? "blocked" : ""} ${conversation.automationState === "human_paused" ? "paused" : ""}`}
@@ -1397,12 +1402,18 @@ function ConversationHeader({
         <div>
           <div className="identity-name">
             <h2>{conversation.name}</h2>
+            {conversation.chatType === "group" && (
+              <span className="group-badge">Group</span>
+            )}
             <span className="channel-status">
               <span className="live-dot" /> WhatsApp
             </span>
           </div>
           <p>
-            {conversation.phone} Â· {conversation.company}
+            {conversation.chatType === "group"
+              ? "WhatsApp group"
+              : conversation.phone}
+            {conversation.company ? ` · ${conversation.company}` : ""}
           </p>
         </div>
       </div>
@@ -1422,11 +1433,11 @@ function ConversationHeader({
         >
           <Sparkles size={13} />{" "}
           {conversation.automationState === "human_paused"
-            ? "Human takeover â€” AI paused"
+            ? "Human takeover — AI paused"
             : conversation.aiMode === "safe_auto"
               ? "Auto-reply"
               : conversation.aiMode === "draft"
-                ? "Copilot"
+                ? "Copilot — drafts only"
                 : "Manual"}
         </span>
         {conversation.humanTakeoverReason && (
@@ -1604,7 +1615,7 @@ function MessageBubble({
             <Sparkles size={11} /> AI generated
           </span>
         )}
-        {message.sender} Â· {message.time}
+        {message.sender} · {message.time}
       </div>
       <div className="message-content-row">
         <div className="message-bubble-wrap">
@@ -1626,7 +1637,7 @@ function MessageBubble({
                 <strong>{message.attachment?.name ?? "Media"}</strong>
                 <small>
                   {message.mediaStatus === "processing"
-                    ? "Processing mediaâ€¦"
+                    ? "Processing media…"
                     : message.mediaStatus === "unsupported"
                       ? `Format ${message.attachment?.meta ?? "unknown"} is not supported`
                       : "Media unavailable"}
@@ -1693,7 +1704,7 @@ function MessageBubble({
               onClick={onDelete}
             >
               <Trash2 size={14} />
-              {actionPending ? "DeletingÃ¢â‚¬Â¦" : "Delete for everyone"}
+              {actionPending ? "Deleting…" : "Delete for everyone"}
             </button>
           )}
           {!message.deleted && (
@@ -1719,7 +1730,7 @@ function MessageBubble({
           aria-label={message.status ?? "sent"}
         >
           {message.status === "sending" ? (
-            "Sendingâ€¦"
+            "Sending…"
           ) : message.status === "failed" ? (
             "Failed"
           ) : message.status === "read" || message.status === "delivered" ? (
@@ -1986,7 +1997,7 @@ function MediaComposer({
           <Sparkles size={15} /> Insert AI draft
         </button>
         <span className="composer-hint">
-          Enter to send Â· Shift + Enter for newline
+          Enter to send · Shift + Enter for newline
         </span>
       </div>
       {attachmentOpen && (
@@ -2043,7 +2054,7 @@ function MediaComposer({
                   </button>
                   <strong title={item.file.name}>{item.file.name}</strong>
                   <small>
-                    {(item.file.size / 1024 / 1024).toFixed(1)} MB Â·{" "}
+                    {(item.file.size / 1024 / 1024).toFixed(1)} MB ·{" "}
                     {item.progress}%
                   </small>
                   <input
@@ -2129,7 +2140,7 @@ function MediaComposer({
             >
               <Send size={14} />{" "}
               {sending
-                ? "Sendingâ€¦"
+                ? "Sending…"
                 : `Send ${pendingFiles.length || 1} attachment${pendingFiles.length === 1 ? "" : "s"}`}
             </button>
           </div>
@@ -2157,8 +2168,8 @@ function MediaComposer({
             automationState === "human_paused"
               ? "AI paused - resume in three dots"
               : aiMode === "safe_auto"
-                ? "AI is handling safe repliesâ€¦"
-                : "Write a replyâ€¦"
+                ? "AI is handling safe replies…"
+                : "Write a reply…"
           }
           rows={1}
         />

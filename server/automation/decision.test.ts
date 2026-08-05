@@ -110,6 +110,25 @@ describe("live worker automation decisions", () => {
     ).toMatchObject({ action: "auto_reply", allowed: true });
   });
 
+  it("allows a high-confidence social reply without published knowledge", () => {
+    const policy = normalizeAiPolicy({
+      safe_auto_intents: ["social"],
+    });
+    const social = {
+      ...triage,
+      intent: "social" as const,
+      summary: "The customer says goodbye.",
+    };
+
+    expect(
+      policyDecision("safe_auto", social, policy, false, "safe_auto_reply"),
+    ).toMatchObject({
+      action: "auto_reply",
+      allowed: true,
+      reason: "A low-risk social reply passed the workspace safety policy.",
+    });
+  });
+
   it("blocks safe auto-reply intents that are not allowlisted", () => {
     const policy = normalizeAiPolicy({ safe_auto_intents: ["status"] });
 

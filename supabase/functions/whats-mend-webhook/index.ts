@@ -27,6 +27,8 @@ interface NormalizedMessage {
   interactionId?: string;
   providerTimestamp?: string;
   contactName?: string;
+  chatType?: "direct" | "group";
+  participantName?: string;
   raw: JsonRecord;
 }
 
@@ -332,6 +334,7 @@ async function normalizeMessages(
           value.contactName,
         );
         const fromMe = key.fromMe === true || value.fromMe === true;
+        const chatType = remoteJid.endsWith("@g.us") ? "group" : "direct";
 
         return {
           instanceName,
@@ -353,6 +356,10 @@ async function normalizeMessages(
             ? { providerTimestamp: parsedTimestamp.toISOString() }
             : {}),
           ...(contactName ? { contactName } : {}),
+          chatType,
+          ...(chatType === "group" && contactName
+            ? { participantName: contactName }
+            : {}),
           raw: value,
         };
       },

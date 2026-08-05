@@ -837,6 +837,22 @@ h1 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.group-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45rem;
+  padding: 0.08rem 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
 .conversation-row-top span {
   color: var(--muted-2);
   font-size: 10px;

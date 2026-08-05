@@ -9,6 +9,7 @@ export const TriageIntentSchema = z.enum([
   "incident",
   "billing",
   "feature",
+  "social",
   "other",
 ]);
 
@@ -50,6 +51,7 @@ const safeAutoIntents = new Set<TriageResult["intent"]>([
   "question",
   "how_to",
   "status",
+  "social",
 ]);
 const unsafeRequestPattern =
   /\b(password|passcode|api[ -]?key|secret|token|credential|credit card|card number|cvv|one[ -]?time code|otp|bypass|disable security|drop database|delete all|wire transfer)\b/i;

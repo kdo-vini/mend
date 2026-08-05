@@ -373,11 +373,35 @@ describe("InboxService and WhatsAppService", () => {
     expect(extractProviderMessageUpdate({ status: "DELETED" })).toEqual({
       isDeleted: true,
     });
+    expect(
+      extractProviderMessageUpdate({
+        message: { conversation: "Nos vemos lá" },
+        status: "sent",
+      }),
+    ).toBeNull();
     expect(receipt).toMatchObject({
       inserted: false,
       providerStatus: "delivered",
     });
     expect(port.messages.size).toBe(1);
+    const outbound = await inbox.persistNormalizedMessage(
+      { workspaceId },
+      channelId,
+      {
+        ...inbound("wamid-outbound-upsert"),
+        remoteJid: "120363426966918405@g.us",
+        phoneNumber: "120363426966918405",
+        direction: "outbound",
+        text: "Nos vemos lá",
+        contactName: "Téchne Sistemas",
+        raw: {
+          message: { conversation: "Nos vemos lá" },
+          status: "sent",
+        },
+      },
+    );
+    expect(outbound).toMatchObject({ inserted: true, direction: "outbound" });
+    expect(port.messages.size).toBe(2);
     const deleted = await inbox.persistNormalizedMessage(
       { workspaceId },
       channelId,

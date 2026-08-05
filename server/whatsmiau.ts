@@ -105,6 +105,8 @@ export interface NormalizedWhatsmiauMessage {
   interactionId?: string;
   providerTimestamp?: string;
   contactName?: string;
+  chatType?: "direct" | "group";
+  participantName?: string;
   raw: Record<string, unknown>;
 }
 
@@ -260,6 +262,12 @@ export function normalizeWhatsmiauEvent(
       asRecord(value.media).url,
     );
     const fromMe = key.fromMe === true || value.fromMe === true;
+    const chatType = remoteJid.endsWith("@g.us") ? "group" : "direct";
+    const contactName = stringValue(
+      value.pushName,
+      value.notifyName,
+      value.contactName,
+    );
 
     return [
       {
@@ -291,14 +299,10 @@ export function normalizeWhatsmiauEvent(
         ...(timestampMs
           ? { providerTimestamp: new Date(timestampMs).toISOString() }
           : {}),
-        ...(stringValue(value.pushName, value.notifyName, value.contactName)
-          ? {
-              contactName: stringValue(
-                value.pushName,
-                value.notifyName,
-                value.contactName,
-              ),
-            }
+        ...(contactName ? { contactName } : {}),
+        chatType,
+        ...(chatType === "group" && contactName
+          ? { participantName: contactName }
           : {}),
         raw: value,
       },
@@ -406,6 +410,10 @@ export class WhatsmiauMessagingProvider {
     const url = new URL(input.url);
     if (!["http:", "https:"].includes(url.protocol) || !input.secret)
       throw new Error("invalid_webhook_configuration");
+    // Whatsmiau persists custom headers but currently omits them when delivering
+    // webhook requests. The Edge Function accepts the same secret as a path
+    // segment so callbacks remain authenticated.
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/${encodeURIComponent(input.secret)}`;
     return this.request<void>(
       `/webhook/set/${encodeURIComponent(input.instanceName)}`,
       {

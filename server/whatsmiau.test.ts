@@ -144,6 +144,29 @@ describe("Whatsmiau normalization", () => {
     });
   });
 
+  it("classifies group chats and keeps the participant display name", () => {
+    const [message] = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        key: {
+          id: "group-message-1",
+          remoteJid: "120363426966918405@g.us",
+          participant: "551231999058@s.whatsapp.net",
+          fromMe: false,
+        },
+        pushName: "Guilherme Correa",
+        message: { conversation: "Até amanhã!" },
+      },
+    });
+
+    expect(message).toMatchObject({
+      chatType: "group",
+      participantName: "Guilherme Correa",
+      phoneNumber: "120363426966918405",
+    });
+  });
+
   it("normalizes JIDs for contact and send contracts", () => {
     expect(normalizePhoneNumber("+55 (11) 99999-9999@s.whatsapp.net")).toBe(
       "5511999999999",
@@ -190,7 +213,7 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
-  it("configures documented bearer authentication and all message events", async () => {
+  it("configures path fallback and bearer authentication for all message events", async () => {
     const originalFetch = globalThis.fetch;
     let webhookBody: Record<string, unknown> | undefined;
     globalThis.fetch = async (_input, init) => {
@@ -211,7 +234,7 @@ describe("Whatsmiau normalization", () => {
       expect(webhookBody).toEqual({
         webhook: {
           enabled: true,
-          url: "https://mend.test/functions/v1/whats-mend-webhook",
+          url: "https://mend.test/functions/v1/whats-mend-webhook/path-secret",
           events: [
             "messages.upsert",
             "messages.update",

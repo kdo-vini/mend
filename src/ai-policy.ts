@@ -9,6 +9,7 @@ export const triageIntentValues = [
   "incident",
   "billing",
   "feature",
+  "social",
   "other",
 ] as const;
 
@@ -16,6 +17,7 @@ export type TriageIntent = (typeof triageIntentValues)[number];
 
 export const aiTriageRouteValues = [
   "knowledge_auto_reply",
+  "safe_auto_reply",
   "draft_for_review",
   "human_escalation",
   "bug_triage",
@@ -49,6 +51,7 @@ export const DEFAULT_AI_ROUTE_MAP: AiRouteMap = {
   incident: "human_escalation",
   billing: "knowledge_auto_reply",
   feature: "draft_for_review",
+  social: "safe_auto_reply",
   other: "draft_for_review",
 };
 
@@ -56,7 +59,7 @@ export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   draftEnabled: true,
   safeAutoEnabled: true,
   safeAutoMinConfidence: 0.85,
-  safeAutoIntents: ["question", "how_to", "status"],
+  safeAutoIntents: ["question", "how_to", "status", "social"],
   safeAutoSendEnabled: false,
   requirePublishedKnowledge: true,
   routes: DEFAULT_AI_ROUTE_MAP,

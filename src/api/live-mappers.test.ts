@@ -12,6 +12,7 @@ const baseMessage: MessageRecord = {
   channel_connection_id: "channel-1",
   conversation_id: "conversation-1",
   provider_message_id: "provider-1",
+  participant_name: null,
   direction: "inbound",
   sender_type: "contact",
   message_type: "image",
@@ -122,6 +123,57 @@ describe("live conversation mapper", () => {
       aiConfidence: 0.94,
       aiSummary: "Customer is asking about an open request.",
     });
+  });
+
+  it("classifies a group contact and shows the message participant", () => {
+    const conversation = {
+      id: "conversation-group",
+      workspace_id: "workspace-1",
+      contact_id: "contact-group",
+      channel_connection_id: "channel-1",
+      status: "open",
+      attention_state: "needs_attention",
+      ai_mode: "draft",
+      assigned_user_id: null,
+      unread_count: 1,
+      last_message_at: "2026-08-05T20:30:04.000Z",
+      last_inbound_at: "2026-08-05T20:30:04.000Z",
+      last_outbound_at: null,
+      resolved_at: null,
+      snoozed_until: null,
+      created_at: "2026-08-05T20:28:02.000Z",
+      updated_at: "2026-08-05T20:30:04.000Z",
+    } satisfies ConversationRecord;
+
+    const result = toUiConversation(
+      conversation,
+      {
+        id: "contact-group",
+        workspace_id: "workspace-1",
+        channel_connection_id: "channel-1",
+        display_name: "Guilherme Correa",
+        phone_number: "120363426966918405",
+        company_name: null,
+        notes: null,
+        profile_picture_url: null,
+        provider_contact_id: "120363426966918405@g.us",
+        created_at: "2026-08-05T20:28:02.000Z",
+        updated_at: "2026-08-05T20:30:04.000Z",
+      },
+      [
+        {
+          ...baseMessage,
+          conversation_id: "conversation-group",
+          participant_name: "Guilherme Correa",
+          text: "Até amanhã!",
+          caption: null,
+          message_type: "text",
+        },
+      ],
+    );
+
+    expect(result.chatType).toBe("group");
+    expect(result.messages[0]?.sender).toBe("Guilherme Correa");
   });
 });
 

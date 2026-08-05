@@ -913,6 +913,7 @@ export type Database = {
           origin?: string
           mime_type: string | null
           provider_message_id: string
+          participant_name: string | null
           provider_status: string | null
           provider_timestamp: string | null
           quoted_message_id: string | null
@@ -943,6 +944,7 @@ export type Database = {
           origin?: string
           mime_type?: string | null
           provider_message_id: string
+          participant_name?: string | null
           provider_status?: string | null
           provider_timestamp?: string | null
           quoted_message_id?: string | null
@@ -973,6 +975,7 @@ export type Database = {
           origin?: string
           mime_type?: string | null
           provider_message_id?: string
+          participant_name?: string | null
           provider_status?: string | null
           provider_timestamp?: string | null
           quoted_message_id?: string | null

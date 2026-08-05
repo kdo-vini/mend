@@ -84,6 +84,7 @@ export interface AiDraft {
 
 export interface Conversation {
   id: string;
+  chatType: "direct" | "group";
   name: string;
   company: string;
   phone: string;

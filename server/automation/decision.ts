@@ -172,7 +172,10 @@ export function policyDecision(
   return {
     action: "auto_reply" as const,
     allowed: true,
-    reason: "Published knowledge and workspace policy allow auto-reply.",
+    reason:
+      route === "safe_auto_reply"
+        ? "A low-risk social reply passed the workspace safety policy."
+        : "Published knowledge and workspace policy allow auto-reply.",
   };
 }
 
