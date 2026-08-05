@@ -17,6 +17,7 @@ import type {
 import { supabase } from "./lib/supabase";
 import {
   enableNativePush,
+  dismissWorkspaceNotifications,
   listWorkspaceNotifications,
   markWorkspaceNotificationRead,
   type PushSetupResult,
@@ -182,7 +183,7 @@ function App() {
   const [workspaceOptions, setWorkspaceOptions] = useState<
     Array<{ id: string; name: string }>
   >(demoMode ? [{ id: "demo", name: "Techne" }] : []);
-  const [channel, setChannel] = useState<WhatsAppInstance | null>(null);
+  const [, setChannel] = useState<WhatsAppInstance | null>(null);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(
     !demoMode && !localOperatorMode,
@@ -552,14 +553,11 @@ function App() {
     setToast(`${issue.identifier} created`);
   };
 
-  const markNotificationRead = async (notificationId: string) => {
+  const dismissNotification = async (notificationId: string) => {
     if (!workspaceId || !supabase) return;
+    const previous = notifications;
     setNotifications((current) =>
-      current.map((notification) =>
-        notification.id === notificationId
-          ? { ...notification, read_at: new Date().toISOString() }
-          : notification,
-      ),
+      current.filter((notification) => notification.id !== notificationId),
     );
     try {
       await markWorkspaceNotificationRead(
@@ -571,8 +569,25 @@ function App() {
       setToast(
         error instanceof Error
           ? error.message
-          : "Notification could not be marked as read.",
+          : "Notification could not be dismissed.",
       );
+      setNotifications(previous);
+    }
+  };
+
+  const dismissAllNotifications = async () => {
+    if (!workspaceId || !supabase || !notifications.length) return;
+    const previous = notifications;
+    setNotifications([]);
+    try {
+      await dismissWorkspaceNotifications(supabase, workspaceId);
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "Notifications could not be dismissed.",
+      );
+      setNotifications(previous);
     }
   };
 
@@ -866,13 +881,6 @@ function App() {
     );
   };
 
-  // `lastEventAt` is a delivery/freshness signal, not the connection state.
-  // A quiet WhatsApp number can stay connected for minutes without receiving
-  // an event; treating that silence as offline makes the composer lie about
-  // the real provider state. Connection health is surfaced separately in
-  // Settings, while Inbox only needs the authoritative open/closed state.
-  const channelHealthy = channel?.state === "open";
-
   return (
     <div
       className={`app-shell ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`}
@@ -881,8 +889,6 @@ function App() {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((current) => !current)}
         onOpenCommand={() => setCommandOpen(true)}
-        channel={channel}
-        demoMode={demoMode}
         operator={operatorIdentity}
         theme={theme}
         onToggleTheme={() =>
@@ -899,7 +905,8 @@ function App() {
         unreadNotificationCount={unreadNotificationCount}
         pushStatus={pushStatus}
         onEnablePush={() => void enablePushNotifications()}
-        onReadNotification={(id) => void markNotificationRead(id)}
+        onDismissNotification={(id) => void dismissNotification(id)}
+        onDismissAllNotifications={() => void dismissAllNotifications()}
       />
       <main className="main-shell">
         <ShellMobileTopbar
@@ -909,7 +916,8 @@ function App() {
           unreadNotificationCount={unreadNotificationCount}
           pushStatus={pushStatus}
           onEnablePush={() => void enablePushNotifications()}
-          onReadNotification={(id) => void markNotificationRead(id)}
+          onDismissNotification={(id) => void dismissNotification(id)}
+          onDismissAllNotifications={() => void dismissAllNotifications()}
         />
         {liveDataError && (
           <div className="live-data-error">
@@ -950,7 +958,6 @@ function App() {
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
                     liveMode={!demoMode}
-                    whatsappConnected={channelHealthy}
                     knowledgeArticles={knowledgeArticles}
                     assigneeOptions={assigneeOptions}
                     assigneeLabel={assigneeLabel}
@@ -1064,7 +1071,6 @@ function App() {
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
                     liveMode={!demoMode}
-                    whatsappConnected={channelHealthy}
                     knowledgeArticles={knowledgeArticles}
                     assigneeOptions={assigneeOptions}
                     assigneeLabel={assigneeLabel}

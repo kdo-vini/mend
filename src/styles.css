@@ -293,16 +293,6 @@ kbd {
   align-items: center;
   gap: 2px;
 }
-.live-connection {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-}
-.live-connection > span:nth-child(2),
 .user-row > span:nth-child(2) {
   min-width: 0;
   flex: 1;
@@ -310,15 +300,10 @@ kbd {
   flex-direction: column;
   gap: 1px;
 }
-.live-connection strong,
 .user-row strong {
   color: var(--ink-soft);
   font-size: 11px;
   font-weight: 500;
-}
-.live-connection small {
-  color: var(--muted-2);
-  font-size: 10px;
 }
 .live-dot {
   display: inline-block;
@@ -329,24 +314,18 @@ kbd {
   background: var(--whatsapp);
   box-shadow: 0 0 0 3px oklch(0.72 0.18 145 / 0.1);
 }
-.live-dot.inline {
-  margin-left: 4px;
-  vertical-align: 1px;
-}
 .user-row {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 8px;
 }
-.live-connection,
 .user-row {
   width: 100%;
   border: 0;
   background: transparent;
   text-align: left;
 }
-.live-connection:hover,
 .user-row:hover {
   background: var(--surface);
   color: var(--ink);
@@ -918,19 +897,6 @@ h1 {
 .attention-marker.waiting_customer {
   background: var(--signal);
 }
-.rail-footer {
-  display: flex;
-  justify-content: space-between;
-  padding: 11px 14px;
-  border-top: 1px solid var(--line);
-  color: var(--muted-2);
-  font-size: 10px;
-}
-.rail-footer span:first-child {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 .conversation-panel {
   min-width: 0;
   min-height: 0;
@@ -971,14 +937,6 @@ h1 {
   margin-top: 3px;
   color: var(--muted);
   font-size: 11px;
-}
-.channel-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 400;
 }
 .conversation-controls {
   display: flex;
@@ -1671,7 +1629,6 @@ h1 {
   color: var(--muted-2);
   font-size: 10px;
 }
-.connection-state,
 .composer-ai-state {
   display: flex;
   align-items: center;
@@ -3790,8 +3747,6 @@ h1 {
   .command-trigger kbd,
   .nav-section-label,
   .nav-item span,
-  .live-connection > span:nth-child(2),
-  .live-connection > svg,
   .user-row > span:nth-child(2),
   .user-row > svg {
     display: none;
@@ -3806,10 +3761,6 @@ h1 {
   }
   .nav-count {
     display: none;
-  }
-  .live-connection {
-    justify-content: center;
-    padding: 10px 0;
   }
   .user-row {
     justify-content: center;
@@ -5203,15 +5154,12 @@ h1 {
 .sidebar-is-collapsed .command-trigger kbd,
 .sidebar-is-collapsed .nav-section-label,
 .sidebar-is-collapsed .nav-item span,
-.sidebar-is-collapsed .live-connection > span:nth-child(2),
-.sidebar-is-collapsed .live-connection > svg,
 .sidebar-is-collapsed .user-row > span:nth-child(2),
 .sidebar-is-collapsed .user-row > svg {
   display: none;
 }
 .sidebar-is-collapsed .command-trigger,
 .sidebar-is-collapsed .nav-item,
-.sidebar-is-collapsed .live-connection,
 .sidebar-is-collapsed .user-row {
   justify-content: center;
 }
@@ -5223,9 +5171,6 @@ h1 {
   padding: 8px 0;
 }
 .sidebar-is-collapsed .nav-item {
-  padding: 10px 0;
-}
-.sidebar-is-collapsed .live-connection {
   padding: 10px 0;
 }
 .sidebar-is-collapsed .user-row {

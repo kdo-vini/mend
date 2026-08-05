@@ -35,6 +35,7 @@ export function listWorkspaceNotifications(
       .from("notifications")
       .select("*")
       .eq("workspace_id", workspaceId)
+      .is("read_at", null)
       .order("created_at", { ascending: false })
       .limit(limit),
   );
@@ -50,6 +51,18 @@ export async function markWorkspaceNotificationRead(
     .update({ read_at: new Date().toISOString() })
     .eq("workspace_id", workspaceId)
     .eq("id", notificationId);
+  if (error) throw new Error(error.message);
+}
+
+export async function dismissWorkspaceNotifications(
+  client: MendSupabaseClient,
+  workspaceId: string,
+): Promise<void> {
+  const { error } = await client
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("workspace_id", workspaceId)
+    .is("read_at", null);
   if (error) throw new Error(error.message);
 }
 

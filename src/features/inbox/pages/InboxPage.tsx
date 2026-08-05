@@ -161,7 +161,6 @@ export function InboxPage({
   onNewIssue,
   onToast,
   liveMode,
-  whatsappConnected,
   knowledgeArticles,
   assigneeOptions,
   assigneeLabel,
@@ -176,7 +175,6 @@ export function InboxPage({
   onNewIssue: () => void;
   onToast: (message: string) => void;
   liveMode: boolean;
-  whatsappConnected?: boolean;
   knowledgeArticles: KnowledgeArticle[];
   assigneeOptions: AssigneeOption[];
   assigneeLabel: (value: string) => string;
@@ -293,7 +291,7 @@ export function InboxPage({
       <div className="inbox-page">
         <EmptyState
           title="No conversations yet"
-          description="New WhatsApp conversations will appear here when the connection is active."
+          description="New conversations will appear here."
           action={
             <button
               className="button button-ghost"
@@ -887,9 +885,6 @@ export function InboxPage({
     >
       <div className="inbox-toolbar">
         <div>
-          <div className="page-kicker">
-            Live queue <span className="live-dot inline" />
-          </div>
           <h1>
             Inbox{" "}
             <span className="title-count">
@@ -994,12 +989,6 @@ export function InboxPage({
                 }
               />
             )}
-          </div>
-          <div className="rail-footer">
-            <span>
-              <span className="live-dot" /> WhatsApp
-            </span>
-            <span>{conversations.length} conversations</span>
           </div>
         </section>
         <section className="conversation-panel">
@@ -1127,7 +1116,6 @@ export function InboxPage({
             aiMode={selected.aiMode}
             automationState={selected.automationState}
             liveMode={liveMode}
-            whatsappConnected={whatsappConnected}
             prefillDraft={
               draftInsertRequest?.conversationId === selected.id
                 ? draftInsertRequest
@@ -1405,13 +1393,10 @@ function ConversationHeader({
             {conversation.chatType === "group" && (
               <span className="group-badge">Group</span>
             )}
-            <span className="channel-status">
-              <span className="live-dot" /> WhatsApp
-            </span>
           </div>
           <p>
             {conversation.chatType === "group"
-              ? "WhatsApp group"
+              ? "Group chat"
               : conversation.phone}
             {conversation.company ? ` · ${conversation.company}` : ""}
           </p>
@@ -1752,7 +1737,6 @@ function MediaComposer({
   prefillDraft,
   aiMode,
   liveMode,
-  whatsappConnected,
   automationState,
 }: {
   onSend: (message: string) => boolean | Promise<boolean>;
@@ -1764,7 +1748,6 @@ function MediaComposer({
   prefillDraft?: { text: string; requestId: number };
   aiMode: AiMode;
   liveMode: boolean;
-  whatsappConnected?: boolean;
   automationState: AutomationState;
 }) {
   type PendingFile = {
@@ -1938,11 +1921,6 @@ function MediaComposer({
     }
   };
 
-  const connectionLabel = whatsappConnected
-    ? "Connected to Whatsmiau"
-    : liveMode
-      ? "WhatsApp not connected"
-      : "Demo workspace";
   return (
     <div
       className={`composer ${dragActive ? "drag-active" : ""}`}
@@ -2184,12 +2162,6 @@ function MediaComposer({
         </button>
       </div>
       <div className="composer-footer">
-        <span
-          className={`connection-state ${whatsappConnected ? "" : "offline"}`}
-        >
-          <span className={`live-dot ${whatsappConnected ? "" : "offline"}`} />{" "}
-          {connectionLabel}
-        </span>
         <span className="composer-ai-state">
           <Sparkles size={12} />{" "}
           {aiMode === "off"

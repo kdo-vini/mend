@@ -15,7 +15,6 @@ import type {
   PushSetupResult,
   WorkspaceNotification,
 } from "../../api/notifications";
-import type { WhatsAppInstance } from "../../api/live-actions";
 import { formatActivityTime, identityInitials } from "../../shared/lib/format";
 import { navItems } from "./navigation";
 
@@ -24,13 +23,15 @@ export function NotificationCenter({
   unreadNotificationCount,
   pushStatus,
   onEnablePush,
-  onReadNotification,
+  onDismissNotification,
+  onDismissAllNotifications,
 }: {
   notifications: WorkspaceNotification[];
   unreadNotificationCount: number;
   pushStatus: PushSetupResult | "idle";
   onEnablePush: () => void;
-  onReadNotification: (id: string) => void;
+  onDismissNotification: (id: string) => void;
+  onDismissAllNotifications: () => void;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -97,7 +98,7 @@ export function NotificationCenter({
   }, [open, notifications.length, pushStatus]);
 
   const openNotification = (notification: WorkspaceNotification) => {
-    onReadNotification(notification.id);
+    onDismissNotification(notification.id);
     setOpen(false);
     if (notification.entity_type === "conversation" && notification.entity_id)
       navigate(
@@ -148,13 +149,9 @@ export function NotificationCenter({
               <button
                 className="text-button"
                 type="button"
-                onClick={() =>
-                  unread.forEach((notification) =>
-                    onReadNotification(notification.id),
-                  )
-                }
+                onClick={onDismissAllNotifications}
               >
-                Mark read
+                Dismiss all
               </button>
             )}
           </div>
@@ -166,7 +163,7 @@ export function NotificationCenter({
             ) : (
               notifications.slice(0, 12).map((notification) => (
                 <button
-                  className={`notification-item${notification.read_at ? "" : " unread"}`}
+                  className="notification-item unread"
                   type="button"
                   key={notification.id}
                   onClick={() => openNotification(notification)}
@@ -209,8 +206,6 @@ export function Sidebar({
   collapsed,
   onToggle,
   onOpenCommand,
-  channel,
-  demoMode,
   operator,
   theme,
   onToggleTheme,
@@ -219,13 +214,12 @@ export function Sidebar({
   unreadNotificationCount,
   pushStatus,
   onEnablePush,
-  onReadNotification,
+  onDismissNotification,
+  onDismissAllNotifications,
 }: {
   collapsed: boolean;
   onToggle: () => void;
   onOpenCommand: () => void;
-  channel: WhatsAppInstance | null;
-  demoMode: boolean;
   operator: { name: string; email: string };
   theme: "dark" | "light";
   onToggleTheme: () => void;
@@ -234,7 +228,8 @@ export function Sidebar({
   unreadNotificationCount: number;
   pushStatus: PushSetupResult | "idle";
   onEnablePush: () => void;
-  onReadNotification: (id: string) => void;
+  onDismissNotification: (id: string) => void;
+  onDismissAllNotifications: () => void;
 }) {
   const navigate = useNavigate();
   return (
@@ -284,7 +279,8 @@ export function Sidebar({
               unreadNotificationCount={unreadNotificationCount}
               pushStatus={pushStatus}
               onEnablePush={onEnablePush}
-              onReadNotification={onReadNotification}
+              onDismissNotification={onDismissNotification}
+              onDismissAllNotifications={onDismissAllNotifications}
             />
             <button
               className="icon-button subtle"
@@ -304,27 +300,6 @@ export function Sidebar({
             </button>
           </div>
         </div>
-        <button
-          className="live-connection"
-          type="button"
-          onClick={() => navigate("/settings")}
-        >
-          <span
-            className={`live-dot ${channel?.state === "open" ? "" : "offline"}`}
-          />
-          <span>
-            <strong>
-              {channel?.state === "open"
-                ? "WhatsApp connected"
-                : "WhatsApp not connected"}
-            </strong>
-            <small>
-              {channel?.instanceName ??
-                (demoMode ? "Demo mode" : "Connect a number in Settings")}
-            </small>
-          </span>
-          <SettingsIcon size={15} />
-        </button>
         <button
           className="user-row"
           type="button"
@@ -353,7 +328,8 @@ export function MobileTopbar({
   unreadNotificationCount,
   pushStatus,
   onEnablePush,
-  onReadNotification,
+  onDismissNotification,
+  onDismissAllNotifications,
 }: {
   operator: { name: string; email: string };
   onOpenCommand: () => void;
@@ -361,7 +337,8 @@ export function MobileTopbar({
   unreadNotificationCount: number;
   pushStatus: PushSetupResult | "idle";
   onEnablePush: () => void;
-  onReadNotification: (id: string) => void;
+  onDismissNotification: (id: string) => void;
+  onDismissAllNotifications: () => void;
 }) {
   return (
     <header className="mobile-topbar">
@@ -377,7 +354,8 @@ export function MobileTopbar({
           unreadNotificationCount={unreadNotificationCount}
           pushStatus={pushStatus}
           onEnablePush={onEnablePush}
-          onReadNotification={onReadNotification}
+          onDismissNotification={onDismissNotification}
+          onDismissAllNotifications={onDismissAllNotifications}
         />
         <button
           className="mobile-command-button"
