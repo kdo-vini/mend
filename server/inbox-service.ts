@@ -165,6 +165,11 @@ export interface InboxPort {
     messageId: string;
     participantName: string;
   }): Promise<void>;
+  setContactDisplayName?(input: {
+    workspaceId: string;
+    contactId: string;
+    displayName: string;
+  }): Promise<void>;
   setConversationState(input: {
     workspaceId: string;
     conversationId: string;
@@ -462,6 +467,20 @@ export class SupabaseInboxPort implements InboxPort {
       .eq("id", input.messageId);
     if (result.error)
       throw new Error(`supabase:messages:participant:${result.error.message}`);
+  }
+
+  async setContactDisplayName(input: {
+    workspaceId: string;
+    contactId: string;
+    displayName: string;
+  }): Promise<void> {
+    const result = await this.client
+      .from("contacts")
+      .update({ display_name: input.displayName })
+      .eq("workspace_id", input.workspaceId)
+      .eq("id", input.contactId);
+    if (result.error)
+      throw new Error(`supabase:contacts:display_name:${result.error.message}`);
   }
 
   async getConversationContext(
@@ -765,7 +784,7 @@ export class InboxService {
       workspaceId: context.workspaceId,
       channelConnectionId: connectionId,
       phoneNumber,
-      displayName: message.contactName,
+      displayName: chatType === "group" ? undefined : message.contactName,
       providerContactId: message.remoteJid,
       providerMessageId: message.providerMessageId,
       direction: message.direction,
@@ -860,6 +879,21 @@ export class InboxService {
         : {}),
       ...(mediaStoragePath ? { mediaStoragePath } : {}),
     };
+  }
+
+  async setContactDisplayName(
+    contextInput: InboxContext,
+    contactId: string,
+    displayName: string,
+  ): Promise<void> {
+    const context = this.context(contextInput);
+    const name = displayName.trim().slice(0, 240);
+    if (!name) throw new Error("contact_display_name_required");
+    await this.port.setContactDisplayName?.({
+      workspaceId: context.workspaceId,
+      contactId: safeWorkspacePart(contactId, "contact_id"),
+      displayName: name,
+    });
   }
 
   async recordOutbound(

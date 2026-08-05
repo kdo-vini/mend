@@ -133,6 +133,18 @@ export interface LiveWorkerInbox {
     channelConnectionId: string,
     message: NormalizedWhatsmiauMessage,
   ): Promise<InboxMessageRecord>;
+  setContactDisplayName?(
+    context: InboxContext,
+    contactId: string,
+    displayName: string,
+  ): Promise<void>;
+}
+
+export interface LiveWorkerGroupDirectory {
+  getGroupInfo?(input: {
+    instanceName: string;
+    remoteJid: string;
+  }): Promise<{ subject: string } | null>;
 }
 
 export interface LiveWorkerKnowledge {
@@ -192,6 +204,7 @@ export interface LiveWorkerOptions {
   automation?: LiveWorkerAutomation;
   channelResolver: LiveWorkerChannelResolver;
   inbox: LiveWorkerInbox;
+  groupDirectory?: LiveWorkerGroupDirectory;
   jobStore: JobStore<WhatsmiauMessageJobPayload>;
   mediaPipeline?: SupabaseMediaPipeline;
   knowledge?: LiveWorkerKnowledge;
@@ -396,6 +409,29 @@ export class LiveWorker {
       binding.channelConnectionId,
       { ...message, instanceName },
     );
+
+    const isGroup =
+      message.chatType === "group" || message.remoteJid.endsWith("@g.us");
+    if (
+      isGroup &&
+      this.options.groupDirectory?.getGroupInfo &&
+      this.options.inbox.setContactDisplayName
+    ) {
+      try {
+        const group = await this.options.groupDirectory.getGroupInfo({
+          instanceName,
+          remoteJid: message.remoteJid,
+        });
+        if (group?.subject)
+          await this.options.inbox.setContactDisplayName(
+            { workspaceId: binding.workspaceId, actorType: "system" },
+            persisted.contactId,
+            group.subject,
+          );
+      } catch {
+        // Group metadata is supplemental; message ingestion must still finish.
+      }
+    }
 
     if (message.direction !== "inbound" || !this.options.automation) {
       await this.markWebhookEvent(job.id, "processed", persisted.id);
@@ -1451,6 +1487,7 @@ export function createSupabaseLiveWorker(
     jobStore: options.jobStore,
     channelResolver: new SupabaseLiveWorkerChannelResolver(options.client),
     inbox,
+    groupDirectory: options.whatsappProvider,
     mediaPipeline,
     knowledge,
     automation,

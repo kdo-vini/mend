@@ -253,6 +253,45 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
+  it("fetches and caches the real group subject", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          id: "120363426966918405@g.us",
+          subject: "[CAÇADOR PRO] Téchne Soluções",
+        }),
+        { status: 200 },
+      );
+    };
+
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      const input = {
+        instanceName: "mend-test",
+        remoteJid: "120363426966918405@g.us",
+      };
+      expect(await provider.getGroupInfo(input)).toEqual({
+        id: input.remoteJid,
+        subject: "[CAÇADOR PRO] Téchne Soluções",
+      });
+      expect(await provider.getGroupInfo(input)).toEqual({
+        id: input.remoteJid,
+        subject: "[CAÇADOR PRO] Téchne Soluções",
+      });
+      expect(calls).toEqual([
+        "https://provider.test/v2/group/findGroupInfos/mend-test?groupJid=120363426966918405%40g.us",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("revokes a message for everyone with the documented Whatsmiau payload", async () => {
     const originalFetch = globalThis.fetch;
     let request: { method?: string; body?: Record<string, unknown> } = {};

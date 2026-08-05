@@ -20,10 +20,15 @@ import type {
   SendAudioInput,
   SendMediaInput,
   SendTextInput,
+  WhatsmiauGroupInfo,
 } from "./whatsmiau.js";
 import type { SupportFlowNode } from "../src/shared/support-flow.js";
 
 export interface WhatsAppProvider {
+  getGroupInfo?(input: {
+    instanceName: string;
+    remoteJid: string;
+  }): Promise<WhatsmiauGroupInfo | null>;
   sendPresence?(
     instanceName: string,
     number: string,

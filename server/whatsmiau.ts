@@ -13,6 +13,11 @@ export interface ProviderMessage {
   key?: { id?: string };
   message?: Record<string, unknown>;
 }
+
+export interface WhatsmiauGroupInfo {
+  id: string;
+  subject: string;
+}
 export interface CreateInstanceInput {
   instanceName: string;
   qrcode?: boolean;
@@ -313,6 +318,10 @@ export function normalizeWhatsmiauEvent(
 export class WhatsmiauMessagingProvider {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly groupInfoCache = new Map<
+    string,
+    { expiresAt: number; value: WhatsmiauGroupInfo }
+  >();
 
   constructor(
     baseUrl = process.env.WHATSMIAU_BASE_URL ?? "https://api.whatsmiau.dev/v2",
@@ -405,6 +414,28 @@ export class WhatsmiauMessagingProvider {
     return this.request<ConnectionState>(
       `/instance/connectionState/${encodeURIComponent(instanceName)}`,
     );
+  }
+  async getGroupInfo(input: {
+    instanceName: string;
+    remoteJid: string;
+  }): Promise<WhatsmiauGroupInfo | null> {
+    if (!input.remoteJid.endsWith("@g.us")) return null;
+    const cacheKey = `${input.instanceName}:${input.remoteJid}`;
+    const cached = this.groupInfoCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const result = await this.request<Record<string, unknown>>(
+      `/group/findGroupInfos/${encodeURIComponent(input.instanceName)}?groupJid=${encodeURIComponent(input.remoteJid)}`,
+    );
+    const group = asRecord(result.group ?? result);
+    const subject = stringValue(group.subject)?.trim().slice(0, 240);
+    const id = stringValue(group.id) ?? input.remoteJid;
+    if (!subject) return null;
+    const value = { id, subject };
+    this.groupInfoCache.set(cacheKey, {
+      expiresAt: Date.now() + 60 * 60 * 1000,
+      value,
+    });
+    return value;
   }
   configureWebhook(input: ConfigureWebhookInput) {
     const url = new URL(input.url);

@@ -70,6 +70,11 @@ class FakeInbox implements LiveWorkerInbox {
     channelConnectionId: string;
     message: NormalizedWhatsmiauMessage;
   }> = [];
+  displayNames: Array<{
+    context: InboxContext;
+    contactId: string;
+    displayName: string;
+  }> = [];
   private index = 0;
 
   constructor(private readonly failures: Error[] = []) {}
@@ -93,6 +98,14 @@ class FakeInbox implements LiveWorkerInbox {
       unreadCount: 1,
       inserted: this.calls.length === 1,
     };
+  }
+
+  async setContactDisplayName(
+    context: InboxContext,
+    contactId: string,
+    displayName: string,
+  ): Promise<void> {
+    this.displayNames.push({ context, contactId, displayName });
   }
 }
 
@@ -274,6 +287,43 @@ describe("live Whatsmiau worker", () => {
     expect(unmapped).toEqual(["mend-live:provider-1"]);
     expect((await store.list())[0].status).toBe("completed");
     expect(await store.listDeadLetters()).toHaveLength(0);
+  });
+
+  it("uses provider metadata for a group title without blocking ingestion", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const inbox = new FakeInbox();
+    const worker = new LiveWorker({
+      jobStore: store,
+      channelResolver: new FakeResolver(binding),
+      inbox,
+      groupDirectory: {
+        getGroupInfo: vi.fn(async () => ({
+          subject: "[CAÇADOR PRO] Téchne Soluções",
+        })),
+      },
+    });
+    await store.enqueue({
+      type: "whatsmiau.message.received",
+      payload: {
+        event: "messages.upsert",
+        message: {
+          ...message,
+          remoteJid: "120363426966918405@g.us",
+          phoneNumber: "120363426966918405",
+          chatType: "group",
+        },
+      },
+      dedupeKey: "group-title",
+    });
+
+    expect(await worker.poll()).toBe(true);
+    expect(inbox.displayNames).toEqual([
+      {
+        context: { workspaceId: "workspace-1", actorType: "system" },
+        contactId: "contact-1",
+        displayName: "[CAÇADOR PRO] Téchne Soluções",
+      },
+    ]);
   });
 
   it("lets persistence errors fail the job so the store schedules a retry", async () => {
