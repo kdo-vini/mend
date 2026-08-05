@@ -1546,7 +1546,7 @@ export async function updateLiveCodexRun(
 ) {
   if (mendApiBaseUrl)
     return apiRequest(
-      `/api/codex/runs/${input.runId}/${input.action}`,
+      `/api/coding-runs/${input.runId}/${input.action}`,
       { method: "POST", body: JSON.stringify({}) },
       input.workspaceId,
     );

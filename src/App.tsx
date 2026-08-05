@@ -17,9 +17,9 @@ import type {
 import { supabase } from "./lib/supabase";
 import {
   enableNativePush,
+  dismissWorkspaceNotification,
   dismissWorkspaceNotifications,
   listWorkspaceNotifications,
-  markWorkspaceNotificationRead,
   type PushSetupResult,
   type WorkspaceNotification,
 } from "./api/notifications";
@@ -567,11 +567,7 @@ function App() {
       current.filter((notification) => notification.id !== notificationId),
     );
     try {
-      await markWorkspaceNotificationRead(
-        supabase,
-        workspaceId,
-        notificationId,
-      );
+      await dismissWorkspaceNotification(supabase, workspaceId, notificationId);
     } catch (error) {
       setToast(
         error instanceof Error
