@@ -15,7 +15,6 @@ import {
   type WorkspaceRole,
 } from "./contracts/api-ports.js";
 import {
-  idParamSchema,
   issueParamSchema,
   uuid,
   workspaceRoleSchema,
@@ -268,7 +267,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
     minimumRole: WorkspaceRole = "viewer",
   ): Promise<RequestContext> =>
     access(response, workspaceIdFromRequest(request), minimumRole);
-  const pathId = (request: Request) => parse(idParamSchema, request.params).id;
+  const pathId = (request: Request) => parse(uuid, request.params.id);
   const pathIssue = (request: Request) =>
     parse(issueParamSchema, request.params).identifier;
 

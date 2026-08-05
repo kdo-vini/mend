@@ -155,6 +155,13 @@ function createFakeDependencies(
       get: vi.fn(async (_context, id) =>
         id === conversationId ? { id, workspaceId } : null,
       ),
+      reactToMessage: vi.fn(
+        async (_context, id, targetMessageId, reaction) => ({
+          id: targetMessageId,
+          conversationId: id,
+          reaction,
+        }),
+      ),
       update: vi.fn(async (_context, id, input) => ({ id, ...input })),
       markRead: vi.fn(async (_context, id) => ({ id, unreadCount: 0 })),
       snooze: vi.fn(async (_context, id, input) => ({
@@ -272,6 +279,23 @@ describe("Mend API router", () => {
     expect(response.status).toBe(401);
     expect(response.body).toEqual({
       error: { code: "unauthenticated", message: "Authentication is required" },
+    });
+  });
+
+  it("accepts conversation routes with a messageId path parameter", async () => {
+    const app = makeApp();
+    const response = await request(app)
+      .post(
+        `/api/conversations/${conversationId}/messages/${messageId}/reaction`,
+      )
+      .set(scoped(true))
+      .send({ reaction: "👍" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      id: messageId,
+      conversationId,
+      reaction: "👍",
     });
   });
 
