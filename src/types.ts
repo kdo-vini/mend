@@ -120,6 +120,8 @@ export interface Issue {
   type: IssueType;
   priority: Priority;
   status: IssueStatus;
+  dueOn?: string | null;
+  kanbanPosition?: number;
   assignee: string;
   labels: string[];
   customer?: string;

@@ -28,6 +28,7 @@ import { registerKnowledgeRoutes } from "./routes/knowledge-routes.js";
 import { registerRepositoryRoutes } from "./routes/repository-routes.js";
 import { registerWorkspaceRoutes } from "./routes/workspace-routes.js";
 import { registerMediaRoutes } from "./routes/media-routes.js";
+import { registerKanbanRoutes } from "./routes/kanban-routes.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -321,6 +322,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerChannelRoutes(routeContext);
   registerConversationRoutes(routeContext);
   registerIssueRoutes(routeContext);
+  registerKanbanRoutes(routeContext);
   registerKnowledgeRoutes(routeContext);
   registerRepositoryRoutes(routeContext);
   registerCodingRunRoutes(routeContext);

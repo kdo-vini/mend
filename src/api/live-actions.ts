@@ -1079,6 +1079,7 @@ export async function createLiveIssue(
     priority: Priority;
     conversationId?: string;
     description?: string;
+    dueOn?: string | null;
   },
   client: MendSupabaseClient | null = supabase,
 ) {
@@ -1099,6 +1100,7 @@ export async function createLiveIssue(
           ...(input.description?.trim()
             ? { description: input.description.trim() }
             : {}),
+          ...(input.dueOn !== undefined ? { dueOn: input.dueOn } : {}),
         }),
       },
       input.workspaceId,
@@ -1126,6 +1128,7 @@ export async function createLiveIssue(
         source: input.conversationId ? "conversation" : "internal",
         conversation_id: input.conversationId ?? null,
         description: input.description ?? null,
+        due_on: input.dueOn ?? null,
         created_by: "user",
       })
       .select("*")
@@ -1157,6 +1160,7 @@ export async function updateLiveIssue(
       input.patch.assignee === "Unassigned" || input.patch.assignee === "AI"
         ? null
         : input.patch.assignee;
+  if (input.patch.dueOn !== undefined) updates.due_on = input.patch.dueOn;
   if (input.patch.labels !== undefined)
     (updates as Tables["issues"]["Update"] & { labels?: string[] }).labels =
       input.patch.labels;
@@ -1187,6 +1191,7 @@ export async function updateLiveIssue(
                 : input.patch.assignee,
           }
         : {}),
+      ...(input.patch.dueOn !== undefined ? { dueOn: input.patch.dueOn } : {}),
       ...(input.patch.labels !== undefined
         ? { labels: input.patch.labels }
         : {}),

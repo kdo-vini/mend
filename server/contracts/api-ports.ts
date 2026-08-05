@@ -2,6 +2,10 @@ import type { Request } from "express";
 import type { IssuePort } from "../issue-service.js";
 import type { KnowledgePort } from "../knowledge-service.js";
 import type { MediaAssetInput, MediaAssetRecord } from "../media-pipeline.js";
+import type {
+  KanbanIssuePort,
+  PersonalPlanningPort,
+} from "../kanban-service.js";
 
 export type WorkspaceRole = "owner" | "admin" | "agent" | "viewer";
 
@@ -348,4 +352,6 @@ export interface ApiRouterDependencies {
   repositories: RepositoryPort;
   codingRuns: CodingRunPort;
   media?: MediaPort;
+  kanban: KanbanIssuePort;
+  personalPlanning: PersonalPlanningPort;
 }

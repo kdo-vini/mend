@@ -633,11 +633,13 @@ export type Database = {
           created_by_user_id: string | null
           customer_notified_at: string | null
           description: string | null
+          due_on: string | null
           duplicate_of_issue_id: string | null
           expected_behavior: string | null
           id: string
           identifier: string
           impact: string | null
+          kanban_position: number
           number: number
           parent_issue_id: string | null
           priority: string
@@ -664,11 +666,13 @@ export type Database = {
           created_by_user_id?: string | null
           customer_notified_at?: string | null
           description?: string | null
+          due_on?: string | null
           duplicate_of_issue_id?: string | null
           expected_behavior?: string | null
           id?: string
           identifier: string
           impact?: string | null
+          kanban_position?: number
           number: number
           parent_issue_id?: string | null
           priority?: string
@@ -695,11 +699,13 @@ export type Database = {
           created_by_user_id?: string | null
           customer_notified_at?: string | null
           description?: string | null
+          due_on?: string | null
           duplicate_of_issue_id?: string | null
           expected_behavior?: string | null
           id?: string
           identifier?: string
           impact?: string | null
+          kanban_position?: number
           number?: number
           parent_issue_id?: string | null
           priority?: string
@@ -1053,6 +1059,117 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "notifications_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      personal_events: {
+        Row: {
+          all_day: boolean
+          created_at: string
+          ends_at: string | null
+          id: string
+          location: string | null
+          starts_at: string
+          title: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          all_day?: boolean
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          location?: string | null
+          starts_at: string
+          title: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          all_day?: boolean
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          location?: string | null
+          starts_at?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personal_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "personal_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      personal_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          due_on: string | null
+          id: string
+          kanban_position: number
+          notes: string | null
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          due_on?: string | null
+          id?: string
+          kanban_position?: number
+          notes?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          due_on?: string | null
+          id?: string
+          kanban_position?: number
+          notes?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personal_tasks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "personal_tasks_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"

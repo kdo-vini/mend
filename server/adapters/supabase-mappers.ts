@@ -182,6 +182,8 @@ export function issue(rowValue: Row): Row {
     type: str(rowValue.type, "task"),
     priority: str(rowValue.priority, "none"),
     status: str(rowValue.status, "triage"),
+    dueOn: nullable(rowValue.due_on),
+    kanbanPosition: num(rowValue.kanban_position),
     title: str(rowValue.title),
     description: nullable(rowValue.description),
     aiSummary: nullable(rowValue.ai_summary),
@@ -321,6 +323,7 @@ export function issueDbPayload(value: IssueCreateInput | IssuePatchInput): Row {
     ...(input.assignedUserId !== undefined
       ? { assigned_user_id: input.assignedUserId }
       : {}),
+    ...(input.dueOn !== undefined ? { due_on: input.dueOn } : {}),
     ...(input.parentIssueId !== undefined
       ? { parent_issue_id: input.parentIssueId }
       : {}),

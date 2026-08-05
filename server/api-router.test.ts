@@ -182,6 +182,35 @@ function createFakeDependencies(
       })),
     },
     issues: issuePort,
+    kanban: {
+      move: vi.fn(async (_context, identifier, input) => ({
+        id: issueId,
+        identifier,
+        workspaceId,
+        ...input,
+      })),
+    },
+    personalPlanning: {
+      listTasks: vi.fn(async (_context, query) => ({ data: [], query })),
+      createTask: vi.fn(async (_context, input) => ({
+        id: "personal-task-1",
+        workspaceId,
+        userId,
+        ...input,
+      })),
+      updateTask: vi.fn(async (_context, id, input) => ({ id, ...input })),
+      moveTask: vi.fn(async (_context, id, input) => ({ id, ...input })),
+      removeTask: vi.fn(async () => true),
+      listEvents: vi.fn(async (_context, query) => ({ data: [], query })),
+      createEvent: vi.fn(async (_context, input) => ({
+        id: "personal-event-1",
+        workspaceId,
+        userId,
+        ...input,
+      })),
+      updateEvent: vi.fn(async (_context, id, input) => ({ id, ...input })),
+      removeEvent: vi.fn(async () => true),
+    },
     knowledge: knowledgePort,
     repositories: {
       list: vi.fn(async () => [{ id: repositoryId, name: "Mend" }]),
@@ -621,5 +650,46 @@ describe("Mend API router", () => {
       .set(headers)
       .send({ mode: "investigate", shell: "rm -rf /" });
     expect(run.status).toBe(400);
+  });
+
+  it("scopes personal planning routes and validates move statuses", async () => {
+    const dependencies = createFakeDependencies();
+    const app = makeApp(dependencies);
+    const headers = scoped(true);
+
+    const list = await request(app)
+      .get("/api/personal-tasks?from=2026-08-05&to=2026-08-12")
+      .set(headers);
+    expect(list.status).toBe(200);
+    expect(dependencies.personalPlanning.listTasks).toHaveBeenCalledWith(
+      context(),
+      expect.objectContaining({ from: "2026-08-05", to: "2026-08-12" }),
+    );
+
+    const created = await request(app)
+      .post("/api/personal-tasks")
+      .set(headers)
+      .send({ title: "Plan the sprint", dueOn: "2026-08-05" });
+    expect(created.status).toBe(201);
+    expect(created.body.title).toBe("Plan the sprint");
+
+    const invalidMove = await request(app)
+      .post(`/api/personal-tasks/${issueId}/move`)
+      .set(headers)
+      .send({ status: "review" });
+    expect(invalidMove.status).toBe(400);
+  });
+
+  it("turns stale Kanban neighbors into a conflict response", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.kanban.move = vi.fn(async () => {
+      throw new Error("kanban_order_conflict");
+    });
+    const response = await request(makeApp(dependencies))
+      .post("/api/issues/TEC-1/move")
+      .set(scoped(true))
+      .send({ status: "in_progress", beforeId: issueId });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("kanban_order_conflict");
   });
 });

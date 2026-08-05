@@ -5,6 +5,7 @@ import {
   ChevronRight,
   LogOut,
   Menu,
+  MoreHorizontal,
   Moon,
   Search,
   Settings as SettingsIcon,
@@ -401,9 +402,12 @@ export function MobileTopbar({
 }
 
 export function MobileBottomNav() {
+  const primary = navItems.filter(({ to }) =>
+    ["/inbox", "/kanban", "/issues", "/codex-runs"].includes(to),
+  );
   return (
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-      {navItems.map(({ to, label, icon: Icon }) => (
+      {primary.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
@@ -415,6 +419,24 @@ export function MobileBottomNav() {
           <span>{label === "Codex runs" ? "Runs" : label}</span>
         </NavLink>
       ))}
+      <details className="mobile-more-menu">
+        <summary className="mobile-nav-item">
+          <MoreHorizontal size={19} strokeWidth={1.8} />
+          <span>More</span>
+        </summary>
+        <div className="mobile-more-popover">
+          <NavLink to="/knowledge">
+            <span>Knowledge</span>
+          </NavLink>
+          <NavLink to="/settings">
+            <SettingsIcon size={16} />
+            <span>Settings</span>
+          </NavLink>
+          <NavLink to="/profile">
+            <span>Profile</span>
+          </NavLink>
+        </div>
+      </details>
     </nav>
   );
 }

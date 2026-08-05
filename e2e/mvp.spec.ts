@@ -13,6 +13,35 @@ async function chooseOption(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
+test("operator can open the shared and personal Kanban views", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/kanban?demo=1");
+  await expect(page.getByRole("heading", { name: "Kanban" })).toBeVisible();
+
+  if (testInfo.project.name === "mobile") {
+    await expect(page.getByRole("tab", { name: "Personal" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(
+      page.getByRole("button", { name: /Review onboarding checklist/ }).first(),
+    ).toBeVisible();
+    await expect(
+      page.locator(".mobile-bottom-nav").getByRole("link", { name: "Kanban" }),
+    ).toBeVisible();
+  } else {
+    await expect(
+      page.locator(".kanban-column-heading").filter({ hasText: "Triage" }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".kanban-column-heading").filter({ hasText: "In progress" }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "Personal" }).click();
+    await expect(page.getByPlaceholder("Add a task…")).toBeVisible();
+  }
+});
+
 test("operator can move from inbox to issues and create an issue", async ({
   page,
 }, testInfo) => {

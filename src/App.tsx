@@ -72,6 +72,11 @@ const FeatureIssuesPage = lazy(() =>
     default: IssuesPage,
   })),
 );
+const FeatureKanbanPage = lazy(() =>
+  import("./features/kanban/pages/KanbanPage").then(({ KanbanPage }) => ({
+    default: KanbanPage,
+  })),
+);
 const FeatureKnowledgePage = lazy(() =>
   import("./features/knowledge/pages/KnowledgePage").then(
     ({ KnowledgePage }) => ({ default: KnowledgePage }),
@@ -962,6 +967,21 @@ function App() {
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onEditIssue={setEditIssueId}
                     onDeleteIssue={(issueId) => void deleteIssue(issueId)}
+                  />
+                </FeatureBoundary>
+              }
+              kanban={
+                <FeatureBoundary label="Loading Kanban…">
+                  <FeatureKanbanPage
+                    workspaceId={workspaceId ?? ""}
+                    currentUserId={operatorIdentity.id}
+                    issues={issues}
+                    assigneeLabel={assigneeLabel}
+                    demoMode={demoMode}
+                    onUpdateIssue={updateIssue}
+                    onOpenIssue={setInspectorIssueId}
+                    onNewIssue={() => setCreateIssueOpen(true)}
+                    onToast={setToast}
                   />
                 </FeatureBoundary>
               }

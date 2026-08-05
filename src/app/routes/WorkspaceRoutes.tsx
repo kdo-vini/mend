@@ -4,6 +4,7 @@ import { Route, Routes } from "react-router-dom";
 export interface WorkspaceRouteElements {
   inbox: ReactNode;
   issues: ReactNode;
+  kanban: ReactNode;
   issueDetail: ReactNode;
   runs: ReactNode;
   knowledge: ReactNode;
@@ -18,6 +19,7 @@ export function WorkspaceRoutes(elements: WorkspaceRouteElements) {
       <Route path="/inbox" element={elements.inbox} />
       <Route path="/issues" element={elements.issues} />
       <Route path="/issues/:identifier" element={elements.issueDetail} />
+      <Route path="/kanban" element={elements.kanban} />
       <Route path="/codex-runs" element={elements.runs} />
       <Route path="/knowledge" element={elements.knowledge} />
       <Route path="/settings" element={elements.settings} />

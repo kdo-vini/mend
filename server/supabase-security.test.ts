@@ -8,6 +8,12 @@ const migrationPath = fileURLToPath(
     import.meta.url,
   ),
 );
+const kanbanMigrationPath = fileURLToPath(
+  new URL(
+    "../supabase/migrations/20260805173459_kanban_personal_planning.sql",
+    import.meta.url,
+  ),
+);
 
 describe("Supabase security migration contract", () => {
   it("keeps privileged implementations private and public RPCs invoker-only", async () => {
@@ -65,5 +71,20 @@ describe("Supabase security migration contract", () => {
     ]) {
       expect(sql).toContain(`'${table}'`);
     }
+  });
+
+  it("keeps personal Kanban data private and realtime-enabled", async () => {
+    const sql = await readFile(kanbanMigrationPath, "utf8");
+    for (const table of ["personal_tasks", "personal_events"]) {
+      expect(sql).toContain(
+        `alter table public.${table} enable row level security`,
+      );
+      expect(sql).toContain(`user_id = (select auth.uid())`);
+      expect(sql).toContain(
+        `alter publication supabase_realtime add table public.${table}`,
+      );
+    }
+    expect(sql).toContain("workspace agents can update own personal tasks");
+    expect(sql).toContain("workspace agents can update own personal events");
   });
 });

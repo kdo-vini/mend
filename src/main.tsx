@@ -5,6 +5,14 @@ import App from "./App";
 import { AuthGate } from "./components/AuthGate";
 import "./styles.css";
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/push-sw.js").catch(() => {
+      // The app remains online-first when service worker registration is unavailable.
+    });
+  });
+}
+
 const CHUNK_RECOVERY_PARAM = "_mend_chunk_recovery";
 const CHUNK_RECOVERY_KEY = "mend:chunk-recovery-at";
 

@@ -30,6 +30,9 @@ export const issueTypeSchema = z.enum([
 export const issueSourceSchema = z.enum(["conversation", "internal", "ai"]);
 
 const nullableText = z.string().trim().max(20_000).nullable();
+const issueDueDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected an ISO date (YYYY-MM-DD)");
 
 export const issueCreateSchema = z
   .object({
@@ -53,6 +56,7 @@ export const issueCreateSchema = z
     conversationId: z.string().uuid().nullable().optional(),
     contactId: z.string().uuid().nullable().optional(),
     assignedUserId: z.string().uuid().nullable().optional(),
+    dueOn: issueDueDate.nullable().optional(),
     labels: z.array(z.string().trim().min(1).max(64)).max(30).default([]),
   })
   .strict();
