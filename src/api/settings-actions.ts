@@ -123,6 +123,18 @@ export async function saveLiveWorkspaceAiPolicy(
       .eq("id", workspaceId)
       .select("id"),
   );
+  await unwrap(
+    requireClient(client)
+      .from("audit_log")
+      .insert({
+        workspace_id: workspaceId,
+        action: "ai.policy_updated",
+        entity_type: "workspace",
+        entity_id: workspaceId,
+        metadata_json: workspaceAiPolicyJson(policy),
+      })
+      .select("id"),
+  );
   return { updatedCount: rows.length, policy };
 }
 

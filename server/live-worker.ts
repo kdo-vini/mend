@@ -742,6 +742,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       route === "bug_triage" &&
       issue &&
       modePolicy.policy.bugAutoFixEnabled &&
+      modePolicy.policy.allowedIntegrations.includes("codex") &&
+      modePolicy.policy.allowedActions.includes("investigate") &&
       !triage.unsafe &&
       triage.confidence >= modePolicy.policy.safeAutoMinConfidence &&
       this.codexStarter

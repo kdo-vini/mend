@@ -18,6 +18,16 @@ export {
 export type { SupportFlow, SupportFlowNode } from "../../shared/support-flow";
 export type { WhatsAppInstance } from "../../api/live-actions";
 export {
+  disconnectLiveGoogleConnection,
+  listLiveGoogleConnections,
+  saveLiveGoogleCalendarSelection,
+  startLiveGoogleOAuth,
+} from "../../api/google-connections";
+export type {
+  GoogleCalendar,
+  GoogleConnection,
+} from "../../api/google-connections";
+export {
   listLiveAuditLog,
   listLiveWorkspaceMembers,
   loadLiveAiConversationPolicy,

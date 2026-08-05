@@ -28,6 +28,7 @@ import { registerRepositoryRoutes } from "./routes/repository-routes.js";
 import { registerWorkspaceRoutes } from "./routes/workspace-routes.js";
 import { registerMediaRoutes } from "./routes/media-routes.js";
 import { registerKanbanRoutes } from "./routes/kanban-routes.js";
+import { registerGoogleConnectionRoutes } from "./routes/google-connection-routes.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -293,6 +294,12 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
 
   router.use(
     asyncRoute(async (request, response, next) => {
+      // The signed, one-time OAuth state authenticates the Google callback;
+      // Google cannot send the Mend bearer token back to this endpoint.
+      if (request.path === "/api/google/connections/oauth/callback") {
+        next();
+        return;
+      }
       const user = await dependencies.auth.authenticate(request);
       if (!user || !uuid.safeParse(user.id).success)
         throw new ApiHttpError(
@@ -325,6 +332,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerKnowledgeRoutes(routeContext);
   registerRepositoryRoutes(routeContext);
   registerCodingRunRoutes(routeContext);
+  registerGoogleConnectionRoutes(routeContext);
 
   router.use(
     (

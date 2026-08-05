@@ -9,6 +9,7 @@ import {
 } from "./api-router.js";
 import type { IssuePort } from "./issue-service.js";
 import type { KnowledgePort } from "./knowledge-service.js";
+import { CodexServiceError } from "./codex-service.js";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const workspaceId = "22222222-2222-4222-8222-222222222222";
@@ -245,6 +246,21 @@ function createFakeDependencies(
         id === runId ? { patch: "diff --git a/a b/a" } : null,
       ),
     },
+    googleConnections: {
+      list: vi.fn(async () => []),
+      startOAuth: vi.fn(async () => ({
+        oauthUrl: "https://accounts.google.com",
+      })),
+      completeOAuth: vi.fn(async () => ({ id: "google-connection-1" })),
+      updateCalendars: vi.fn(async (_context, id, selectedCalendarIds) => ({
+        id,
+        selectedCalendarIds,
+      })),
+      disconnect: vi.fn(async (_context, id) => ({
+        id,
+        status: "disconnected",
+      })),
+    },
     media: {
       createUpload: vi.fn(async (_context, input) => ({
         assetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -272,6 +288,63 @@ const scoped = (agent = false) => ({
 });
 
 describe("Mend API router", () => {
+  it("returns actionable readiness details when Codex preflight cannot start", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.codingRuns.create = vi.fn(async () => {
+      throw new CodexServiceError("CODEX_WORKSPACE_ROOT must be a directory");
+    });
+
+    const response = await request(makeApp(dependencies))
+      .post("/api/issues/TEC-1/coding-runs")
+      .set(scoped(true))
+      .send({ mode: "investigate", repositoryId });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      error: {
+        code: "codex_unavailable",
+        message:
+          "Codex run could not start: CODEX_WORKSPACE_ROOT must be a directory",
+        details: {
+          action: "Check /api/ready and the workspace repository settings.",
+        },
+      },
+    });
+  });
+
+  it("routes workspace-scoped Google connection actions through the API port", async () => {
+    const dependencies = createFakeDependencies();
+    const app = makeApp(dependencies);
+    const headers = scoped(true);
+
+    expect(
+      (await request(app).get("/api/google/connections").set(headers)).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post("/api/google/connections/oauth/start")
+          .set(headers)
+          .send({})
+      ).body,
+    ).toEqual({ oauthUrl: "https://accounts.google.com" });
+    expect(
+      (
+        await request(app)
+          .patch(`/api/google/connections/${repositoryId}/calendars`)
+          .set(headers)
+          .send({ selectedCalendarIds: ["primary"] })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .delete(`/api/google/connections/${repositoryId}`)
+          .set(headers)
+      ).status,
+    ).toBe(200);
+  });
+
   it("requires authentication and returns a stable error envelope", async () => {
     const response = await request(
       makeApp(createFakeDependencies({ user: null })),

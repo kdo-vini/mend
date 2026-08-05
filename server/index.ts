@@ -25,6 +25,7 @@ import type { AuthAdapter } from "./contracts/api-ports.js";
 import { createSupabaseApiAdapters } from "./supabase-api-adapters.js";
 import { createSupabaseLiveWorker, type LiveWorker } from "./live-worker.js";
 import { getVapidPublicKey } from "./push.js";
+import { readGoogleOAuthConfig } from "./google-calendar.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -447,6 +448,7 @@ app.get("/api/runtime", async (_request, response) =>
     supabase: hasServerSupabaseConfig(),
     whatsMiau: Boolean(process.env.WHATSMIAU_API_KEY),
     openai: Boolean(process.env.OPENAI_API_KEY),
+    googleOAuth: Boolean(readGoogleOAuthConfig()),
     aiProvider: "openai",
     jobs: (await messageJobs.list()).length,
   }),

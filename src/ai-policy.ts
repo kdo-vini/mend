@@ -27,7 +27,35 @@ export const aiTriageRouteValues = [
 export type AiTriageRoute = (typeof aiTriageRouteValues)[number];
 export type AiRouteMap = Record<TriageIntent, AiTriageRoute>;
 
+export const aiPolicyActionValues = [
+  "respond",
+  "triage",
+  "create_issue",
+  "investigate",
+  "propose_fix",
+  "implement_fix",
+  "publish",
+  "deploy",
+  "delete",
+] as const;
+
+export type AiPolicyAction = (typeof aiPolicyActionValues)[number];
+
+export const aiPolicyChannelValues = ["whatsapp", "web"] as const;
+export type AiPolicyChannel = (typeof aiPolicyChannelValues)[number];
+
+export const aiPolicyIntegrationValues = [
+  "knowledge",
+  "google_calendar",
+  "codex",
+] as const;
+export type AiPolicyIntegration = (typeof aiPolicyIntegrationValues)[number];
+
 export interface WorkspaceAiPolicy {
+  allowedChannels: AiPolicyChannel[];
+  allowedIntegrations: AiPolicyIntegration[];
+  allowedActions: AiPolicyAction[];
+  humanApprovalActions: AiPolicyAction[];
   draftEnabled: boolean;
   safeAutoEnabled: boolean;
   safeAutoMinConfidence: number;
@@ -55,7 +83,24 @@ export const DEFAULT_AI_ROUTE_MAP: AiRouteMap = {
   other: "draft_for_review",
 };
 
+const mandatoryHumanApprovalActions: AiPolicyAction[] = [
+  "implement_fix",
+  "publish",
+  "deploy",
+  "delete",
+];
+
 export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
+  allowedChannels: ["whatsapp", "web"],
+  allowedIntegrations: ["knowledge", "codex"],
+  allowedActions: [
+    "respond",
+    "triage",
+    "create_issue",
+    "investigate",
+    "propose_fix",
+  ],
+  humanApprovalActions: ["implement_fix", "publish", "deploy", "delete"],
   draftEnabled: true,
   safeAutoEnabled: true,
   safeAutoMinConfidence: 0.85,
@@ -83,6 +128,17 @@ export function isAiTriageRoute(value: unknown): value is AiTriageRoute {
   return (aiTriageRouteValues as readonly unknown[]).includes(value);
 }
 
+function normalizedValues<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fallback: readonly T[],
+): T[] {
+  const values = Array.isArray(value)
+    ? value.filter((item): item is T => allowed.includes(item as T))
+    : [];
+  return values.length ? [...new Set(values)] : [...fallback];
+}
+
 export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
   const raw =
     value !== null && typeof value === "object" && !Array.isArray(value)
@@ -106,6 +162,31 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
     ? raw.automation_fallback_route
     : DEFAULT_WORKSPACE_AI_POLICY.fallbackRoute;
   return {
+    allowedChannels: normalizedValues(
+      raw.allowed_channels,
+      aiPolicyChannelValues,
+      DEFAULT_WORKSPACE_AI_POLICY.allowedChannels,
+    ),
+    allowedIntegrations: normalizedValues(
+      raw.allowed_integrations,
+      aiPolicyIntegrationValues,
+      DEFAULT_WORKSPACE_AI_POLICY.allowedIntegrations,
+    ),
+    allowedActions: normalizedValues(
+      raw.allowed_actions,
+      aiPolicyActionValues,
+      DEFAULT_WORKSPACE_AI_POLICY.allowedActions,
+    ),
+    humanApprovalActions: [
+      ...new Set([
+        ...normalizedValues(
+          raw.human_approval_actions,
+          aiPolicyActionValues,
+          DEFAULT_WORKSPACE_AI_POLICY.humanApprovalActions,
+        ),
+        ...mandatoryHumanApprovalActions,
+      ]),
+    ] as AiPolicyAction[],
     draftEnabled:
       typeof raw.draft_enabled === "boolean"
         ? raw.draft_enabled
@@ -140,6 +221,10 @@ export function workspaceAiPolicyJson(
   policy: WorkspaceAiPolicy,
 ): Record<string, Json> {
   return {
+    allowed_channels: [...policy.allowedChannels],
+    allowed_integrations: [...policy.allowedIntegrations],
+    allowed_actions: [...policy.allowedActions],
+    human_approval_actions: [...policy.humanApprovalActions],
     draft_enabled: policy.draftEnabled,
     safe_auto_enabled: policy.safeAutoEnabled,
     safe_auto_min_confidence: policy.safeAutoMinConfidence,

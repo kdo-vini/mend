@@ -20,6 +20,10 @@ describe("workspace AI policy", () => {
       "social",
     ]);
     expect(policy.routes.social).toBe("safe_auto_reply");
+    expect(policy.allowedActions).toContain("investigate");
+    expect(policy.humanApprovalActions).toEqual(
+      expect.arrayContaining(["implement_fix", "publish", "deploy", "delete"]),
+    );
   });
 
   it("preserves valid company overrides and rejects invalid routes", () => {
@@ -32,6 +36,8 @@ describe("workspace AI policy", () => {
       safe_auto_intents: ["question", "billing", "invalid"],
       notify_on_bug: false,
       bug_auto_deploy_enabled: true,
+      allowed_actions: ["triage", "not-real"],
+      allowed_integrations: ["google_calendar"],
     });
 
     expect(policy.routes.billing).toBe("draft_for_review");
@@ -39,6 +45,11 @@ describe("workspace AI policy", () => {
     expect(policy.notifyOnBug).toBe(false);
     expect(policy.bugAutoDeployEnabled).toBe(true);
     expect(policy.safeAutoIntents).toEqual(["question", "billing"]);
+    expect(policy.allowedActions).toEqual(["triage"]);
+    expect(policy.allowedIntegrations).toEqual(["google_calendar"]);
+    expect(policy.humanApprovalActions).toEqual(
+      expect.arrayContaining(["delete"]),
+    );
   });
 
   it("serializes only the workspace policy contract", () => {
@@ -49,6 +60,7 @@ describe("workspace AI policy", () => {
       notify_on_human_escalation: true,
       bug_auto_fix_enabled: false,
       safe_auto_intents: ["question", "how_to", "status", "social"],
+      allowed_integrations: ["knowledge", "codex"],
     });
     expect(serialized).not.toHaveProperty("totalConversations");
   });

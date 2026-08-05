@@ -44,6 +44,7 @@ Copy every key from `.env.example`; the important groups are:
 - WhatsApp: `WHATSMIAU_BASE_URL`, `WHATSMIAU_API_KEY`, `WHATSMIAU_WEBHOOK_SECRET`, `WHATSMIAU_WEBHOOK_URL`.
 - Support AI: `OPENAI_API_KEY`, `SUPPORT_AI_MODEL`.
 - Codex: `CODEX_MODEL`, `CODEX_REASONING_EFFORT`, fallback settings, limits and `CODEX_WORKSPACE_ROOT`.
+- Google connections: server-only `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` and `GOOGLE_TOKEN_ENCRYPTION_KEY`.
 - Local API: `PORT`, optional `MEND_API_TOKEN`, `MEND_WORKER_POLL_MS`.
 
 `MEND_DEV_MODE=1` and `VITE_MEND_LOCAL_OPERATOR_MODE=1` are loopback-only escape hatches. They must be disabled in production. Never put `WHATSMIAU_API_KEY`, `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` or any other secret in a `VITE_*` variable.
@@ -69,6 +70,14 @@ Open Knowledge, create an article, and choose Draft or Published for AI. Only pu
 3. Open an issue and click Run Codex.
 4. Review timeline, changed files, diff and checks.
 5. Approve only after review. Approval may create a local branch and commit; it never pushes, merges, deploys or runs database migrations.
+
+## Configure Google connections
+
+Set the four server-only Google variables, register the callback URI in the
+Google OAuth client, then open Settings → Connections. Multiple accounts can
+be linked to the same workspace and each account has an explicit calendar
+selection. If the variables are missing, the UI reports the configuration gap
+and does not claim that an external connection succeeded.
 
 On Windows, approved npm commands run through the fixed command allowlist using `cmd.exe`; command names and arguments never come from user input. npm cache/config state is kept outside the isolated workspace so it cannot pollute the review diff.
 

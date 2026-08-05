@@ -2744,6 +2744,11 @@ h1 {
   border-radius: 7px;
   background: var(--surface);
 }
+
+.settings-list {
+  display: grid;
+  gap: 12px;
+}
 .connection-card-main {
   display: flex;
   align-items: center;

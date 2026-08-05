@@ -318,3 +318,15 @@ export const codingRunCreateSchema = z
       .default([]),
   })
   .strict();
+
+export const googleOAuthCallbackSchema = z
+  .object({
+    code: z.string().trim().min(1).max(4_000),
+    state: z.string().trim().min(1).max(4_000),
+  })
+  .strict();
+export const googleCalendarSelectionSchema = z
+  .object({
+    selectedCalendarIds: z.array(z.string().trim().min(1).max(500)).max(200),
+  })
+  .strict();

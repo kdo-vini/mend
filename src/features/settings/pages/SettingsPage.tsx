@@ -4,6 +4,7 @@ import {
   ChevronRight,
   GitBranch,
   Info,
+  Link2,
   MessageCircle,
   Plus,
   QrCode,
@@ -15,7 +16,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { AiMode } from "../../../types";
-import type { WhatsAppInstance } from "../api";
+import type { GoogleConnection, WhatsAppInstance } from "../api";
 import {
   connectLiveChannel,
   connectWhatsAppInstance,
@@ -29,6 +30,10 @@ import {
   loadLiveChannelFlow,
   listLiveChannels,
   listLiveRepositories,
+  listLiveGoogleConnections,
+  saveLiveGoogleCalendarSelection,
+  startLiveGoogleOAuth,
+  disconnectLiveGoogleConnection,
   listWhatsAppInstances,
   refreshLiveChannel,
   saveLiveChannelFlow,
@@ -53,6 +58,12 @@ import {
   triageIntentValues,
   type AiTriageRoute,
   type TriageIntent,
+  aiPolicyActionValues,
+  aiPolicyChannelValues,
+  aiPolicyIntegrationValues,
+  type AiPolicyAction,
+  type AiPolicyChannel,
+  type AiPolicyIntegration,
 } from "../../../ai-policy";
 import { supabase } from "../api";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
@@ -80,6 +91,29 @@ const triageRouteLabels: Record<AiTriageRoute, string> = {
   no_action: "No action",
 };
 
+const aiPolicyActionLabels: Record<AiPolicyAction, string> = {
+  respond: "Respond to customers",
+  triage: "Triage conversations",
+  create_issue: "Create issues",
+  investigate: "Investigate with Codex",
+  propose_fix: "Propose code fixes",
+  implement_fix: "Implement code fixes",
+  publish: "Publish changes",
+  deploy: "Deploy changes",
+  delete: "Delete data",
+};
+
+const aiPolicyChannelLabels: Record<AiPolicyChannel, string> = {
+  whatsapp: "WhatsApp",
+  web: "Web conversations",
+};
+
+const aiPolicyIntegrationLabels: Record<AiPolicyIntegration, string> = {
+  knowledge: "Published knowledge",
+  google_calendar: "Google Calendar",
+  codex: "Codex",
+};
+
 export function SettingsPage({
   workspaceId,
   onToast,
@@ -91,13 +125,24 @@ export function SettingsPage({
 }) {
   type SettingsTab =
     | "whatsapp"
+    | "connections"
     | "members"
     | "ai"
     | "flows"
     | "repositories"
     | "audit";
-  const [activeTab, setActiveTab] = useState<SettingsTab>("whatsapp");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    if (typeof window !== "undefined") {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab === "connections") return "connections";
+    }
+    return "whatsapp";
+  });
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
+  const [googleConnections, setGoogleConnections] = useState<
+    GoogleConnection[]
+  >([]);
+  const [googleAction, setGoogleAction] = useState<string | null>(null);
   const [selected, setSelected] = useState<WhatsAppInstance | null>(null);
   const [instanceName, setInstanceName] = useState("mend-techne");
   const [qr, setQr] = useState<string | null>(null);
@@ -287,6 +332,8 @@ export function SettingsPage({
         setAiPolicy(policy);
         if (policy.dominantMode !== "mixed") setAiMode(policy.dominantMode);
       }
+      if (activeTab === "connections")
+        setGoogleConnections(await listLiveGoogleConnections(workspaceId));
       if (activeTab === "flows" && selected?.channelId) {
         setFlow(
           (await loadLiveChannelFlow({
@@ -523,6 +570,95 @@ export function SettingsPage({
     }
   };
 
+  const togglePolicyValue = (
+    field: "allowedChannels" | "allowedIntegrations" | "allowedActions",
+    value: AiPolicyChannel | AiPolicyIntegration | AiPolicyAction,
+    checked: boolean,
+  ) => {
+    setAiPolicy((current) => {
+      if (!current) return current;
+      const values = current[field] as string[];
+      const next = checked
+        ? [...new Set([...values, value])]
+        : values.filter((item) => item !== value);
+      return { ...current, [field]: next } as LiveWorkspaceAiPolicy;
+    });
+  };
+
+  const connectGoogle = async () => {
+    if (!workspaceId) return;
+    setGoogleAction("connect");
+    try {
+      const { oauthUrl } = await startLiveGoogleOAuth(workspaceId);
+      window.location.assign(oauthUrl);
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Google OAuth is not configured.",
+      );
+    } finally {
+      setGoogleAction(null);
+    }
+  };
+
+  const saveGoogleCalendars = async (
+    connection: GoogleConnection,
+    selectedCalendarIds: string[],
+  ) => {
+    if (!workspaceId) return;
+    setGoogleAction(connection.id);
+    try {
+      const updated = await saveLiveGoogleCalendarSelection(
+        workspaceId,
+        connection.id,
+        selectedCalendarIds,
+      );
+      setGoogleConnections((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      onToast("Google calendar selection saved");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Google calendar selection could not be saved.",
+      );
+    } finally {
+      setGoogleAction(null);
+    }
+  };
+
+  const disconnectGoogle = async (connection: GoogleConnection) => {
+    if (!workspaceId) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        `Disconnect ${connection.accountEmail ?? "this Google account"}? Its server-side tokens will be removed.`,
+      )
+    )
+      return;
+    setGoogleAction(connection.id);
+    try {
+      const updated = await disconnectLiveGoogleConnection(
+        workspaceId,
+        connection.id,
+      );
+      setGoogleConnections((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      onToast("Google account disconnected");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Google account could not be disconnected.",
+      );
+    } finally {
+      setGoogleAction(null);
+    }
+  };
+
   const saveFlow = async () => {
     if (!workspaceId || !selected?.channelId || !flow) return;
     const parsed = supportFlowSchema.safeParse(flow);
@@ -588,6 +724,7 @@ export function SettingsPage({
     icon: typeof MessageCircle;
   }> = [
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+    { id: "connections", label: "Connections", icon: Link2 },
     { id: "members", label: "Members", icon: UsersRound },
     { id: "ai", label: "AI behavior", icon: Bot },
     { id: "flows", label: "Flows", icon: GitBranch },
@@ -820,6 +957,128 @@ export function SettingsPage({
                 >
                   Create instance
                 </button>
+              </section>
+            </div>
+          )}
+
+          {activeTab === "connections" && (
+            <div
+              id="settings-panel-connections"
+              role="tabpanel"
+              aria-labelledby="settings-tab-connections"
+            >
+              <section className="settings-section">
+                <div className="settings-section-header">
+                  <div>
+                    <h2>Google connections</h2>
+                    <p>
+                      Link more than one Google account to this workspace and
+                      choose which calendars are available to authorized AI
+                      actions. OAuth tokens stay on the server.
+                    </p>
+                  </div>
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    disabled={googleAction === "connect" || !workspaceId}
+                    onClick={() => void connectGoogle()}
+                  >
+                    <Plus size={14} /> Connect Google account
+                  </button>
+                </div>
+                {settingsError && (
+                  <div className="inline-empty" role="alert">
+                    <Info size={16} /> <span>{settingsError}</span>
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => void loadSettingsData()}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {settingsLoading ? (
+                  <LoadingState label="Loading Google connections…" />
+                ) : !googleConnections.length ? (
+                  <EmptyState
+                    title="No Google accounts connected"
+                    description="Connect a Google account when OAuth credentials are configured for this server."
+                  />
+                ) : (
+                  <div className="settings-list">
+                    {googleConnections.map((connection) => {
+                      const selectedCalendarIds = new Set(
+                        connection.selectedCalendarIds,
+                      );
+                      return (
+                        <div className="connection-card" key={connection.id}>
+                          <div className="connection-card-main">
+                            <div className="whatsapp-symbol">G</div>
+                            <div>
+                              <strong>
+                                {connection.accountName ??
+                                  connection.accountEmail ??
+                                  "Google account"}
+                              </strong>
+                              <span>
+                                {connection.accountEmail ??
+                                  "Email not reported"}{" "}
+                                · Google Calendar
+                              </span>
+                              <small>
+                                State: {connection.status} ·{" "}
+                                {connection.calendars.length} calendar
+                                {connection.calendars.length === 1 ? "" : "s"}
+                              </small>
+                              {connection.lastError && (
+                                <small role="alert">
+                                  {connection.lastError}
+                                </small>
+                              )}
+                            </div>
+                          </div>
+                          {connection.calendars.length > 0 && (
+                            <div className="settings-form-grid">
+                              {connection.calendars.map((calendar) => (
+                                <label key={calendar.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCalendarIds.has(
+                                      calendar.id,
+                                    )}
+                                    disabled={googleAction === connection.id}
+                                    onChange={(event) => {
+                                      const next = new Set(selectedCalendarIds);
+                                      if (event.target.checked)
+                                        next.add(calendar.id);
+                                      else next.delete(calendar.id);
+                                      void saveGoogleCalendars(connection, [
+                                        ...next,
+                                      ]);
+                                    }}
+                                  />
+                                  {calendar.summary}
+                                  {calendar.primary ? " (primary)" : ""}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          <div className="connection-card-actions">
+                            <button
+                              className="button button-danger"
+                              type="button"
+                              disabled={googleAction === connection.id}
+                              onClick={() => void disconnectGoogle(connection)}
+                            >
+                              <Trash2 size={14} /> Disconnect
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
             </div>
           )}
@@ -1206,6 +1465,91 @@ export function SettingsPage({
                               }
                             />
                             {triageIntentLabels[intent]}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="settings-section-header settings-subsection-header">
+                      <div>
+                        <h3>Workspace AI autonomy</h3>
+                        <p>
+                          Each workspace chooses the channels, integrations and
+                          capabilities available to its AI. Sensitive actions
+                          always remain behind human approval.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="settings-form-grid automation-toggles">
+                      <div>
+                        <strong>Allowed channels</strong>
+                        {aiPolicyChannelValues.map((channel) => (
+                          <label key={channel}>
+                            <input
+                              type="checkbox"
+                              checked={aiPolicy.allowedChannels.includes(
+                                channel,
+                              )}
+                              disabled={aiPolicySaving}
+                              onChange={(event) =>
+                                togglePolicyValue(
+                                  "allowedChannels",
+                                  channel,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                            {aiPolicyChannelLabels[channel]}
+                          </label>
+                        ))}
+                      </div>
+                      <div>
+                        <strong>Allowed integrations</strong>
+                        {aiPolicyIntegrationValues.map((integration) => (
+                          <label key={integration}>
+                            <input
+                              type="checkbox"
+                              checked={aiPolicy.allowedIntegrations.includes(
+                                integration,
+                              )}
+                              disabled={aiPolicySaving}
+                              onChange={(event) =>
+                                togglePolicyValue(
+                                  "allowedIntegrations",
+                                  integration,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                            {aiPolicyIntegrationLabels[integration]}
+                          </label>
+                        ))}
+                      </div>
+                      <div>
+                        <strong>Allowed AI actions</strong>
+                        {aiPolicyActionValues.map((action) => (
+                          <label key={action}>
+                            <input
+                              type="checkbox"
+                              checked={aiPolicy.allowedActions.includes(action)}
+                              disabled={aiPolicySaving}
+                              onChange={(event) =>
+                                togglePolicyValue(
+                                  "allowedActions",
+                                  action,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                            {aiPolicyActionLabels[action]}
+                          </label>
+                        ))}
+                      </div>
+                      <div>
+                        <strong>Human approval required</strong>
+                        {aiPolicy.humanApprovalActions.map((action) => (
+                          <label key={action}>
+                            <input type="checkbox" checked disabled readOnly />
+                            {aiPolicyActionLabels[action]}
                           </label>
                         ))}
                       </div>

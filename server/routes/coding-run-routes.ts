@@ -1,4 +1,5 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
+import { CodexServiceError } from "../codex-service.js";
 import { codingRunCreateSchema, codingRunListQuerySchema } from "./schemas.js";
 
 export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
@@ -27,15 +28,28 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
   router.post(
     "/api/issues/:identifier/coding-runs",
     asyncRoute(async (request, response) => {
-      send(
-        response,
-        201,
-        await dependencies.codingRuns.create(
-          await scoped(request, response, "agent"),
-          pathIssue(request),
-          parse(codingRunCreateSchema, request.body),
-        ),
-      );
+      try {
+        send(
+          response,
+          201,
+          await dependencies.codingRuns.create(
+            await scoped(request, response, "agent"),
+            pathIssue(request),
+            parse(codingRunCreateSchema, request.body),
+          ),
+        );
+      } catch (error) {
+        if (error instanceof CodexServiceError)
+          throw new context.ApiHttpError(
+            503,
+            "codex_unavailable",
+            `Codex run could not start: ${error.message}`,
+            {
+              action: "Check /api/ready and the workspace repository settings.",
+            },
+          );
+        throw error;
+      }
     }),
   );
   router.get(

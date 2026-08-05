@@ -186,6 +186,138 @@ export type Database = {
           },
         ]
       }
+      google_connections: {
+        Row: {
+          account_email: string | null
+          account_name: string | null
+          calendars_json: Json
+          created_at: string
+          created_by_user_id: string | null
+          google_account_id: string
+          id: string
+          last_error: string | null
+          last_synced_at: string | null
+          provider: string
+          scopes_json: Json
+          selected_calendar_ids_json: Json
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          account_email?: string | null
+          account_name?: string | null
+          calendars_json?: Json
+          created_at?: string
+          created_by_user_id?: string | null
+          google_account_id: string
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          provider?: string
+          scopes_json?: Json
+          selected_calendar_ids_json?: Json
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          account_email?: string | null
+          account_name?: string | null
+          calendars_json?: Json
+          created_at?: string
+          created_by_user_id?: string | null
+          google_account_id?: string
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          provider?: string
+          scopes_json?: Json
+          selected_calendar_ids_json?: Json
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_connections_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_connection_secrets: {
+        Row: {
+          access_token_encrypted: string | null
+          connection_id: string
+          refresh_token_encrypted: string | null
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          connection_id: string
+          refresh_token_encrypted?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          connection_id?: string
+          refresh_token_encrypted?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_connection_secrets_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "google_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_oauth_states: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          state_hash: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          state_hash: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          state_hash?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_oauth_states_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coding_run_events: {
         Row: {
           coding_run_id: string
