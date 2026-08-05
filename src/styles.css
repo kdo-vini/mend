@@ -1475,92 +1475,18 @@ h1 {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-wash);
 }
-.attachment-panel {
+.attachment-preview-bar {
   display: grid;
-  gap: 12px;
-  margin: 8px 0 10px;
-  padding: 12px;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface-2);
 }
-.attachment-panel-header,
-.attachment-actions {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.attachment-panel-header strong {
-  color: var(--ink-soft);
-  font-size: 11px;
-}
-.attachment-panel-header p,
-.attachment-help,
-.attachment-file-field span,
-.attachment-or {
-  margin-top: 3px;
-  color: var(--muted-2);
-  font-size: 10px;
-}
-.attachment-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-}
-.attachment-form-grid label {
-  display: grid;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 10px;
-}
-.attachment-form-grid input,
-.attachment-form-grid select {
-  min-width: 0;
-  padding: 7px 8px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  outline: 0;
-  background: var(--surface);
-  color: var(--ink-soft);
-  font-size: 11px;
-}
-.attachment-file-field {
-  grid-column: 1 / -1;
-}
-.attachment-file-field input {
-  padding: 5px;
-}
-.attachment-or {
-  grid-column: 1 / -1;
-  margin: -3px 0;
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.attachment-actions {
-  justify-content: flex-end;
-}
-.attachment-dropzone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 58px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 11px;
-}
-.attachment-dropzone:hover,
-.attachment-dropzone:focus-visible {
-  border-color: var(--accent);
-  color: var(--ink-soft);
-}
 .attachment-preview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: 8px;
 }
 .attachment-preview-card {
@@ -1599,14 +1525,12 @@ h1 {
   color: var(--muted-2);
   font-size: 9px;
 }
-.attachment-preview-card > input {
-  min-width: 0;
-  padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--surface-2);
-  color: var(--ink-soft);
-  font-size: 10px;
+.attachment-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.attachment-send {
+  justify-self: end;
 }
 .attachment-remove {
   position: absolute;
@@ -5612,7 +5536,6 @@ h1 {
 .automation-route-grid .custom-select,
 .settings-form-grid .custom-select,
 .modal .custom-select,
-.attachment-form-grid .custom-select,
 .profile-form .custom-select {
   width: 100%;
 }

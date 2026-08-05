@@ -99,6 +99,15 @@ export function mediaKindForMime(value?: string): MediaKind {
   return "document";
 }
 
+export function resolveDetectedMediaMime(
+  declaredMime: string,
+  detectedMime?: string,
+): string {
+  if (declaredMime.startsWith("audio/") && detectedMime === "video/webm")
+    return declaredMime;
+  return detectedMime ?? (declaredMime === "image/svg+xml" ? declaredMime : "");
+}
+
 export function mediaLimitForMime(value?: string): number {
   return mediaLimits[mediaKindForMime(value)];
 }
@@ -453,8 +462,10 @@ export class SupabaseMediaPipeline {
       const declared = normalizeMediaMime(
         String(asset.declared_mime_type ?? ""),
       );
-      const mimeType =
-        detected?.mime ?? (declared === "image/svg+xml" ? declared : "");
+      // WebM audio is commonly detected as video/webm because the container
+      // is shared. The declared audio MIME is the reliable signal for routing
+      // the asset through the audio normalizer and WhatsApp audio endpoint.
+      const mimeType = resolveDetectedMediaMime(declared, detected?.mime);
       if (!mimeType) throw new Error("media_type_unknown");
       if (!allowedMediaMimeTypes.has(mimeType))
         throw new Error(`unsupported_media_type:${mimeType}`);

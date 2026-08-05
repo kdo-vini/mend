@@ -1881,20 +1881,13 @@ function MediaComposer({
     id: string;
     file: File;
     type: ComposerMediaInput["messageType"];
-    caption: string;
     previewUrl: string;
     progress: number;
   };
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
-  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaType, setMediaType] =
-    useState<ComposerMediaInput["messageType"]>("document");
-  const [fileName, setFileName] = useState("");
-  const [caption, setCaption] = useState("");
   const [recording, setRecording] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1949,14 +1942,11 @@ function MediaComposer({
       id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
       file,
       type: typeForFile(file),
-      caption: "",
       previewUrl: URL.createObjectURL(file),
       progress: 0,
     }));
     if (!additions.length) return;
     setPendingFiles((current) => [...current, ...additions]);
-    setMediaUrl("");
-    setAttachmentOpen(true);
   };
 
   const removeFile = (id: string) => {
@@ -1982,17 +1972,30 @@ function MediaComposer({
         if (event.data.size) recordingChunksRef.current.push(event.data);
       };
       recorder.onstop = () => {
-        addFiles([
-          new File(recordingChunksRef.current, `voice-${Date.now()}.webm`, {
-            type: mimeType,
-          }),
-        ]);
+        const audio = new File(
+          recordingChunksRef.current,
+          `voice-${Date.now()}.webm`,
+          { type: mimeType },
+        );
         stream.getTracks().forEach((track) => track.stop());
         recorderRef.current = null;
         recordingStreamRef.current = null;
         setRecording(false);
+        if (onSendMediaBatch) {
+          setSending(true);
+          void Promise.resolve(
+            onSendMediaBatch([
+              {
+                file: audio,
+                messageType: "audio",
+                fileName: audio.name,
+                mimeType: audio.type,
+              },
+            ]),
+          ).finally(() => setSending(false));
+        }
       };
-      recorder.start();
+      recorder.start(250);
       setRecording(true);
     } catch {
       setRecording(false);
@@ -2013,12 +2016,11 @@ function MediaComposer({
   };
 
   const submitAttachments = async () => {
-    if (!onSendMediaBatch || sending) return;
+    if (!onSendMediaBatch || sending || !pendingFiles.length) return;
     const inputs: ComposerMediaInput[] = pendingFiles.map((item) => ({
       file: item.file,
       messageType: item.type,
       fileName: item.file.name,
-      caption: item.caption.trim() || undefined,
       onProgress: (percent) =>
         setPendingFiles((current) =>
           current.map((entry) =>
@@ -2026,23 +2028,11 @@ function MediaComposer({
           ),
         ),
     }));
-    if (!inputs.length && /^https:\/\/[^\s]+$/i.test(mediaUrl.trim()))
-      inputs.push({
-        mediaUrl: mediaUrl.trim(),
-        messageType: mediaType,
-        fileName: fileName.trim() || undefined,
-        caption: caption.trim() || undefined,
-      });
-    if (!inputs.length) return;
     setSending(true);
     try {
       if (await onSendMediaBatch(inputs)) {
         pendingFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
         setPendingFiles([]);
-        setMediaUrl("");
-        setFileName("");
-        setCaption("");
-        setAttachmentOpen(false);
       }
     } finally {
       setSending(false);
@@ -2081,24 +2071,41 @@ function MediaComposer({
       }}
     >
       <div className="composer-toolbar">
+        <input
+          ref={fileInputRef}
+          hidden
+          type="file"
+          multiple
+          accept={accepted}
+          onChange={(event) => {
+            addFiles(Array.from(event.target.files ?? []));
+            event.currentTarget.value = "";
+          }}
+        />
         <button
           className="composer-tool"
           type="button"
-          disabled={!liveMode || !onSendMediaBatch || sending}
-          aria-label="Attach media"
-          aria-expanded={attachmentOpen}
-          onClick={() => setAttachmentOpen((current) => !current)}
+          disabled={!liveMode || !onSendMediaBatch || sending || recording}
+          aria-label="Attach files"
+          onClick={() => fileInputRef.current?.click()}
         >
-          <Paperclip size={15} /> Attach
+          <Paperclip size={15} /> Files
         </button>
         <button
           className="composer-tool"
           type="button"
-          disabled={!liveMode || sending}
+          disabled={!liveMode || !onSendMediaBatch || sending}
           aria-label={recording ? "Stop recording" : "Record audio"}
-          onClick={() =>
-            void (recording ? recorderRef.current?.stop() : startRecording())
-          }
+          aria-pressed={recording}
+          onClick={() => {
+            if (recording) {
+              const recorder = recorderRef.current;
+              if (recorder?.state === "recording") {
+                recorder.requestData();
+                recorder.stop();
+              }
+            } else void startRecording();
+          }}
         >
           {recording ? <Square size={14} /> : <Mic size={15} />}{" "}
           {recording ? "Stop" : "Voice"}
@@ -2122,148 +2129,52 @@ function MediaComposer({
           Enter to send · Shift + Enter for newline
         </span>
       </div>
-      {attachmentOpen && (
-        <div className="attachment-panel" aria-label="Send attachments">
-          <div className="attachment-panel-header">
-            <div>
-              <strong>Send through WhatsApp</strong>
-              <p>Drop files, paste an image, or choose up to 10 files.</p>
-            </div>
-            <button
-              className="icon-button subtle"
-              type="button"
-              aria-label="Close attachment panel"
-              onClick={() => setAttachmentOpen(false)}
-            >
-              <X size={15} />
-            </button>
-          </div>
-          <input
-            ref={fileInputRef}
-            hidden
-            type="file"
-            multiple
-            accept={accepted}
-            onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
-          />
-          <button
-            className="attachment-dropzone"
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip size={16} /> Choose files or drop them here
-          </button>
-          {pendingFiles.length > 0 && (
-            <div className="attachment-preview-grid">
-              {pendingFiles.map((item) => (
-                <div className="attachment-preview-card" key={item.id}>
-                  {item.type === "image" ? (
-                    <img src={item.previewUrl} alt={item.file.name} />
-                  ) : item.type === "video" ? (
-                    <video muted preload="metadata" src={item.previewUrl} />
-                  ) : item.type === "audio" ? (
-                    <audio controls preload="metadata" src={item.previewUrl} />
-                  ) : (
-                    <FileText size={24} />
-                  )}
-                  <button
-                    className="icon-button subtle attachment-remove"
-                    type="button"
-                    aria-label={`Remove ${item.file.name}`}
-                    onClick={() => removeFile(item.id)}
-                  >
-                    <X size={13} />
-                  </button>
-                  <strong title={item.file.name}>{item.file.name}</strong>
-                  <small>
-                    {(item.file.size / 1024 / 1024).toFixed(1)} MB ·{" "}
-                    {item.progress}%
-                  </small>
-                  <input
-                    aria-label={`Caption for ${item.file.name}`}
-                    value={item.caption}
-                    onChange={(event) =>
-                      setPendingFiles((current) =>
-                        current.map((entry) =>
-                          entry.id === item.id
-                            ? { ...entry, caption: event.target.value }
-                            : entry,
-                        ),
-                      )
-                    }
-                    placeholder="Caption (optional)"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="attachment-form-grid">
-            <label>
-              Type for public URL
-              <Select
-                value={mediaType}
-                options={[
-                  { value: "image", label: "Image" },
-                  { value: "video", label: "Video" },
-                  { value: "audio", label: "Audio" },
-                  { value: "document", label: "Document" },
-                ]}
-                onChange={(value) =>
-                  setMediaType(value as ComposerMediaInput["messageType"])
-                }
-              />
-            </label>
-            <label>
-              Public HTTPS URL <span className="optional-label">optional</span>
-              <input
-                value={mediaUrl}
-                disabled={pendingFiles.length > 0}
-                onChange={(event) => setMediaUrl(event.target.value)}
-                placeholder="https://cdn.example.com/file.pdf"
-                inputMode="url"
-              />
-            </label>
-            <label>
-              URL file name <span className="optional-label">optional</span>
-              <input
-                value={fileName}
-                disabled={pendingFiles.length > 0}
-                onChange={(event) => setFileName(event.target.value)}
-                placeholder="manual.pdf"
-              />
-            </label>
-            <label>
-              URL caption <span className="optional-label">optional</span>
-              <input
-                value={caption}
-                disabled={pendingFiles.length > 0}
-                onChange={(event) => setCaption(event.target.value)}
-                placeholder="What should the customer see?"
-              />
-            </label>
+      {pendingFiles.length > 0 && (
+        <div className="attachment-preview-bar" aria-label="Selected files">
+          <div className="attachment-preview-grid">
+            {pendingFiles.map((item) => (
+              <div className="attachment-preview-card" key={item.id}>
+                {item.type === "image" ? (
+                  <img src={item.previewUrl} alt={item.file.name} />
+                ) : item.type === "video" ? (
+                  <video muted preload="metadata" src={item.previewUrl} />
+                ) : item.type === "audio" ? (
+                  <audio controls preload="metadata" src={item.previewUrl} />
+                ) : (
+                  <FileText size={24} />
+                )}
+                <button
+                  className="icon-button subtle attachment-remove"
+                  type="button"
+                  aria-label={`Remove ${item.file.name}`}
+                  disabled={sending}
+                  onClick={() => removeFile(item.id)}
+                >
+                  <X size={13} />
+                </button>
+                <strong title={item.file.name}>{item.file.name}</strong>
+                <small>
+                  {(item.file.size / 1024 / 1024).toFixed(1)} MB ·{" "}
+                  {item.progress}%
+                </small>
+              </div>
+            ))}
           </div>
           <div className="attachment-actions">
             <button
-              className="button button-ghost"
+              className="button button-primary attachment-send"
               type="button"
-              onClick={() => setAttachmentOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="button button-primary"
-              type="button"
-              disabled={
-                (!pendingFiles.length &&
-                  !/^https:\/\/[^\s]+$/i.test(mediaUrl.trim())) ||
-                sending
-              }
+              disabled={sending}
               onClick={() => void submitAttachments()}
             >
-              <Send size={14} />{" "}
+              {sending ? (
+                <LoaderCircle className="spin" size={14} />
+              ) : (
+                <Send size={14} />
+              )}{" "}
               {sending
                 ? "Sending…"
-                : `Send ${pendingFiles.length || 1} attachment${pendingFiles.length === 1 ? "" : "s"}`}
+                : `Send ${pendingFiles.length} file${pendingFiles.length === 1 ? "" : "s"}`}
             </button>
           </div>
         </div>

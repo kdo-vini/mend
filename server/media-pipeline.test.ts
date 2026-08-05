@@ -4,6 +4,7 @@ import {
   MEDIA_BATCH_MAX_COUNT,
   mediaKindForMime,
   mediaLimitForMime,
+  resolveDetectedMediaMime,
   validateMediaAssetInput,
 } from "./media-pipeline.js";
 import { safeMediaFileName } from "./media-policy.js";
@@ -16,6 +17,15 @@ describe("media pipeline boundaries", () => {
     expect(mediaKindForMime("application/zip")).toBe("archive");
     expect(mediaLimitForMime("image/png")).toBe(20 * 1024 * 1024);
     expect(mediaLimitForMime("video/mp4")).toBe(100 * 1024 * 1024);
+  });
+
+  it("keeps browser-recorded WebM audio on the audio pipeline", () => {
+    expect(resolveDetectedMediaMime("audio/webm", "video/webm")).toBe(
+      "audio/webm",
+    );
+    expect(resolveDetectedMediaMime("video/webm", "video/webm")).toBe(
+      "video/webm",
+    );
   });
 
   it("normalizes names and rejects unsafe upload metadata", () => {
