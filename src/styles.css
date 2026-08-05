@@ -1633,6 +1633,11 @@ h1 {
 .composer-tool:hover {
   color: var(--accent-soft);
 }
+.composer-tool:disabled {
+  color: var(--muted-2);
+  cursor: wait;
+  opacity: 0.7;
+}
 .composer-hint {
   margin-left: auto;
   color: var(--muted-2);
