@@ -9,6 +9,7 @@ import {
   Ellipsis,
   FileText,
   Filter,
+  LoaderCircle,
   Mic,
   ListFilter,
   LockKeyhole,
@@ -84,6 +85,9 @@ interface ComposerMediaInput {
   caption?: string;
   onProgress?: (percent: number) => void;
 }
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sortConversations(items: Conversation[]) {
   return [...items].sort((left, right) => {
@@ -205,6 +209,7 @@ export function InboxPage({
   }));
   const dismissedAiCards = dismissedAiCardsByScope[aiCardStorageKey] ?? {};
   const [messageActionId, setMessageActionId] = useState<string>();
+  const [reactionPendingId, setReactionPendingId] = useState<string>();
   const [conversationDeleting, setConversationDeleting] = useState(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -799,10 +804,16 @@ export function InboxPage({
   };
 
   const reactToMessage = async (message: Message, reaction: string) => {
-    if (liveMode && workspaceId && !message.providerMessageId) {
-      onToast("This message does not have a WhatsApp message id yet.");
+    if (reactionPendingId) return;
+    if (liveMode && workspaceId && !uuidPattern.test(message.id)) {
+      onToast("This message is still syncing with WhatsApp.");
       return;
     }
+    if (liveMode && workspaceId && !message.providerMessageId) {
+      onToast("This message is still syncing with WhatsApp.");
+      return;
+    }
+    setReactionPendingId(message.id);
     try {
       if (liveMode && workspaceId)
         await reactToLiveMessage({
@@ -836,6 +847,8 @@ export function InboxPage({
       onToast(
         error instanceof Error ? error.message : "Reaction could not be sent.",
       );
+    } finally {
+      setReactionPendingId(undefined);
     }
   };
 
@@ -1107,6 +1120,7 @@ export function InboxPage({
                         : undefined
                     }
                     actionPending={messageActionId === message.id}
+                    reactionPending={reactionPendingId === message.id}
                     onDelete={() => void deleteMessage(message)}
                     onCopy={async () => {
                       if (!message.text) return;
@@ -1690,6 +1704,7 @@ function MessageBubble({
   message,
   senderName,
   actionPending,
+  reactionPending,
   onDelete,
   onCopy,
   onReact,
@@ -1697,6 +1712,7 @@ function MessageBubble({
   message: Message;
   senderName?: string;
   actionPending: boolean;
+  reactionPending: boolean;
   onDelete: () => void;
   onCopy: () => void;
   onReact: (reaction: string) => void;
@@ -1810,9 +1826,10 @@ function MessageBubble({
                   key={reaction}
                   type="button"
                   role="menuitem"
+                  disabled={reactionPending}
                   onClick={() => onReact(reaction)}
                 >
-                  {reaction} React
+                  {reaction} {reactionPending ? "Sending…" : "React"}
                 </button>
               ))}
             </>
@@ -1870,6 +1887,7 @@ function MediaComposer({
   };
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [draftLoading, setDraftLoading] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [mediaUrl, setMediaUrl] = useState("");
@@ -2031,6 +2049,16 @@ function MediaComposer({
     }
   };
 
+  const insertAiDraft = async () => {
+    if (sending || draftLoading) return;
+    setDraftLoading(true);
+    try {
+      setText(await onUseDraft());
+    } finally {
+      setDraftLoading(false);
+    }
+  };
+
   return (
     <div
       className={`composer ${dragActive ? "drag-active" : ""}`}
@@ -2078,11 +2106,17 @@ function MediaComposer({
         <button
           className="composer-tool"
           type="button"
-          disabled={sending}
+          disabled={sending || draftLoading}
           aria-label="Insert AI draft"
-          onClick={() => void Promise.resolve(onUseDraft()).then(setText)}
+          aria-busy={draftLoading}
+          onClick={() => void insertAiDraft()}
         >
-          <Sparkles size={15} /> Insert AI draft
+          {draftLoading ? (
+            <LoaderCircle className="spin" size={15} />
+          ) : (
+            <Sparkles size={15} />
+          )}{" "}
+          {draftLoading ? "Generating…" : "Insert AI draft"}
         </button>
         <span className="composer-hint">
           Enter to send · Shift + Enter for newline

@@ -5338,6 +5338,10 @@ h1 {
   padding-inline: 0;
 }
 
+.spin {
+  animation: spin 1s linear infinite;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
