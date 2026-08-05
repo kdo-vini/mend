@@ -1983,16 +1983,18 @@ function MediaComposer({
         setRecording(false);
         if (onSendMediaBatch) {
           setSending(true);
-          void Promise.resolve(
-            onSendMediaBatch([
-              {
-                file: audio,
-                messageType: "audio",
-                fileName: audio.name,
-                mimeType: audio.type,
-              },
-            ]),
-          ).finally(() => setSending(false));
+          void Promise.resolve()
+            .then(() =>
+              onSendMediaBatch([
+                {
+                  file: audio,
+                  messageType: "audio",
+                  fileName: audio.name,
+                  mimeType: audio.type,
+                },
+              ]),
+            )
+            .finally(() => setSending(false));
         }
       };
       recorder.start(250);
