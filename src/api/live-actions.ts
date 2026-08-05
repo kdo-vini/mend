@@ -259,6 +259,7 @@ export async function loadLiveWorkspace(
         .from("ai_drafts")
         .select("*")
         .eq("workspace_id", workspace.id)
+        .in("status", ["pending_review", "auto_eligible"])
         .order("created_at", { ascending: false }),
     ),
   ]);
@@ -411,6 +412,7 @@ export async function loadLiveConversationSnapshot(
         .select("*")
         .eq("workspace_id", workspaceId)
         .eq("conversation_id", conversationId)
+        .in("status", ["pending_review", "auto_eligible"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
