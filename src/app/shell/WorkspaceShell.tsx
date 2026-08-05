@@ -81,7 +81,10 @@ export function NotificationCenter({
       const aboveSpace = Math.max(0, rect.top - viewportPadding - gap);
       const openAbove = belowSpace < desiredHeight && aboveSpace > belowSpace;
       const availableSpace = openAbove ? aboveSpace : belowSpace;
-      const panelHeight = Math.max(1, Math.floor(availableSpace));
+      const panelHeight = Math.max(
+        1,
+        Math.min(Math.floor(desiredHeight), Math.floor(availableSpace)),
+      );
       const top = openAbove
         ? Math.max(viewportPadding, rect.top - gap - panelHeight)
         : Math.min(
