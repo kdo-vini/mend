@@ -39,6 +39,7 @@ export function NotificationCenter({
     top: number;
     left: number;
     maxHeight: number;
+    side: "left" | "right";
   } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -58,13 +59,20 @@ export function NotificationCenter({
         360,
         Math.max(0, window.innerWidth - viewportPadding * 2),
       );
-      const left = Math.min(
-        Math.max(rect.right - panelWidth, viewportPadding),
-        Math.max(
-          viewportPadding,
-          window.innerWidth - panelWidth - viewportPadding,
-        ),
-      );
+      const side = rect.left < window.innerWidth / 2 ? "left" : "right";
+      const left =
+        side === "left"
+          ? Math.min(
+              rect.right + gap,
+              window.innerWidth - panelWidth - viewportPadding,
+            )
+          : Math.min(
+              Math.max(rect.right - panelWidth, viewportPadding),
+              Math.max(
+                viewportPadding,
+                window.innerWidth - panelWidth - viewportPadding,
+              ),
+            );
       const desiredHeight = panelRef.current?.scrollHeight ?? 480;
       const belowSpace = Math.max(
         0,
@@ -85,6 +93,7 @@ export function NotificationCenter({
         top,
         left,
         maxHeight: panelHeight,
+        side,
       });
     };
 
@@ -128,7 +137,7 @@ export function NotificationCenter({
       {open && (
         <div
           ref={panelRef}
-          className="notification-panel"
+          className={`notification-panel notification-panel-${panelPosition?.side ?? "right"}`}
           role="dialog"
           aria-label="Notifications"
           style={{

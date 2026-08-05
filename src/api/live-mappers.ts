@@ -117,7 +117,10 @@ function displayTime(value: string | null | undefined) {
   }).format(date);
 }
 
-export function toUiMessage(record: MessageRecord): Message {
+export function toUiMessage(
+  record: MessageRecord,
+  contactDisplayName?: string,
+): Message {
   const messageType =
     record.message_type === "reaction"
       ? "text"
@@ -126,8 +129,10 @@ export function toUiMessage(record: MessageRecord): Message {
     id: record.id,
     conversationId: record.conversation_id,
     providerMessageId: record.provider_message_id,
+    senderUserId: record.sent_by_user_id ?? undefined,
     direction: record.direction === "outbound" ? "outbound" : "inbound",
     sender:
+      contactDisplayName ||
       record.participant_name ||
       (record.sender_type === "contact"
         ? "Customer"
@@ -196,7 +201,9 @@ export function toUiConversation(
   );
   const messages = orderedRecords
     .filter((record) => record.message_type !== "reaction")
-    .map(toUiMessage);
+    .map((record) =>
+      toUiMessage(record, chatType === "direct" ? name : undefined),
+    );
   for (const reaction of orderedRecords.filter(
     (record) => record.message_type === "reaction",
   )) {
@@ -213,6 +220,7 @@ export function toUiConversation(
   const last = messages.at(-1);
   return {
     id: record.id,
+    contactId: record.contact_id,
     chatType,
     name,
     company: contact?.company_name ?? "",

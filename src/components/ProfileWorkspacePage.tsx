@@ -15,6 +15,7 @@ import {
   getCurrentUser,
   getMyWorkspace,
   signOut,
+  updateMyWorkspaceMemberDisplayName,
   updateWorkspace,
   type WorkspaceWithRole,
 } from "../api/auth";
@@ -163,6 +164,12 @@ export function ProfileWorkspacePage({
         data: { full_name: profileName.trim() },
       });
       if (updateError) throw updateError;
+      if (workspaceId)
+        await updateMyWorkspaceMemberDisplayName(
+          workspaceId,
+          profileName.trim(),
+          supabase,
+        );
       setUser(data.user);
       onIdentityUpdated({
         name: profileName.trim(),

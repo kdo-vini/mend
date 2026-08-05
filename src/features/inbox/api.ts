@@ -13,6 +13,7 @@ import {
   sendLivePresence,
   reactToLiveMessage,
   snoozeLiveConversation,
+  updateLiveContact,
   updateLiveConversation,
   uploadLiveMediaAsset,
 } from "../../api/live-actions";
@@ -32,6 +33,7 @@ export {
   sendLivePresence,
   reactToLiveMessage,
   snoozeLiveConversation,
+  updateLiveContact,
   updateLiveConversation,
   uploadLiveMediaAsset,
 };

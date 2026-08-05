@@ -40,6 +40,7 @@ export interface Message {
   conversationId: string;
   providerMessageId?: string;
   clientId?: string;
+  senderUserId?: string;
   direction: "inbound" | "outbound";
   sender: string;
   text: string;
@@ -84,6 +85,7 @@ export interface AiDraft {
 
 export interface Conversation {
   id: string;
+  contactId?: string;
   chatType: "direct" | "group";
   name: string;
   company: string;

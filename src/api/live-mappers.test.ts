@@ -50,6 +50,13 @@ describe("live message mapper", () => {
       true,
     );
   });
+
+  it("uses the workspace contact name for direct messages", () => {
+    expect(toUiMessage(baseMessage, "João")).toMatchObject({
+      sender: "João",
+      senderUserId: undefined,
+    });
+  });
 });
 
 describe("live conversation mapper", () => {

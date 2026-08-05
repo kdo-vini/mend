@@ -49,6 +49,7 @@ import {
   sendLiveMessage,
   sendLivePresence,
   snoozeLiveConversation,
+  updateLiveContact,
   updateLiveConversation,
   uploadLiveMediaAsset,
 } from "../api";
@@ -161,6 +162,7 @@ export function InboxPage({
   onNewIssue,
   onToast,
   liveMode,
+  senderNames,
   knowledgeArticles,
   assigneeOptions,
   assigneeLabel,
@@ -175,6 +177,7 @@ export function InboxPage({
   onNewIssue: () => void;
   onToast: (message: string) => void;
   liveMode: boolean;
+  senderNames: Record<string, string>;
   knowledgeArticles: KnowledgeArticle[];
   assigneeOptions: AssigneeOption[];
   assigneeLabel: (value: string) => string;
@@ -879,6 +882,49 @@ export function InboxPage({
     }
   };
 
+  const saveContactName = async (displayName: string) => {
+    const nextName = displayName.trim();
+    if (!nextName || !selected.contactId || !workspaceId) return;
+    const previous = {
+      name: selected.name,
+      initials: selected.initials,
+    };
+    const nextInitials =
+      nextName
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase() || "?";
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id
+          ? { ...item, name: nextName, initials: nextInitials }
+          : item,
+      ),
+    );
+    try {
+      await updateLiveContact({
+        workspaceId,
+        contactId: selected.contactId,
+        displayName: nextName,
+      });
+      onToast("Contact name saved");
+    } catch (error) {
+      setConversations((current) =>
+        current.map((item) =>
+          item.id === selected.id ? { ...item, ...previous } : item,
+        ),
+      );
+      onToast(
+        error instanceof Error
+          ? error.message
+          : "Contact name could not be saved.",
+      );
+    }
+  };
+
   return (
     <div
       className={`inbox-page ${mobileConversationOpen ? "mobile-detail-open" : ""}`}
@@ -1012,6 +1058,7 @@ export function InboxPage({
             onDelete={() => void deleteConversation()}
             deleting={conversationDeleting}
             onAssign={assignConversation}
+            onRename={saveContactName}
             assigneeOptions={assigneeOptions}
             aiDetailsOpen={aiDetailsOpen}
             onToggleAiDetails={() => setAiDetailsOpen((current) => !current)}
@@ -1054,6 +1101,11 @@ export function InboxPage({
                   <MessageBubble
                     key={message.id}
                     message={message}
+                    senderName={
+                      message.senderUserId
+                        ? senderNames[message.senderUserId]
+                        : undefined
+                    }
                     actionPending={messageActionId === message.id}
                     onDelete={() => void deleteMessage(message)}
                     onCopy={async () => {
@@ -1357,6 +1409,7 @@ function ConversationHeader({
   onDelete,
   deleting,
   onAssign,
+  onRename,
   assigneeOptions,
   aiDetailsOpen,
   onToggleAiDetails,
@@ -1370,11 +1423,18 @@ function ConversationHeader({
   onDelete: () => void;
   deleting: boolean;
   onAssign: (assignee: string) => void;
+  onRename: (displayName: string) => void | Promise<void>;
   assigneeOptions: AssigneeOption[];
   aiDetailsOpen: boolean;
   onToggleAiDetails: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(conversation.name);
+  useEffect(() => {
+    setDraftName(conversation.name);
+    setEditingName(false);
+  }, [conversation.id, conversation.name]);
   return (
     <header className="conversation-header">
       <div className="conversation-identity">
@@ -1389,9 +1449,57 @@ function ConversationHeader({
         </div>
         <div>
           <div className="identity-name">
-            <h2>{conversation.name}</h2>
-            {conversation.chatType === "group" && (
-              <span className="group-badge">Group</span>
+            {editingName ? (
+              <form
+                className="identity-name-editor"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void Promise.resolve(onRename(draftName)).then(() =>
+                    setEditingName(false),
+                  );
+                }}
+              >
+                <input
+                  autoFocus
+                  aria-label="Contact name"
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                />
+                <button
+                  className="icon-button subtle"
+                  type="submit"
+                  aria-label="Save contact name"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  className="icon-button subtle"
+                  type="button"
+                  aria-label="Cancel contact name edit"
+                  onClick={() => {
+                    setDraftName(conversation.name);
+                    setEditingName(false);
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </form>
+            ) : (
+              <>
+                <h2>{conversation.name}</h2>
+                <button
+                  className="icon-button subtle identity-name-edit"
+                  type="button"
+                  aria-label="Edit contact name"
+                  disabled={!conversation.contactId}
+                  onClick={() => setEditingName(true)}
+                >
+                  <PenLine size={13} />
+                </button>
+                {conversation.chatType === "group" && (
+                  <span className="group-badge">Group</span>
+                )}
+              </>
             )}
           </div>
           <p>
@@ -1580,12 +1688,14 @@ function ConversationHeader({
 
 function MessageBubble({
   message,
+  senderName,
   actionPending,
   onDelete,
   onCopy,
   onReact,
 }: {
   message: Message;
+  senderName?: string;
   actionPending: boolean;
   onDelete: () => void;
   onCopy: () => void;
@@ -1600,7 +1710,7 @@ function MessageBubble({
             <Sparkles size={11} /> AI generated
           </span>
         )}
-        {message.sender} · {message.time}
+        {senderName || message.sender} · {message.time}
       </div>
       <div className="message-content-row">
         <div className="message-bubble-wrap">
@@ -1674,7 +1784,7 @@ function MessageBubble({
             ))}
           </div>
         )}
-        <ActionMenu label={`${message.sender} message`}>
+        <ActionMenu label={`${senderName || message.sender} message`}>
           {!message.deleted && message.text && (
             <button type="button" role="menuitem" onClick={onCopy}>
               <Copy size={14} /> Copy message

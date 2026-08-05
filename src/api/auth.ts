@@ -224,6 +224,32 @@ export function listWorkspaceMembers(
   );
 }
 
+export function updateMyWorkspaceMemberDisplayName(
+  workspaceId: string,
+  displayName: string,
+  client?: MendSupabaseClient,
+): Promise<WorkspaceMember> {
+  const normalizedName = displayName.trim();
+  if (!normalizedName)
+    return Promise.reject(new Error("Display name is required."));
+  const db = clientOrDefault(client);
+  return db.auth.getUser().then(({ data, error }) => {
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("A signed-in user is required.");
+    return db
+      .from("workspace_members")
+      .update({ display_name: normalizedName })
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", data.user.id)
+      .select("*")
+      .single()
+      .then((result) => {
+        if (result.error) throw new Error(result.error.message);
+        return result.data;
+      });
+  });
+}
+
 export function addWorkspaceMember(
   workspaceId: string,
   userId: string,

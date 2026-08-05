@@ -988,6 +988,28 @@ export async function updateLiveConversation(
   );
 }
 
+export async function updateLiveContact(
+  input: {
+    workspaceId: string;
+    contactId: string;
+    displayName: string;
+  },
+  client: MendSupabaseClient | null = supabase,
+) {
+  const db = requireClient(client);
+  const displayName = input.displayName.trim();
+  if (!displayName) throw new LiveActionError("Contact name is required.");
+  const { data, error } = await db
+    .from("contacts")
+    .update({ display_name: displayName, updated_at: new Date().toISOString() })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.contactId)
+    .select("*")
+    .single();
+  if (error) throw new LiveActionError(error.message);
+  return data;
+}
+
 export async function pauseLiveConversationAi(input: {
   workspaceId: string;
   conversationId: string;

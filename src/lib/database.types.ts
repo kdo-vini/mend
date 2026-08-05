@@ -1278,6 +1278,7 @@ export type Database = {
       workspace_members: {
         Row: {
           created_at: string
+          display_name: string | null
           id: string
           role: string
           user_id: string
@@ -1285,6 +1286,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          display_name?: string | null
           id?: string
           role?: string
           user_id: string
@@ -1292,6 +1294,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          display_name?: string | null
           id?: string
           role?: string
           user_id?: string

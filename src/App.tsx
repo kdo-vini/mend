@@ -208,7 +208,9 @@ function App() {
     name: "Current operator",
     email: "",
   });
-  const [workspaceMemberIds, setWorkspaceMemberIds] = useState<string[]>([]);
+  const [workspaceMemberNames, setWorkspaceMemberNames] = useState<
+    Record<string, string>
+  >({});
   const [inspectorIssueId, setInspectorIssueId] = useState<string | null>(null);
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const [editIssueId, setEditIssueId] = useState<string | null>(null);
@@ -299,10 +301,18 @@ function App() {
     void listWorkspaceMembers(workspaceId, supabase)
       .then((members) => {
         if (active)
-          setWorkspaceMemberIds(members.map((member) => member.user_id));
+          setWorkspaceMemberNames(
+            Object.fromEntries(
+              members.map((member) => [
+                member.user_id,
+                member.display_name?.trim() ||
+                  `Workspace member ${member.user_id.slice(0, 8)}`,
+              ]),
+            ),
+          );
       })
       .catch(() => {
-        if (active) setWorkspaceMemberIds([]);
+        if (active) setWorkspaceMemberNames({});
       });
     return () => {
       active = false;
@@ -317,12 +327,9 @@ function App() {
       ]
     : [
         { value: "Unassigned", label: "Unassigned" },
-        ...workspaceMemberIds.map((userId) => ({
+        ...Object.entries(workspaceMemberNames).map(([userId, name]) => ({
           value: userId,
-          label:
-            userId === operatorIdentity.id
-              ? operatorIdentity.name
-              : `User ${userId.slice(0, 8)}`,
+          label: userId === operatorIdentity.id ? operatorIdentity.name : name,
         })),
       ];
   const assigneeLabel = (value: string) =>
@@ -958,6 +965,12 @@ function App() {
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
                     liveMode={!demoMode}
+                    senderNames={{
+                      ...workspaceMemberNames,
+                      ...(operatorIdentity.id
+                        ? { [operatorIdentity.id]: operatorIdentity.name }
+                        : {}),
+                    }}
                     knowledgeArticles={knowledgeArticles}
                     assigneeOptions={assigneeOptions}
                     assigneeLabel={assigneeLabel}
@@ -1071,6 +1084,12 @@ function App() {
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
                     liveMode={!demoMode}
+                    senderNames={{
+                      ...workspaceMemberNames,
+                      ...(operatorIdentity.id
+                        ? { [operatorIdentity.id]: operatorIdentity.name }
+                        : {}),
+                    }}
                     knowledgeArticles={knowledgeArticles}
                     assigneeOptions={assigneeOptions}
                     assigneeLabel={assigneeLabel}
