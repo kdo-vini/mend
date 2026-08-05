@@ -15,6 +15,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -209,6 +210,7 @@ export function KanbanPage({
   const [loading, setLoading] = useState(!demoMode);
   const [error, setError] = useState<string | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
+  const taskInputRef = useRef<HTMLInputElement>(null);
   const [eventComposerOpen, setEventComposerOpen] = useState(false);
   const [eventTitle, setEventTitle] = useState("");
   const [eventStart, setEventStart] = useState(() => {
@@ -435,6 +437,14 @@ export function KanbanPage({
     }
   };
 
+  const focusTaskInput = () => {
+    if (!online) {
+      onToast("You are offline. Reconnect to add a task.");
+      return;
+    }
+    taskInputRef.current?.focus();
+  };
+
   const createEvent = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!online) {
@@ -606,7 +616,7 @@ export function KanbanPage({
             disabled={!online}
             className="button button-primary kanban-primary-action"
             type="button"
-            onClick={mode === "shared" ? onNewIssue : () => void createTask()}
+            onClick={mode === "shared" ? onNewIssue : focusTaskInput}
           >
             <Plus size={14} /> {mode === "shared" ? "New issue" : "New task"}
           </button>
@@ -641,6 +651,7 @@ export function KanbanPage({
             <Plus size={13} />
             <input
               disabled={!online}
+              ref={taskInputRef}
               aria-label="New personal task"
               value={taskTitle}
               placeholder="Add a task…"
@@ -753,17 +764,7 @@ export function KanbanPage({
             assigneeLabel={assigneeLabel}
             setIssueDueDate={setIssueDueDate}
             removeTask={removeTask}
-            onAddCard={
-              mode === "shared"
-                ? onNewIssue
-                : () => {
-                    document
-                      .querySelector<HTMLInputElement>(
-                        '[aria-label="New personal task"]',
-                      )
-                      ?.focus();
-                  }
-            }
+            onAddCard={mode === "shared" ? onNewIssue : focusTaskInput}
             online={online}
           />
         )}

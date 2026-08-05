@@ -30,6 +30,10 @@ test("operator can open the shared and personal Kanban views", async ({
     await expect(
       page.locator(".mobile-bottom-nav").getByRole("link", { name: "Kanban" }),
     ).toBeVisible();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
+    await expect(
+      page.getByRole("textbox", { name: "New personal task" }),
+    ).toBeFocused();
   } else {
     await expect(
       page.locator(".kanban-column-heading").filter({ hasText: "Triage" }),
@@ -39,6 +43,10 @@ test("operator can open the shared and personal Kanban views", async ({
     ).toBeVisible();
     await page.getByRole("tab", { name: "Personal" }).click();
     await expect(page.getByPlaceholder("Add a task…")).toBeVisible();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
+    await expect(
+      page.getByRole("textbox", { name: "New personal task" }),
+    ).toBeFocused();
   }
 });
 
