@@ -48,6 +48,7 @@ export const aiPolicyIntegrationValues = [
   "knowledge",
   "google_calendar",
   "codex",
+  "mcp",
 ] as const;
 export type AiPolicyIntegration = (typeof aiPolicyIntegrationValues)[number];
 
@@ -69,6 +70,7 @@ export interface WorkspaceAiPolicy {
   bugAutoReplyEnabled: boolean;
   bugAutoFixEnabled: boolean;
   bugAutoDeployEnabled: boolean;
+  mcpFailurePolicy: "review" | "generic_reply" | "retry_then_review";
 }
 
 export const DEFAULT_AI_ROUTE_MAP: AiRouteMap = {
@@ -92,7 +94,7 @@ const mandatoryHumanApprovalActions: AiPolicyAction[] = [
 
 export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   allowedChannels: ["whatsapp", "web"],
-  allowedIntegrations: ["knowledge", "codex"],
+  allowedIntegrations: ["knowledge", "codex", "mcp"],
   allowedActions: [
     "respond",
     "triage",
@@ -114,6 +116,7 @@ export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   bugAutoReplyEnabled: false,
   bugAutoFixEnabled: false,
   bugAutoDeployEnabled: false,
+  mcpFailurePolicy: "review",
 };
 
 export function isAiMode(value: unknown): value is AiMode {
@@ -214,6 +217,11 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
     bugAutoReplyEnabled: raw.bug_auto_reply_enabled === true,
     bugAutoFixEnabled: raw.bug_auto_fix_enabled === true,
     bugAutoDeployEnabled: raw.bug_auto_deploy_enabled === true,
+    mcpFailurePolicy:
+      raw.mcp_failure_policy === "generic_reply" ||
+      raw.mcp_failure_policy === "retry_then_review"
+        ? raw.mcp_failure_policy
+        : "review",
   };
 }
 
@@ -238,5 +246,6 @@ export function workspaceAiPolicyJson(
     bug_auto_reply_enabled: policy.bugAutoReplyEnabled,
     bug_auto_fix_enabled: policy.bugAutoFixEnabled,
     bug_auto_deploy_enabled: policy.bugAutoDeployEnabled,
+    mcp_failure_policy: policy.mcpFailurePolicy,
   };
 }

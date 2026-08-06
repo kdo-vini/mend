@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import type { AiMode } from "../../../types";
 import { currentInterfaceLanguage } from "../../../i18n/preferences";
-import type { GoogleConnection, WhatsAppInstance } from "../api";
+import type { GoogleConnection, McpConnection, WhatsAppInstance } from "../api";
 import {
   connectLiveChannel,
   connectWhatsAppInstance,
@@ -35,6 +35,12 @@ import {
   saveLiveGoogleCalendarSelection,
   startLiveGoogleOAuth,
   disconnectLiveGoogleConnection,
+  createLiveMcpConnection,
+  disconnectLiveMcpConnection,
+  listLiveMcpConnections,
+  startLiveMcpOAuth,
+  testLiveMcpConnection,
+  updateLiveMcpConnection,
   listWhatsAppInstances,
   refreshLiveChannel,
   saveLiveChannelFlow,
@@ -70,6 +76,7 @@ import { supabase } from "../api";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { Select } from "../../../shared/ui/Select";
+import type { Confirm } from "../../../shared/ui/ConfirmDialog";
 
 const triageIntentLabels: Record<TriageIntent, string> = {
   question: "Question / pricing",
@@ -113,16 +120,19 @@ const aiPolicyIntegrationLabels: Record<AiPolicyIntegration, string> = {
   knowledge: "Published knowledge",
   google_calendar: "Google Calendar",
   codex: "Codex",
+  mcp: "MCP plugins",
 };
 
 export function SettingsPage({
   workspaceId,
   onToast,
   onChannelChange,
+  onConfirm,
 }: {
   workspaceId: string | null;
   onToast: (message: string) => void;
   onChannelChange: (channel: WhatsAppInstance | null) => void;
+  onConfirm: Confirm;
 }) {
   type SettingsTab =
     | "whatsapp"
@@ -144,6 +154,14 @@ export function SettingsPage({
     GoogleConnection[]
   >([]);
   const [googleAction, setGoogleAction] = useState<string | null>(null);
+  const [mcpConnections, setMcpConnections] = useState<McpConnection[]>([]);
+  const [mcpAction, setMcpAction] = useState<string | null>(null);
+  const [mcpName, setMcpName] = useState("");
+  const [mcpDescription, setMcpDescription] = useState("");
+  const [mcpUrl, setMcpUrl] = useState("");
+  const [mcpAuthMode, setMcpAuthMode] =
+    useState<McpConnection["authMode"]>("none");
+  const [mcpHeaders, setMcpHeaders] = useState("{}");
   const [selected, setSelected] = useState<WhatsAppInstance | null>(null);
   const [instanceName, setInstanceName] = useState("mend-techne");
   const [qr, setQr] = useState<string | null>(null);
@@ -333,8 +351,14 @@ export function SettingsPage({
         setAiPolicy(policy);
         if (policy.dominantMode !== "mixed") setAiMode(policy.dominantMode);
       }
-      if (activeTab === "connections")
-        setGoogleConnections(await listLiveGoogleConnections(workspaceId));
+      if (activeTab === "connections") {
+        const [google, mcp] = await Promise.all([
+          listLiveGoogleConnections(workspaceId),
+          listLiveMcpConnections(workspaceId),
+        ]);
+        setGoogleConnections(google);
+        setMcpConnections(mcp);
+      }
       if (activeTab === "flows" && selected?.channelId) {
         setFlow(
           (await loadLiveChannelFlow({
@@ -514,10 +538,12 @@ export function SettingsPage({
     if (!workspaceId || !aiPolicy?.totalConversations) return;
     if (
       aiMode === "safe_auto" &&
-      typeof window !== "undefined" &&
-      !window.confirm(
-        "Enable Auto-reply for this workspace? It remains blocked unless the explicit send policy is enabled.",
-      )
+      !(await onConfirm({
+        title: "Enable Auto-reply?",
+        description:
+          "Auto-reply remains blocked unless the explicit send policy is enabled.",
+        confirmLabel: "Enable Auto-reply",
+      }))
     )
       return;
     setAiSaving(true);
@@ -549,10 +575,12 @@ export function SettingsPage({
     if (!workspaceId || !aiPolicy) return;
     if (
       aiPolicy.safeAutoSendEnabled &&
-      typeof window !== "undefined" &&
-      !window.confirm(
-        "Enable automatic customer replies for this workspace? Only configured routes with relevant published knowledge can send.",
-      )
+      !(await onConfirm({
+        title: "Enable automatic replies?",
+        description:
+          "Only configured routes with relevant published knowledge can send replies.",
+        confirmLabel: "Enable automatic replies",
+      }))
     )
       return;
     setAiPolicySaving(true);
@@ -633,10 +661,12 @@ export function SettingsPage({
   const disconnectGoogle = async (connection: GoogleConnection) => {
     if (!workspaceId) return;
     if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        `Disconnect ${connection.accountEmail ?? "this Google account"}? Its server-side tokens will be removed.`,
-      )
+      !(await onConfirm({
+        title: "Disconnect Google account?",
+        description: `Disconnect ${connection.accountEmail ?? "this Google account"}? Its server-side tokens will be removed.`,
+        confirmLabel: "Disconnect",
+        destructive: true,
+      }))
     )
       return;
     setGoogleAction(connection.id);
@@ -657,6 +687,140 @@ export function SettingsPage({
       );
     } finally {
       setGoogleAction(null);
+    }
+  };
+
+  const createMcp = async () => {
+    if (!workspaceId || !mcpName.trim() || !mcpUrl.trim()) return;
+    let headers: Record<string, string> = {};
+    try {
+      const parsed = JSON.parse(mcpHeaders || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+        headers = parsed;
+      else throw new Error("Headers must be a JSON object.");
+    } catch (error) {
+      onToast(
+        error instanceof Error ? error.message : "Headers JSON is invalid.",
+      );
+      return;
+    }
+    setMcpAction("create");
+    try {
+      const created = await createLiveMcpConnection(workspaceId, {
+        name: mcpName.trim(),
+        description: mcpDescription.trim(),
+        serverUrl: mcpUrl.trim(),
+        authMode: mcpAuthMode,
+        ...(mcpAuthMode === "headers" ? { headers } : {}),
+      });
+      setMcpConnections((current) => [created, ...current]);
+      setMcpName("");
+      setMcpDescription("");
+      setMcpUrl("");
+      onToast("MCP plugin connected. Select tools before using it.");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "MCP plugin could not be connected.",
+      );
+    } finally {
+      setMcpAction(null);
+    }
+  };
+
+  const testMcp = async (connection: McpConnection) => {
+    if (!workspaceId) return;
+    setMcpAction(connection.id);
+    try {
+      const updated = await testLiveMcpConnection(workspaceId, connection.id);
+      setMcpConnections((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      onToast(
+        `Discovered ${updated.tools.length} MCP tools. None were enabled automatically.`,
+      );
+    } catch (reason) {
+      onToast(
+        reason instanceof Error ? reason.message : "MCP plugin test failed.",
+      );
+    } finally {
+      setMcpAction(null);
+    }
+  };
+
+  const saveMcp = async (
+    connection: McpConnection,
+    update: Partial<Pick<McpConnection, "allowedToolNames" | "writeModes">>,
+  ) => {
+    if (!workspaceId) return;
+    if (update.writeModes?.length && !connection.writeModes.length) {
+      const confirmed = await onConfirm({
+        title: "Allow MCP writes?",
+        description:
+          "Copilot may alter the connected system before showing a draft. Auto-reply may alter it and respond without human review. Generic or SQL tools can have broad access.",
+        confirmLabel: "Allow writes",
+        destructive: true,
+      });
+      if (!confirmed) return;
+    }
+    setMcpAction(connection.id);
+    try {
+      const updated = await updateLiveMcpConnection(
+        workspaceId,
+        connection.id,
+        {
+          name: connection.name,
+          description: connection.description,
+          allowedToolNames:
+            update.allowedToolNames ?? connection.allowedToolNames,
+          writeModes: update.writeModes ?? connection.writeModes,
+        },
+      );
+      setMcpConnections((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "MCP plugin settings could not be saved.",
+      );
+    } finally {
+      setMcpAction(null);
+    }
+  };
+
+  const disconnectMcp = async (connection: McpConnection) => {
+    if (
+      !workspaceId ||
+      !(await onConfirm({
+        title: "Disconnect MCP plugin?",
+        description:
+          "This removes its server-side credentials and disables all tools.",
+        confirmLabel: "Disconnect",
+        destructive: true,
+      }))
+    )
+      return;
+    setMcpAction(connection.id);
+    try {
+      const updated = await disconnectLiveMcpConnection(
+        workspaceId,
+        connection.id,
+      );
+      setMcpConnections((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      onToast("MCP plugin disconnected");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "MCP plugin could not be disconnected.",
+      );
+    } finally {
+      setMcpAction(null);
     }
   };
 
@@ -725,7 +889,7 @@ export function SettingsPage({
     icon: typeof MessageCircle;
   }> = [
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-    { id: "connections", label: "Connections", icon: Link2 },
+    { id: "connections", label: "Plugins", icon: Link2 },
     { id: "members", label: "Members", icon: UsersRound },
     { id: "ai", label: "AI behavior", icon: Bot },
     { id: "flows", label: "Flows", icon: GitBranch },
@@ -795,6 +959,218 @@ export function SettingsPage({
               role="tabpanel"
               aria-labelledby="settings-tab-whatsapp"
             >
+              <section className="settings-section">
+                <div className="settings-section-header">
+                  <div>
+                    <h2>MCP plugins</h2>
+                    <p>
+                      Connect a trusted company MCP server. Tools are discovered
+                      for review and none are enabled automatically.
+                    </p>
+                  </div>
+                </div>
+                <div className="settings-form-grid">
+                  <label>
+                    Plugin name
+                    <input
+                      value={mcpName}
+                      onChange={(event) => setMcpName(event.target.value)}
+                      placeholder="Zelo workspace"
+                    />
+                  </label>
+                  <label>
+                    Purpose
+                    <input
+                      value={mcpDescription}
+                      onChange={(event) =>
+                        setMcpDescription(event.target.value)
+                      }
+                      placeholder="Find customers and account status"
+                    />
+                  </label>
+                  <label>
+                    MCP server URL
+                    <input
+                      value={mcpUrl}
+                      onChange={(event) => setMcpUrl(event.target.value)}
+                      placeholder="https://mcp.example.com"
+                      inputMode="url"
+                    />
+                  </label>
+                  <label>
+                    Authentication
+                    <Select
+                      value={mcpAuthMode}
+                      onChange={(value) =>
+                        setMcpAuthMode(value as McpConnection["authMode"])
+                      }
+                      options={[
+                        { value: "none", label: "None" },
+                        { value: "headers", label: "Secret headers" },
+                        { value: "oauth", label: "OAuth" },
+                      ]}
+                    />
+                  </label>
+                  {mcpAuthMode === "headers" && (
+                    <label className="settings-form-wide">
+                      Secret headers (JSON; stored encrypted)
+                      <textarea
+                        value={mcpHeaders}
+                        onChange={(event) => setMcpHeaders(event.target.value)}
+                        rows={3}
+                        placeholder={'{"Authorization":"Bearer …"}'}
+                      />
+                    </label>
+                  )}
+                </div>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  disabled={mcpAction === "create" || !workspaceId}
+                  onClick={() => void createMcp()}
+                >
+                  <Plus size={14} /> Add plugin
+                </button>
+                {settingsLoading ? (
+                  <LoadingState label="Loading MCP plugins…" />
+                ) : !mcpConnections.length ? (
+                  <EmptyState
+                    title="No MCP plugins connected"
+                    description="Connect your Zelo or another trusted workspace MCP server above."
+                  />
+                ) : (
+                  <div className="settings-list">
+                    {mcpConnections.map((connection) => {
+                      const enabled = new Set(connection.allowedToolNames);
+                      return (
+                        <div className="connection-card" key={connection.id}>
+                          <div className="connection-card-main">
+                            <div className="whatsapp-symbol">M</div>
+                            <div>
+                              <strong>{connection.name}</strong>
+                              <span>
+                                {connection.description || connection.serverUrl}
+                              </span>
+                              <small>
+                                Status: {connection.status} ·{" "}
+                                {connection.tools.length} discovered tools
+                              </small>
+                              {connection.lastError && (
+                                <small role="alert">
+                                  {connection.lastError}
+                                </small>
+                              )}
+                            </div>
+                          </div>
+                          {connection.authMode === "oauth" &&
+                            connection.status !== "connected" && (
+                              <button
+                                className="button button-secondary"
+                                type="button"
+                                disabled={mcpAction === connection.id}
+                                onClick={() =>
+                                  void startLiveMcpOAuth(
+                                    workspaceId!,
+                                    connection.id,
+                                  )
+                                    .then(({ oauthUrl }) =>
+                                      window.location.assign(oauthUrl),
+                                    )
+                                    .catch((reason) =>
+                                      onToast(
+                                        reason instanceof Error
+                                          ? reason.message
+                                          : "OAuth could not start.",
+                                      ),
+                                    )
+                                }
+                              >
+                                Authorize OAuth
+                              </button>
+                            )}
+                          {connection.tools.length > 0 && (
+                            <div className="settings-form-grid">
+                              {connection.tools.map((tool) => (
+                                <label key={tool.name}>
+                                  <input
+                                    type="checkbox"
+                                    checked={enabled.has(tool.name)}
+                                    disabled={mcpAction === connection.id}
+                                    onChange={(event) => {
+                                      const next = new Set(enabled);
+                                      if (event.target.checked)
+                                        next.add(tool.name);
+                                      else next.delete(tool.name);
+                                      void saveMcp(connection, {
+                                        allowedToolNames: [...next],
+                                      });
+                                    }}
+                                  />
+                                  {tool.name}{" "}
+                                  {tool.readOnly
+                                    ? "(read)"
+                                    : "(write — confirm risk)"}
+                                </label>
+                              ))}
+                              <label>
+                                Write access
+                                <Select
+                                  value={
+                                    connection.writeModes.length === 2
+                                      ? "both"
+                                      : (connection.writeModes[0] ?? "none")
+                                  }
+                                  disabled={mcpAction === connection.id}
+                                  options={[
+                                    { value: "none", label: "None" },
+                                    {
+                                      value: "draft",
+                                      label: "Copilot / draft",
+                                    },
+                                    { value: "safe_auto", label: "Auto-reply" },
+                                    {
+                                      value: "both",
+                                      label: "Copilot and Auto-reply",
+                                    },
+                                  ]}
+                                  onChange={(value) => {
+                                    void saveMcp(connection, {
+                                      writeModes:
+                                        value === "both"
+                                          ? ["draft", "safe_auto"]
+                                          : value === "none"
+                                            ? []
+                                            : [value as "draft" | "safe_auto"],
+                                    });
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                          <div className="connection-card-actions">
+                            <button
+                              className="button button-secondary"
+                              type="button"
+                              disabled={mcpAction === connection.id}
+                              onClick={() => void testMcp(connection)}
+                            >
+                              <RefreshCw size={14} /> Test / rediscover
+                            </button>
+                            <button
+                              className="button button-danger"
+                              type="button"
+                              disabled={mcpAction === connection.id}
+                              onClick={() => void disconnectMcp(connection)}
+                            >
+                              <Trash2 size={14} /> Disconnect
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
@@ -1279,6 +1655,36 @@ export function SettingsPage({
                       </label>
                     </div>
                     <div className="settings-form-grid automation-toggles">
+                      <label>
+                        MCP failure policy
+                        <Select
+                          ariaLabel="MCP failure policy"
+                          value={aiPolicy.mcpFailurePolicy}
+                          options={[
+                            { value: "review", label: "Send to human review" },
+                            {
+                              value: "generic_reply",
+                              label: "Generic published-knowledge reply",
+                            },
+                            {
+                              value: "retry_then_review",
+                              label: "Retry twice, then review",
+                            },
+                          ]}
+                          disabled={aiPolicySaving}
+                          onChange={(value) =>
+                            setAiPolicy((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    mcpFailurePolicy:
+                                      value as LiveWorkspaceAiPolicy["mcpFailurePolicy"],
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                      </label>
                       <label>
                         <input
                           type="checkbox"

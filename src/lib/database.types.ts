@@ -1425,6 +1425,180 @@ export type Database = {
           },
         ]
       }
+      mcp_connections: {
+        Row: {
+          id: string
+          workspace_id: string
+          name: string
+          description: string
+          server_url: string
+          auth_mode: string
+          status: string
+          tools_json: Json
+          allowed_tool_names_json: Json
+          write_modes_json: Json
+          last_error: string | null
+          last_tested_at: string | null
+          created_by_user_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          name: string
+          description?: string
+          server_url: string
+          auth_mode?: string
+          status?: string
+          tools_json?: Json
+          allowed_tool_names_json?: Json
+          write_modes_json?: Json
+          last_error?: string | null
+          last_tested_at?: string | null
+          created_by_user_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          name?: string
+          description?: string
+          server_url?: string
+          auth_mode?: string
+          status?: string
+          tools_json?: Json
+          allowed_tool_names_json?: Json
+          write_modes_json?: Json
+          last_error?: string | null
+          last_tested_at?: string | null
+          created_by_user_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mcp_connection_secrets: {
+        Row: {
+          connection_id: string
+          headers_encrypted: string | null
+          access_token_encrypted: string | null
+          refresh_token_encrypted: string | null
+          client_id_encrypted: string | null
+          client_secret_encrypted: string | null
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          headers_encrypted?: string | null
+          access_token_encrypted?: string | null
+          refresh_token_encrypted?: string | null
+          client_id_encrypted?: string | null
+          client_secret_encrypted?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          headers_encrypted?: string | null
+          access_token_encrypted?: string | null
+          refresh_token_encrypted?: string | null
+          client_id_encrypted?: string | null
+          client_secret_encrypted?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mcp_oauth_states: {
+        Row: {
+          id: string
+          state_hash: string
+          connection_id: string
+          workspace_id: string
+          user_id: string
+          verifier_encrypted: string
+          issuer: string | null
+          expires_at: string
+          consumed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          state_hash: string
+          connection_id: string
+          workspace_id: string
+          user_id: string
+          verifier_encrypted: string
+          issuer?: string | null
+          expires_at: string
+          consumed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          state_hash?: string
+          connection_id?: string
+          workspace_id?: string
+          user_id?: string
+          verifier_encrypted?: string
+          issuer?: string | null
+          expires_at?: string
+          consumed_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      mcp_tool_executions: {
+        Row: {
+          id: string
+          workspace_id: string
+          connection_id: string
+          source_message_id: string
+          idempotency_key: string
+          tool_name: string
+          arguments_hmac: string
+          mode: string
+          status: string
+          openai_response_id: string | null
+          approval_request_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          connection_id: string
+          source_message_id: string
+          idempotency_key: string
+          tool_name: string
+          arguments_hmac: string
+          mode: string
+          status?: string
+          openai_response_id?: string | null
+          approval_request_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          connection_id?: string
+          source_message_id?: string
+          idempotency_key?: string
+          tool_name?: string
+          arguments_hmac?: string
+          mode?: string
+          status?: string
+          openai_response_id?: string | null
+          approval_request_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       workspace_members: {
         Row: {
           created_at: string

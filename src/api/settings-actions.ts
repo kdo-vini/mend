@@ -113,26 +113,15 @@ export async function saveLiveWorkspaceAiPolicy(
   policy: WorkspaceAiPolicy,
   client: MendSupabaseClient | null = supabase,
 ) {
+  const supabaseClient = requireClient(client);
   const rows = await unwrap(
-    requireClient(client)
+    supabaseClient
       .from("workspaces")
       .update({
         ai_policy_json: workspaceAiPolicyJson(policy),
         updated_at: new Date().toISOString(),
       })
       .eq("id", workspaceId)
-      .select("id"),
-  );
-  await unwrap(
-    requireClient(client)
-      .from("audit_log")
-      .insert({
-        workspace_id: workspaceId,
-        action: "ai.policy_updated",
-        entity_type: "workspace",
-        entity_id: workspaceId,
-        metadata_json: workspaceAiPolicyJson(policy),
-      })
       .select("id"),
   );
   return { updatedCount: rows.length, policy };

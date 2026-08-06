@@ -1,0 +1,109 @@
+# Catálogo de helpers e padrões
+
+Este documento é a referência rápida para reutilizar helpers e padrões antes de
+criar um novo adapter, integração ou fluxo de autorização. Decisões
+arquiteturais completas ficam em [decisions](decisions/); este
+catálogo não substitui os ADRs.
+
+## Regra principal
+
+Antes de escrever código novo:
+
+1. Procure um helper existente com `rg` pelo comportamento, não apenas pelo
+   nome (`encrypt`, `normalize`, `validate`, `map`, `audit`, `idempotency`).
+2. Se o comportamento for igual em dois domínios, generalize o helper e
+   preserve aliases de compatibilidade quando houver chamadas existentes.
+3. Mantenha regras de domínio no adapter/serviço; o helper genérico não deve
+   conhecer workspace, HTTP, Supabase ou componentes React.
+4. Registre uma decisão nesta página quando uma abstração nova for necessária.
+5. Adicione um teste do comportamento reutilizado antes de copiar a lógica.
+
+## Catálogo de helpers genéricos
+
+| Helper                                                | Local                                                | Uso obrigatório                                                                                                                                                                                                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `encryptConnectionSecret` / `decryptConnectionSecret` | `server/connection-crypto.ts`                        | Criptografar tokens, headers, client secrets, refresh tokens e qualquer segredo de conexão. O helper é agnóstico à chave; o MCP resolve `CONNECTION_ENCRYPTION_KEY` com fallback legado `GOOGLE_TOKEN_ENCRYPTION_KEY`. Não criar outro AES-GCM. |
+| `connectionEncryptionKey`                             | `server/mcp.ts`                                      | Resolver e validar a chave de criptografia no backend. Nunca chamar essa lógica no navegador.                                                                                                                                                   |
+| `mcpConnectionRecordFromRow`                          | `server/mcp.ts`                                      | Converter uma linha sanitizada de `mcp_connections` para o contrato de domínio. Worker e adapters devem reutilizar o mapper.                                                                                                                    |
+| `normalizePhoneNumber`                                | `server/whatsmiau.ts`                                | Normalizar telefone antes de procurar o contato em qualquer MCP ou integração de atendimento.                                                                                                                                                   |
+| `apiRequest`                                          | `src/api/transport.ts`                               | Toda chamada HTTP autenticada do navegador. Componentes não devem montar `fetch` próprio.                                                                                                                                                       |
+| `checked`, `row`, `rows`, `str`                       | `server/adapters/supabase-mappers.ts`                | Validar resultados Supabase e converter dados no limite do backend. Não duplicar casts espalhados nos serviços.                                                                                                                                 |
+| `policyDecision` / `normalizeWorkspaceAiPolicy`       | `server/automation/decision.ts` e `src/ai-policy.ts` | Toda decisão de draft, Auto-reply, escalonamento e política de falha. A UI apenas edita a política; não reimplementa os gates.                                                                                                                  |
+| `useConfirmation` / `ConfirmDialog`                   | `src/shared/ui/`                                     | Confirmações destrutivas ou que autorizam escrita externa. Não usar `window.confirm`.                                                                                                                                                           |
+
+Aliases antigos, como `encryptGoogleToken` e `decryptGoogleToken`, existem
+somente para compatibilidade com chamadas legadas. Código novo deve usar os
+nomes genéricos.
+
+## Padrões de arquitetura
+
+### Ports and adapters
+
+Contratos de integração ficam em `server/contracts/` ou no módulo de domínio
+da integração. A implementação Supabase fica em
+`server/supabase-api-adapters.ts`. Rotas recebem a porta por
+`ApiRouterDependencies`; elas não consultam Supabase diretamente.
+
+Fluxo esperado:
+
+```text
+React/API client -> route schema -> port -> Supabase adapter -> mapper/helper
+```
+
+Uma porta com uma implementação ainda é aceitável quando ela protege o limite
+HTTP, facilita testes e mantém a implementação de banco fora da UI. Não criar
+interfaces genéricas para utilitários puros ou para uma função usada uma única
+vez.
+
+### Mappers no limite
+
+Linhas Supabase são convertidas uma vez, no limite do backend. O mapper deve:
+
+- remover nomes de coluna do contrato de domínio;
+- aplicar defaults e classificações conservadoras;
+- excluir segredos e payloads brutos;
+- ser reutilizado por listagem, worker e rotas.
+
+Não faça um segundo `map` equivalente em worker, página ou adapter diferente.
+
+### Provider-shaped AI
+
+`SupportAiProvider` é o limite para OpenAI. O worker decide quando chamar o
+provider e quais dados podem entrar no contexto. O provider decide como montar a
+requisição Responses API/MCP. Nenhum componente React ou serviço de domínio
+deve conhecer o formato `mcp`, `mcp_call` ou `mcp_approval_request`.
+
+### Segredos e integrações
+
+- Segredos ficam apenas em tabelas backend-only e são lidos pelo service role.
+- Resumos sanitizados podem ir para o navegador; headers, tokens, client
+  secrets, argumentos e resultados brutos nunca vão.
+- OAuth deve usar o SDK oficial, PKCE, state one-shot, expiração e validação
+  de issuer/resource.
+- A Responses API recebe somente as tools allowlisted e as credenciais
+  necessárias para aquele workspace.
+
+### Idempotência de escrita
+
+Toda escrita MCP autorizada precisa de uma chave derivada da mensagem,
+workspace/plugin, tool e argumentos. Grave o HMAC antes da execução. Se já
+existir uma execução aprovada, concluída ou incerta, não execute novamente;
+encaminhe para revisão humana. Falha depois de uma possível mutação não deve
+ser automaticamente repetida.
+
+## Checklist para uma mudança nova
+
+- [ ] Pesquisei helpers existentes com `rg` antes de implementar.
+- [ ] A lógica nova é realmente genérica ou é regra do domínio?
+- [ ] Há um único mapper para o mesmo row/DTO?
+- [ ] Segredos permanecem no backend e não aparecem no contrato público?
+- [ ] A operação é workspace-scoped e coberta por RLS/role check?
+- [ ] Escrita externa tem confirmação, HMAC, estado idempotente e auditoria?
+- [ ] O novo helper tem teste unitário e nome orientado ao comportamento?
+- [ ] Atualizei este catálogo se criei um helper reutilizável?
+- [ ] Rodei `npm run typecheck`, `npm test`, `npm run lint` e
+      `npm run format:check`?
+
+Para uma decisão que afeta arquitetura, segurança, dados ou operação, use o
+[template de ADR](templates/ADR.md) e registre o documento no
+[índice de decisões](decisions/).

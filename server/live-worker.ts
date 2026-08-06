@@ -7,7 +7,12 @@ import {
   type InboxMessageRecord,
 } from "./inbox-service.js";
 import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
-import { OpenAiAudioTranscriber, type SupportAiProvider } from "./providers.js";
+import {
+  OpenAiAudioTranscriber,
+  type McpApprovalInput,
+  type SupportAiDraftResult,
+  type SupportAiProvider,
+} from "./providers.js";
 import { normalizeLocale } from "./locale.js";
 import { SupabaseMediaStorage } from "./media.js";
 import {
@@ -36,7 +41,10 @@ import {
   type LiveWorkerKnowledgeArticle,
   type LiveWorkerTriageState,
 } from "./automation/decision.js";
-import type { NormalizedWhatsmiauMessage } from "./whatsmiau.js";
+import {
+  normalizePhoneNumber,
+  type NormalizedWhatsmiauMessage,
+} from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
 import {
   flowFromChannelSettings,
@@ -48,6 +56,13 @@ import {
   SupabaseCodexRunStore,
   SupabaseRepositoryAdapter,
 } from "./supabase-api-adapters.js";
+import {
+  connectionEncryptionKey,
+  decryptMcpSecret,
+  mcpArgumentsHmac,
+  mcpConnectionRecordFromRow,
+  type McpRuntimeConnection,
+} from "./mcp.js";
 
 type LiveWorkerSupabaseClient = SupabaseClient<Database>;
 type KnowledgeArticleRow =
@@ -101,7 +116,11 @@ type LiveWorkerJobPayload =
   | SendAiReplyJobPayload
   | MediaProcessJobPayload;
 
-interface UncheckedSupabaseQuery {
+interface UncheckedSupabaseQuery
+  extends PromiseLike<{
+    data: unknown;
+    error: { message: string } | null;
+  }> {
   select(columns?: string): UncheckedSupabaseQuery;
   insert(values: unknown): UncheckedSupabaseQuery;
   update(values: unknown): UncheckedSupabaseQuery;
@@ -170,6 +189,8 @@ export interface LiveWorkerDraft {
   body: string;
   knowledgeArticleIds: readonly string[];
   triage: TriageResult;
+  mcpEvidence?: boolean;
+  mcpCalls?: SupportAiDraftResult["mcpCalls"];
 }
 
 export interface LiveWorkerIssue {
@@ -679,35 +700,119 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     }
 
     const matchedKnowledge = relevantKnowledge(input.message, input.knowledge);
+    let mcpConnections: McpRuntimeConnection[] = [];
+    let mcpFailureRequiresReview = false;
+    if (modePolicy.policy.allowedIntegrations.includes("mcp")) {
+      const attempts =
+        modePolicy.policy.mcpFailurePolicy === "retry_then_review" ? 3 : 1;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        try {
+          mcpConnections = await this.loadMcpConnections(input);
+          break;
+        } catch (error) {
+          if (attempt === attempts - 1) {
+            mcpFailureRequiresReview =
+              modePolicy.policy.mcpFailurePolicy !== "generic_reply";
+            await this.auditDecision(input, triage, "ai.mcp_failed", {
+              policy: modePolicy.policy.mcpFailurePolicy,
+              attempts: attempt + 1,
+              error:
+                error instanceof Error
+                  ? error.message.slice(0, 200)
+                  : "unknown",
+            });
+          }
+        }
+      }
+    }
     const configuredRoute = modePolicy.policy.routes[triage.intent];
-    const route =
+    let route =
       configuredRoute === "knowledge_auto_reply" &&
       modePolicy.policy.requirePublishedKnowledge &&
-      !matchedKnowledge.length
+      !matchedKnowledge.length &&
+      !mcpConnections.length
         ? modePolicy.policy.fallbackRoute
         : configuredRoute;
-    const decision = policyDecision(
+    if (mcpFailureRequiresReview && route !== "bug_triage")
+      route = "human_escalation";
+    const provisionalDecision = policyDecision(
       modePolicy.mode,
       triage,
       modePolicy.policy,
-      matchedKnowledge.length > 0,
+      matchedKnowledge.length > 0 || mcpConnections.length > 0,
       route,
     );
     const issue =
       route === "bug_triage"
         ? await this.upsertIssue(input, triage)
         : undefined;
-    const draft =
-      decision.allowed && route !== "bug_triage"
-        ? await this.buildDraft(
+    let draft: LiveWorkerDraft | undefined;
+    if (provisionalDecision.allowed && route !== "bug_triage") {
+      try {
+        draft = await this.buildDraft(
+          input,
+          triage,
+          modePolicy.mode,
+          provisionalDecision,
+          matchedKnowledge,
+          mcpConnections,
+        );
+      } catch (error) {
+        await this.auditDecision(input, triage, "ai.mcp_failed", {
+          policy: modePolicy.policy.mcpFailurePolicy,
+          stage: "draft",
+          error:
+            error instanceof Error ? error.message.slice(0, 200) : "unknown",
+        });
+        if (
+          modePolicy.policy.mcpFailurePolicy === "generic_reply" &&
+          matchedKnowledge.length
+        ) {
+          draft = await this.buildDraft(
             input,
             triage,
             modePolicy.mode,
-            decision,
+            provisionalDecision,
             matchedKnowledge,
-          )
-        : undefined;
-    if (draft)
+            [],
+          );
+        } else {
+          route = "human_escalation";
+        }
+      }
+    }
+    const hasEvidence =
+      matchedKnowledge.length > 0 || draft?.mcpEvidence === true;
+    for (const call of draft?.mcpCalls ?? []) {
+      await this.auditDecision(input, triage, "ai.mcp_tool_called", {
+        connectionId: call.connectionId,
+        tool: call.toolName,
+        classification: call.kind,
+        status: call.status,
+        mode: modePolicy.mode,
+      });
+      if (call.kind === "write" && call.status !== "approval_denied") {
+        await this.metadataClient
+          .from("mcp_tool_executions")
+          .update({
+            status: call.status === "completed" ? "completed" : "failed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("workspace_id", input.binding.workspaceId)
+          .eq("source_message_id", input.persisted.id)
+          .eq("idempotency_key", input.idempotencyKey)
+          .eq("connection_id", call.connectionId)
+          .eq("tool_name", call.toolName);
+      }
+    }
+    const decision = policyDecision(
+      modePolicy.mode,
+      triage,
+      modePolicy.policy,
+      hasEvidence,
+      route,
+    );
+    if (draft && decision.allowed)
       await this.persistDraft(
         input,
         draft,
@@ -762,7 +867,16 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         mode: modePolicy.mode,
         decision: decision.action,
         route,
-        hasKnowledge: matchedKnowledge.length > 0,
+        hasKnowledge: hasEvidence,
+        mcpEvidence: draft?.mcpEvidence ?? false,
+        mcpCalls: draft?.mcpCalls?.map(
+          ({ connectionId, toolName, kind, status }) => ({
+            connectionId,
+            toolName,
+            kind,
+            status,
+          }),
+        ),
       },
     );
     const { error } = await this.client
@@ -798,7 +912,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         );
     }
     const canSend =
-      Boolean(draft) &&
+      Boolean(draft && decision.allowed) &&
       decision.action === "auto_reply" &&
       modePolicy.policy.safeAutoSendEnabled;
     const result: LiveWorkerAutomationResult = {
@@ -1253,6 +1367,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     mode: LiveWorkerAiMode,
     decision: ReturnType<typeof policyDecision>,
     knowledge: readonly LiveWorkerKnowledgeArticle[],
+    mcpConnections: readonly McpRuntimeConnection[],
   ): Promise<LiveWorkerDraft | undefined> {
     if (triage.unsafe || !decision.allowed || mode === "off") return undefined;
     const workspace = await this.metadataClient
@@ -1267,14 +1382,35 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     const workspaceRow = (workspace.data ?? {}) as {
       default_language?: unknown;
     };
-    const body = boundedText(
-      await this.provider.draftReply(
-        messageText(input.message),
-        safeKnowledgeContext(knowledge),
-        normalizeLocale(workspaceRow.default_language),
-      ),
-      12_000,
-    );
+    const phone = await this.customerPhone(input);
+    const conversation = [
+      "<customer_context>",
+      `normalized_phone: ${phone}`,
+      "</customer_context>",
+      "<customer_message>",
+      messageText(input.message),
+      "</customer_message>",
+    ].join("\n");
+    const contextResult =
+      mcpConnections.length && this.provider.draftReplyWithContext
+        ? await this.provider.draftReplyWithContext({
+            conversation,
+            knowledgeContext: safeKnowledgeContext(knowledge),
+            language: normalizeLocale(workspaceRow.default_language),
+            mcpConnections,
+            onMcpApproval: (approval) =>
+              this.approveMcpWrite(input, mode, mcpConnections, approval),
+          })
+        : {
+            body: await this.provider.draftReply(
+              conversation,
+              safeKnowledgeContext(knowledge),
+              normalizeLocale(workspaceRow.default_language),
+            ),
+            mcpEvidence: false,
+            mcpCalls: [],
+          };
+    const body = boundedText(contextResult.body, 12_000);
     if (!body) return undefined;
     return {
       conversationId: input.persisted.conversationId,
@@ -1283,7 +1419,143 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       body,
       knowledgeArticleIds: knowledge.map((article) => article.id),
       triage,
+      mcpEvidence: contextResult.mcpEvidence,
+      mcpCalls: contextResult.mcpCalls,
     };
+  }
+
+  private async loadMcpConnections(
+    input: LiveWorkerAutomationInput,
+  ): Promise<McpRuntimeConnection[]> {
+    const result = await this.metadataClient
+      .from("mcp_connections")
+      .select("*")
+      .eq("workspace_id", input.binding.workspaceId)
+      .eq("status", "connected");
+    if (result.error)
+      throw new Error(`supabase:mcp_connections:${result.error.message}`);
+    const rows = Array.isArray(result.data) ? result.data : [];
+    const output: McpRuntimeConnection[] = [];
+    for (const value of rows) {
+      const row = value as Record<string, unknown>;
+      const connection = mcpConnectionRecordFromRow(row);
+      if (!connection.allowedToolNames.length) continue;
+      let headers: Record<string, string> = {};
+      if (row.auth_mode === "headers") {
+        const secret = await this.metadataClient
+          .from("mcp_connection_secrets")
+          .select("headers_encrypted")
+          .eq("connection_id", String(row.id))
+          .maybeSingle();
+        if (secret.error)
+          throw new Error(`supabase:mcp_secrets:${secret.error.message}`);
+        if (
+          typeof (secret.data as Record<string, unknown> | null)
+            ?.headers_encrypted === "string"
+        ) {
+          const plaintext = decryptMcpSecret(
+            String((secret.data as Record<string, unknown>).headers_encrypted),
+            connectionEncryptionKey(),
+          );
+          const parsed = JSON.parse(plaintext) as unknown;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+            headers = Object.fromEntries(
+              Object.entries(parsed).filter(
+                (entry): entry is [string, string] =>
+                  typeof entry[1] === "string",
+              ),
+            );
+        }
+      }
+      output.push({
+        ...connection,
+        status: "connected",
+        lastError: connection.lastError,
+        headers,
+      });
+    }
+    return output;
+  }
+
+  private async customerPhone(
+    input: LiveWorkerAutomationInput,
+  ): Promise<string> {
+    const fromMessage = normalizePhoneNumber(input.message.phoneNumber || "");
+    if (fromMessage) return fromMessage;
+    const result = await this.metadataClient
+      .from("contacts")
+      .select("phone_number")
+      .eq("id", input.persisted.contactId)
+      .eq("workspace_id", input.binding.workspaceId)
+      .maybeSingle();
+    if (result.error)
+      throw new Error(`supabase:contacts:phone:${result.error.message}`);
+    return normalizePhoneNumber(
+      String(
+        (result.data as Record<string, unknown> | null)?.phone_number ?? "",
+      ),
+    );
+  }
+
+  private async approveMcpWrite(
+    input: LiveWorkerAutomationInput,
+    mode: LiveWorkerAiMode,
+    connections: readonly McpRuntimeConnection[],
+    approval: McpApprovalInput,
+  ): Promise<boolean> {
+    const connection = connections.find(
+      (item) => item.id === approval.connectionId,
+    );
+    const tool = connection?.tools.find(
+      (item) => item.name === approval.toolName,
+    );
+    if (
+      !connection ||
+      !tool ||
+      tool.readOnly ||
+      !connection.writeModes.includes(mode as "draft" | "safe_auto")
+    )
+      return false;
+    const key = mcpArgumentsHmac(
+      approval.argumentsJson,
+      connectionEncryptionKey(),
+    );
+    const existing = await this.metadataClient
+      .from("mcp_tool_executions")
+      .select("status")
+      .eq("workspace_id", input.binding.workspaceId)
+      .eq("connection_id", connection.id)
+      .eq("idempotency_key", input.idempotencyKey)
+      .eq("tool_name", approval.toolName)
+      .eq("arguments_hmac", key)
+      .maybeSingle();
+    if (existing.error)
+      throw new Error(`supabase:mcp_tool_executions:${existing.error.message}`);
+    if (existing.data) return false;
+    const inserted = await this.metadataClient
+      .from("mcp_tool_executions")
+      .insert({
+        workspace_id: input.binding.workspaceId,
+        connection_id: connection.id,
+        source_message_id: input.persisted.id,
+        idempotency_key: input.idempotencyKey,
+        tool_name: approval.toolName,
+        arguments_hmac: key,
+        mode,
+        status: "approved",
+        openai_response_id: approval.responseId ?? null,
+        approval_request_id: approval.approvalRequestId,
+      });
+    if (inserted.error && !/duplicate|unique/i.test(inserted.error.message))
+      throw new Error(`supabase:mcp_tool_executions:${inserted.error.message}`);
+    await this.metadataClient.from("audit_log").insert({
+      workspace_id: input.binding.workspaceId,
+      action: "ai.mcp_tool_approval",
+      entity_type: "mcp_connection",
+      entity_id: connection.id,
+      metadata_json: { tool: approval.toolName, mode, status: "approved" },
+    });
+    return !inserted.error;
   }
 
   private async persistDraft(

@@ -12,6 +12,9 @@ This repository is a TypeScript React/Vite SaaS with an Express backend.
 - `public/`, `supabase/`, `docs/`: static assets, database configuration, and supporting documentation.
 
 Keep feature-specific API calls inside that feature’s `api.ts`; shared UI must not import backend adapters directly. Consult `DESIGN.md` before changing visual patterns.
+Before adding a helper, adapter, integration or authorization flow, consult `docs/engineering/catalog.md` and update its catalog when the behavior is reusable.
+
+Every feature that involves UI must read `DESIGN.md` before implementation and follow its design patterns, tokens, accessibility rules, and review checklist. New confirmation flows must use the shared app-native confirmation pattern documented there.
 
 ## Build, Test, and Development Commands
 

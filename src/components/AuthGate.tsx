@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { signInWithGoogle as startGoogleSignIn } from "../api/auth";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import {
@@ -29,6 +30,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [authAction, setAuthAction] = useState<"password" | "google" | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [interfaceLanguage, setInterfaceLanguage] = useState<SupportedLocale>(
@@ -93,21 +97,50 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!supabase) return;
+    if (!supabase || authAction) return;
     setError(null);
     setNotice(null);
-    const result =
-      authMode === "sign-in"
-        ? await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-          })
-        : await supabase.auth.signUp({ email: email.trim(), password });
-    if (result.error) setError(result.error.message);
-    else if (authMode === "sign-up" && !result.data.session)
-      setNotice(t("checkInboxConfirm"));
-    else
-      setNotice(authMode === "sign-up" ? t("accountCreated") : t("signedIn"));
+    setAuthAction("password");
+    try {
+      const result =
+        authMode === "sign-in"
+          ? await supabase.auth.signInWithPassword({
+              email: email.trim(),
+              password,
+            })
+          : await supabase.auth.signUp({ email: email.trim(), password });
+      if (result.error) setError(result.error.message);
+      else if (authMode === "sign-up" && !result.data.session)
+        setNotice(t("checkInboxConfirm"));
+      else
+        setNotice(authMode === "sign-up" ? t("accountCreated") : t("signedIn"));
+    } finally {
+      setAuthAction(null);
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    if (!supabase || authAction) return;
+    setError(null);
+    setNotice(null);
+    setAuthAction("google");
+    try {
+      const result = await startGoogleSignIn(
+        typeof window === "undefined" ? undefined : window.location.origin,
+        supabase,
+      );
+      if (result.error) {
+        setError(result.error.message);
+        setAuthAction(null);
+      }
+    } catch (googleError) {
+      setError(
+        googleError instanceof Error
+          ? googleError.message
+          : t("googleSignInError"),
+      );
+      setAuthAction(null);
+    }
   };
 
   const sendMagicLink = async () => {
@@ -136,6 +169,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
             void applyInterfaceLanguage(locale);
           }}
         />
+        <button
+          className="button button-ghost auth-google"
+          type="button"
+          onClick={() => void signInWithGoogle()}
+          disabled={authAction !== null}
+        >
+          <GoogleMark />
+          {authAction === "google"
+            ? t("connectingGoogle")
+            : t("continueWithGoogle")}
+        </button>
+        <div className="auth-divider" aria-hidden="true">
+          <span>{t("orContinueWith")}</span>
+        </div>
         <label>
           <span>{t("email")}</span>
           <div className="auth-input">
@@ -174,7 +221,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
             {notice}
           </p>
         )}
-        <button className="button button-primary auth-submit" type="submit">
+        <button
+          className="button button-primary auth-submit"
+          type="submit"
+          disabled={authAction !== null}
+        >
           {authMode === "sign-in" ? t("signIn") : t("createAccount")}{" "}
           <ArrowRight size={15} />
         </button>
@@ -183,6 +234,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             className="text-button auth-magic"
             type="button"
             onClick={() => void sendMagicLink()}
+            disabled={authAction !== null}
           >
             {t("magicLink")}
           </button>
@@ -190,6 +242,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <button
           className="text-button auth-magic"
           type="button"
+          disabled={authAction !== null}
           onClick={() => {
             setAuthMode((current) =>
               current === "sign-in" ? "sign-up" : "sign-in",
@@ -204,6 +257,34 @@ export function AuthGate({ children }: { children: ReactNode }) {
         </button>
       </form>
     </AuthShell>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg
+      className="auth-google-mark"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="#4285F4"
+        d="M21.35 12.27c0-.68-.06-1.34-.18-1.97H12v3.73h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.15Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 21.6c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.53A9.74 9.74 0 0 0 12 21.6Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.54 13.68A5.86 5.86 0 0 1 6.23 12c0-.58.1-1.15.31-1.68V7.79H3.3A9.6 9.6 0 0 0 2.27 12c0 1.52.36 2.96 1.03 4.21l3.24-2.53Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 6.29c1.43 0 2.71.49 3.72 1.46l2.79-2.79C16.84 3.39 14.63 2.4 12 2.4a9.74 9.74 0 0 0-8.7 5.39l3.24 2.53c.77-2.31 2.92-4.03 5.46-4.03Z"
+      />
+    </svg>
   );
 }
 

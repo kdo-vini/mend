@@ -20,6 +20,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@supabase/supabase-js": "2.57.4",
     "express": "5.1.0",
     "express-rate-limit": "8.6.1",

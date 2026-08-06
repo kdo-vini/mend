@@ -330,3 +330,34 @@ export const googleCalendarSelectionSchema = z
     selectedCalendarIds: z.array(z.string().trim().min(1).max(500)).max(200),
   })
   .strict();
+
+export const mcpAuthModeSchema = z.enum(["none", "headers", "oauth"]);
+export const mcpAiModeSchema = z.enum(["draft", "safe_auto"]);
+export const mcpConnectionCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    description: z.string().trim().max(4_000).optional(),
+    serverUrl: z.string().trim().url().max(2_000),
+    authMode: mcpAuthModeSchema.default("none"),
+    headers: z
+      .record(z.string().trim().min(1).max(120), z.string().max(4_000))
+      .optional(),
+    clientId: z.string().trim().max(1_000).optional(),
+    clientSecret: z.string().trim().max(4_000).optional(),
+  })
+  .strict();
+export const mcpConnectionPatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(4_000).optional(),
+    allowedToolNames: z
+      .array(z.string().trim().min(1).max(200))
+      .max(200)
+      .optional(),
+    writeModes: z.array(mcpAiModeSchema).max(2).optional(),
+  })
+  .strict()
+  .refine(
+    (value) => Object.keys(value).length > 0,
+    "At least one field is required",
+  );

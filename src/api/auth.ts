@@ -66,6 +66,16 @@ export function signInWithPassword(
   });
 }
 
+export function signInWithGoogle(
+  redirectTo?: string,
+  client?: MendSupabaseClient,
+) {
+  return clientOrDefault(client).auth.signInWithOAuth({
+    provider: "google",
+    ...(redirectTo ? { options: { redirectTo } } : {}),
+  });
+}
+
 export function sendMagicLink(
   email: string,
   redirectTo?: string,

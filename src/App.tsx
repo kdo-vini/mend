@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorState, LoadingState } from "./shared/ui/ResourceState";
+import { useConfirmation } from "./shared/ui/useConfirmation";
 import { ProfileWorkspacePage } from "./components/ProfileWorkspacePage";
 import { seedConversations, seedIssues, seedKnowledge, seedRuns } from "./data";
 import type {
@@ -219,6 +220,8 @@ function App() {
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const [editIssueId, setEditIssueId] = useState<string | null>(null);
   const [runDialogIssueId, setRunDialogIssueId] = useState<string | null>(null);
+  const { confirm: requestConfirmation, confirmationDialog } =
+    useConfirmation();
   const handleProfileWorkspaceUpdated = useCallback(
     (workspace: { id: string; name: string; default_language?: string }) => {
       setWorkspaceId(workspace.id);
@@ -677,8 +680,12 @@ function App() {
     const issue = issues.find((item) => item.id === issueId);
     if (!issue) return;
     if (
-      typeof window !== "undefined" &&
-      !window.confirm(`Delete ${issue.identifier}? This cannot be undone.`)
+      !(await requestConfirmation({
+        title: "Delete issue?",
+        description: `Delete ${issue.identifier}? This cannot be undone.`,
+        confirmLabel: "Delete issue",
+        destructive: true,
+      }))
     )
       return;
     try {
@@ -982,6 +989,7 @@ function App() {
                     onOpenIssue={setInspectorIssueId}
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
+                    onConfirm={requestConfirmation}
                     liveMode={!demoMode}
                     senderNames={{
                       ...workspaceMemberNames,
@@ -1079,6 +1087,7 @@ function App() {
                     workspaceId={workspaceId}
                     onToast={setToast}
                     onChannelChange={setChannel}
+                    onConfirm={requestConfirmation}
                   />
                 </FeatureBoundary>
               }
@@ -1102,6 +1111,7 @@ function App() {
                     onOpenIssue={setInspectorIssueId}
                     onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
+                    onConfirm={requestConfirmation}
                     liveMode={!demoMode}
                     senderNames={{
                       ...workspaceMemberNames,
@@ -1204,6 +1214,7 @@ function App() {
           <Check size={15} /> {toast}
         </div>
       )}
+      {confirmationDialog}
     </div>
   );
 }

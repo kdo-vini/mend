@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createWorkspace } from "./auth";
+import { createWorkspace, signInWithGoogle } from "./auth";
 import type { MendSupabaseClient } from "../lib/supabase";
 
 const workspace = {
@@ -15,6 +15,24 @@ const workspace = {
 };
 
 describe("workspace auth helpers", () => {
+  it("starts Google OAuth with the app redirect URL", async () => {
+    const signInWithOAuth = vi.fn(async () => ({
+      data: { provider: "google", url: "https://accounts.google.com" },
+      error: null,
+    }));
+    const client = {
+      auth: { signInWithOAuth },
+    } as unknown as MendSupabaseClient;
+
+    await expect(
+      signInWithGoogle("https://mend.test", client),
+    ).resolves.toMatchObject({ data: { provider: "google" } });
+    expect(signInWithOAuth).toHaveBeenCalledWith({
+      provider: "google",
+      options: { redirectTo: "https://mend.test" },
+    });
+  });
+
   it("preserves the Supabase client context when calling rpc", async () => {
     const rpcRequest = vi.fn(
       async (_name: string, _args: Record<string, unknown>) => ({

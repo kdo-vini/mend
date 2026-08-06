@@ -39,4 +39,13 @@ export type {
   LiveWorkspaceAiPolicy,
   WorkspaceMemberRecord,
 } from "../../api/settings-actions";
+export {
+  createLiveMcpConnection,
+  disconnectLiveMcpConnection,
+  listLiveMcpConnections,
+  startLiveMcpOAuth,
+  testLiveMcpConnection,
+  updateLiveMcpConnection,
+} from "../../api/mcp-connections";
+export type { McpConnection, McpToolRecord } from "../../api/mcp-connections";
 export { supabase } from "../../lib/supabase";

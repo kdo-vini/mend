@@ -61,6 +61,7 @@ import { useConversationScroll } from "../hooks/useConversationScroll";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PriorityDot } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
+import type { Confirm } from "../../../shared/ui/ConfirmDialog";
 import {
   dismissAiCard,
   getAiCardDismissalStorage,
@@ -165,6 +166,7 @@ export function InboxPage({
   onOpenIssue,
   onNewIssue,
   onToast,
+  onConfirm,
   liveMode,
   senderNames,
   knowledgeArticles,
@@ -180,6 +182,7 @@ export function InboxPage({
   onOpenIssue: (id: string) => void;
   onNewIssue: () => void;
   onToast: (message: string) => void;
+  onConfirm: Confirm;
   liveMode: boolean;
   senderNames: Record<string, string>;
   knowledgeArticles: KnowledgeArticle[];
@@ -608,13 +611,14 @@ export function InboxPage({
     }
   };
 
-  const setAiMode = (mode: AiMode) => {
+  const setAiMode = async (mode: AiMode) => {
     if (
       mode === "safe_auto" &&
-      typeof window !== "undefined" &&
-      !window.confirm(
-        "Enable Auto-reply for this conversation? Only allowlisted, high-confidence messages can be sent.",
-      )
+      !(await onConfirm({
+        title: "Enable Auto-reply for this conversation?",
+        description: "Only allowlisted, high-confidence messages can be sent.",
+        confirmLabel: "Enable Auto-reply",
+      }))
     )
       return;
     if (liveMode && workspaceId)
@@ -727,10 +731,13 @@ export function InboxPage({
 
   const deleteConversation = async (conversationId = selected.id) => {
     if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        "Delete this conversation from Mend? The WhatsApp chat will not be deleted.",
-      )
+      !(await onConfirm({
+        title: "Delete conversation?",
+        description:
+          "This removes the conversation from Mend. The WhatsApp chat will not be deleted.",
+        confirmLabel: "Delete conversation",
+        destructive: true,
+      }))
     )
       return;
     const nextConversation = conversations.find(
@@ -761,8 +768,12 @@ export function InboxPage({
 
   const deleteMessage = async (message: Message) => {
     if (
-      typeof window !== "undefined" &&
-      !window.confirm("Delete this message for everyone on WhatsApp?")
+      !(await onConfirm({
+        title: "Delete message for everyone?",
+        description: "This message will be deleted for everyone on WhatsApp.",
+        confirmLabel: "Delete message",
+        destructive: true,
+      }))
     )
       return;
     if (liveMode && workspaceId && !message.providerMessageId) {

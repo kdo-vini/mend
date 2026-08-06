@@ -3143,7 +3143,7 @@ h1 {
 .modal-backdrop,
 .palette-backdrop {
   position: fixed;
-  z-index: 20;
+  z-index: var(--z-modal);
   inset: 0;
   background: oklch(0.06 0 0 / 0.72);
 }
@@ -3291,6 +3291,17 @@ h1 {
 .modal-note svg {
   flex: 0 0 auto;
   color: var(--accent-soft);
+}
+.confirmation-dialog {
+  width: min(430px, 100%);
+}
+.confirmation-body p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.confirmation-dialog .modal-footer {
+  gap: 8px;
 }
 .run-context {
   display: flex;
@@ -5382,6 +5393,41 @@ h1 {
   flex-direction: column;
   gap: 14px;
   margin-top: 23px;
+}
+.auth-google {
+  width: 100%;
+  min-height: 38px;
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+.auth-google:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+  background: var(--surface-3);
+}
+.auth-google:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.auth-google-mark {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+.auth-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted-2);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.auth-divider::before,
+.auth-divider::after {
+  height: 1px;
+  background: var(--line);
+  content: "";
 }
 .auth-form label {
   display: flex;

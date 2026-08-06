@@ -7,6 +7,7 @@ import type {
   PersonalPlanningPort,
 } from "../kanban-service.js";
 import type { GoogleConnectionPort } from "../google-calendar.js";
+import type { McpConnectionPort } from "../mcp.js";
 
 export type WorkspaceRole = "owner" | "admin" | "agent" | "viewer";
 
@@ -353,6 +354,7 @@ export interface ApiRouterDependencies {
   repositories: RepositoryPort;
   codingRuns: CodingRunPort;
   googleConnections: GoogleConnectionPort;
+  mcpConnections: McpConnectionPort;
   media?: MediaPort;
   kanban: KanbanIssuePort;
   personalPlanning: PersonalPlanningPort;
