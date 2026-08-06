@@ -1,7 +1,15 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import {
+  applyInterfaceLanguage,
+  resolveInterfaceLanguage,
+  storedInterfaceLanguage,
+} from "../i18n/preferences";
+import type { SupportedLocale } from "../i18n/resources";
 
 const browserEnv =
   (import.meta as ImportMeta & { env?: Record<string, string | undefined> })
@@ -23,20 +31,49 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [interfaceLanguage, setInterfaceLanguage] = useState<SupportedLocale>(
+    storedInterfaceLanguage,
+  );
+  const { t } = useTranslation("auth");
 
   useEffect(() => {
-    if (!supabase) return;
+    const syncStoredLanguage = () =>
+      setInterfaceLanguage(storedInterfaceLanguage());
+    window.addEventListener("storage", syncStoredLanguage);
+    return () => window.removeEventListener("storage", syncStoredLanguage);
+  }, []);
+
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
     let active = true;
-    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+    const hydrate = async () => {
+      const { data, error: sessionError } = await client.auth.getSession();
       if (!active) return;
       if (sessionError) setError(sessionError.message);
+      if (data.session) {
+        const locale = await resolveInterfaceLanguage(client);
+        if (!active) return;
+        setInterfaceLanguage(locale);
+      }
       setSession(data.session);
       setLoading(false);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange(
+    };
+    void hydrate();
+    const { data: listener } = client.auth.onAuthStateChange(
       (_event, nextSession) => {
-        setSession(nextSession);
-        setLoading(false);
+        if (!nextSession) {
+          setSession(null);
+          setLoading(false);
+          return;
+        }
+        setLoading(true);
+        void resolveInterfaceLanguage(client).then((locale) => {
+          if (!active) return;
+          setInterfaceLanguage(locale);
+          setSession(nextSession);
+          setLoading(false);
+        });
       },
     );
     return () => {
@@ -49,10 +86,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return children;
   if (loading)
     return (
-      <AuthShell
-        title="Loading secure workspace"
-        message="Checking your Mend session…"
-      />
+      <AuthShell title={t("loadingTitle")} message={t("checkingSession")} />
     );
   if (session) return children;
 
@@ -70,36 +104,39 @@ export function AuthGate({ children }: { children: ReactNode }) {
         : await supabase.auth.signUp({ email: email.trim(), password });
     if (result.error) setError(result.error.message);
     else if (authMode === "sign-up" && !result.data.session)
-      setNotice("Check your inbox to confirm your email, then sign in.");
+      setNotice(t("checkInboxConfirm"));
     else
-      setNotice(
-        authMode === "sign-up"
-          ? "Account created. Loading your workspace…"
-          : "Signed in. Loading your workspace…",
-      );
+      setNotice(authMode === "sign-up" ? t("accountCreated") : t("signedIn"));
   };
 
   const sendMagicLink = async () => {
     if (!supabase || !email.trim()) {
-      setError("Enter your email first.");
+      setError(t("enterEmail"));
       return;
     }
     setError(null);
     const result = await supabase.auth.signInWithOtp({ email: email.trim() });
     if (result.error) setError(result.error.message);
-    else setNotice("Check your inbox for a secure sign-in link.");
+    else setNotice(t("magicLinkSent"));
   };
 
   return (
     <AuthShell
       title={
-        authMode === "sign-in" ? "Sign in to Mend" : "Create your Mend account"
+        authMode === "sign-in" ? t("signInTitle") : t("createAccountTitle")
       }
-      message="Your workspace data is protected by Supabase Auth and workspace membership."
+      message={t("authDescription")}
     >
       <form className="auth-form" onSubmit={submit}>
+        <LanguageSwitcher
+          value={interfaceLanguage}
+          onChange={(locale) => {
+            setInterfaceLanguage(locale);
+            void applyInterfaceLanguage(locale);
+          }}
+        />
         <label>
-          <span>Email</span>
+          <span>{t("email")}</span>
           <div className="auth-input">
             <Mail size={15} />
             <input
@@ -113,7 +150,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           </div>
         </label>
         <label>
-          <span>Password</span>
+          <span>{t("password")}</span>
           <div className="auth-input">
             <LockKeyhole size={15} />
             <input
@@ -137,7 +174,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           </p>
         )}
         <button className="button button-primary auth-submit" type="submit">
-          {authMode === "sign-in" ? "Sign in" : "Create account"}{" "}
+          {authMode === "sign-in" ? t("signIn") : t("createAccount")}{" "}
           <ArrowRight size={15} />
         </button>
         {authMode === "sign-in" && (
@@ -146,7 +183,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => void sendMagicLink()}
           >
-            Send me a magic link
+            {t("magicLink")}
           </button>
         )}
         <button
@@ -161,8 +198,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
           }}
         >
           {authMode === "sign-in"
-            ? "Create a new account"
-            : "Already have an account? Sign in"}
+            ? t("createNewAccount")
+            : t("alreadyHaveAccount")}
         </button>
       </form>
     </AuthShell>
@@ -178,6 +215,7 @@ function AuthShell({
   message: string;
   children?: ReactNode;
 }) {
+  const { t } = useTranslation("auth");
   return (
     <main className="auth-shell">
       <div className="auth-card">
@@ -187,10 +225,10 @@ function AuthShell({
           </div>
           <div>
             <div className="brand-name">Mend</div>
-            <div className="brand-subtitle">support operations</div>
+            <div className="brand-subtitle">{t("supportOperations")}</div>
           </div>
         </div>
-        <span className="page-kicker">Secure workspace</span>
+        <span className="page-kicker">{t("secureWorkspace")}</span>
         <h1>{title}</h1>
         <p>{message}</p>
         {children}

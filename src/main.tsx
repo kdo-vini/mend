@@ -3,7 +3,20 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthGate } from "./components/AuthGate";
+import "./i18n";
+import {
+  applyInterfaceLanguage,
+  interfaceLanguageStorageKey,
+} from "./i18n/preferences";
+import { normalizeLocale } from "./i18n/resources";
 import "./styles.css";
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== interfaceLanguageStorageKey || !event.newValue) return;
+    void applyInterfaceLanguage(normalizeLocale(event.newValue));
+  });
+}
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

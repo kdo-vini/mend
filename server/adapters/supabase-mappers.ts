@@ -5,6 +5,7 @@ import type {
   RepositoryInput,
   RepositoryPatchInput,
 } from "../contracts/api-ports.js";
+import { normalizeLocale } from "../locale.js";
 
 export type Row = Record<string, unknown>;
 export type DbResult = { data: unknown; error: { message?: string } | null };
@@ -52,7 +53,7 @@ export function workspace(rowValue: Row): Row {
     slug: str(rowValue.slug),
     issuePrefix: str(rowValue.issue_prefix, "MEND"),
     timezone: str(rowValue.timezone, "UTC"),
-    defaultLanguage: str(rowValue.default_language, "en"),
+    defaultLanguage: normalizeLocale(rowValue.default_language),
     createdAt: nullable(rowValue.created_at),
     updatedAt: nullable(rowValue.updated_at),
   };

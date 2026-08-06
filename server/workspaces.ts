@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Json, Database } from "../src/lib/database.types.js";
 import { AuthenticationError, type MendAuthContext } from "./auth.js";
+import { normalizeLocale } from "./locale.js";
 
 type Tables = Database["public"]["Tables"];
 export type Workspace = Tables["workspaces"]["Row"];
@@ -201,7 +202,7 @@ export async function createWorkspace(
     p_slug: values.slug,
     p_issue_prefix: values.issuePrefix ?? "MEND",
     p_timezone: values.timezone ?? "America/Sao_Paulo",
-    p_default_language: values.defaultLanguage ?? "en",
+    p_default_language: normalizeLocale(values.defaultLanguage),
   });
   return { ...workspace, role: "owner" };
 }
@@ -221,7 +222,7 @@ export async function updateWorkspace(
       : {}),
     ...(values.timezone !== undefined ? { timezone: values.timezone } : {}),
     ...(values.defaultLanguage !== undefined
-      ? { default_language: values.defaultLanguage }
+      ? { default_language: normalizeLocale(values.defaultLanguage) }
       : {}),
   };
   const { data, error } = await auth.client

@@ -24,7 +24,7 @@ describe("support AI providers", () => {
     const provider = new OpenAiSupportProvider(client, { model: "test-model" });
 
     await expect(
-      provider.draftReply("hello", "Checkout closes at 18:00."),
+      provider.draftReply("hello", "Checkout closes at 18:00.", "en-US"),
     ).resolves.toBe("Draft reply");
     await expect(provider.triage("checkout fails")).resolves.toContain(
       '"intent":"bug"',

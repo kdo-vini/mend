@@ -1,0 +1,9 @@
+{
+  "profileSaved": "Profile saved",
+  "profileSaveError": "Profile could not be saved.",
+  "workspaceSaved": "Workspace saved",
+  "workspaceSaveError": "Workspace could not be saved.",
+  "automationLanguage": "Automation language",
+  "workspaceIdentity": "Workspace identity",
+  "personalProfile": "Personal profile"
+}

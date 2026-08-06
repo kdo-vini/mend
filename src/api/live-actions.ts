@@ -1829,6 +1829,10 @@ export function requestAiDraft(
     method: "POST",
     body: JSON.stringify({
       conversation,
+      language:
+        typeof window !== "undefined"
+          ? (window.localStorage.getItem("mend.interface-language") ?? "en-US")
+          : "en-US",
       ...(knowledgeContext.length
         ? { knowledge: knowledgeContext.join("\n\n") }
         : {}),

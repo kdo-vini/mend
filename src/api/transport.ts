@@ -37,6 +37,7 @@ export class LiveActionError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "LiveActionError";
@@ -99,6 +100,13 @@ export async function apiRequest<T>(
     body && typeof body === "object" && "error" in body
       ? (body as { error?: unknown }).error
       : undefined;
+  const code =
+    apiError &&
+    typeof apiError === "object" &&
+    "code" in apiError &&
+    typeof apiError.code === "string"
+      ? apiError.code
+      : undefined;
   const message =
     typeof apiError === "string"
       ? apiError
@@ -108,6 +116,6 @@ export async function apiRequest<T>(
           typeof apiError.message === "string"
         ? apiError.message
         : `Mend API request failed (${response.status}).`;
-  if (!response.ok) throw new LiveActionError(message, response.status);
+  if (!response.ok) throw new LiveActionError(message, response.status, code);
   return body as T;
 }

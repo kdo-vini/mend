@@ -24,6 +24,7 @@ import type {
   AiDecision,
   HumanTakeoverReason,
 } from "../types";
+import { currentInterfaceLanguage } from "../i18n/preferences";
 
 type Tables = Database["public"]["Tables"];
 export type ContactRecord = Tables["contacts"]["Row"];
@@ -111,7 +112,7 @@ function displayTime(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
+  return new Intl.DateTimeFormat(currentInterfaceLanguage(), {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);

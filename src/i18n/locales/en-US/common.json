@@ -1,0 +1,61 @@
+{
+  "language": {
+    "label": "Interface language",
+    "english": "English",
+    "portuguese": "Portuguese (Brazil)"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry": "Retry",
+    "back": "Back"
+  },
+  "states": {
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "unknownTime": "Unknown time",
+    "allCaughtUp": "All caught up"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "preferencesSave": "Your language preference could not be saved.",
+    "supabaseUnavailable": "Supabase is required to load your profile.",
+    "invalidInput": "Please check the information and try again.",
+    "workspaceNotFound": "That Workspace could not be found.",
+    "permissionDenied": "You do not have permission to do that.",
+    "technical": "A technical error occurred. Please try again."
+  },
+  "navigation": {
+    "inbox": "Inbox",
+    "issues": "Issues",
+    "codexRuns": "Codex Runs",
+    "knowledge": "Knowledge",
+    "settings": "Settings",
+    "profile": "Profile",
+    "kanban": "Kanban",
+    "codexRunsShort": "Runs",
+    "more": "More",
+    "workspace": "Workspace",
+    "session": "Session",
+    "searchEverything": "Search everything",
+    "notifications": "Notifications",
+    "unread": "{{count}} unread",
+    "dismissAll": "Dismiss all",
+    "noNotifications": "No workspace notifications yet.",
+    "enableNativeAlerts": "Enable native alerts",
+    "nativeNotificationsEnabled": "Native notifications enabled",
+    "awayAlerts": "Get alerts when you are away",
+    "signedInAs": "Signed in as",
+    "workspaceMember": "Workspace member",
+    "primaryNavigation": "Primary navigation",
+    "mobileNavigation": "Mobile navigation",
+    "openInbox": "Open Inbox",
+    "openProfile": "Open profile",
+    "searchWorkspace": "Search workspace",
+    "logout": "Log out",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "useTheme": "Use {{theme}} theme"
+  }
+}

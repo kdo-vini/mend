@@ -13,6 +13,21 @@ async function chooseOption(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
+test("uses the explicit Portuguese interface choice after reload", async ({
+  page,
+}, testInfo) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("mend.interface-language", "pt-BR");
+  });
+  await page.goto("/inbox?demo=1");
+  await expect(page.locator("html")).toHaveAttribute("lang", "pt-BR");
+  if (testInfo.project.name === "mobile")
+    await page.getByText("Mais", { exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Configurações" }).first(),
+  ).toBeVisible();
+});
+
 test("operator can open the shared and personal Kanban views", async ({
   page,
 }, testInfo) => {

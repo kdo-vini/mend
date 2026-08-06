@@ -15,6 +15,8 @@ import type {
   Message,
 } from "./types";
 import { supabase } from "./lib/supabase";
+import { normalizeLocale, type SupportedLocale } from "./i18n/resources";
+import { currentInterfaceLanguage } from "./i18n/preferences";
 import {
   enableNativePush,
   dismissWorkspaceNotification,
@@ -180,8 +182,10 @@ function App() {
     "idle",
   );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [operationalLanguage, setOperationalLanguage] =
+    useState<SupportedLocale>("en-US");
   const [workspaceOptions, setWorkspaceOptions] = useState<
-    Array<{ id: string; name: string }>
+    Array<{ id: string; name: string; defaultLanguage?: SupportedLocale }>
   >(demoMode ? [{ id: "demo", name: "Techne" }] : []);
   const [, setChannel] = useState<WhatsAppInstance | null>(null);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
@@ -216,8 +220,9 @@ function App() {
   const [editIssueId, setEditIssueId] = useState<string | null>(null);
   const [runDialogIssueId, setRunDialogIssueId] = useState<string | null>(null);
   const handleProfileWorkspaceUpdated = useCallback(
-    (workspace: { id: string; name: string }) => {
+    (workspace: { id: string; name: string; default_language?: string }) => {
       setWorkspaceId(workspace.id);
+      setOperationalLanguage(normalizeLocale(workspace.default_language));
       setLiveDataRetry((current) => current + 1);
     },
     [],
@@ -358,6 +363,7 @@ function App() {
             availableWorkspaces.map((item) => ({
               id: item.id,
               name: item.name,
+              defaultLanguage: normalizeLocale(item.default_language),
             })),
           );
         if (!workspace) {
@@ -366,6 +372,7 @@ function App() {
         }
         if (!active) return;
         setWorkspaceId(workspace.id);
+        setOperationalLanguage(normalizeLocale(workspace.default_language));
         const liveData = await loadLiveWorkspace(client, workspace.id);
         if (!active) return;
         setConversations((current) =>
@@ -937,8 +944,10 @@ function App() {
           !workspaceLoading &&
           !workspaceId ? (
             <FeatureWorkspaceOnboarding
+              initialLanguage={currentInterfaceLanguage()}
               onCreated={(workspace) => {
                 setWorkspaceId(workspace.id);
+                setOperationalLanguage("en-US");
                 setWorkspaceOptions((current) => [
                   ...current.filter((item) => item.id !== workspace.id),
                   { id: workspace.id, name: workspace.name },
@@ -1006,6 +1015,7 @@ function App() {
                   issues={issues}
                   runs={runs}
                   workspaceId={workspaceId}
+                  operationalLanguage={operationalLanguage}
                   liveMode={!demoMode}
                   assigneeOptions={assigneeOptions}
                   assigneeLabel={assigneeLabel}
@@ -1143,6 +1153,7 @@ function App() {
             );
             if (!workspace || nextWorkspaceId === "demo") return;
             setWorkspaceId(workspace.id);
+            setOperationalLanguage(workspace.defaultLanguage ?? "en-US");
             setSelectedConversationId("");
             setToast(`Switched to ${workspace.name}`);
           }}

@@ -16,6 +16,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { AiMode } from "../../../types";
+import { currentInterfaceLanguage } from "../../../i18n/preferences";
 import type { GoogleConnection, WhatsAppInstance } from "../api";
 import {
   connectLiveChannel,
@@ -739,7 +740,7 @@ export function SettingsPage({
     const date = new Date(value);
     return Number.isNaN(date.getTime())
       ? value
-      : new Intl.DateTimeFormat("pt-BR", {
+      : new Intl.DateTimeFormat(currentInterfaceLanguage(), {
           dateStyle: "short",
           timeStyle: "short",
         }).format(date);

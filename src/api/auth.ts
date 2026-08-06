@@ -1,6 +1,7 @@
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import type { Database } from "../lib/database.types";
 import { requireSupabase, type MendSupabaseClient } from "../lib/supabase";
+import { normalizeLocale } from "../i18n/resources";
 
 type Tables = Database["public"]["Tables"];
 export type Workspace = Tables["workspaces"]["Row"];
@@ -162,14 +163,14 @@ export function createWorkspace(
     slug: input.slug.trim().toLowerCase(),
     issuePrefix: input.issuePrefix?.trim().toUpperCase() ?? "MEND",
     timezone: input.timezone?.trim() || "America/Sao_Paulo",
-    defaultLanguage: input.defaultLanguage?.trim() || "en",
+    defaultLanguage: input.defaultLanguage?.trim() || "en-US",
   };
   return callRpc<Workspace>(supabase, "create_workspace", {
     p_name: values.name,
     p_slug: values.slug,
     p_issue_prefix: values.issuePrefix,
     p_timezone: values.timezone,
-    p_default_language: values.defaultLanguage,
+    p_default_language: normalizeLocale(values.defaultLanguage),
   }).then((workspace) => ({ ...workspace, role: "owner" }));
 }
 
@@ -190,7 +191,7 @@ export function updateWorkspace(
       ? { timezone: input.timezone.trim() }
       : {}),
     ...(input.defaultLanguage !== undefined
-      ? { default_language: input.defaultLanguage.trim() }
+      ? { default_language: normalizeLocale(input.defaultLanguage) }
       : {}),
   };
   return Promise.resolve(

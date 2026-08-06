@@ -1,0 +1,5 @@
+{
+  "conversationMessageTitle": "New WhatsApp message",
+  "conversationMessageBody": "A conversation assigned to you needs attention.",
+  "workspaceNotificationFallback": "Workspace notification"
+}

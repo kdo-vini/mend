@@ -21,6 +21,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Issue, IssueStatus } from "../../../types";
+import { currentInterfaceLanguage } from "../../../i18n/preferences";
 import {
   createPersonalEvent,
   createPersonalTask,
@@ -144,14 +145,14 @@ function addDays(date: string, days: number) {
 
 function dateLabel(value: string | null | undefined) {
   if (!value) return "No due date";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(currentInterfaceLanguage(), {
     month: "short",
     day: "numeric",
   }).format(new Date(`${value}T12:00:00`));
 }
 
 function eventTimeLabel(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(currentInterfaceLanguage(), {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));

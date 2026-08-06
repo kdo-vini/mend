@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -18,6 +19,26 @@ import type {
 import { formatActivityTime, identityInitials } from "../../shared/lib/format";
 import { navItems } from "./navigation";
 
+function translatedNavLabel(
+  label: (typeof navItems)[number]["label"],
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  switch (label) {
+    case "Inbox":
+      return t("navigation.inbox");
+    case "Issues":
+      return t("navigation.issues");
+    case "Kanban":
+      return t("navigation.kanban");
+    case "Codex runs":
+      return t("navigation.codexRuns");
+    case "Knowledge":
+      return t("navigation.knowledge");
+    case "Settings":
+      return t("navigation.settings");
+  }
+}
+
 export function NotificationCenter({
   notifications,
   unreadNotificationCount,
@@ -33,6 +54,16 @@ export function NotificationCenter({
   onDismissNotification: (id: string) => void;
   onDismissAllNotifications: () => void;
 }) {
+  const { t } = useTranslation(["common", "notifications"]);
+  const notificationText = (notification: WorkspaceNotification) => {
+    if (notification.kind === "conversation_message") {
+      return {
+        title: t("conversationMessageTitle", { ns: "notifications" }),
+        body: t("conversationMessageBody", { ns: "notifications" }),
+      };
+    }
+    return { title: notification.title, body: notification.body };
+  };
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [panelPosition, setPanelPosition] = useState<{
@@ -142,7 +173,7 @@ export function NotificationCenter({
           ref={panelRef}
           className={`notification-panel notification-panel-${panelPosition?.side ?? "right"}`}
           role="dialog"
-          aria-label="Notifications"
+          aria-label={t("navigation.notifications")}
           style={{
             top: panelPosition?.top ?? 12,
             left: panelPosition?.left ?? 12,
@@ -152,9 +183,11 @@ export function NotificationCenter({
         >
           <div className="notification-panel-header">
             <div>
-              <strong>Notifications</strong>
+              <strong>{t("navigation.notifications")}</strong>
               <small>
-                {unread.length ? `${unread.length} unread` : "All caught up"}
+                {unread.length
+                  ? t("navigation.unread", { count: unread.length })
+                  : t("states.allCaughtUp")}
               </small>
             </div>
             {unread.length > 0 && (
@@ -163,14 +196,14 @@ export function NotificationCenter({
                 type="button"
                 onClick={onDismissAllNotifications}
               >
-                Dismiss all
+                {t("navigation.dismissAll")}
               </button>
             )}
           </div>
           <div className="notification-list">
             {notifications.length === 0 ? (
               <div className="notification-empty">
-                No workspace notifications yet.
+                {t("navigation.noNotifications")}
               </div>
             ) : (
               notifications.slice(0, 12).map((notification) => (
@@ -184,8 +217,8 @@ export function NotificationCenter({
                     <Bell size={14} />
                   </span>
                   <span className="notification-item-copy">
-                    <strong>{notification.title}</strong>
-                    <span>{notification.body}</span>
+                    <strong>{notificationText(notification).title}</strong>
+                    <span>{notificationText(notification).body}</span>
                     <small>{formatActivityTime(notification.created_at)}</small>
                   </span>
                 </button>
@@ -195,8 +228,8 @@ export function NotificationCenter({
           <div className="notification-panel-footer">
             <span>
               {pushStatus === "enabled"
-                ? "Native notifications enabled"
-                : "Get alerts when you are away"}
+                ? t("navigation.nativeNotificationsEnabled")
+                : t("navigation.awayAlerts")}
             </span>
             {pushStatus !== "enabled" && (
               <button
@@ -204,7 +237,7 @@ export function NotificationCenter({
                 type="button"
                 onClick={onEnablePush}
               >
-                Enable native alerts
+                {t("navigation.enableNativeAlerts")}
               </button>
             )}
           </div>
@@ -243,6 +276,7 @@ export function Sidebar({
   onDismissNotification: (id: string) => void;
   onDismissAllNotifications: () => void;
 }) {
+  const { t } = useTranslation("common");
   const navigate = useNavigate();
   return (
     <aside className="sidebar">
@@ -257,7 +291,11 @@ export function Sidebar({
         <button
           className="icon-button subtle sidebar-collapse"
           type="button"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={
+            collapsed
+              ? t("navigation.expandSidebar")
+              : t("navigation.collapseSidebar")
+          }
           aria-expanded={!collapsed}
           onClick={onToggle}
         >
@@ -266,11 +304,14 @@ export function Sidebar({
       </div>
       <button className="command-trigger" type="button" onClick={onOpenCommand}>
         <Search size={15} />
-        <span>Search everything</span>
+        <span>{t("navigation.searchEverything")}</span>
         <kbd>⌘ K</kbd>
       </button>
-      <nav className="primary-nav" aria-label="Primary navigation">
-        <div className="nav-section-label">Workspace</div>
+      <nav
+        className="primary-nav"
+        aria-label={t("navigation.primaryNavigation")}
+      >
+        <div className="nav-section-label">{t("navigation.workspace")}</div>
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
@@ -278,13 +319,15 @@ export function Sidebar({
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
             <Icon size={16} strokeWidth={1.7} />
-            <span>{label}</span>
+            <span>{translatedNavLabel(label, t)}</span>
           </NavLink>
         ))}
       </nav>
       <div className="sidebar-bottom">
         <div className="sidebar-bottom-header">
-          <span className="sidebar-bottom-label">Session</span>
+          <span className="sidebar-bottom-label">
+            {t("navigation.session")}
+          </span>
           <div className="sidebar-utilities">
             <NotificationCenter
               notifications={notifications}
@@ -297,7 +340,9 @@ export function Sidebar({
             <button
               className="icon-button subtle"
               type="button"
-              aria-label={`Use ${theme === "dark" ? "light" : "dark"} theme`}
+              aria-label={t("navigation.useTheme", {
+                theme: theme === "dark" ? "light" : "dark",
+              })}
               onClick={onToggleTheme}
             >
               {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
@@ -305,7 +350,7 @@ export function Sidebar({
             <button
               className="icon-button subtle"
               type="button"
-              aria-label="Log out"
+              aria-label={t("navigation.logout")}
               onClick={onSignOut}
             >
               <LogOut size={15} />
@@ -316,15 +361,17 @@ export function Sidebar({
           className="user-row"
           type="button"
           onClick={() => navigate("/profile")}
-          aria-label="Open profile"
+          aria-label={t("navigation.openProfile")}
         >
           <div className="avatar avatar-small avatar-violet">
             {identityInitials(operator.name)}
           </div>
           <span>
-            <small className="user-row-label">Signed in as</small>
+            <small className="user-row-label">
+              {t("navigation.signedInAs")}
+            </small>
             <strong>{operator.name}</strong>
-            <small>{operator.email || "Workspace member"}</small>
+            <small>{operator.email || t("navigation.workspaceMember")}</small>
           </span>
           <ChevronRight size={14} />
         </button>
@@ -352,9 +399,14 @@ export function MobileTopbar({
   onDismissNotification: (id: string) => void;
   onDismissAllNotifications: () => void;
 }) {
+  const { t } = useTranslation("common");
   return (
     <header className="mobile-topbar">
-      <NavLink className="mobile-brand" to="/inbox" aria-label="Open Inbox">
+      <NavLink
+        className="mobile-brand"
+        to="/inbox"
+        aria-label={t("navigation.openInbox")}
+      >
         <span className="brand-mark">
           <span />
         </span>
@@ -373,14 +425,14 @@ export function MobileTopbar({
           className="mobile-command-button"
           type="button"
           onClick={onOpenCommand}
-          aria-label="Search workspace"
+          aria-label={t("navigation.searchWorkspace")}
         >
           <Search size={17} />
         </button>
         <NavLink
           className="mobile-profile-link"
           to="/profile"
-          aria-label="Open profile"
+          aria-label={t("navigation.openProfile")}
         >
           <span className="avatar avatar-small avatar-violet">
             {identityInitials(operator.name)}
@@ -392,11 +444,15 @@ export function MobileTopbar({
 }
 
 export function MobileBottomNav() {
+  const { t } = useTranslation("common");
   const primary = navItems.filter(({ to }) =>
     ["/inbox", "/kanban", "/issues", "/codex-runs"].includes(to),
   );
   return (
-    <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+    <nav
+      className="mobile-bottom-nav"
+      aria-label={t("navigation.mobileNavigation")}
+    >
       {primary.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
@@ -406,24 +462,28 @@ export function MobileBottomNav() {
           }
         >
           <Icon size={19} strokeWidth={1.8} />
-          <span>{label === "Codex runs" ? "Runs" : label}</span>
+          <span>
+            {label === "Codex runs"
+              ? t("navigation.codexRunsShort")
+              : translatedNavLabel(label, t)}
+          </span>
         </NavLink>
       ))}
       <details className="mobile-more-menu">
         <summary className="mobile-nav-item">
           <MoreHorizontal size={19} strokeWidth={1.8} />
-          <span>More</span>
+          <span>{t("navigation.more")}</span>
         </summary>
         <div className="mobile-more-popover">
           <NavLink to="/knowledge">
-            <span>Knowledge</span>
+            <span>{t("navigation.knowledge")}</span>
           </NavLink>
           <NavLink to="/settings">
             <SettingsIcon size={16} />
-            <span>Settings</span>
+            <span>{t("navigation.settings")}</span>
           </NavLink>
           <NavLink to="/profile">
-            <span>Profile</span>
+            <span>{t("navigation.profile")}</span>
           </NavLink>
         </div>
       </details>

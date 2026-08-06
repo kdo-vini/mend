@@ -1,3 +1,5 @@
+import { currentInterfaceLanguage } from "../../i18n/preferences";
+
 export function normalizeSearch(value: string) {
   return value
     .normalize("NFD")
@@ -7,11 +9,14 @@ export function normalizeSearch(value: string) {
 }
 
 export function formatActivityTime(value: unknown) {
-  if (typeof value !== "string" || !value) return "Unknown time";
+  if (typeof value !== "string" || !value)
+    return currentInterfaceLanguage() === "pt-BR"
+      ? "Horário desconhecido"
+      : "Unknown time";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : new Intl.DateTimeFormat("pt-BR", {
+    : new Intl.DateTimeFormat(currentInterfaceLanguage(), {
         dateStyle: "short",
         timeStyle: "short",
       }).format(date);

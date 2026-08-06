@@ -1,0 +1,61 @@
+{
+  "language": {
+    "label": "Idioma da interface",
+    "english": "English",
+    "portuguese": "Português (Brasil)"
+  },
+  "actions": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "retry": "Tentar novamente",
+    "back": "Voltar"
+  },
+  "states": {
+    "loading": "Carregando…",
+    "saving": "Salvando…",
+    "unknownTime": "Horário desconhecido",
+    "allCaughtUp": "Tudo em dia"
+  },
+  "errors": {
+    "generic": "Algo deu errado. Tente novamente.",
+    "preferencesSave": "Não foi possível salvar sua preferência de idioma.",
+    "supabaseUnavailable": "O Supabase é necessário para carregar seu perfil.",
+    "invalidInput": "Confira as informações e tente novamente.",
+    "workspaceNotFound": "Não foi possível encontrar esse Workspace.",
+    "permissionDenied": "Você não tem permissão para fazer isso.",
+    "technical": "Ocorreu um erro técnico. Tente novamente."
+  },
+  "navigation": {
+    "inbox": "Inbox",
+    "issues": "Issues",
+    "codexRuns": "Codex Runs",
+    "knowledge": "Knowledge",
+    "settings": "Configurações",
+    "profile": "Perfil",
+    "kanban": "Kanban",
+    "codexRunsShort": "Execuções",
+    "more": "Mais",
+    "workspace": "Workspace",
+    "session": "Sessão",
+    "searchEverything": "Pesquisar em tudo",
+    "notifications": "Notificações",
+    "unread": "{{count}} não lida(s)",
+    "dismissAll": "Dispensar tudo",
+    "noNotifications": "Nenhuma notificação do Workspace ainda.",
+    "enableNativeAlerts": "Ativar alertas nativos",
+    "nativeNotificationsEnabled": "Notificações nativas ativadas",
+    "awayAlerts": "Receba alertas quando estiver ausente",
+    "signedInAs": "Sessão de",
+    "workspaceMember": "Membro do Workspace",
+    "primaryNavigation": "Navegação principal",
+    "mobileNavigation": "Navegação mobile",
+    "openInbox": "Abrir Inbox",
+    "openProfile": "Abrir perfil",
+    "searchWorkspace": "Pesquisar no Workspace",
+    "logout": "Sair",
+    "expandSidebar": "Expandir barra lateral",
+    "collapseSidebar": "Recolher barra lateral",
+    "useTheme": "Usar tema {{theme}}"
+  }
+}

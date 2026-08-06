@@ -8,6 +8,7 @@ import {
 } from "./inbox-service.js";
 import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
 import type { SupportAiProvider } from "./providers.js";
+import { normalizeLocale } from "./locale.js";
 import { SupabaseMediaStorage } from "./media.js";
 import {
   MEDIA_PROCESS_JOB_TYPE,
@@ -1151,6 +1152,18 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           intent: triage.intent,
           confidence: triage.confidence,
           summary: triage.summary,
+          i18n: {
+            namespace: "notifications",
+            titleKey:
+              kind === "conversation_message"
+                ? "conversationMessageTitle"
+                : "workspaceNotificationFallback",
+            bodyKey:
+              kind === "conversation_message"
+                ? "conversationMessageBody"
+                : "workspaceNotificationFallback",
+            params: {},
+          },
         },
         dedupe_key: dedupeKey,
       })
@@ -1162,6 +1175,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       await this.push.notify(this.client, input.binding.workspaceId, {
         title: boundedText(title, 240),
         body: boundedText(body, 2_000),
+        kind,
         url:
           entityId === input.persisted.conversationId
             ? `/inbox?conversation=${encodeURIComponent(input.persisted.conversationId)}`
@@ -1238,10 +1252,23 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     knowledge: readonly LiveWorkerKnowledgeArticle[],
   ): Promise<LiveWorkerDraft | undefined> {
     if (triage.unsafe || !decision.allowed || mode === "off") return undefined;
+    const workspace = await this.metadataClient
+      .from("workspaces")
+      .select("default_language")
+      .eq("id", input.binding.workspaceId)
+      .maybeSingle();
+    if (workspace.error)
+      throw new Error(
+        "supabase:workspaces:language:" + workspace.error.message,
+      );
+    const workspaceRow = (workspace.data ?? {}) as {
+      default_language?: unknown;
+    };
     const body = boundedText(
       await this.provider.draftReply(
         messageText(input.message),
         safeKnowledgeContext(knowledge),
+        normalizeLocale(workspaceRow.default_language),
       ),
       12_000,
     );

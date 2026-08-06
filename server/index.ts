@@ -7,6 +7,7 @@ import helmet from "helmet";
 import pino from "pino";
 import { z } from "zod";
 import { createSupportAiProvider } from "./providers.js";
+import { normalizeLocale } from "./locale.js";
 import { gateAiAction, triageConversation, type AiMode } from "./triage.js";
 import { InMemoryJobStore } from "./jobs.js";
 import {
@@ -92,6 +93,7 @@ const WebhookPayloadSchema = z.record(z.unknown());
 const DraftSchema = z.object({
   conversation: z.string().min(1).max(12_000),
   knowledge: z.string().max(50_000).optional(),
+  language: z.enum(["en-US", "pt-BR"]).default("en-US"),
 });
 const TriageSchema = z.object({
   conversation: z.string().min(1).max(12_000),
@@ -242,6 +244,7 @@ app.post("/api/ai/draft", async (request, response) => {
     const draft = await provider.draftReply(
       parsed.data.conversation,
       parsed.data.knowledge,
+      normalizeLocale(parsed.data.language),
     );
     return response.json({ draft, provider: provider.name });
   } catch (error) {

@@ -79,6 +79,7 @@ import {
   createSupportAiProvider,
   type SupportAiProvider,
 } from "./providers.js";
+import { normalizeLocale } from "./locale.js";
 import {
   CodexService,
   CodexServiceError,
@@ -231,7 +232,7 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
       p_slug: input.slug,
       p_issue_prefix: input.issuePrefix ?? "MEND",
       p_timezone: input.timezone ?? "America/Sao_Paulo",
-      p_default_language: input.defaultLanguage ?? "en",
+      p_default_language: normalizeLocale(input.defaultLanguage),
     });
     return {
       ...workspace(rpcRow(checked("create_workspace", result))),
@@ -268,7 +269,7 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
           : {}),
         ...(value.timezone !== undefined ? { timezone: value.timezone } : {}),
         ...(value.defaultLanguage !== undefined
-          ? { default_language: value.defaultLanguage }
+          ? { default_language: normalizeLocale(value.defaultLanguage) }
           : {}),
         updated_at: new Date().toISOString(),
       })
@@ -972,9 +973,19 @@ export class SupabaseConversationAdapter implements ConversationPort {
     const knowledge = rows(checked("knowledge_articles.published", articles))
       .map((item) => `${str(item.title)}\n${str(item.body)}`)
       .join("\n\n");
+    const workspace = await this.client
+      .from("workspaces")
+      .select("default_language")
+      .eq("id", context.workspaceId)
+      .single();
+    const workspaceRow = checked("workspace.language", workspace) as {
+      default_language?: unknown;
+    };
+    const operationalLanguage = normalizeLocale(workspaceRow.default_language);
     const draft = await this.ai.draftReply(
       `${values}${input.instruction ? `\nOperator instruction: ${input.instruction}` : ""}`,
       knowledge,
+      operationalLanguage,
     );
     return {
       conversationId,

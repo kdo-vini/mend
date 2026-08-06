@@ -1312,6 +1312,24 @@ export type Database = {
           },
         ]
       }
+      user_preferences: {
+        Row: {
+          interface_language: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          interface_language?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          interface_language?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           auth: string

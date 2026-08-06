@@ -45,7 +45,7 @@ describe("workspace auth helpers", () => {
       p_slug: "mend",
       p_issue_prefix: "MEND",
       p_timezone: "America/Sao_Paulo",
-      p_default_language: "en",
+      p_default_language: "en-US",
     });
   });
 });

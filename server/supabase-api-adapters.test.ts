@@ -282,7 +282,7 @@ describe("Supabase API adapters", () => {
         slug: "",
         issuePrefix: "MEND",
         timezone: "UTC",
-        defaultLanguage: "en",
+        defaultLanguage: "en-US",
         createdAt: null,
         updatedAt: null,
         role: "agent",

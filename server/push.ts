@@ -6,8 +6,10 @@ type PushClient = SupabaseClient<Database>;
 
 type PushSubscriptionRow = Pick<
   Database["public"]["Tables"]["push_subscriptions"]["Row"],
-  "id" | "endpoint" | "p256dh" | "auth"
+  "id" | "endpoint" | "p256dh" | "auth" | "user_id"
 >;
+
+type SupportedLocale = "en-US" | "pt-BR";
 
 export interface WorkspacePushPayload {
   title: string;
@@ -15,6 +17,24 @@ export interface WorkspacePushPayload {
   url?: string;
   tag?: string;
   notificationId?: string;
+  kind?: string;
+}
+
+function localizePushPayload(
+  payload: WorkspacePushPayload,
+  locale: SupportedLocale,
+): Pick<WorkspacePushPayload, "title" | "body"> {
+  if (payload.kind !== "conversation_message")
+    return { title: payload.title, body: payload.body };
+  return locale === "pt-BR"
+    ? {
+        title: "Nova mensagem no WhatsApp",
+        body: "Uma conversa atribuída a você precisa de atenção.",
+      }
+    : {
+        title: "New WhatsApp message",
+        body: "A conversation assigned to you needs attention.",
+      };
 }
 
 function pushConfig() {
@@ -50,7 +70,7 @@ export class WorkspacePushNotifier {
 
     const result = await client
       .from("push_subscriptions")
-      .select("id, endpoint, p256dh, auth")
+      .select("id, endpoint, p256dh, auth, user_id")
       .eq("workspace_id", workspaceId);
     if (result.error)
       throw new Error(`supabase:push_subscriptions:${result.error.message}`);
@@ -59,6 +79,20 @@ export class WorkspacePushNotifier {
     const settled = await Promise.allSettled(
       subscriptions.map(async (subscription) => {
         try {
+          let locale: SupportedLocale = "en-US";
+          if (subscription.user_id) {
+            const preference = await client
+              .from("user_preferences")
+              .select("interface_language")
+              .eq("user_id", subscription.user_id)
+              .maybeSingle();
+            if (
+              !preference.error &&
+              preference.data?.interface_language === "pt-BR"
+            )
+              locale = "pt-BR";
+          }
+          const localized = localizePushPayload(payload, locale);
           await webpush.sendNotification(
             {
               endpoint: subscription.endpoint,
@@ -68,8 +102,8 @@ export class WorkspacePushNotifier {
               },
             },
             JSON.stringify({
-              title: payload.title,
-              body: payload.body,
+              title: localized.title,
+              body: localized.body,
               url: payload.url ?? "/inbox",
               tag: payload.tag ?? "mend-workspace-notification",
               notificationId: payload.notificationId,

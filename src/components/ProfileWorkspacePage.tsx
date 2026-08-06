@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
+import { useTranslation } from "react-i18next";
 import {
   Building2,
   CalendarDays,
@@ -22,6 +23,13 @@ import {
 import { supabase } from "../lib/supabase";
 import { ErrorState, LoadingState } from "../shared/ui/ResourceState";
 import { Select } from "../shared/ui/Select";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import {
+  applyInterfaceLanguage,
+  currentInterfaceLanguage,
+  saveInterfaceLanguage,
+} from "../i18n/preferences";
+import { normalizeLocale, type SupportedLocale } from "../i18n/resources";
 
 type ProfileTab = "profile" | "workspace" | "subscription" | "security";
 
@@ -56,7 +64,7 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : new Intl.DateTimeFormat("pt-BR", {
+    : new Intl.DateTimeFormat(currentInterfaceLanguage(), {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(date);
@@ -81,6 +89,9 @@ export function ProfileWorkspacePage({
   const [user, setUser] = useState<User | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceWithRole | null>(null);
   const [profileName, setProfileName] = useState("");
+  const [interfaceLanguage, setInterfaceLanguage] = useState<SupportedLocale>(
+    currentInterfaceLanguage(),
+  );
   const [workspaceForm, setWorkspaceForm] = useState({
     name: "",
     slug: "",
@@ -91,6 +102,7 @@ export function ProfileWorkspacePage({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation(["common", "settings"]);
 
   const load = useCallback(async () => {
     if (!supabase) {
@@ -116,13 +128,14 @@ export function ProfileWorkspacePage({
           : (nextUser.email?.split("@")[0] ?? "Current operator");
       setUser(nextUser);
       setWorkspace(nextWorkspace);
+      setInterfaceLanguage(currentInterfaceLanguage());
       setProfileName(nextName);
       setWorkspaceForm({
         name: nextWorkspace.name,
         slug: nextWorkspace.slug,
         issuePrefix: nextWorkspace.issue_prefix,
         timezone: nextWorkspace.timezone,
-        defaultLanguage: "pt-BR",
+        defaultLanguage: normalizeLocale(nextWorkspace.default_language),
       });
       onIdentityUpdated({ name: nextName, email: nextUser.email ?? "" });
     } catch (reason) {
@@ -136,9 +149,30 @@ export function ProfileWorkspacePage({
     }
   }, [onIdentityUpdated, workspaceId]);
 
+  const changeInterfaceLanguage = async (locale: SupportedLocale) => {
+    const previous = interfaceLanguage;
+    setInterfaceLanguage(locale);
+    await applyInterfaceLanguage(locale);
+    if (!supabase) return;
+    try {
+      await saveInterfaceLanguage(supabase, locale);
+    } catch {
+      setInterfaceLanguage(previous);
+      await applyInterfaceLanguage(previous);
+      onToast(t("errors.preferencesSave", { ns: "common" }));
+    }
+  };
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const syncStoredLanguage = () =>
+      setInterfaceLanguage(currentInterfaceLanguage());
+    window.addEventListener("storage", syncStoredLanguage);
+    return () => window.removeEventListener("storage", syncStoredLanguage);
+  }, []);
 
   const canEditWorkspace =
     workspace?.role === "owner" || workspace?.role === "admin";
@@ -214,7 +248,7 @@ export function ProfileWorkspacePage({
         slug: updated.slug,
         issuePrefix: updated.issue_prefix,
         timezone: updated.timezone,
-        defaultLanguage: "pt-BR",
+        defaultLanguage: normalizeLocale(updated.default_language),
       });
       onWorkspaceUpdated(updated);
       onToast("Workspace saved");
@@ -307,7 +341,7 @@ export function ProfileWorkspacePage({
             <section className="profile-section">
               <div className="profile-section-heading">
                 <div>
-                  <h2>Personal profile</h2>
+                  <h2>{t("personalProfile", { ns: "settings" })}</h2>
                   <p>
                     This name identifies you inside Mend. Your email comes from
                     the authenticated Supabase account.
@@ -326,6 +360,10 @@ export function ProfileWorkspacePage({
                 </div>
               </div>
               <div className="profile-form">
+                <LanguageSwitcher
+                  value={interfaceLanguage}
+                  onChange={(locale) => void changeInterfaceLanguage(locale)}
+                />
                 <label>
                   Display name
                   <input
@@ -360,7 +398,7 @@ export function ProfileWorkspacePage({
             <section className="profile-section">
               <div className="profile-section-heading">
                 <div>
-                  <h2>Workspace identity</h2>
+                  <h2>{t("workspaceIdentity", { ns: "settings" })}</h2>
                   <p>
                     These values are used by the Inbox, issue identifiers and
                     localized automation.
@@ -442,10 +480,13 @@ export function ProfileWorkspacePage({
                   />
                 </label>
                 <label>
-                  Default language
+                  {t("automationLanguage", { ns: "settings" })}
                   <Select
                     value={workspaceForm.defaultLanguage}
-                    options={[{ value: "pt-BR", label: "Português (Brasil)" }]}
+                    options={[
+                      { value: "en-US", label: "English (US)" },
+                      { value: "pt-BR", label: "Português (Brasil)" },
+                    ]}
                     disabled={!canEditWorkspace}
                     onChange={(value) =>
                       setWorkspaceForm((current) => ({

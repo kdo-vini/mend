@@ -1,18 +1,26 @@
 import { useState } from "react";
 import { ArrowUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { createWorkspace } from "../../api/auth";
 import { supabase } from "../../lib/supabase";
+import { LanguageSwitcher } from "../../components/LanguageSwitcher";
+import type { SupportedLocale } from "../../i18n/resources";
 
 export function WorkspaceOnboarding({
   onCreated,
+  initialLanguage,
 }: {
   onCreated: (workspace: { id: string; name: string }) => void;
+  initialLanguage: SupportedLocale;
 }) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [prefix, setPrefix] = useState("MEND");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [operationalLanguage, setOperationalLanguage] =
+    useState<SupportedLocale>(initialLanguage);
+  const { t } = useTranslation("common");
 
   const submit = async () => {
     if (!name.trim() || !slug.trim()) return;
@@ -25,7 +33,7 @@ export function WorkspaceOnboarding({
           slug: slug.trim().toLowerCase(),
           issuePrefix: prefix.trim().toUpperCase() || "MEND",
           timezone: "America/Sao_Paulo",
-          defaultLanguage: "pt-BR",
+          defaultLanguage: operationalLanguage,
         },
         supabase ?? undefined,
       );
@@ -83,6 +91,13 @@ export function WorkspaceOnboarding({
               )
             }
             placeholder="MEND"
+          />
+        </label>
+        <label>
+          {t("language.label")}
+          <LanguageSwitcher
+            value={operationalLanguage}
+            onChange={setOperationalLanguage}
           />
         </label>
         {error && (

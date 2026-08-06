@@ -27,6 +27,7 @@ import type {
   Priority,
 } from "../../../types";
 import { formatActivityTime } from "../../../shared/lib/format";
+import type { SupportedLocale } from "../../../i18n/resources";
 import {
   ActivityItem,
   AssigneeOption,
@@ -52,6 +53,7 @@ export function IssueDetailPage({
   issues,
   runs,
   workspaceId,
+  operationalLanguage,
   liveMode,
   assigneeOptions,
   assigneeLabel,
@@ -67,6 +69,7 @@ export function IssueDetailPage({
   issues: Issue[];
   runs: CodingRun[];
   workspaceId: string | null;
+  operationalLanguage: SupportedLocale;
   liveMode: boolean;
   assigneeOptions: AssigneeOption[];
   assigneeLabel: (value: string) => string;
@@ -275,7 +278,9 @@ export function IssueDetailPage({
                 }
                 if (issue.conversationId) {
                   setResolutionMessage(
-                    `Olá! O chamado ${issue.identifier} foi resolvido. Se o problema continuar, responda por aqui e reabrimos o atendimento.`,
+                    operationalLanguage === "pt-BR"
+                      ? `Olá! O chamado ${issue.identifier} foi resolvido. Se o problema continuar, responda por aqui e reabrimos o atendimento.`
+                      : `Hello! Issue ${issue.identifier} has been resolved. If the problem continues, reply here and we will reopen the conversation.`,
                   );
                   setResolutionOpen(true);
                   return;
