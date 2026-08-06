@@ -1348,19 +1348,15 @@ export function SettingsPage({
                 <div className="settings-section-header">
                   <div>
                     <h2>Google connections</h2>
-                    <p>
-                      Link more than one Google account to this workspace and
-                      choose which calendars are available to authorized AI
-                      actions. OAuth tokens stay on the server.
-                    </p>
+                    <p>Choose which calendars authorized actions can use.</p>
                   </div>
                   <button
-                    className="button button-primary"
+                    className="button button-ghost button-small google-connect-button"
                     type="button"
                     disabled={googleAction === "connect" || !workspaceId}
                     onClick={() => void connectGoogle()}
                   >
-                    <Plus size={14} /> Connect Google account
+                    <Plus size={13} /> Connect account
                   </button>
                 </div>
                 {settingsError && (
@@ -1400,12 +1396,13 @@ export function SettingsPage({
                               </strong>
                               <span>
                                 {connection.accountEmail ??
-                                  "Email not reported"}{" "}
-                                · Google Calendar
+                                  "Email not reported"}
                               </span>
                               <small>
-                                State: {connection.status} ·{" "}
-                                {connection.calendars.length} calendar
+                                {connection.status === "connected"
+                                  ? "Connected"
+                                  : connection.status}{" "}
+                                · {connection.calendars.length} calendar
                                 {connection.calendars.length === 1 ? "" : "s"}
                               </small>
                               {connection.lastError && (
@@ -1416,9 +1413,13 @@ export function SettingsPage({
                             </div>
                           </div>
                           {connection.calendars.length > 0 && (
-                            <div className="settings-form-grid">
+                            <fieldset className="connection-calendar-list">
+                              <legend>Available calendars</legend>
                               {connection.calendars.map((calendar) => (
-                                <label key={calendar.id}>
+                                <label
+                                  className="connection-calendar-option"
+                                  key={calendar.id}
+                                >
                                   <input
                                     type="checkbox"
                                     checked={selectedCalendarIds.has(
@@ -1435,20 +1436,22 @@ export function SettingsPage({
                                       ]);
                                     }}
                                   />
-                                  {calendar.summary}
-                                  {calendar.primary ? " (primary)" : ""}
+                                  <span>
+                                    {calendar.summary}
+                                    {calendar.primary ? " (primary)" : ""}
+                                  </span>
                                 </label>
                               ))}
-                            </div>
+                            </fieldset>
                           )}
                           <div className="connection-card-actions">
                             <button
-                              className="button button-danger"
+                              className="button button-danger button-small"
                               type="button"
                               disabled={googleAction === connection.id}
                               onClick={() => void disconnectGoogle(connection)}
                             >
-                              <Trash2 size={14} /> Disconnect
+                              <Trash2 size={13} /> Disconnect
                             </button>
                           </div>
                         </div>
