@@ -108,6 +108,14 @@ describe("workspace realtime subscriptions", () => {
       () => undefined,
     );
 
+    statusCallback?.("SUBSCRIBED");
+    (globalThis.document as { visibilityState: string }).visibilityState =
+      "visible";
+    listeners.get("visibilitychange")?.();
+    expect(client.channel).toHaveBeenCalledTimes(1);
+
+    (globalThis.document as { visibilityState: string }).visibilityState =
+      "hidden";
     statusCallback?.("CHANNEL_ERROR");
     vi.advanceTimersByTime(30_000);
     expect(client.channel).toHaveBeenCalledTimes(1);

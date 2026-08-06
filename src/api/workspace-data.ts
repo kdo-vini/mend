@@ -218,6 +218,7 @@ export function subscribeToWorkspace(
   let channel: RealtimeChannel | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectDelay = 1_000;
+  let realtimeHealthy = false;
   const isVisible = () =>
     typeof document === "undefined" || document.visibilityState === "visible";
 
@@ -249,6 +250,7 @@ export function subscribeToWorkspace(
 
   const connect = () => {
     if (stopped) return;
+    realtimeHealthy = false;
     if (channel) void client.removeChannel(channel);
     const next = client.channel(`workspace:${workspaceId}`);
     for (const table of workspaceRealtimeTables) {
@@ -264,8 +266,9 @@ export function subscribeToWorkspace(
     }
     channel = next;
     next.subscribe((status) => {
+      realtimeHealthy = status === "SUBSCRIBED";
       options.onStatus?.(status);
-      if (status === "SUBSCRIBED") {
+      if (realtimeHealthy) {
         reconnectDelay = 1_000;
         // A reconnect can happen while the browser was offline. Refetching
         // here closes the gap between the last event and the current snapshot.
@@ -292,7 +295,8 @@ export function subscribeToWorkspace(
     connect();
   };
   const reconnectOnVisible = () => {
-    if (document.visibilityState === "visible") reconnectNow();
+    if (document.visibilityState === "visible" && !realtimeHealthy)
+      reconnectNow();
   };
 
   if (typeof window !== "undefined") {
