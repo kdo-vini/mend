@@ -67,12 +67,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
           setLoading(false);
           return;
         }
-        setLoading(true);
+        // Keep the current app mounted during token refreshes and other
+        // authenticated events. Loading here unmounts the workspace for a
+        // moment whenever the browser returns from the background.
+        setSession(nextSession);
         void resolveInterfaceLanguage(client).then((locale) => {
           if (!active) return;
           setInterfaceLanguage(locale);
-          setSession(nextSession);
-          setLoading(false);
         });
       },
     );
