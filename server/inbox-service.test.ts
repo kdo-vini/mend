@@ -76,6 +76,8 @@ class FakeInboxPort implements InboxPort {
       };
       this.contacts.set(contactKey, contact);
     }
+    if (input.displayName?.trim())
+      contact.displayName = input.displayName.trim();
     const conversationKey = `${input.workspaceId}:${input.channelConnectionId}:${contact.id}`;
     let conversation = this.conversations.get(conversationKey);
     if (!conversation) {
@@ -369,6 +371,23 @@ describe("InboxService and WhatsAppService", () => {
         conversationId,
       ),
     ).toBeNull();
+  });
+
+  it("never replaces an inbound contact name with the connected WhatsApp account name", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, {
+      ...inbound("wamid-inbound-name"),
+      contactName: "Juliana Lamber",
+    });
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, {
+      ...inbound("wamid-outbound-echo"),
+      direction: "outbound",
+      contactName: "Téchne Sistemas",
+    });
+
+    expect([...port.contacts.values()][0].displayName).toBe("Juliana Lamber");
   });
 
   it("handles provider receipts without inserting a phantom message or persisting a provider media URL", async () => {

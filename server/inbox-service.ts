@@ -809,7 +809,13 @@ export class InboxService {
       workspaceId: context.workspaceId,
       channelConnectionId: connectionId,
       phoneNumber,
-      displayName: chatType === "group" ? undefined : message.contactName,
+      // Outbound Baileys echoes expose the connected account's pushName
+      // (e.g. "Téchne Sistemas"), not the contact's name. Only inbound
+      // direct messages are authoritative for a contact display name.
+      displayName:
+        message.direction === "inbound" && chatType !== "group"
+          ? message.contactName
+          : undefined,
       providerContactId: message.remoteJid,
       providerMessageId: message.providerMessageId,
       direction: message.direction,

@@ -65,14 +65,18 @@ const numberValue = (...values: unknown[]): number | undefined => {
 };
 
 function publicMediaUrl(...values: unknown[]): string | undefined {
-  const value = stringValue(...values);
-  if (!value) return undefined;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : undefined;
-  } catch {
-    return undefined;
+  for (const value of values) {
+    const candidate = stringValue(value);
+    if (!candidate) continue;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol !== "https:" || url.pathname.endsWith(".enc")) continue;
+      return url.toString();
+    } catch {
+      // Try the next provider media field.
+    }
   }
+  return undefined;
 }
 
 function normalizeEventName(value: unknown): string {
@@ -325,6 +329,7 @@ async function normalizeMessages(
         );
         const caption = stringValue(content.caption);
         const mediaUrl = publicMediaUrl(
+          asRecord(value.message).mediaUrl,
           value.mediaUrl,
           content.url,
           content.directPath,

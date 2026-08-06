@@ -84,6 +84,31 @@ describe("Whatsmiau normalization", () => {
     });
   });
 
+  it("prefers Whatsmiau's converted media URL over encrypted WhatsApp media", () => {
+    const [message] = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        key: {
+          id: "audio-1",
+          remoteJid: "5511999999999@s.whatsapp.net",
+          fromMe: false,
+        },
+        message: {
+          audioMessage: {
+            mimetype: "audio/ogg; codecs=opus",
+            url: "https://mmg.whatsapp.net/audio.enc",
+          },
+          mediaUrl: "https://storage.googleapis.com/whatsmiau/audio.ogg",
+        },
+      },
+    });
+
+    expect(message.mediaUrl).toBe(
+      "https://storage.googleapis.com/whatsmiau/audio.ogg",
+    );
+  });
+
   it("creates a stable id when the provider omits an id", () => {
     const payload = {
       event: "messages.upsert",
