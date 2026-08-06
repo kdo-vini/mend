@@ -114,6 +114,10 @@ test("operator can move from inbox to issues and create an issue", async ({
   page.once("dialog", (dialog) => void dialog.accept());
   await expect(issueMenu).toBeVisible();
   await issueMenu.getByRole("menuitem", { name: "Delete issue" }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Delete issue", exact: true })
+    .click();
   await expect(page.getByText("Edited E2E issue from Mend")).toHaveCount(0);
 });
 

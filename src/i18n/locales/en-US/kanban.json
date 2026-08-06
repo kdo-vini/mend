@@ -1,0 +1,15 @@
+{
+  "title": "Kanban",
+  "ui": {
+    "eyebrow": "Workspace flow",
+    "sharedDescription": "A shared view of the work that needs attention.",
+    "personalDescription": "Your private plan, linked to the workspace.",
+    "view": "Kanban view",
+    "shared": "Shared",
+    "personal": "Personal",
+    "hideCanceled": "Hide canceled",
+    "canceled": "Canceled",
+    "newIssue": "New issue",
+    "newTask": "New task"
+  }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, FileCode2, GitBranch, RefreshCw, X } from "lucide-react";
 import type { CodingRun } from "../../../types";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
@@ -21,6 +22,7 @@ export function RunsPage({
   ) => void;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("runs");
   const [selectedRunId, setSelectedRunId] = useState(runs[0]?.id ?? "");
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimer = useRef<number | null>(null);
@@ -43,9 +45,9 @@ export function RunsPage({
     return (
       <div className="page">
         <PageHeader
-          eyebrow="Engineering automation"
-          title="Codex runs"
-          description="Isolated investigations and local patches, kept inside the workspace."
+          eyebrow={t("ui.eyebrow")}
+          title={t("title")}
+          description={t("ui.description")}
           actions={
             <button
               className="button button-ghost"
@@ -53,16 +55,16 @@ export function RunsPage({
               onClick={refresh}
               disabled={refreshing}
             >
-              <RefreshCw size={15} /> Refresh
+              <RefreshCw size={15} /> {t("ui.refresh")}
             </button>
           }
         />
         {refreshing ? (
-          <LoadingState label="Refreshing Codex runs…" />
+          <LoadingState label={t("ui.refreshing")} />
         ) : (
           <EmptyState
-            title="No Codex runs yet"
-            description="Start a run from an issue when engineering context is ready."
+            title={t("empty")}
+            description={t("ui.emptyDescription")}
           />
         )}
       </div>
@@ -71,9 +73,9 @@ export function RunsPage({
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Engineering automation"
-        title="Codex runs"
-        description="Isolated investigations and local patches, kept inside the workspace."
+        eyebrow={t("ui.eyebrow")}
+        title={t("title")}
+        description={t("ui.description")}
         actions={
           <button
             className="button button-ghost"
@@ -81,12 +83,13 @@ export function RunsPage({
             onClick={refresh}
             disabled={refreshing}
           >
-            <RefreshCw size={15} /> {refreshing ? "Refreshing…" : "Refresh"}
+            <RefreshCw size={15} />{" "}
+            {refreshing ? t("ui.refreshing") : t("ui.refresh")}
           </button>
         }
       />
       {refreshing ? (
-        <LoadingState label="Refreshing Codex runs…" />
+        <LoadingState label={t("ui.refreshing")} />
       ) : (
         <div className="runs-layout">
           <div className="runs-list">

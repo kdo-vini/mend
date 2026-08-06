@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 export function PageHeader({
   eyebrow,
@@ -11,10 +12,13 @@ export function PageHeader({
   description?: string;
   actions?: ReactNode;
 }) {
+  const { t } = useTranslation("common");
   return (
     <header className="page-header">
       <div>
-        <div className="page-kicker">{eyebrow ?? "Techne workspace"}</div>
+        <div className="page-kicker">
+          {eyebrow ?? t("brand.workspaceEyebrow")}
+        </div>
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>

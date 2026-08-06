@@ -1,4 +1,36 @@
 {
+  "ui": {
+    "eyebrow": "Configuração do workspace",
+    "title": "Configurações",
+    "description": "Conecte o número real do WhatsApp e mantenha pessoas, políticas e histórico de acesso baseados em dados ao vivo."
+  },
+  "tabs": {
+    "whatsapp": "WhatsApp",
+    "plugins": "Plugins",
+    "members": "Membros",
+    "ai": "Comportamento da IA",
+    "flows": "Fluxos",
+    "repositories": "Repositórios",
+    "audit": "Registro de auditoria"
+  },
+  "profileTabs": {
+    "profile": "Perfil",
+    "workspace": "Workspace",
+    "subscription": "Assinatura",
+    "security": "Segurança"
+  },
+  "profileEyebrow": "Conta e workspace",
+  "profileTitle": "Perfil",
+  "profileDescription": "Gerencie uma área por vez. Dados da conta, identidade do workspace, assinatura e segurança ficam separados.",
+  "profileSections": "Seções do perfil",
+  "profileLoading": "Carregando seu perfil…",
+  "profileUnavailable": "Perfil indisponível",
+  "profileLoadError": "Não foi possível carregar sua conta ou workspace.",
+  "profileDescriptionText": "Este nome identifica você dentro do Mend. Seu e-mail vem da conta autenticada do Supabase.",
+  "displayName": "Nome de exibição",
+  "email": "E-mail",
+  "saving": "Salvando…",
+  "saveProfile": "Salvar perfil",
   "profileSaved": "Perfil salvo",
   "profileSaveError": "Não foi possível salvar o perfil.",
   "workspaceSaved": "Workspace salvo",

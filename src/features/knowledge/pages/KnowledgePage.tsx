@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   BookOpen,
   ChevronRight,
@@ -16,6 +17,7 @@ import { StatusArticle } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
 
 export function KnowledgePage() {
+  const { t } = useTranslation("knowledge");
   const [articles, setArticles] = useState<KnowledgeArticle[]>(seedKnowledge);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -47,16 +49,16 @@ export function KnowledgePage() {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Support context"
-        title="Knowledge"
-        description="Small, trusted answers the support agent and AI can use."
+        eyebrow={t("ui.eyebrow")}
+        title={t("title")}
+        description={t("ui.description")}
         actions={
           <button
             className="button button-primary"
             type="button"
             onClick={addArticle}
           >
-            <Plus size={15} /> New article
+            <Plus size={15} /> {t("create")}
           </button>
         }
       />
@@ -68,18 +70,18 @@ export function KnowledgePage() {
             data-global-search
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search knowledge"
-            aria-label="Search knowledge"
+            placeholder={t("ui.search")}
+            aria-label={t("ui.search")}
           />
         </label>
         <div className="select-control">
           <ListFilter size={14} />
           <Select
-            ariaLabel="Filter knowledge by category"
+            ariaLabel={t("ui.filterCategory")}
             value={categoryFilter}
             options={categories.map((category) => ({
               value: category,
-              label: category === "All" ? "All categories" : category,
+              label: category === "All" ? t("ui.allCategories") : category,
             }))}
             onChange={setCategoryFilter}
           />
@@ -108,15 +110,9 @@ export function KnowledgePage() {
           ))
         ) : (
           <EmptyState
-            title={
-              articles.length
-                ? "No matching articles"
-                : "No knowledge articles yet"
-            }
+            title={articles.length ? t("ui.noMatching") : t("empty")}
             description={
-              articles.length
-                ? "Try another search or category."
-                : "Create a trusted answer your support team can reuse."
+              articles.length ? t("ui.tryDifferent") : t("ui.createAnswer")
             }
             action={
               articles.length ? (
@@ -128,7 +124,7 @@ export function KnowledgePage() {
                     setCategoryFilter("All");
                   }}
                 >
-                  Clear filters
+                  {t("ui.clearFilters")}
                 </button>
               ) : (
                 <button
@@ -136,7 +132,7 @@ export function KnowledgePage() {
                   type="button"
                   onClick={addArticle}
                 >
-                  <Plus size={13} /> New article
+                  <Plus size={13} /> {t("create")}
                 </button>
               )
             }

@@ -1,4 +1,36 @@
 {
+  "ui": {
+    "eyebrow": "Workspace configuration",
+    "title": "Settings",
+    "description": "Connect the real WhatsApp number and keep people, policies and access history grounded in live data."
+  },
+  "tabs": {
+    "whatsapp": "WhatsApp",
+    "plugins": "Plugins",
+    "members": "Members",
+    "ai": "AI behavior",
+    "flows": "Flows",
+    "repositories": "Repositories",
+    "audit": "Audit log"
+  },
+  "profileTabs": {
+    "profile": "Profile",
+    "workspace": "Workspace",
+    "subscription": "Subscription",
+    "security": "Security"
+  },
+  "profileEyebrow": "Account & workspace",
+  "profileTitle": "Profile",
+  "profileDescription": "Manage one area at a time. Account details, workspace identity, subscription status and security stay separated.",
+  "profileSections": "Profile sections",
+  "profileLoading": "Loading your profile…",
+  "profileUnavailable": "Profile unavailable",
+  "profileLoadError": "Your account or workspace could not be loaded.",
+  "profileDescriptionText": "This name identifies you inside Mend. Your email comes from the authenticated Supabase account.",
+  "displayName": "Display name",
+  "email": "Email",
+  "saving": "Saving…",
+  "saveProfile": "Save profile",
   "profileSaved": "Profile saved",
   "profileSaveError": "Profile could not be saved.",
   "workspaceSaved": "Workspace saved",

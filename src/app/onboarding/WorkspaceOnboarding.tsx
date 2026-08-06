@@ -20,7 +20,7 @@ export function WorkspaceOnboarding({
   const [error, setError] = useState<string | null>(null);
   const [operationalLanguage, setOperationalLanguage] =
     useState<SupportedLocale>(initialLanguage);
-  const { t } = useTranslation("common");
+  const { t } = useTranslation(["common", "onboarding"]);
 
   const submit = async () => {
     if (!name.trim() || !slug.trim()) return;
@@ -42,7 +42,7 @@ export function WorkspaceOnboarding({
       setError(
         reason instanceof Error
           ? reason.message
-          : "Could not create the workspace.",
+          : t("error", { ns: "onboarding" }),
       );
     } finally {
       setSaving(false);
@@ -55,14 +55,11 @@ export function WorkspaceOnboarding({
         <div className="brand-mark">
           <span />
         </div>
-        <span className="page-kicker">First workspace</span>
-        <h1>Set up Mend for your team</h1>
-        <p>
-          Create the workspace where your WhatsApp connection, knowledge
-          articles, issues and Codex runs will live.
-        </p>
+        <span className="page-kicker">{t("kicker", { ns: "onboarding" })}</span>
+        <h1>{t("title", { ns: "onboarding" })}</h1>
+        <p>{t("description", { ns: "onboarding" })}</p>
         <label>
-          Workspace name
+          {t("workspaceName", { ns: "onboarding" })}
           <input
             autoFocus
             value={name}
@@ -71,7 +68,7 @@ export function WorkspaceOnboarding({
           />
         </label>
         <label>
-          Workspace slug
+          {t("workspaceSlug", { ns: "onboarding" })}
           <input
             value={slug}
             onChange={(event) =>
@@ -81,7 +78,7 @@ export function WorkspaceOnboarding({
           />
         </label>
         <label>
-          Issue prefix
+          {t("issuePrefix", { ns: "onboarding" })}
           <input
             value={prefix}
             maxLength={8}
@@ -111,12 +108,13 @@ export function WorkspaceOnboarding({
           disabled={saving || !name.trim() || !slug.trim()}
           onClick={() => void submit()}
         >
-          {saving ? "Creating workspace…" : "Create workspace"}{" "}
+          {saving
+            ? t("creating", { ns: "onboarding" })
+            : t("create", { ns: "onboarding" })}{" "}
           <ArrowUp size={14} />
         </button>
         <small className="onboarding-note">
-          Your account becomes the workspace owner. No sample records are
-          created.
+          {t("note", { ns: "onboarding" })}
         </small>
       </div>
     </div>

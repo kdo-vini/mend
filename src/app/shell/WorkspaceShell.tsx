@@ -285,8 +285,8 @@ export function Sidebar({
           <span />
         </div>
         <div>
-          <div className="brand-name">Mend</div>
-          <div className="brand-subtitle">support operations</div>
+          <div className="brand-name">{t("brand.name")}</div>
+          <div className="brand-subtitle">{t("brand.descriptor")}</div>
         </div>
         <button
           className="icon-button subtle sidebar-collapse"
@@ -410,7 +410,7 @@ export function MobileTopbar({
         <span className="brand-mark">
           <span />
         </span>
-        <strong>Mend</strong>
+        <strong>{t("brand.name")}</strong>
       </NavLink>
       <div className="mobile-topbar-actions">
         <NotificationCenter

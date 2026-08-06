@@ -26,6 +26,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import type {
   AiMode,
   AiDraft,
@@ -189,6 +190,7 @@ export function InboxPage({
   assigneeOptions: AssigneeOption[];
   assigneeLabel: (value: string) => string;
 }) {
+  const { t } = useTranslation("inbox");
   const location = useLocation();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All conversations");
@@ -301,15 +303,15 @@ export function InboxPage({
     return (
       <div className="inbox-page">
         <EmptyState
-          title="No conversations yet"
-          description="New conversations will appear here."
+          title={t("empty")}
+          description={t("ui.newWillAppear")}
           action={
             <button
               className="button button-ghost"
               type="button"
               onClick={onNewIssue}
             >
-              <Plus size={14} /> Create an internal issue
+              <Plus size={14} /> {t("ui.createIssue")}
             </button>
           }
         />
@@ -352,6 +354,22 @@ export function InboxPage({
     "Unassigned",
     "Resolved",
   ];
+  const filterLabel = (item: string) => {
+    switch (item) {
+      case "All conversations":
+        return t("filters.all");
+      case "Needs attention":
+        return t("filters.needsAttention");
+      case "AI handling":
+        return t("filters.aiHandling");
+      case "Waiting customer":
+        return t("filters.waitingCustomer");
+      case "Unassigned":
+        return t("filters.unassigned");
+      default:
+        return t("filters.resolved");
+    }
+  };
   const countForFilter = (item: string) =>
     item === "All conversations"
       ? conversations.length
@@ -976,14 +994,14 @@ export function InboxPage({
             type="button"
             onClick={() => setFilter("All conversations")}
           >
-            <Filter size={15} /> All conversations
+            <Filter size={15} /> {t("filters.all")}
           </button>
           <button
             className="button button-primary"
             type="button"
             onClick={onNewIssue}
           >
-            <Plus size={15} /> New issue
+            <Plus size={15} /> {t("ui.newIssue")}
           </button>
         </div>
       </div>
@@ -993,13 +1011,13 @@ export function InboxPage({
         <section className="conversation-rail">
           <div className="rail-heading">
             <span>
-              Conversations{" "}
+              {t("ui.conversations")}{" "}
               <span className="count-muted">{filtered.length}</span>
             </span>
             <button
               className="icon-button subtle"
               type="button"
-              aria-label="Focus conversation search"
+              aria-label={t("ui.focusSearch")}
               onClick={() => searchRef.current?.focus()}
             >
               <ListFilter size={16} />
@@ -1012,15 +1030,15 @@ export function InboxPage({
               data-global-search
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search conversations"
-              aria-label="Search conversations"
+              placeholder={t("ui.search")}
+              aria-label={t("ui.search")}
             />
             <kbd>/</kbd>
           </label>
           <div
             className="filter-strip"
             role="tablist"
-            aria-label="Conversation filters"
+            aria-label={t("ui.filters")}
           >
             {filterItems.map((item) => (
               <button
@@ -1031,7 +1049,7 @@ export function InboxPage({
                 className={filter === item ? "selected" : ""}
                 onClick={() => setFilter(item)}
               >
-                {item}
+                {filterLabel(item)}
                 <span>{countForFilter(item)}</span>
               </button>
             ))}
@@ -1048,8 +1066,8 @@ export function InboxPage({
             ))}
             {filtered.length === 0 && (
               <EmptyState
-                title="No conversations found"
-                description="Try a different search or clear the current filter."
+                title={t("ui.noResults")}
+                description={t("ui.tryDifferent")}
                 search={Boolean(search)}
                 action={
                   search || filter !== "All conversations" ? (
@@ -1061,7 +1079,7 @@ export function InboxPage({
                         setFilter("All conversations");
                       }}
                     >
-                      Clear filters
+                      {t("ui.clearFilters")}
                     </button>
                   ) : undefined
                 }
@@ -1075,7 +1093,7 @@ export function InboxPage({
             type="button"
             onClick={() => setMobileConversationOpen(false)}
           >
-            <ArrowLeft size={15} /> Conversations
+            <ArrowLeft size={15} /> {t("ui.conversations")}
           </button>
           <ConversationHeader
             conversation={selected}
@@ -1126,7 +1144,7 @@ export function InboxPage({
           <div className="message-canvas-shell">
             <div className="message-canvas" ref={messageCanvasRef}>
               <div className="day-divider">
-                <span>Today</span>
+                <span>{t("ui.today")}</span>
               </div>
               {selected.messages.length ? (
                 selected.messages.map((message) => (
@@ -1157,8 +1175,8 @@ export function InboxPage({
                 ))
               ) : (
                 <EmptyState
-                  title="No messages yet"
-                  description="The first customer message will appear here."
+                  title={t("ui.noMessages")}
+                  description={t("ui.firstMessage")}
                 />
               )}
               {activeIssue && (
@@ -1321,6 +1339,7 @@ function AiDecisionSummary({
   conversation: Conversation;
   onDismiss?: () => void;
 }) {
+  const { t } = useTranslation("inbox");
   if (
     !conversation.aiDecision &&
     !conversation.aiIntent &&
@@ -1334,16 +1353,16 @@ function AiDecisionSummary({
     conversation.aiDecision === "blocked";
   const title =
     conversation.automationState === "human_paused"
-      ? "Human takeover — AI paused"
+      ? t("ui.humanTakeover")
       : blocked
-        ? "AI blocked — needs human"
+        ? t("ui.aiBlocked")
         : conversation.aiDecision === "auto_reply"
-          ? "AI active — auto-reply eligible"
-          : "AI active — Copilot (drafts only)";
+          ? t("ui.autoReplyEligible")
+          : t("ui.copilotDrafts");
   return (
     <aside
       className={`ai-decision-card ${blocked ? "blocked" : ""} ${conversation.automationState === "human_paused" ? "paused" : ""}`}
-      aria-label="AI decision summary"
+      aria-label={t("ui.aiDecisionSummary")}
     >
       <div className="ai-decision-heading">
         <span className="ai-decision-title">
@@ -1352,14 +1371,15 @@ function AiDecisionSummary({
         <span className="ai-decision-heading-actions">
           {conversation.aiConfidence !== undefined && (
             <span className="ai-confidence">
-              {Math.round(conversation.aiConfidence * 100)}% confidence
+              {Math.round(conversation.aiConfidence * 100)}%{" "}
+              {t("ui.confidence")}
             </span>
           )}
           {onDismiss && (
             <button
               className="icon-button subtle ai-card-dismiss"
               type="button"
-              aria-label="Hide AI details"
+              aria-label={t("ui.hideAiDetails")}
               onClick={onDismiss}
             >
               <X size={14} />
@@ -1391,11 +1411,12 @@ function AiDraftCard({
   onInsert: (text: string) => void;
   onDismiss?: () => void;
 }) {
+  const { t } = useTranslation("inbox");
   return (
-    <aside className="ai-draft-card" aria-label="Persisted AI draft">
+    <aside className="ai-draft-card" aria-label={t("ui.persistedDraft")}>
       <div className="ai-draft-heading">
         <span className="ai-decision-title">
-          <Sparkles size={13} /> AI draft ready
+          <Sparkles size={13} /> {t("ui.draftReady")}
         </span>
         <span className="ai-draft-actions">
           <button
@@ -1403,13 +1424,13 @@ function AiDraftCard({
             type="button"
             onClick={() => onInsert(draft.body)}
           >
-            Insert
+            {t("ui.insertDraft")}
           </button>
           {onDismiss && (
             <button
               className="icon-button subtle ai-card-dismiss"
               type="button"
-              aria-label="Hide AI draft"
+              aria-label={t("ui.hideAiDraft")}
               onClick={onDismiss}
             >
               <X size={14} />
@@ -1461,6 +1482,7 @@ function ConversationHeader({
   aiDetailsOpen: boolean;
   onToggleAiDetails: () => void;
 }) {
+  const { t } = useTranslation("inbox");
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(conversation.name);
@@ -1494,21 +1516,21 @@ function ConversationHeader({
               >
                 <input
                   autoFocus
-                  aria-label="Contact name"
+                  aria-label={t("ui.contactName")}
                   value={draftName}
                   onChange={(event) => setDraftName(event.target.value)}
                 />
                 <button
                   className="icon-button subtle"
                   type="submit"
-                  aria-label="Save contact name"
+                  aria-label={t("ui.saveContactName")}
                 >
                   <Check size={14} />
                 </button>
                 <button
                   className="icon-button subtle"
                   type="button"
-                  aria-label="Cancel contact name edit"
+                  aria-label={t("ui.cancelContactEdit")}
                   onClick={() => {
                     setDraftName(conversation.name);
                     setEditingName(false);
@@ -1523,21 +1545,21 @@ function ConversationHeader({
                 <button
                   className="icon-button subtle identity-name-edit"
                   type="button"
-                  aria-label="Edit contact name"
+                  aria-label={t("ui.editContactName")}
                   disabled={!conversation.contactId}
                   onClick={() => setEditingName(true)}
                 >
                   <PenLine size={13} />
                 </button>
                 {conversation.chatType === "group" && (
-                  <span className="group-badge">Group</span>
+                  <span className="group-badge">{t("ui.group")}</span>
                 )}
               </>
             )}
           </div>
           <p>
             {conversation.chatType === "group"
-              ? "Group chat"
+              ? t("ui.groupChat")
               : conversation.phone}
             {conversation.company ? ` · ${conversation.company}` : ""}
           </p>
@@ -1546,9 +1568,9 @@ function ConversationHeader({
       <div className="conversation-controls">
         <label className="conversation-assignee conversation-desktop-control">
           <UserRound size={13} aria-hidden="true" />
-          <span className="sr-only">Conversation assignee</span>
+          <span className="sr-only">{t("ui.conversationAssignee")}</span>
           <Select
-            ariaLabel="Conversation assignee"
+            ariaLabel={t("ui.conversationAssignee")}
             value={conversation.assignee}
             options={assigneeOptions}
             onChange={onAssign}
@@ -1559,12 +1581,12 @@ function ConversationHeader({
         >
           <Sparkles size={13} />{" "}
           {conversation.automationState === "human_paused"
-            ? "Human takeover — AI paused"
+            ? t("ui.humanTakeover")
             : conversation.aiMode === "safe_auto"
-              ? "Auto-reply"
+              ? t("ui.autoReply")
               : conversation.aiMode === "draft"
-                ? "Copilot — drafts only"
-                : "Manual"}
+                ? t("ui.copilot")
+                : t("ui.manual")}
         </span>
         {conversation.humanTakeoverReason && (
           <span className="ai-reason" title="Human takeover reason">
@@ -1575,7 +1597,7 @@ function ConversationHeader({
           className="icon-button conversation-desktop-control"
           type="button"
           onClick={onNewIssue}
-          aria-label="Open linked issue"
+          aria-label={t("ui.openLinkedIssue")}
         >
           <CircleDot size={16} />
         </button>
@@ -1585,7 +1607,7 @@ function ConversationHeader({
             type="button"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Conversation actions"
+            aria-label={t("ui.conversationActions")}
           >
             <Ellipsis size={17} />
           </button>
@@ -1600,13 +1622,13 @@ function ConversationHeader({
                 }}
               >
                 <Sparkles size={14} />
-                {aiDetailsOpen ? "Hide AI details" : "Show AI details"}
+                {aiDetailsOpen ? t("ui.hideAiDetails") : t("ui.showAiDetails")}
               </button>
               <label className="context-menu-select mobile-menu-control">
                 <UserRound size={14} />
-                <span>Assignee</span>
+                <span>{t("ui.assignee")}</span>
                 <Select
-                  ariaLabel="Conversation assignee"
+                  ariaLabel={t("ui.conversationAssignee")}
                   value={conversation.assignee}
                   options={assigneeOptions}
                   onChange={(value) => {
@@ -1624,7 +1646,7 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <CircleDot size={14} /> Open linked issue
+                <CircleDot size={14} /> {t("ui.openLinkedIssue")}
               </button>
               <hr className="mobile-menu-control" />
               <button
@@ -1635,7 +1657,7 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <PenLine size={14} /> Copilot
+                <PenLine size={14} /> {t("ui.copilot")}
               </button>
               <button
                 type="button"
@@ -1645,7 +1667,7 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <Zap size={14} /> Auto-reply
+                <Zap size={14} /> {t("ui.autoReply")}
               </button>
               <button
                 type="button"
@@ -1655,7 +1677,7 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <LockKeyhole size={14} /> Manual
+                <LockKeyhole size={14} /> {t("ui.manual")}
               </button>
               <button
                 type="button"
@@ -1667,11 +1689,11 @@ function ConversationHeader({
               >
                 {conversation.automationState === "human_paused" ? (
                   <>
-                    <Zap size={14} /> Resume AI
+                    <Zap size={14} /> {t("ui.resumeAi")}
                   </>
                 ) : (
                   <>
-                    <LockKeyhole size={14} /> Pause AI
+                    <LockKeyhole size={14} /> {t("ui.pauseAi")}
                   </>
                 )}
               </button>
@@ -1684,7 +1706,7 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <Archive size={14} /> Snooze conversation
+                <Archive size={14} /> {t("ui.snoozeConversation")}
               </button>
               {conversation.status !== "resolved" && (
                 <button
@@ -1695,7 +1717,7 @@ function ConversationHeader({
                     setMenuOpen(false);
                   }}
                 >
-                  <Check size={14} /> Resolve conversation
+                  <Check size={14} /> {t("ui.resolveConversation")}
                 </button>
               )}
               <hr />
@@ -1709,7 +1731,7 @@ function ConversationHeader({
                   setMenuOpen(false);
                 }}
               >
-                <Trash2 size={14} /> Delete conversation
+                <Trash2 size={14} /> {t("ui.deleteConversation")}
               </button>
             </div>
           )}
@@ -1910,6 +1932,7 @@ function MediaComposer({
   liveMode: boolean;
   automationState: AutomationState;
 }) {
+  const { t } = useTranslation("inbox");
   type PendingFile = {
     id: string;
     file: File;
@@ -2121,16 +2144,16 @@ function MediaComposer({
           className="composer-tool"
           type="button"
           disabled={!liveMode || !onSendMediaBatch || sending || recording}
-          aria-label="Attach files"
+          aria-label={t("ui.attachFiles")}
           onClick={() => fileInputRef.current?.click()}
         >
-          <Paperclip size={15} /> Files
+          <Paperclip size={15} /> {t("ui.files")}
         </button>
         <button
           className="composer-tool"
           type="button"
           disabled={!liveMode || !onSendMediaBatch || sending}
-          aria-label={recording ? "Stop recording" : "Record audio"}
+          aria-label={recording ? t("ui.stopRecording") : t("ui.recordAudio")}
           aria-pressed={recording}
           onClick={() => {
             if (recording) {
@@ -2143,13 +2166,13 @@ function MediaComposer({
           }}
         >
           {recording ? <Square size={14} /> : <Mic size={15} />}{" "}
-          {recording ? "Stop" : "Voice"}
+          {recording ? t("ui.stop") : t("ui.voice")}
         </button>
         <button
           className="composer-tool"
           type="button"
           disabled={sending || draftLoading}
-          aria-label="Insert AI draft"
+          aria-label={t("ui.insertDraft")}
           aria-busy={draftLoading}
           onClick={() => void insertAiDraft()}
         >
@@ -2158,11 +2181,9 @@ function MediaComposer({
           ) : (
             <Sparkles size={15} />
           )}{" "}
-          {draftLoading ? "Generating…" : "Insert AI draft"}
+          {draftLoading ? t("ui.generating") : t("ui.insertAiDraft")}
         </button>
-        <span className="composer-hint">
-          Enter to send · Shift + Enter for newline
-        </span>
+        <span className="composer-hint">{t("ui.composerHint")}</span>
       </div>
       {pendingFiles.length > 0 && (
         <div className="attachment-preview-bar" aria-label="Selected files">
@@ -2217,7 +2238,7 @@ function MediaComposer({
       <div className="composer-input-row">
         <textarea
           ref={textareaRef}
-          aria-label="Write a reply"
+          aria-label={t("ui.writeReply")}
           value={text}
           disabled={sending}
           onChange={(event) => {
@@ -2234,10 +2255,10 @@ function MediaComposer({
           }}
           placeholder={
             automationState === "human_paused"
-              ? "AI paused - resume in three dots"
+              ? t("ui.aiPausedPlaceholder")
               : aiMode === "safe_auto"
-                ? "AI is handling safe replies…"
-                : "Write a reply…"
+                ? t("ui.aiHandlingPlaceholder")
+                : t("ui.writeReplyPlaceholder")
           }
           rows={1}
         />
@@ -2246,7 +2267,7 @@ function MediaComposer({
           type="button"
           disabled={!text.trim() || sending}
           onClick={() => void submitText()}
-          aria-label="Send message"
+          aria-label={t("send")}
         >
           <Send size={16} />
         </button>
@@ -2255,12 +2276,12 @@ function MediaComposer({
         <span className="composer-ai-state">
           <Sparkles size={12} />{" "}
           {aiMode === "off"
-            ? "Manual"
+            ? t("ui.manual")
             : automationState === "human_paused"
-              ? "AI paused"
+              ? t("ui.aiPaused")
               : aiMode === "safe_auto"
-                ? "Auto-reply active"
-                : "Copilot drafts ready"}
+                ? t("ui.autoReplyActive")
+                : t("ui.copilotReady")}
         </span>
       </div>
     </div>

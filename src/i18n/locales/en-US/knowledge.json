@@ -1,5 +1,16 @@
 {
   "title": "Knowledge",
   "empty": "No articles yet",
-  "create": "New article"
+  "create": "New article",
+  "ui": {
+    "eyebrow": "Support context",
+    "description": "Small, trusted answers the support agent and AI can use.",
+    "search": "Search knowledge",
+    "filterCategory": "Filter knowledge by category",
+    "allCategories": "All categories",
+    "noMatching": "No matching articles",
+    "tryDifferent": "Try another search or category.",
+    "createAnswer": "Create a trusted answer your support team can reuse.",
+    "clearFilters": "Clear filters"
+  }
 }

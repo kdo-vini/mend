@@ -1,5 +1,12 @@
 {
   "title": "Codex Runs",
   "empty": "No runs yet",
-  "retry": "Run again"
+  "retry": "Run again",
+  "ui": {
+    "eyebrow": "Engineering automation",
+    "description": "Isolated investigations and local patches, kept inside the workspace.",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing Codex runs…",
+    "emptyDescription": "Start a run from an issue when engineering context is ready."
+  }
 }

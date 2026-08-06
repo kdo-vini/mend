@@ -1,0 +1,325 @@
+{
+  "navigation": {
+    "label": "Marketing navigation",
+    "features": "Features",
+    "capabilities": "Capabilities",
+    "useCases": "Use cases",
+    "pricing": "Pricing",
+    "signIn": "Sign in",
+    "getStarted": "Get started",
+    "openMenu": "Open navigation",
+    "closeMenu": "Close navigation",
+    "switchLanguageShort": "PT",
+    "switchLanguageLong": "Português"
+  },
+  "hero": {
+    "releaseLabel": "New",
+    "releaseText": "The support-to-code loop is live",
+    "title": "Keep shipping. Mend the support loop.",
+    "description": "Mend turns WhatsApp support into clear replies, traceable issues, and reviewable engineering work—so customer context reaches the fix without slowing the people building it.",
+    "primaryCta": "Connect WhatsApp",
+    "secondaryCta": "See the product"
+  },
+  "preview": {
+    "ariaLabel": "Mend Inbox, issue, and Codex run product preview",
+    "inbox": "Mend Inbox",
+    "live": "Live workspace",
+    "conversations": "Conversations",
+    "search": "Search conversations",
+    "threads": {
+      "one": {
+        "initial": "L",
+        "customer": "Luiza · Acme",
+        "subject": "Checkout is failing again"
+      },
+      "two": {
+        "initial": "P",
+        "customer": "Pedro · Tally",
+        "subject": "Question about the new plan"
+      },
+      "three": {
+        "initial": "M",
+        "customer": "Marina · Nova",
+        "subject": "Import finished"
+      }
+    },
+    "channel": "WhatsApp",
+    "needsAttention": "needs attention",
+    "aiDrafts": "AI draft",
+    "customerMessage": "Checkout failed again for two customers after the plan change. Can you take a look?",
+    "agentMessage": "I’m on it. I’ve linked the affected release and I’ll update you here after review.",
+    "issueTitle": "Checkout error after plan change",
+    "issueStatus": "In progress",
+    "issueId": "MEND-184",
+    "composer": "Write a reply…",
+    "runTitle": "Support loop",
+    "runStatus": "Human review required",
+    "filesChanged": "3 files",
+    "additions": "+ 18",
+    "deletions": "− 4",
+    "steps": {
+      "context": "Context captured",
+      "contextMeta": "WhatsApp + history",
+      "issue": "Issue created",
+      "issueMeta": "MEND-184",
+      "run": "Codex run complete",
+      "runMeta": "Checks passed",
+      "review": "Awaiting review",
+      "reviewMeta": "You decide what ships"
+    }
+  },
+  "proof": {
+    "label": "Built for teams close to the customer",
+    "items": {
+      "solo": "Solo founders",
+      "microSaas": "Micro SaaS",
+      "developerLed": "Developer-led support",
+      "whatsappFirst": "WhatsApp-first teams",
+      "smallTeams": "Small product teams"
+    }
+  },
+  "stories": {
+    "title": "Everything needed to turn support into shipped work.",
+    "description": "From the first customer signal to the reviewed fix, Mend keeps one continuous thread of context, ownership, and evidence.",
+    "cta": "Start your loop",
+    "cards": {
+      "reply": {
+        "title": "Reply with the whole customer story",
+        "description": "Work from one operational inbox instead of reconstructing context across chats, docs, and memory.",
+        "points": {
+          "0": "WhatsApp history in one view",
+          "1": "Grounded AI drafts",
+          "2": "Human approval stays explicit"
+        }
+      },
+      "ground": {
+        "title": "Ground every suggestion in trusted knowledge",
+        "description": "Give AI the product facts it needs while making source quality and review state visible to the operator.",
+        "points": {
+          "0": "Workspace knowledge sources",
+          "1": "Confidence and source trace",
+          "2": "Reviewable automation boundaries"
+        }
+      },
+      "issue": {
+        "title": "Turn a signal into an issue without copying",
+        "description": "Create native work directly from the conversation and keep the customer impact attached to every decision.",
+        "points": {
+          "0": "Conversation-linked issues",
+          "1": "Owner and next action",
+          "2": "No external tracker handoff"
+        }
+      },
+      "run": {
+        "title": "Run code changes behind a review gate",
+        "description": "Let Codex inspect, implement, and test in a constrained workspace while the founder keeps final control.",
+        "points": {
+          "0": "Scoped local execution",
+          "1": "Checks and diff evidence",
+          "2": "Approve before shipping"
+        }
+      }
+    },
+    "items": {
+      "0": {
+        "quote": "A customer message should arrive with enough context to become the next safe product decision—not another tab I need to remember.",
+        "role": "Solo founder scenario",
+        "outcome": "Support stays moving while product work continues"
+      },
+      "1": {
+        "quote": "The useful handoff is not a ticket. It is the conversation, the decision, the issue, and the evidence that the fix is ready.",
+        "role": "Small SaaS team scenario",
+        "outcome": "Support and engineering share one source of truth"
+      },
+      "2": {
+        "quote": "I want the speed of vibe coding with a visible boundary around what AI changed and what I still need to approve.",
+        "role": "Vibe coder scenario",
+        "outcome": "Fast iteration without an invisible automation step"
+      }
+    },
+    "previous": "Previous story",
+    "next": "Next story",
+    "goTo": "Go to story {{number}}"
+  },
+  "capabilities": {
+    "title": "A support system designed for people who also ship the product.",
+    "description": "Mend combines the speed of a focused inbox with the structure needed to make AI-assisted work safe and traceable.",
+    "items": {
+      "0": {
+        "title": "WhatsApp-native inbox",
+        "description": "Receive, triage, and reply without forcing customers into a new support channel."
+      },
+      "1": {
+        "title": "Grounded AI drafts",
+        "description": "Draft from the conversation and approved knowledge, with the operator still in control."
+      },
+      "2": {
+        "title": "Conversation-linked issues",
+        "description": "Preserve customer evidence, ownership, and status from signal to fix."
+      },
+      "3": {
+        "title": "Controlled Codex runs",
+        "description": "Scope local engineering work, inspect checks, and approve the resulting diff."
+      },
+      "4": {
+        "title": "Human review boundaries",
+        "description": "Make every automated step visible, reversible, and clear about who acts next."
+      },
+      "5": {
+        "title": "One operational graph",
+        "description": "Keep messages, decisions, issues, knowledge, and runs connected in one workspace."
+      }
+    }
+  },
+  "audience": {
+    "title": "Built around the way small SaaS teams actually work.",
+    "description": "Choose your operating mode. The same support loop adapts to a founder doing everything, a growing team, or a builder moving fast with AI.",
+    "tabLabel": "Builder profiles",
+    "flow": {
+      "signal": "Signal",
+      "context": "Context",
+      "action": "Action",
+      "outcome": "Outcome"
+    },
+    "items": {
+      "0": {
+        "title": "Solo founders",
+        "short": "Stay in product mode",
+        "headline": "Handle support without surrendering the day to support.",
+        "description": "Mend collects the customer story, prepares the next safe action, and keeps you focused on the decisions only you should make.",
+        "flow": {
+          "signal": "A customer writes on WhatsApp",
+          "context": "History and release context arrive together",
+          "action": "Reply or create an issue",
+          "outcome": "Keep shipping without dropping the request"
+        }
+      },
+      "1": {
+        "title": "Growing SaaS teams",
+        "short": "Share one source of truth",
+        "headline": "Give support and engineering the same customer evidence.",
+        "description": "Replace ticket summaries and scattered handoffs with one connected record of what happened, who owns it, and what changed.",
+        "flow": {
+          "signal": "Support identifies a recurring problem",
+          "context": "Conversation and knowledge are attached",
+          "action": "The issue gets an owner and status",
+          "outcome": "Engineering reviews the fix with impact visible"
+        }
+      },
+      "2": {
+        "title": "Vibe coders",
+        "short": "Move fast with a review gate",
+        "headline": "Turn a WhatsApp thread into a safe next coding step.",
+        "description": "Use AI speed where it helps, while making the scope, checks, and final approval impossible to miss.",
+        "flow": {
+          "signal": "A user reports an edge case",
+          "context": "Mend structures the reproduction path",
+          "action": "Codex works inside a constrained run",
+          "outcome": "You inspect the diff before anything ships"
+        }
+      }
+    }
+  },
+  "pricing": {
+    "title": "Simple pricing for teams that stay close to support.",
+    "description": "Start with the loop you need today. Add collaboration and automation only when they earn their place.",
+    "billingLabel": "Billing cycle",
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "discount": "−18%",
+    "popular": "Most useful",
+    "perMonth": "/ month",
+    "included": "What’s included",
+    "plans": {
+      "0": {
+        "name": "Starter",
+        "description": "For a founder validating the support loop with real customers.",
+        "monthly": "$0",
+        "annual": "$0",
+        "features": {
+          "0": "1 workspace and 1 operator",
+          "1": "WhatsApp conversation inbox",
+          "2": "Conversation-linked issues",
+          "3": "No credit card required"
+        },
+        "cta": "Start free"
+      },
+      "1": {
+        "name": "Builder",
+        "description": "For small SaaS teams connecting support, knowledge, and code.",
+        "monthly": "$20",
+        "annual": "$16",
+        "features": {
+          "0": "Up to 5 operators",
+          "1": "Grounded AI drafts",
+          "2": "Controlled Codex runs",
+          "3": "Priority workspace support"
+        },
+        "cta": "Start Builder"
+      },
+      "2": {
+        "name": "Scale",
+        "description": "For teams that need custom limits, onboarding, and controls.",
+        "monthly": "Let’s talk",
+        "annual": "Let’s talk",
+        "features": {
+          "0": "Custom operators and volume",
+          "1": "Advanced automation policies",
+          "2": "Workspace onboarding",
+          "3": "Priority response path"
+        },
+        "cta": "Talk to us"
+      }
+    }
+  },
+  "finalCta": {
+    "title": "Build your first support loop today.",
+    "description": "Bring one real WhatsApp conversation. Leave with the reply, issue, and next engineering action connected.",
+    "primary": "Connect WhatsApp",
+    "secondary": "See how it works"
+  },
+  "footer": {
+    "description": "Mend helps SaaS builders turn WhatsApp support into clear replies, traceable issues, and reviewed product work.",
+    "status": "All systems operational",
+    "columns": {
+      "product": {
+        "title": "Product",
+        "links": {
+          "0": "Inbox",
+          "1": "Issues",
+          "2": "Knowledge",
+          "3": "Codex runs"
+        }
+      },
+      "resources": {
+        "title": "Resources",
+        "links": {
+          "0": "Documentation",
+          "1": "API reference",
+          "2": "WhatsApp setup",
+          "3": "Changelog"
+        }
+      },
+      "company": {
+        "title": "Company",
+        "links": {
+          "0": "About",
+          "1": "Contact",
+          "2": "Status",
+          "3": "Support"
+        }
+      },
+      "legal": {
+        "title": "Legal",
+        "links": {
+          "0": "Privacy",
+          "1": "Terms",
+          "2": "Security",
+          "3": "Data policy"
+        }
+      }
+    },
+    "copyright": "© {{year}} Mend. Built for people who ship.",
+    "backToTop": "Back to top"
+  }
+}
