@@ -324,7 +324,7 @@ export const googleOAuthCallbackSchema = z
     code: z.string().trim().min(1).max(4_000),
     state: z.string().trim().min(1).max(4_000),
   })
-  .strict();
+  .strip();
 export const googleCalendarSelectionSchema = z
   .object({
     selectedCalendarIds: z.array(z.string().trim().min(1).max(500)).max(200),

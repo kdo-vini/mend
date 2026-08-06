@@ -345,6 +345,26 @@ describe("Mend API router", () => {
     ).toBe(200);
   });
 
+  it("accepts standard Google OAuth callback metadata", async () => {
+    const dependencies = createFakeDependencies();
+    const response = await request(makeApp(dependencies))
+      .get("/api/google/connections/oauth/callback")
+      .query({
+        code: "authorization-code",
+        state: "signed-state",
+        iss: "https://accounts.google.com",
+        scope: "openid email profile",
+        authuser: "0",
+        prompt: "consent",
+      });
+
+    expect(response.status).toBe(303);
+    expect(dependencies.googleConnections.completeOAuth).toHaveBeenCalledWith(
+      "authorization-code",
+      "signed-state",
+    );
+  });
+
   it("requires authentication and returns a stable error envelope", async () => {
     const response = await request(
       makeApp(createFakeDependencies({ user: null })),
