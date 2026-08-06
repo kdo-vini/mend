@@ -52,7 +52,7 @@ async function hydrateMessageMediaUrls(
 ): Promise<Message[]> {
   return Promise.all(
     records.map(async (record) => {
-      if (!record.media_storage_path || record.media_remote_url) return record;
+      if (!record.media_storage_path) return record;
       const signed = await client.storage
         .from("private-media")
         .createSignedUrl(record.media_storage_path, 900);
