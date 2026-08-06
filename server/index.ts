@@ -51,6 +51,7 @@ app.use(
             ? [supabaseOrigin.replace(/^https:/, "wss:")]
             : []),
         ],
+        mediaSrc: ["'self'", ...(supabaseOrigin ? [supabaseOrigin] : [])],
       },
     },
   }),

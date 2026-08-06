@@ -13,6 +13,13 @@ describe("API boundary", () => {
     expect(response.body).toEqual({ ok: true, service: "mend-api" });
   });
 
+  it("allows audio playback from the configured Supabase origin", async () => {
+    const response = await request(app).get("/api/health");
+    expect(response.headers["content-security-policy"]).toContain(
+      "media-src 'self'",
+    );
+  });
+
   it("reports readiness as booleans without exposing secret values", async () => {
     const response = await request(app).get("/api/ready");
     expect([200, 503]).toContain(response.status);
