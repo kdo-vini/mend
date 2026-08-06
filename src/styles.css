@@ -1310,7 +1310,8 @@ h1 {
   align-self: flex-end;
   margin-bottom: 2px;
 }
-.message-reactions span {
+.message-reactions span,
+.message-reactions button {
   min-width: 23px;
   padding: 2px 5px;
   border: 1px solid var(--line);
@@ -1319,6 +1320,14 @@ h1 {
   font-size: 12px;
   line-height: 1.2;
   text-align: center;
+}
+.message-reactions button {
+  color: inherit;
+  cursor: pointer;
+}
+.message-reactions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 .message-meta {
   margin-bottom: 5px;

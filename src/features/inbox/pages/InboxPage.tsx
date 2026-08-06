@@ -813,6 +813,8 @@ export function InboxPage({
       onToast("This message is still syncing with WhatsApp.");
       return;
     }
+    const currentReaction = message.reactions?.find((item) => item.mine)?.emoji;
+    const nextReaction = currentReaction === reaction ? "" : reaction;
     setReactionPendingId(message.id);
     try {
       if (liveMode && workspaceId)
@@ -820,7 +822,7 @@ export function InboxPage({
           workspaceId,
           conversationId: selected.id,
           messageId: message.id,
-          reaction,
+          reaction: nextReaction,
         });
       setConversations((current) =>
         current.map((conversation) =>
@@ -832,8 +834,12 @@ export function InboxPage({
                     ? {
                         ...item,
                         reactions: [
-                          ...(item.reactions ?? []),
-                          { emoji: reaction, mine: true },
+                          ...(item.reactions ?? []).filter(
+                            (itemReaction) => !itemReaction.mine,
+                          ),
+                          ...(nextReaction
+                            ? [{ emoji: nextReaction, mine: true }]
+                            : []),
                         ],
                       }
                     : item,
@@ -842,7 +848,9 @@ export function InboxPage({
             : conversation,
         ),
       );
-      onToast(`Reaction ${reaction} sent`);
+      onToast(
+        nextReaction ? `Reaction ${nextReaction} sent` : "Reaction removed",
+      );
     } catch (error) {
       onToast(
         error instanceof Error ? error.message : "Reaction could not be sent.",
@@ -1795,9 +1803,23 @@ function MessageBubble({
         </div>
         {message.reactions && message.reactions.length > 0 && (
           <div className="message-reactions" aria-label="Message reactions">
-            {message.reactions.map((reaction, index) => (
-              <span key={`${reaction.emoji}-${index}`}>{reaction.emoji}</span>
-            ))}
+            {message.reactions.map((reaction, index) =>
+              reaction.mine ? (
+                <button
+                  key={`${reaction.emoji}-${index}`}
+                  className="message-reaction-button"
+                  type="button"
+                  disabled={reactionPending}
+                  title="Remove reaction"
+                  aria-label={`Remove reaction ${reaction.emoji}`}
+                  onClick={() => onReact("")}
+                >
+                  {reaction.emoji}
+                </button>
+              ) : (
+                <span key={`${reaction.emoji}-${index}`}>{reaction.emoji}</span>
+              ),
+            )}
           </div>
         )}
         <ActionMenu label={`${senderName || message.sender} message`}>
@@ -1806,7 +1828,7 @@ function MessageBubble({
               <Copy size={14} /> Copy message
             </button>
           )}
-          {!message.deleted && (
+          {!message.deleted && message.direction === "outbound" && (
             <button
               className="danger"
               type="button"

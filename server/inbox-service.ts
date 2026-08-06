@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildMediaStoragePath,
   fetchRemoteMedia,
+  normalizeAudioForPlayback,
   parseMediaInput,
   type MediaStorage,
   type RemoteMediaReference,
@@ -13,6 +14,7 @@ import {
   type NormalizedMessageType,
   type NormalizedWhatsmiauMessage,
 } from "./whatsmiau.js";
+import type { AudioTranscriber } from "./providers.js";
 
 export type InboxActorType = "contact" | "user" | "ai" | "system";
 export type ConversationAction = "read" | "unread" | "snooze" | "resolve";
@@ -49,6 +51,7 @@ export interface InboxMessageRecord {
   mediaStoragePath?: string;
   providerStatus?: string | null;
   isDeleted?: boolean;
+  transcript?: string;
 }
 
 export interface PersistMessageOptions {
@@ -192,6 +195,11 @@ export interface InboxPort {
     messageId: string;
     status: "processing" | "ready" | "failed" | "unsupported";
     errorCode?: string;
+  }): Promise<void>;
+  setMessageText?(input: {
+    workspaceId: string;
+    messageId: string;
+    text: string;
   }): Promise<void>;
   linkIssueMessage(input: {
     workspaceId: string;
@@ -622,6 +630,22 @@ export class SupabaseInboxPort implements InboxPort {
       throw new Error(`supabase:messages_media_status:${error.message}`);
   }
 
+  async setMessageText(input: {
+    workspaceId: string;
+    messageId: string;
+    text: string;
+  }): Promise<void> {
+    const { error } = await this.client
+      .from("messages")
+      .update({
+        text: input.text.slice(0, 20_000),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.messageId)
+      .eq("workspace_id", input.workspaceId);
+    if (error) throw new Error(`supabase:messages_text:${error.message}`);
+  }
+
   async linkIssueMessage(
     input: Parameters<InboxPort["linkIssueMessage"]>[0],
   ): Promise<{ inserted: boolean }> {
@@ -715,6 +739,7 @@ export class InboxService {
     private readonly options: {
       mediaStorage?: MediaStorage;
       mediaMaxBytes?: number;
+      transcriber?: AudioTranscriber;
     } = {},
   ) {}
 
@@ -830,6 +855,7 @@ export class InboxService {
       });
 
     let mediaStoragePath: string | undefined;
+    let transcript: string | undefined;
     if (
       result.inserted &&
       !options.mediaStoragePath &&
@@ -845,20 +871,44 @@ export class InboxService {
           },
           { maxBytes: this.options.mediaMaxBytes },
         );
+        const playbackMedia =
+          message.messageType === "audio"
+            ? await normalizeAudioForPlayback(media)
+            : media;
         mediaStoragePath = buildMediaStoragePath(
           context.workspaceId,
           result.conversationId,
-          media,
+          playbackMedia,
         );
-        await this.options.mediaStorage.upload(mediaStoragePath, media);
+        await this.options.mediaStorage.upload(mediaStoragePath, playbackMedia);
         await this.port.attachMessageMedia({
           workspaceId: context.workspaceId,
           messageId: result.id,
           storagePath: mediaStoragePath,
-          mimeType: media.mimeType,
-          fileName: media.fileName,
-          sizeBytes: media.size,
+          mimeType: playbackMedia.mimeType,
+          fileName: playbackMedia.fileName,
+          sizeBytes: playbackMedia.size,
         });
+        if (
+          message.direction === "inbound" &&
+          message.messageType === "audio" &&
+          this.options.transcriber
+        ) {
+          try {
+            transcript = await this.options.transcriber.transcribe({
+              data: playbackMedia.data,
+              mimeType: playbackMedia.mimeType,
+              fileName: playbackMedia.fileName,
+            });
+            await this.port.setMessageText?.({
+              workspaceId: context.workspaceId,
+              messageId: result.id,
+              text: transcript,
+            });
+          } catch {
+            // Audio playback remains useful when transcription is unavailable.
+          }
+        }
       } catch {
         // The message remains usable without media; never persist a provider
         // exception or a signed URL in a customer-visible timeline.
@@ -874,6 +924,7 @@ export class InboxService {
       ...result,
       direction: message.direction,
       messageType: message.messageType,
+      ...(transcript ? { transcript } : {}),
       ...(options.mediaStoragePath
         ? { mediaStoragePath: options.mediaStoragePath }
         : {}),

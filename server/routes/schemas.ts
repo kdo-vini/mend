@@ -130,7 +130,7 @@ export const conversationAiPauseSchema = z
   })
   .strict();
 export const messageReactionSchema = z
-  .object({ reaction: z.string().trim().min(1).max(16) })
+  .object({ reaction: z.string().trim().max(16) })
   .strict();
 export const messagePresenceSchema = z
   .object({

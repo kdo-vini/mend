@@ -43,6 +43,7 @@ type FakeMessage = {
   isDeleted?: boolean;
   aiGenerated?: boolean;
   remoteUrl?: string;
+  text?: string;
 };
 
 class FakeInboxPort implements InboxPort {
@@ -122,6 +123,7 @@ class FakeInboxPort implements InboxPort {
         : {}),
       ...(input.mediaRemoteUrl ? { remoteUrl: input.mediaRemoteUrl } : {}),
       ...(input.aiGenerated ? { aiGenerated: true } : {}),
+      ...(input.text ? { text: input.text } : {}),
     });
     if (input.direction === "inbound") {
       conversation.unreadCount += 1;
@@ -254,6 +256,18 @@ class FakeInboxPort implements InboxPort {
     this.links.add(key);
     this.timelineKeys.add(input.timelineKey);
     return { inserted };
+  }
+
+  async setMessageText(
+    input: Parameters<NonNullable<InboxPort["setMessageText"]>>[0],
+  ) {
+    const message = [...this.messages.values()].find(
+      (candidate) =>
+        candidate.id === input.messageId &&
+        candidate.workspaceId === input.workspaceId,
+    );
+    if (!message) throw new Error("message_not_found");
+    message.text = input.text;
   }
 
   async createEvidence(input: Parameters<InboxPort["createEvidence"]>[0]) {
@@ -425,6 +439,49 @@ describe("InboxService and WhatsAppService", () => {
       (message) => message.id === media.id,
     );
     expect(stored?.remoteUrl).toBeUndefined();
+  });
+
+  it("stores a playable inbound audio and sends its transcript to the message context", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: { "content-type": "audio/ogg" },
+        }),
+    );
+    try {
+      const port = new FakeInboxPort();
+      const transcriber = {
+        transcribe: vi.fn(async () => "Preciso de ajuda com o pedido"),
+      };
+      const inbox = new InboxService(port, {
+        mediaStorage: new InMemoryMediaStorage(),
+        transcriber,
+      });
+      const result = await inbox.persistNormalizedMessage(
+        { workspaceId },
+        channelId,
+        {
+          ...inbound("wamid-audio"),
+          messageType: "audio",
+          text: undefined,
+          mediaUrl: "https://provider.example/audio.ogg",
+          mimeType: "audio/ogg",
+          fileName: "voice.ogg",
+        },
+      );
+
+      expect(result.transcript).toBe("Preciso de ajuda com o pedido");
+      expect(transcriber.transcribe).toHaveBeenCalledWith(
+        expect.objectContaining({ mimeType: "audio/ogg" }),
+      );
+      expect(
+        [...port.messages.values()].find((message) => message.id === result.id)
+          ?.text,
+      ).toBe("Preciso de ajuda com o pedido");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("supports read, unread, snooze and resolve transitions with workspace scoping", async () => {

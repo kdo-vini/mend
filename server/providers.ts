@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { replyLanguageInstruction, type SupportedLocale } from "./locale.js";
 
 export type SupportAiProviderName = "openai";
@@ -11,6 +11,63 @@ export interface SupportAiProvider {
     language: SupportedLocale,
   ): Promise<string>;
   triage(conversation: string): Promise<string>;
+}
+
+export interface AudioTranscriber {
+  transcribe(input: {
+    data: Uint8Array;
+    mimeType: string;
+    fileName: string;
+  }): Promise<string>;
+}
+
+interface OpenAiTranscriptionClient {
+  audio: {
+    transcriptions: {
+      create(input: {
+        file: unknown;
+        model: string;
+        response_format: "json";
+      }): Promise<{ text?: string }>;
+    };
+  };
+}
+
+export class OpenAiAudioTranscriber implements AudioTranscriber {
+  private readonly client: OpenAiTranscriptionClient;
+  private readonly model: string;
+
+  constructor(
+    client?: OpenAiTranscriptionClient,
+    options: { model?: string } = {},
+  ) {
+    this.client =
+      client ??
+      (new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      }) as unknown as OpenAiTranscriptionClient);
+    this.model =
+      options.model ??
+      process.env.SUPPORT_TRANSCRIPTION_MODEL ??
+      "gpt-4o-mini-transcribe";
+  }
+
+  async transcribe(input: {
+    data: Uint8Array;
+    mimeType: string;
+    fileName: string;
+  }): Promise<string> {
+    const response = await this.client.audio.transcriptions.create({
+      file: await toFile(input.data, input.fileName, {
+        type: input.mimeType,
+      }),
+      model: this.model,
+      response_format: "json",
+    });
+    const text = response.text?.trim() ?? "";
+    if (!text) throw new Error("audio_transcription_empty");
+    return text;
+  }
 }
 
 export interface OpenAiResponsesClient {

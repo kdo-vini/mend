@@ -7,7 +7,7 @@ import {
   type InboxMessageRecord,
 } from "./inbox-service.js";
 import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
-import type { SupportAiProvider } from "./providers.js";
+import { OpenAiAudioTranscriber, type SupportAiProvider } from "./providers.js";
 import { normalizeLocale } from "./locale.js";
 import { SupabaseMediaStorage } from "./media.js";
 import {
@@ -448,7 +448,10 @@ export class LiveWorker {
         ingestionJobId: job.id,
         binding,
         idempotencyKey,
-        message,
+        message: {
+          ...message,
+          ...(persisted.transcript ? { text: persisted.transcript } : {}),
+        },
         persisted,
       },
       dedupeKey: `mend:process-inbound:${binding.channelConnectionId}:${persisted.id}`,
@@ -1501,6 +1504,7 @@ export function createSupabaseLiveWorker(
   );
   const inboxService = new InboxService(new SupabaseInboxPort(options.client), {
     mediaStorage,
+    transcriber: new OpenAiAudioTranscriber(),
   });
   const inbox = options.inbox ?? inboxService;
   const knowledge =

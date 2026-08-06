@@ -154,6 +154,17 @@ const numberValue = (...values: unknown[]) =>
       typeof value === "number" && Number.isFinite(value),
   );
 
+function publicMediaUrl(...values: unknown[]): string | undefined {
+  const value = stringValue(...values);
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function normalizePhoneNumber(value: string): string {
   return value
     .replace(/^\+/, "")
@@ -259,7 +270,7 @@ export function normalizeWhatsmiauEvent(
       listResponse.title,
       buttonResponse.selectedDisplayText,
     );
-    const mediaUrl = stringValue(
+    const mediaUrl = publicMediaUrl(
       value.mediaUrl,
       content.url,
       content.directPath,

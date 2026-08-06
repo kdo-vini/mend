@@ -656,6 +656,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
       unknown
     > | null;
     if (!message) return null;
+    if (message.direction !== "outbound") return null;
     if (message.is_deleted === true) return this.get(context, conversationId);
     await this.whatsapp.deleteMessageForEveryone(
       {
@@ -704,7 +705,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
       message.message_type === "reaction"
     )
       return message ? this.get(context, conversationId) : null;
-    await this.whatsapp.sendReaction(
+    const sentReaction = await this.whatsapp.sendReaction(
       {
         workspaceId: context.workspaceId,
         actorUserId: context.userId,
@@ -717,6 +718,20 @@ export class SupabaseConversationAdapter implements ConversationPort {
         reaction,
       },
     );
+    const previousReactionsQuery = this.client
+      .from("messages")
+      .delete()
+      .eq("workspace_id", context.workspaceId)
+      .eq("conversation_id", conversationId)
+      .eq("quoted_message_id", messageId)
+      .eq("message_type", "reaction")
+      .eq("direction", "outbound");
+    if (sentReaction) previousReactionsQuery.neq("id", sentReaction.id);
+    const previousReactions = await previousReactionsQuery;
+    if (previousReactions.error)
+      throw new Error(
+        `supabase:messages:reaction_cleanup:${previousReactions.error.message}`,
+      );
     return this.get(context, conversationId);
   }
 

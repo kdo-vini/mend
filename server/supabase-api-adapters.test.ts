@@ -238,10 +238,13 @@ const fakeProvider = (): WhatsmiauProviderPort => ({
   markAsRead: async () => undefined,
 });
 
-function adapters(client: FakeClient) {
+function adapters(
+  client: FakeClient,
+  whatsMiau: WhatsmiauProviderPort = fakeProvider(),
+) {
   return createSupabaseApiAdapters({
     client: client as unknown as SupabaseClient,
-    whatsMiau: fakeProvider(),
+    whatsMiau,
     aiProvider: {
       name: "openai",
       draftReply: async () => "draft",
@@ -251,6 +254,38 @@ function adapters(client: FakeClient) {
 }
 
 describe("Supabase API adapters", () => {
+  it("does not delete inbound messages for everyone", async () => {
+    const deleteMessageForEveryone = vi.fn(async () => undefined);
+    const provider = {
+      ...fakeProvider(),
+      deleteMessageForEveryone,
+    };
+    const client = new FakeClient({
+      messages: [
+        {
+          id: "message-inbound",
+          workspace_id: workspaceId,
+          conversation_id: conversationId,
+          provider_message_id: "provider-inbound",
+          direction: "inbound",
+          is_deleted: false,
+        },
+      ],
+    });
+
+    await expect(
+      adapters(client, provider).conversations.deleteMessage(
+        { workspaceId, userId, role: "agent" },
+        conversationId,
+        "message-inbound",
+      ),
+    ).resolves.toBeNull();
+    expect(deleteMessageForEveryone).not.toHaveBeenCalled();
+    expect(client.rows.get("messages")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ is_deleted: false })]),
+    );
+  });
+
   it("keeps membership and workspace reads scoped to the requested user/workspace", async () => {
     const client = new FakeClient({
       workspace_members: [

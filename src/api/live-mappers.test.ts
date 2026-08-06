@@ -60,6 +60,57 @@ describe("live message mapper", () => {
 });
 
 describe("live conversation mapper", () => {
+  it("keeps only the latest operator reaction after repeated sends", () => {
+    const result = toUiConversation(
+      {
+        id: "conversation-1",
+        workspace_id: "workspace-1",
+        contact_id: "contact-1",
+        channel_connection_id: "channel-1",
+        status: "open",
+        attention_state: "needs_attention",
+        ai_mode: "draft",
+        assigned_user_id: null,
+        unread_count: 0,
+        last_message_at: null,
+        last_inbound_at: null,
+        last_outbound_at: null,
+        resolved_at: null,
+        snoozed_until: null,
+        created_at: "2026-08-03T00:00:00.000Z",
+        updated_at: "2026-08-03T00:00:00.000Z",
+      },
+      undefined,
+      [
+        { ...baseMessage, message_type: "text", quoted_message_id: null },
+        {
+          ...baseMessage,
+          id: "reaction-1",
+          message_type: "reaction",
+          direction: "outbound",
+          text: "👍",
+          caption: null,
+          quoted_message_id: "message-1",
+          created_at: "2026-08-03T20:01:00.000Z",
+        },
+        {
+          ...baseMessage,
+          id: "reaction-2",
+          message_type: "reaction",
+          direction: "outbound",
+          text: "✅",
+          caption: null,
+          quoted_message_id: "message-1",
+          created_at: "2026-08-03T20:02:00.000Z",
+        },
+      ],
+    );
+
+    expect(result.messages[0]?.reactions).toEqual([
+      { emoji: "✅", mine: true },
+    ]);
+  });
+
   it("exposes the latest AI decision and triage context", () => {
     const conversation = {
       id: "conversation-1",

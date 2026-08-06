@@ -64,6 +64,17 @@ const numberValue = (...values: unknown[]): number | undefined => {
   return undefined;
 };
 
+function publicMediaUrl(...values: unknown[]): string | undefined {
+  const value = stringValue(...values);
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeEventName(value: unknown): string {
   return (
     typeof value === "string" && value.trim() ? value.trim() : "messages.upsert"
@@ -313,7 +324,7 @@ async function normalizeMessages(
           buttonResponse.selectedDisplayText,
         );
         const caption = stringValue(content.caption);
-        const mediaUrl = stringValue(
+        const mediaUrl = publicMediaUrl(
           value.mediaUrl,
           content.url,
           content.directPath,

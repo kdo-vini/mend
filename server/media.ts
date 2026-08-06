@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promises as fs } from "node:fs";
 import { isIP } from "node:net";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   allowedMediaMimeTypes,
@@ -29,6 +34,8 @@ export interface MediaStorage {
   upload(path: string, media: ValidatedMedia): Promise<void>;
   createSignedUrl(path: string, expiresInSeconds?: number): Promise<string>;
 }
+
+const execFileAsync = promisify(execFile);
 
 const megabyte = 1024 * 1024;
 const defaultMaxBytes = Number(process.env.MEDIA_MAX_BYTES ?? 100 * megabyte);
@@ -253,6 +260,36 @@ export async function fetchRemoteMedia(
     );
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/** Keep inbound audio playable in browsers while retaining the original fallback. */
+export async function normalizeAudioForPlayback(
+  media: ValidatedMedia,
+): Promise<ValidatedMedia> {
+  if (!media.mimeType.startsWith("audio/")) return media;
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), "mend-audio-"));
+  try {
+    const inputPath = path.join(temp, "input");
+    const outputPath = path.join(temp, "output.ogg");
+    await fs.writeFile(inputPath, media.data);
+    await execFileAsync("ffmpeg", [
+      "-y",
+      "-i",
+      inputPath,
+      "-vn",
+      "-c:a",
+      "libopus",
+      "-b:a",
+      "48k",
+      outputPath,
+    ]);
+    const data = await fs.readFile(outputPath);
+    return validateMedia(data, "audio/ogg", "audio.ogg");
+  } catch {
+    return media;
+  } finally {
+    await fs.rm(temp, { recursive: true, force: true });
   }
 }
 

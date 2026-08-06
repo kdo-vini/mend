@@ -213,10 +213,16 @@ export function toUiConversation(
     );
     const emoji = reaction.text ?? reaction.caption;
     if (!target || !emoji) continue;
-    target.reactions = [
-      ...(target.reactions ?? []),
-      { emoji, mine: reaction.direction === "outbound" },
-    ];
+    const mappedReaction = {
+      emoji,
+      mine: reaction.direction === "outbound",
+    };
+    target.reactions = mappedReaction.mine
+      ? [
+          ...(target.reactions ?? []).filter((item) => !item.mine),
+          mappedReaction,
+        ]
+      : [...(target.reactions ?? []), mappedReaction];
   }
   const last = messages.at(-1);
   return {

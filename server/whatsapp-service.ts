@@ -272,7 +272,7 @@ export class WhatsAppService {
     context: InboxContext,
     conversationId: string,
     input: { providerMessageId: string; fromMe: boolean; reaction: string },
-  ): Promise<InboxMessageRecord> {
+  ): Promise<InboxMessageRecord | null> {
     const conversation = await this.inbox.getConversation(
       context,
       conversationId,
@@ -281,7 +281,7 @@ export class WhatsAppService {
     if (!this.provider.sendReaction)
       throw new Error("whatsmiau_reaction_not_supported");
     const reaction = input.reaction.trim();
-    if (!reaction || reaction.length > 16) throw new Error("reaction_invalid");
+    if (reaction.length > 16) throw new Error("reaction_invalid");
     const response = await this.provider.sendReaction({
       instanceName: conversation.providerInstanceName,
       remoteJid: conversation.remoteJid,
@@ -289,6 +289,7 @@ export class WhatsAppService {
       fromMe: input.fromMe,
       reaction,
     });
+    if (!reaction) return null;
     const id = providerMessageId(response) || `reaction-${randomUUID()}`;
     return this.inbox.recordOutbound(context, conversationId, {
       providerMessageId: id,

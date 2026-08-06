@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  OpenAiAudioTranscriber,
   OpenAiSupportProvider,
   type OpenAiResponsesClient,
   createSupportAiProvider,
@@ -41,5 +42,27 @@ describe("support AI providers", () => {
         },
       }),
     ).toBeInstanceOf(OpenAiSupportProvider);
+  });
+
+  it("transcribes audio with the configured model", async () => {
+    const create = vi.fn(async () => ({ text: "Olá, tudo bem?" }));
+    const transcriber = new OpenAiAudioTranscriber(
+      { audio: { transcriptions: { create } } },
+      { model: "transcribe-test" },
+    );
+
+    await expect(
+      transcriber.transcribe({
+        data: new Uint8Array([1, 2, 3]),
+        mimeType: "audio/ogg",
+        fileName: "voice.ogg",
+      }),
+    ).resolves.toBe("Olá, tudo bem?");
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "transcribe-test",
+        response_format: "json",
+      }),
+    );
   });
 });
