@@ -54,6 +54,25 @@ export function createRealtimeFallback(
   };
 }
 
+function belongsToWorkspace(
+  payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+  workspaceId: string,
+) {
+  const rows = [payload.new, payload.old].filter(
+    (row): row is Record<string, unknown> =>
+      Boolean(row) && typeof row === "object",
+  );
+  const scopedRows = rows.filter((row) => "workspace_id" in row);
+
+  // DELETE payloads may omit workspace_id when replica identity is not full.
+  // RLS still limits delivered rows; unknown-scope events are safe to reconcile
+  // because every follow-up query is explicitly scoped to this workspace.
+  return (
+    scopedRows.length === 0 ||
+    scopedRows.every((row) => row.workspace_id === workspaceId)
+  );
+}
+
 async function unwrap<T>(
   result: PromiseLike<{ data: T | null; error: { message: string } | null }>,
 ): Promise<NonNullable<T>> {
@@ -248,24 +267,9 @@ export function subscribeToWorkspace(
         event: "*" as const,
         schema: "public" as const,
         table,
-        // Realtime's production schema cache rejects this filter for contacts;
-        // RLS still limits which rows the authenticated client can receive.
-        ...(table === "contacts"
-          ? {}
-          : { filter: `workspace_id=eq.${workspaceId}` }),
       };
       next.on("postgres_changes", options, (payload) => {
-        if (
-          table === "contacts" &&
-          ![payload.new, payload.old].some(
-            (row) =>
-              row &&
-              typeof row === "object" &&
-              "workspace_id" in row &&
-              row.workspace_id === workspaceId,
-          )
-        )
-          return;
+        if (!belongsToWorkspace(payload, workspaceId)) return;
         onChange(payload);
       });
     }

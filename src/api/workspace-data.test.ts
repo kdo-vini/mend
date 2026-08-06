@@ -51,9 +51,9 @@ describe("workspace realtime subscriptions", () => {
     expect(workspaceRealtimeTables).toContain("contacts");
     expect(workspaceRealtimeTables).toContain("issue_messages");
     expect(workspaceRealtimeTables).not.toContain("ai_draft_knowledge");
-    expect(
-      registrations.find((item) => item.options.table === "contacts")?.options,
-    ).not.toHaveProperty("filter");
+    expect(registrations.every((item) => !("filter" in item.options))).toBe(
+      true,
+    );
 
     statusCallback?.("SUBSCRIBED");
     expect(changes).toHaveLength(1);
@@ -64,12 +64,12 @@ describe("workspace realtime subscriptions", () => {
       ?.handler({ eventType: "INSERT", table: "messages" });
     expect(changes).toHaveLength(2);
 
-    const contactHandler = registrations.find(
-      (item) => item.options.table === "contacts",
+    const messagesHandler = registrations.find(
+      (item) => item.options.table === "messages",
     )?.handler;
-    contactHandler?.({ new: { workspace_id: "other" }, old: {} });
+    messagesHandler?.({ new: { workspace_id: "other" }, old: {} });
     expect(changes).toHaveLength(2);
-    contactHandler?.({ new: { workspace_id: "workspace-1" }, old: {} });
+    messagesHandler?.({ new: { workspace_id: "workspace-1" }, old: {} });
     expect(changes).toHaveLength(3);
 
     statusCallback?.("CHANNEL_ERROR");
