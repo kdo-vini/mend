@@ -22,7 +22,6 @@ export const workspaceRealtimeTables = [
   "channel_connections",
   "conversation_ai_state",
   "ai_drafts",
-  "ai_draft_knowledge",
   "issue_comments",
   "coding_run_events",
   "knowledge_articles",
@@ -33,6 +32,27 @@ export const workspaceRealtimeTables = [
   "contacts",
   "issue_messages",
 ] as const;
+
+export function createRealtimeFallback(
+  refresh: () => void,
+  isHealthy: () => boolean,
+  intervalMs = 5_000,
+) {
+  let timer: ReturnType<typeof setInterval> | null = null;
+  return {
+    start() {
+      if (timer !== null) return;
+      timer = setInterval(() => {
+        if (!isHealthy()) refresh();
+      }, intervalMs);
+    },
+    stop() {
+      if (timer === null) return;
+      clearInterval(timer);
+      timer = null;
+    },
+  };
+}
 
 async function unwrap<T>(
   result: PromiseLike<{ data: T | null; error: { message: string } | null }>,
@@ -224,16 +244,30 @@ export function subscribeToWorkspace(
     if (channel) void client.removeChannel(channel);
     const next = client.channel(`workspace:${workspaceId}`);
     for (const table of workspaceRealtimeTables) {
-      next.on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table,
-          filter: `workspace_id=eq.${workspaceId}`,
-        },
-        onChange,
-      );
+      const options = {
+        event: "*" as const,
+        schema: "public" as const,
+        table,
+        // Realtime's production schema cache rejects this filter for contacts;
+        // RLS still limits which rows the authenticated client can receive.
+        ...(table === "contacts"
+          ? {}
+          : { filter: `workspace_id=eq.${workspaceId}` }),
+      };
+      next.on("postgres_changes", options, (payload) => {
+        if (
+          table === "contacts" &&
+          ![payload.new, payload.old].some(
+            (row) =>
+              row &&
+              typeof row === "object" &&
+              "workspace_id" in row &&
+              row.workspace_id === workspaceId,
+          )
+        )
+          return;
+        onChange(payload);
+      });
     }
     channel = next;
     next.subscribe((status) => {
@@ -264,10 +298,13 @@ export function subscribeToWorkspace(
     reconnectDelay = 1_000;
     connect();
   };
+  const reconnectOnVisible = () => {
+    if (document.visibilityState === "visible") reconnectNow();
+  };
 
   if (typeof window !== "undefined") {
     window.addEventListener("online", reconnectNow);
-    window.addEventListener("visibilitychange", reconnectNow);
+    window.addEventListener("visibilitychange", reconnectOnVisible);
   }
 
   connect();
@@ -275,7 +312,7 @@ export function subscribeToWorkspace(
     stopped = true;
     if (typeof window !== "undefined") {
       window.removeEventListener("online", reconnectNow);
-      window.removeEventListener("visibilitychange", reconnectNow);
+      window.removeEventListener("visibilitychange", reconnectOnVisible);
     }
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = null;

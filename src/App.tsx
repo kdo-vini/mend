@@ -26,7 +26,7 @@ import {
   type WorkspaceNotification,
 } from "./api/notifications";
 import {
-  listMessagesSince,
+  createRealtimeFallback,
   listWorkspaces,
   subscribeToWorkspace,
 } from "./api/workspace-data";
@@ -348,8 +348,8 @@ function App() {
     let active = true;
     let unsubscribe: () => void = () => undefined;
     let workspaceSubscribed = false;
-    let lastKnownEventAt = new Date().toISOString();
     let reconcileQueue = Promise.resolve();
+    let realtimeHealthy = false;
     const hydrate = async (showLoading = true) => {
       try {
         if (showLoading) setWorkspaceLoading(true);
@@ -393,7 +393,6 @@ function App() {
           workspace.id,
         );
         if (active) setNotifications(workspaceNotifications);
-        lastKnownEventAt = new Date().toISOString();
         if (!workspaceSubscribed) {
           workspaceSubscribed = true;
           unsubscribe = subscribeToWorkspace(
@@ -408,21 +407,8 @@ function App() {
                     string,
                     unknown
                   >;
-                  const eventAt =
-                    typeof payload.commit_timestamp === "string"
-                      ? payload.commit_timestamp
-                      : new Date().toISOString();
-                  const isReconnect = table === "*";
-                  if (!isReconnect && eventAt > lastKnownEventAt)
-                    lastKnownEventAt = eventAt;
 
-                  if (isReconnect) {
-                    const since = lastKnownEventAt;
-                    try {
-                      await listMessagesSince(client, workspace.id, since);
-                    } catch {
-                      /* full snapshot below is the safe fallback */
-                    }
+                  if (table === "*") {
                     await hydrate(false);
                     return;
                   }
@@ -460,6 +446,14 @@ function App() {
                     );
                 });
             },
+            {
+              onStatus: (status) => {
+                realtimeHealthy = status === "SUBSCRIBED";
+                if (realtimeHealthy) {
+                  realtimeFallback.stop();
+                } else realtimeFallback.start();
+              },
+            },
           );
         }
       } catch (error) {
@@ -475,10 +469,29 @@ function App() {
         if (active && showLoading) setWorkspaceLoading(false);
       }
     };
+    const realtimeFallback = createRealtimeFallback(
+      () => {
+        if (realtimeHealthy || !active) return;
+        // ponytail: degraded mode uses the existing full snapshot; add a
+        // cursor-based incremental query if workspace size makes this costly.
+        reconcileQueue = reconcileQueue
+          .then(() => (active ? hydrate(false) : undefined))
+          .catch((error) => {
+            if (active)
+              setLiveDataError(
+                error instanceof Error
+                  ? error.message
+                  : "Live workspace reconciliation failed.",
+              );
+          });
+      },
+      () => realtimeHealthy,
+    );
     void hydrate();
     return () => {
       active = false;
       unsubscribe();
+      realtimeFallback.stop();
     };
   }, [demoMode, liveDataRetry, workspaceId]);
 
