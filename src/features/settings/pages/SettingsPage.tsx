@@ -1385,7 +1385,10 @@ export function SettingsPage({
                         connection.selectedCalendarIds,
                       );
                       return (
-                        <div className="connection-card" key={connection.id}>
+                        <div
+                          className="connection-card google-connection-card"
+                          key={connection.id}
+                        >
                           <div className="connection-card-main">
                             <div className="whatsapp-symbol">G</div>
                             <div>
