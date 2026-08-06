@@ -1,0 +1,320 @@
+.resource-state {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 30px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.resource-state svg {
+  color: var(--muted-2);
+}
+.resource-state strong {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+}
+.resource-state > span {
+  max-width: 42ch;
+  color: var(--muted);
+  font-size: 11px;
+}
+.resource-state .button,
+.resource-state .text-button {
+  margin-top: 4px;
+}
+.resource-state-error svg {
+  color: var(--danger);
+}
+.skeleton {
+  display: block;
+  border-radius: 4px;
+  background: var(--surface-3);
+  animation: skeleton-pulse 1.35s ease-in-out infinite;
+}
+.skeleton-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(270px, 100%);
+  margin-bottom: 4px;
+}
+.skeleton-preview-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+}
+.skeleton-preview-copy {
+  display: grid;
+  flex: 1;
+  gap: 7px;
+}
+.skeleton-preview-title {
+  width: 58%;
+  height: 10px;
+}
+.skeleton-preview-line {
+  width: 88%;
+  height: 8px;
+}
+.knowledge-list-skeleton {
+  border-top: 1px solid var(--line);
+}
+.knowledge-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 5px;
+  border-bottom: 1px solid var(--line);
+}
+.knowledge-skeleton-copy {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+}
+.knowledge-skeleton-title {
+  width: min(48%, 280px);
+  height: 11px;
+}
+.knowledge-skeleton-line {
+  width: min(76%, 500px);
+  height: 8px;
+}
+.knowledge-skeleton-meta {
+  width: 28%;
+  height: 7px;
+}
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.48;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.live-data-error {
+  padding: 10px 27px 0;
+}
+.live-data-error .resource-state {
+  min-height: 0;
+  flex-direction: row;
+  justify-content: flex-start;
+  padding: 9px 11px;
+  border: 1px solid oklch(0.69 0.18 25 / 0.28);
+  border-radius: 6px;
+  background: oklch(0.69 0.18 25 / 0.08);
+  text-align: left;
+}
+.live-data-error .resource-state span {
+  flex: 1;
+  max-width: none;
+}
+.live-data-error .resource-state .button {
+  margin: 0 0 0 auto;
+}
+.app-error {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  max-width: 440px;
+  margin: auto;
+  padding: 32px;
+}
+.app-error-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 15px;
+  border: 1px solid oklch(0.69 0.18 25 / 0.35);
+  border-radius: 8px;
+  background: oklch(0.69 0.18 25 / 0.1);
+  color: var(--danger);
+}
+.app-error h1 {
+  margin-top: 6px;
+}
+.app-error p {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.app-error code {
+  max-width: 100%;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+  color: var(--muted-2);
+  font:
+    10px/1.5 "DM Mono",
+    monospace;
+}
+.app-error .button {
+  margin-top: 18px;
+}
+.count-muted {
+  margin-left: 4px;
+  color: var(--muted-2);
+  font:
+    10px "DM Mono",
+    monospace;
+}
+.sidebar-is-collapsed .sidebar {
+  width: 58px;
+  flex-basis: 58px;
+  padding: 13px 8px;
+}
+.sidebar-is-collapsed .brand-row {
+  justify-content: center;
+  padding: 0 0 17px;
+}
+.sidebar-is-collapsed .brand-row > div:not(.brand-mark),
+.sidebar-is-collapsed .sidebar-bottom-label,
+.sidebar-is-collapsed .command-trigger span,
+.sidebar-is-collapsed .command-trigger kbd,
+.sidebar-is-collapsed .nav-section-label,
+.sidebar-is-collapsed .nav-item span,
+.sidebar-is-collapsed .user-row > span:nth-child(2),
+.sidebar-is-collapsed .user-row > svg {
+  display: none;
+}
+.sidebar-is-collapsed .command-trigger,
+.sidebar-is-collapsed .nav-item,
+.sidebar-is-collapsed .user-row {
+  justify-content: center;
+}
+.sidebar-is-collapsed .sidebar-bottom-header {
+  justify-content: center;
+  padding: 0;
+}
+.sidebar-is-collapsed .command-trigger {
+  padding: 8px 0;
+}
+.sidebar-is-collapsed .nav-item {
+  padding: 10px 0;
+}
+.sidebar-is-collapsed .user-row {
+  padding: 0;
+}
+.issue-table tbody tr:focus-visible {
+  position: relative;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.section-action {
+  color: var(--accent-soft);
+  font-size: 11px;
+}
+.field-error {
+  color: var(--danger);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.inline-edit-trigger,
+.inline-edit-text {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.inline-edit-trigger:hover,
+.inline-edit-text:hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+.inline-edit-trigger svg,
+.inline-edit-text svg {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+  opacity: 0;
+  transition: opacity 120ms var(--ease);
+}
+.inline-edit-trigger:hover svg,
+.inline-edit-trigger:focus-visible svg,
+.inline-edit-text:hover svg,
+.inline-edit-text:focus-visible svg {
+  opacity: 1;
+}
+.inline-edit-text {
+  width: 100%;
+  align-items: flex-start;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.inline-edit-text span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.inline-edit-select,
+.inline-edit-textarea {
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: 0;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.inline-edit-select {
+  min-height: 26px;
+  padding: 0 5px;
+}
+.inline-edit-textarea {
+  width: 100%;
+  min-height: 65px;
+  padding: 8px;
+  resize: vertical;
+  line-height: 1.55;
+}
+.inspector-props .inline-edit-trigger {
+  width: 100%;
+  min-height: 37px;
+  padding: 0;
+  border-radius: 0;
+}
+.inspector-props .inline-edit-trigger::before {
+  content: attr(aria-label);
+  width: 65px;
+  flex: 0 0 65px;
+  color: var(--muted-2);
+  font-size: 10px;
+}
+.inspector-props .inline-edit-trigger > :first-child {
+  flex: 1;
+}
+.inspector-props .inline-edit-trigger svg {
+  margin-left: auto;
+}
+.send-button:disabled {
+  background: var(--surface-3);
+  color: var(--muted-2);
+  cursor: not-allowed;
+}
+.back-link {
+  border: 0;
+  background: transparent;
+  padding-inline: 0;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

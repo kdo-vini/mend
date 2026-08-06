@@ -9,7 +9,7 @@ import {
   interfaceLanguageStorageKey,
 } from "./i18n/preferences";
 import { normalizeLocale } from "./i18n/resources";
-import "./styles.css";
+import "./styles/index.css";
 
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
