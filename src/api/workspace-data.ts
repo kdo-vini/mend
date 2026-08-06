@@ -119,25 +119,6 @@ export function listMessages(
   );
 }
 
-/**
- * Recovery query used after a realtime reconnect. The `gte` boundary is
- * intentional: the client deduplicates by database/provider id, so a small
- * overlap is safer than losing a message because of clock precision.
- */
-export function listMessagesSince(
-  client: MendSupabaseClient,
-  workspaceId: string,
-  since?: string,
-): Promise<MessageRecord[]> {
-  let query = client
-    .from("messages")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: true });
-  if (since) query = query.gte("created_at", since);
-  return unwrap(query);
-}
-
 export function listIssues(
   client: MendSupabaseClient,
   workspaceId: string,
@@ -237,6 +218,8 @@ export function subscribeToWorkspace(
   let channel: RealtimeChannel | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectDelay = 1_000;
+  const isVisible = () =>
+    typeof document === "undefined" || document.visibilityState === "visible";
 
   const refreshPayload = () =>
     ({
@@ -250,7 +233,13 @@ export function subscribeToWorkspace(
     }) as unknown as RealtimePostgresChangesPayload<Record<string, unknown>>;
 
   const scheduleReconnect = () => {
-    if (stopped || options.reconnect === false || reconnectTimer) return;
+    if (
+      stopped ||
+      options.reconnect === false ||
+      !isVisible() ||
+      reconnectTimer
+    )
+      return;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       connect();
@@ -296,7 +285,7 @@ export function subscribeToWorkspace(
   };
 
   const reconnectNow = () => {
-    if (stopped) return;
+    if (stopped || !isVisible()) return;
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = null;
     reconnectDelay = 1_000;

@@ -80,6 +80,7 @@ describe("workspace realtime subscriptions", () => {
   });
 
   it("reconnects only when a hidden tab becomes visible again", () => {
+    vi.useFakeTimers();
     const listeners = new Map<string, () => void>();
     vi.stubGlobal("window", {
       addEventListener: vi.fn((event: string, listener: () => void) =>
@@ -90,8 +91,12 @@ describe("workspace realtime subscriptions", () => {
     vi.stubGlobal("document", { visibilityState: "hidden" });
     const channel = {
       on: vi.fn(() => channel),
-      subscribe: vi.fn(),
+      subscribe: vi.fn((callback?: (status: string) => void) => {
+        statusCallback = callback;
+        return channel;
+      }),
     };
+    let statusCallback: ((status: string) => void) | undefined;
     const client = {
       channel: vi.fn(() => channel),
       removeChannel: vi.fn(async () => "ok"),
@@ -101,8 +106,11 @@ describe("workspace realtime subscriptions", () => {
       client,
       "workspace-1",
       () => undefined,
-      { reconnect: false },
     );
+
+    statusCallback?.("CHANNEL_ERROR");
+    vi.advanceTimersByTime(30_000);
+    expect(client.channel).toHaveBeenCalledTimes(1);
 
     listeners.get("visibilitychange")?.();
     expect(client.channel).toHaveBeenCalledTimes(1);
@@ -113,6 +121,7 @@ describe("workspace realtime subscriptions", () => {
     expect(client.channel).toHaveBeenCalledTimes(2);
 
     unsubscribe();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
