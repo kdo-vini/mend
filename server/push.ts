@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 import type { Database } from "../src/lib/database.types.js";
+import { normalizeLocale, type SupportedLocale } from "./locale.js";
 
 type PushClient = SupabaseClient<Database>;
 
@@ -8,8 +9,6 @@ type PushSubscriptionRow = Pick<
   Database["public"]["Tables"]["push_subscriptions"]["Row"],
   "id" | "endpoint" | "p256dh" | "auth" | "user_id"
 >;
-
-type SupportedLocale = "en-US" | "pt-BR";
 
 export interface WorkspacePushPayload {
   title: string;
@@ -79,18 +78,15 @@ export class WorkspacePushNotifier {
     const settled = await Promise.allSettled(
       subscriptions.map(async (subscription) => {
         try {
-          let locale: SupportedLocale = "en-US";
+          let locale: SupportedLocale = "pt-BR";
           if (subscription.user_id) {
             const preference = await client
               .from("user_preferences")
               .select("interface_language")
               .eq("user_id", subscription.user_id)
               .maybeSingle();
-            if (
-              !preference.error &&
-              preference.data?.interface_language === "pt-BR"
-            )
-              locale = "pt-BR";
+            if (!preference.error)
+              locale = normalizeLocale(preference.data?.interface_language);
           }
           const localized = localizePushPayload(payload, locale);
           await webpush.sendNotification(

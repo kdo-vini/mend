@@ -8,7 +8,7 @@ type Client = SupabaseClient<Database>;
 export const interfaceLanguageStorageKey = "mend.interface-language";
 
 export function storedInterfaceLanguage(): SupportedLocale {
-  if (typeof window === "undefined") return "en-US";
+  if (typeof window === "undefined") return "pt-BR";
   return normalizeLocale(
     window.localStorage.getItem(interfaceLanguageStorageKey),
   );
@@ -29,13 +29,11 @@ export function currentInterfaceLanguage(): SupportedLocale {
 
 export function resolvePreferredLocale(
   persisted?: unknown,
-  firstWorkspaceLanguage?: unknown,
   localChoice?: unknown,
 ): SupportedLocale {
   if (persisted) return normalizeLocale(persisted);
-  if (firstWorkspaceLanguage) return normalizeLocale(firstWorkspaceLanguage);
   if (localChoice) return normalizeLocale(localChoice);
-  return "en-US";
+  return "pt-BR";
 }
 
 export async function resolveInterfaceLanguage(
@@ -60,24 +58,7 @@ export async function resolveInterfaceLanguage(
     return locale;
   }
 
-  let locale = resolvePreferredLocale(undefined, undefined, cached);
-  const workspaceResult = await client
-    .from("workspace_members")
-    .select("created_at, workspaces(default_language)")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const workspace = workspaceResult.data?.workspaces as
-    | { default_language?: string }
-    | null
-    | undefined;
-  if (workspace?.default_language)
-    locale = resolvePreferredLocale(
-      undefined,
-      workspace.default_language,
-      cached,
-    );
+  const locale = resolvePreferredLocale(undefined, cached);
 
   await client.from("user_preferences").upsert(
     {

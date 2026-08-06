@@ -11,6 +11,41 @@
     "noMatching": "No matching articles",
     "tryDifferent": "Try another search or category.",
     "createAnswer": "Create a trusted answer your support team can reuse.",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "updated": "Updated {{date}}",
+    "publishedOnly": "Only published articles from this workspace are eligible for AI context. Drafts stay internal.",
+    "loading": "Loading knowledge…",
+    "refresh": "Refresh",
+    "connectWorkspace": "Connect a workspace first",
+    "connectWorkspaceDescription": "Knowledge is scoped to an authenticated Mend workspace. No demo articles are shown.",
+    "edit": "Edit article",
+    "delete": "Delete article",
+    "noArticles": "No knowledge articles yet",
+    "createReviewedAnswer": "Create the first reviewed answer about your systems, products, and support procedures.",
+    "workspaceKnowledge": "Workspace knowledge",
+    "closeEditor": "Close article editor"
+  },
+  "editor": {
+    "title": "Title",
+    "titlePlaceholder": "How our checkout works",
+    "category": "Category",
+    "categoryPlaceholder": "Product",
+    "body": "Article body",
+    "bodyPlaceholder": "Explain the system, the correct procedure, and when to escalate.",
+    "status": "Status",
+    "draft": "Draft",
+    "published": "Published for AI",
+    "save": "Save article"
+  },
+  "errors": {
+    "load": "Knowledge could not be loaded.",
+    "save": "Article could not be saved.",
+    "delete": "Article could not be deleted."
+  },
+  "toasts": {
+    "updated": "Article updated",
+    "published": "Article published for AI",
+    "savedDraft": "Article saved as draft",
+    "deleted": "Article deleted"
   }
 }

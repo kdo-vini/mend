@@ -37,10 +37,11 @@ export function KnowledgePage() {
     setArticles((current) => [
       {
         id: `kb-${Date.now()}`,
-        title: "Untitled knowledge article",
-        category: "Support",
-        updatedAt: "Just now",
-        excerpt: "Add the operational answer your team wants to reuse.",
+        title: "Novo artigo de conhecimento",
+        category: "Suporte",
+        updatedAt: "agora",
+        excerpt:
+          "Adicione a resposta operacional que sua equipe quer reutilizar.",
         status: "Draft",
       },
       ...current,
@@ -102,7 +103,7 @@ export function KnowledgePage() {
                 <p>{article.excerpt}</p>
                 <div className="knowledge-meta">
                   <span>{article.category}</span>
-                  <span>Updated {article.updatedAt}</span>
+                  <span>{t("ui.updated", { date: article.updatedAt })}</span>
                 </div>
               </div>
               <ChevronRight size={17} />
@@ -142,10 +143,7 @@ export function KnowledgePage() {
       </div>
       <div className="knowledge-note">
         <ShieldCheck size={15} />
-        <span>
-          AI only uses published articles from this workspace. Drafts stay
-          internal.
-        </span>
+        <span>{t("ui.publishedOnly")}</span>
       </div>
     </div>
   );

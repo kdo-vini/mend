@@ -22,7 +22,13 @@ export function RunsPage({
   ) => void;
   onRefresh: () => void;
 }) {
-  const { t } = useTranslation("runs");
+  const { t } = useTranslation(["runs", "common"]);
+  const modeLabel = (mode: CodingRun["mode"]) =>
+    mode === "Investigate"
+      ? t("data.runMode.investigate", { ns: "common" })
+      : mode === "Propose fix"
+        ? t("data.runMode.proposeFix", { ns: "common" })
+        : t("data.runMode.implementFix", { ns: "common" });
   const [selectedRunId, setSelectedRunId] = useState(runs[0]?.id ?? "");
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimer = useRef<number | null>(null);
@@ -107,7 +113,7 @@ export function RunsPage({
                     <span>{run.startedAt}</span>
                   </div>
                   <p>
-                    {run.mode} · {run.summary}
+                    {modeLabel(run.mode)} · {run.summary}
                   </p>
                   <div className="run-list-meta">
                     <StatusRun status={run.status} />
@@ -120,10 +126,11 @@ export function RunsPage({
           <div className="run-detail">
             <div className="run-detail-header">
               <div>
-                <div className="page-kicker">Selected execution</div>
+                <div className="page-kicker">{t("detail.selected")}</div>
                 <h2>
                   {selectedRun.issueIdentifier}{" "}
-                  <span className="muted-separator">·</span> {selectedRun.mode}
+                  <span className="muted-separator">·</span>{" "}
+                  {modeLabel(selectedRun.mode)}
                 </h2>
                 <p>{selectedRun.summary}</p>
               </div>
@@ -133,7 +140,7 @@ export function RunsPage({
                   type="button"
                   onClick={() => onOpenIssue(selectedRun.issueId)}
                 >
-                  Open issue
+                  {t("detail.openIssue")}
                 </button>
                 {selectedRun.status === "Running" && (
                   <button
@@ -141,7 +148,7 @@ export function RunsPage({
                     type="button"
                     onClick={() => onUpdateRun(selectedRun.id, "cancel")}
                   >
-                    Cancel run
+                    {t("detail.cancelRun")}
                   </button>
                 )}
                 {selectedRun.status !== "Running" && (
@@ -150,7 +157,7 @@ export function RunsPage({
                     type="button"
                     onClick={() => onStartRun(selectedRun.issueId)}
                   >
-                    <RefreshCw size={15} /> Run again
+                    <RefreshCw size={15} /> {t("detail.runAgain")}
                   </button>
                 )}
               </div>
@@ -158,7 +165,9 @@ export function RunsPage({
             <div
               className="progress-line"
               role="progressbar"
-              aria-label={`${selectedRun.issueIdentifier} progress`}
+              aria-label={t("detail.progress", {
+                identifier: selectedRun.issueIdentifier,
+              })}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={selectedRun.progress}
@@ -167,18 +176,19 @@ export function RunsPage({
             </div>
             <div className="run-stat-row">
               <span>
-                <strong>{selectedRun.progress}%</strong> complete
+                <strong>{selectedRun.progress}%</strong> {t("detail.complete")}
               </span>
               <span>
-                <strong>{selectedRun.files.length}</strong> files changed
+                <strong>{selectedRun.files.length}</strong>{" "}
+                {t("detail.filesChanged")}
               </span>
               <span>
-                <strong>{selectedRun.duration}</strong> runtime
+                <strong>{selectedRun.duration}</strong> {t("detail.runtime")}
               </span>
               {selectedRun.commit && (
                 <span>
                   <GitBranch size={13} /> <strong>{selectedRun.commit}</strong>{" "}
-                  local commit
+                  {t("detail.localCommit")}
                 </span>
               )}
               {selectedRun.branch && (
@@ -189,16 +199,13 @@ export function RunsPage({
             </div>
             {selectedRun.status === "Completed" && (
               <div className="run-review-actions">
-                <span>
-                  Review the diff and checks. Approval creates the local commit;
-                  publication is a separate action.
-                </span>
+                <span>{t("detail.reviewDescription")}</span>
                 <button
                   className="button button-ghost"
                   type="button"
                   onClick={() => onUpdateRun(selectedRun.id, "reject")}
                 >
-                  Reject result
+                  {t("detail.rejectResult")}
                 </button>
                 <button
                   className="button button-primary"
@@ -209,7 +216,7 @@ export function RunsPage({
                   }
                   onClick={() => onUpdateRun(selectedRun.id, "approve")}
                 >
-                  <Check size={14} /> Approve local commit
+                  <Check size={14} /> {t("detail.approveCommit")}
                 </button>
               </div>
             )}
@@ -217,16 +224,13 @@ export function RunsPage({
               selectedRun.branch &&
               !selectedRun.published && (
                 <div className="run-review-actions">
-                  <span>
-                    This branch is approved and committed locally. Publish it
-                    only when you are ready for the configured remote.
-                  </span>
+                  <span>{t("detail.publishDescription")}</span>
                   <button
                     className="button button-primary"
                     type="button"
                     onClick={() => onUpdateRun(selectedRun.id, "publish")}
                   >
-                    Publish branch
+                    {t("detail.publishBranch")}
                   </button>
                 </div>
               )}
@@ -234,21 +238,21 @@ export function RunsPage({
               selectedRun.published &&
               !selectedRun.deployed && (
                 <div className="run-review-actions">
-                  <span>
-                    The approved branch is published. Deploying is gated by the
-                    workspace AI policy and Dokploy configuration.
-                  </span>
+                  <span>{t("detail.deployDescription")}</span>
                   <button
                     className="button button-primary"
                     type="button"
                     onClick={() => onUpdateRun(selectedRun.id, "deploy")}
                   >
-                    Deploy approved branch
+                    {t("detail.deployBranch")}
                   </button>
                 </div>
               )}
             <section className="run-section">
-              <SectionTitle title="Operational timeline" action="Live" />
+              <SectionTitle
+                title={t("detail.timeline")}
+                action={t("detail.live")}
+              />
               <div className="run-timeline">
                 {selectedRun.events.length ? (
                   selectedRun.events.map((event, index) => (
@@ -270,49 +274,56 @@ export function RunsPage({
                   ))
                 ) : (
                   <EmptyState
-                    title="No timeline events"
-                    description="Events will appear here as the run progresses."
+                    title={t("detail.noTimeline")}
+                    description={t("detail.noTimelineDescription")}
                   />
                 )}
               </div>
             </section>
             <section className="run-section">
-              <SectionTitle title="Files changed" />
+              <SectionTitle title={t("detail.filesChangedTitle")} />
               {selectedRun.files.length ? (
                 <div className="file-list">
                   {selectedRun.files.map((file) => (
                     <div className="file-row" key={file}>
                       <FileCode2 size={15} />
                       <span>{file}</span>
-                      <span className="file-change">modified</span>
+                      <span className="file-change">
+                        {t("detail.modified")}
+                      </span>
                     </div>
                   ))}
                 </div>
               ) : (
                 <EmptyState
-                  title="No patch files"
-                  description="This run did not produce a file change."
+                  title={t("detail.noPatchFiles")}
+                  description={t("detail.noPatchFilesDescription")}
                 />
               )}
             </section>
             <section className="run-section">
               <SectionTitle
-                title="Reviewable diff"
-                action={selectedRun.diffTruncated ? "Truncated" : undefined}
+                title={t("detail.reviewableDiff")}
+                action={
+                  selectedRun.diffTruncated ? t("detail.truncated") : undefined
+                }
               />
               {selectedRun.diff ? (
-                <pre className="diff-view" aria-label="Codex diff">
+                <pre
+                  className="diff-view"
+                  aria-label={t("detail.diffAriaLabel")}
+                >
                   <code>{selectedRun.diff}</code>
                 </pre>
               ) : (
                 <EmptyState
-                  title="No diff available"
-                  description="Investigations may finish without changing a file."
+                  title={t("detail.noDiff")}
+                  description={t("detail.noDiffDescription")}
                 />
               )}
             </section>
             <section className="run-section">
-              <SectionTitle title="Checks" />
+              <SectionTitle title={t("detail.checks")} />
               {selectedRun.checks?.length ? (
                 <div className="check-list">
                   {selectedRun.checks.map((check, index) => (
@@ -331,14 +342,14 @@ export function RunsPage({
                         <strong>{check.name}</strong>
                         <code>exit {check.exitCode}</code>
                       </summary>
-                      <pre>{check.output || "No command output."}</pre>
+                      <pre>{check.output || t("detail.noCommandOutput")}</pre>
                     </details>
                   ))}
                 </div>
               ) : (
                 <EmptyState
-                  title="No checks recorded"
-                  description="This run did not execute an approved validation command."
+                  title={t("detail.noChecksRecorded")}
+                  description={t("detail.noChecksDescription")}
                 />
               )}
             </section>

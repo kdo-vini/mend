@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
   ArrowUp,
@@ -42,12 +43,92 @@ import {
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { ActionMenu } from "../../../shared/ui/ActionMenu";
+import { localizedError } from "../../../shared/ui/localizedError";
 import {
   addLiveTextEvidence,
   createLiveIssueComment,
   getLiveIssueHistory,
   supabase,
 } from "../api";
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+function issueTypeLabel(type: IssueType, t: Translate) {
+  switch (type) {
+    case "Production Bug":
+      return t("ui.types.productionBug", { ns: "issues" });
+    case "Bug":
+      return t("ui.types.bug", { ns: "issues" });
+    case "Incident":
+      return t("ui.types.incident", { ns: "issues" });
+    case "Feature":
+      return t("ui.types.feature", { ns: "issues" });
+    case "Task":
+      return t("ui.types.task", { ns: "issues" });
+    case "Billing":
+      return t("ui.types.billing", { ns: "issues" });
+    case "Commercial":
+      return t("ui.types.commercial", { ns: "issues" });
+    case "Question":
+      return t("ui.types.question", { ns: "issues" });
+    default:
+      return t("ui.types.other", { ns: "issues" });
+  }
+}
+
+function issueStatusOptions(t: Translate) {
+  return [
+    { value: "Triage", label: t("data.issueStatus.triage", { ns: "common" }) },
+    {
+      value: "Backlog",
+      label: t("data.issueStatus.backlog", { ns: "common" }),
+    },
+    { value: "Todo", label: t("data.issueStatus.todo", { ns: "common" }) },
+    {
+      value: "In Progress",
+      label: t("data.issueStatus.inProgress", { ns: "common" }),
+    },
+    { value: "Review", label: t("data.issueStatus.review", { ns: "common" }) },
+    { value: "Done", label: t("data.issueStatus.done", { ns: "common" }) },
+    {
+      value: "Canceled",
+      label: t("data.issueStatus.canceled", { ns: "common" }),
+    },
+  ];
+}
+
+function priorityOptions(t: Translate) {
+  return [
+    { value: "Urgent", label: t("data.priority.urgent", { ns: "common" }) },
+    { value: "High", label: t("data.priority.high", { ns: "common" }) },
+    { value: "Medium", label: t("data.priority.medium", { ns: "common" }) },
+    { value: "Low", label: t("data.priority.low", { ns: "common" }) },
+    {
+      value: "No priority",
+      label: t("data.priority.noPriority", { ns: "common" }),
+    },
+  ];
+}
+
+function issueTypeOptions(t: Translate) {
+  return [
+    "Production Bug",
+    "Bug",
+    "Incident",
+    "Feature",
+    "Task",
+    "Billing",
+    "Commercial",
+    "Question",
+    "Other",
+  ].map((value) => ({ value, label: issueTypeLabel(value as IssueType, t) }));
+}
+
+function issueSourceLabel(source: Issue["source"], t: Translate) {
+  return source === "Conversation"
+    ? t("detail.sourceConversation", { ns: "issues" })
+    : t("detail.sourceInternal", { ns: "issues" });
+}
 
 export function IssueDetailPage({
   issues,
@@ -82,6 +163,7 @@ export function IssueDetailPage({
   onUpdateIssue: (id: string, patch: Partial<Issue>) => void;
   onResolveAndNotify: (issueId: string, message: string) => Promise<boolean>;
 }) {
+  const { t } = useTranslation(["common", "issues"]);
   const navigate = useNavigate();
   const location = useLocation();
   const identifier = location.pathname.split("/").pop();
@@ -152,9 +234,10 @@ export function IssueDetailPage({
       .catch((error) => {
         if (active)
           onToast(
-            error instanceof Error
-              ? error.message
-              : "Issue history could not be loaded.",
+            localizedError(
+              error,
+              t("detail.historyLoadError", { ns: "issues" }),
+            ),
           );
       })
       .finally(() => {
@@ -163,20 +246,21 @@ export function IssueDetailPage({
     return () => {
       active = false;
     };
-  }, [issue?.identifier, liveMode, onToast, workspaceId]);
+  }, [issue?.identifier, liveMode, onToast, t, workspaceId]);
   if (!issue)
     return (
       <div className="page">
         <EmptyState
-          title="Issue not found"
-          description="This issue may have been removed or is not available in the current workspace."
+          title={t("detail.notFound", { ns: "issues" })}
+          description={t("detail.notFoundDescription", { ns: "issues" })}
           action={
             <button
               className="button button-ghost"
               type="button"
               onClick={() => navigate("/issues")}
             >
-              <ArrowLeft size={14} /> Back to issues
+              <ArrowLeft size={14} />{" "}
+              {t("detail.backToIssues", { ns: "issues" })}
             </button>
           }
         />
@@ -206,10 +290,10 @@ export function IssueDetailPage({
         },
       ]);
       setComment("");
-      onToast("Comment added");
+      onToast(t("detail.commentAdded", { ns: "issues" }));
     } catch (error) {
       onToast(
-        error instanceof Error ? error.message : "Comment could not be added.",
+        localizedError(error, t("detail.commentError", { ns: "issues" })),
       );
     } finally {
       setSavingActivity(false);
@@ -233,16 +317,16 @@ export function IssueDetailPage({
         ...current,
         {
           id: `evidence-${Date.now()}`,
-          label: evidenceLabel.trim() || "Evidence",
+          label: evidenceLabel.trim() || t("detail.evidence", { ns: "issues" }),
           body: evidenceBody.trim(),
           createdAt: "Just now",
         },
       ]);
       setEvidenceBody("");
-      onToast("Evidence linked to issue");
+      onToast(t("detail.evidenceAdded", { ns: "issues" }));
     } catch (error) {
       onToast(
-        error instanceof Error ? error.message : "Evidence could not be added.",
+        localizedError(error, t("detail.evidenceError", { ns: "issues" })),
       );
     } finally {
       setSavingActivity(false);
@@ -261,10 +345,10 @@ export function IssueDetailPage({
         type="button"
         onClick={() => navigate("/issues")}
       >
-        <ArrowLeft size={14} /> Back to issues
+        <ArrowLeft size={14} /> {t("detail.backToIssues", { ns: "issues" })}
       </button>
       <PageHeader
-        eyebrow={`${issue.identifier} · ${issue.source.toLowerCase()}`}
+        eyebrow={`${issue.identifier} · ${issueSourceLabel(issue.source, t)}`}
         title={issue.title}
         actions={
           <>
@@ -278,9 +362,11 @@ export function IssueDetailPage({
                 }
                 if (issue.conversationId) {
                   setResolutionMessage(
-                    operationalLanguage === "pt-BR"
-                      ? `Olá! O chamado ${issue.identifier} foi resolvido. Se o problema continuar, responda por aqui e reabrimos o atendimento.`
-                      : `Hello! Issue ${issue.identifier} has been resolved. If the problem continues, reply here and we will reopen the conversation.`,
+                    t("detail.resolutionGreeting", {
+                      ns: "issues",
+                      identifier: issue.identifier,
+                      language: operationalLanguage,
+                    }),
                   );
                   setResolutionOpen(true);
                   return;
@@ -289,17 +375,18 @@ export function IssueDetailPage({
               }}
             >
               {issue.status === "Done"
-                ? "Reopen"
+                ? t("detail.reopen", { ns: "issues" })
                 : issue.conversationId
-                  ? "Resolve & notify"
-                  : "Resolve"}
+                  ? t("detail.resolveAndNotify", { ns: "issues" })
+                  : t("detail.resolve", { ns: "issues" })}
             </button>
             <button
               className="button button-primary"
               type="button"
               onClick={() => onStartRun(issue.id)}
             >
-              <TerminalSquare size={15} /> Run Codex
+              <TerminalSquare size={15} />{" "}
+              {t("detail.runCodex", { ns: "issues" })}
             </button>
             <ActionMenu label={issue.identifier}>
               <button
@@ -307,7 +394,7 @@ export function IssueDetailPage({
                 role="menuitem"
                 onClick={() => onEditIssue(issue.id)}
               >
-                <PenLine size={14} /> Edit issue
+                <PenLine size={14} /> {t("ui.edit", { ns: "issues" })}
               </button>
               <button
                 className="danger"
@@ -315,7 +402,7 @@ export function IssueDetailPage({
                 role="menuitem"
                 onClick={() => onDeleteIssue(issue.id)}
               >
-                <Trash2 size={14} /> Delete issue
+                <Trash2 size={14} /> {t("ui.delete", { ns: "issues" })}
               </button>
             </ActionMenu>
           </>
@@ -324,19 +411,11 @@ export function IssueDetailPage({
       <div className="issue-detail-grid">
         <div className="issue-main-column">
           <div className="detail-properties">
-            <Property label="Status">
+            <Property label={t("detail.status", { ns: "issues" })}>
               <InlineSelect
-                label="Status"
+                label={t("detail.status", { ns: "issues" })}
                 value={issue.status}
-                options={[
-                  "Triage",
-                  "Backlog",
-                  "Todo",
-                  "In Progress",
-                  "Review",
-                  "Done",
-                  "Canceled",
-                ]}
+                options={issueStatusOptions(t)}
                 renderValue={(value) => (
                   <StatusPill status={value as IssueStatus} />
                 )}
@@ -345,11 +424,11 @@ export function IssueDetailPage({
                 }
               />
             </Property>
-            <Property label="Priority">
+            <Property label={t("detail.priority", { ns: "issues" })}>
               <InlineSelect
-                label="Priority"
+                label={t("detail.priority", { ns: "issues" })}
                 value={issue.priority}
-                options={["Urgent", "High", "Medium", "Low", "No priority"]}
+                options={priorityOptions(t)}
                 renderValue={(value) => (
                   <PriorityDot priority={value as Priority} showLabel />
                 )}
@@ -358,24 +437,15 @@ export function IssueDetailPage({
                 }
               />
             </Property>
-            <Property label="Type">
+            <Property label={t("detail.type", { ns: "issues" })}>
               <InlineSelect
-                label="Type"
+                label={t("detail.type", { ns: "issues" })}
                 value={issue.type}
-                options={[
-                  "Production Bug",
-                  "Bug",
-                  "Incident",
-                  "Feature",
-                  "Task",
-                  "Billing",
-                  "Commercial",
-                  "Question",
-                  "Other",
-                ]}
+                options={issueTypeOptions(t)}
                 renderValue={(value) => (
                   <span className="plain-value">
-                    <CircleDot size={14} /> {value}
+                    <CircleDot size={14} />{" "}
+                    {issueTypeLabel(value as IssueType, t)}
                   </span>
                 )}
                 onChange={(value) =>
@@ -383,9 +453,9 @@ export function IssueDetailPage({
                 }
               />
             </Property>
-            <Property label="Assignee">
+            <Property label={t("detail.assignee", { ns: "issues" })}>
               <InlineSelect
-                label="Assignee"
+                label={t("detail.assignee", { ns: "issues" })}
                 value={issue.assignee}
                 options={assigneeOptions}
                 renderValue={(value) => (
@@ -398,25 +468,26 @@ export function IssueDetailPage({
                 }
               />
             </Property>
-            <Property label="Customer">
+            <Property label={t("detail.customer", { ns: "issues" })}>
               <span className="plain-value">
-                <UsersRound size={14} /> {issue.customer ?? "Internal issue"}
+                <UsersRound size={14} />{" "}
+                {issue.customer ?? t("detail.internalIssue", { ns: "issues" })}
               </span>
             </Property>
           </div>
           <section className="detail-section">
-            <SectionTitle title="Summary" />
+            <SectionTitle title={t("detail.summary", { ns: "issues" })} />
             <InlineText
-              label="Issue summary"
+              label={t("detail.issueSummary", { ns: "issues" })}
               value={issue.summary}
               onSave={(value) => onUpdateIssue(issue.id, { summary: value })}
             />
             <div className="impact-note">
               <Info size={15} />
               <span>
-                <strong>Impact</strong>
+                <strong>{t("detail.impact", { ns: "issues" })}</strong>
                 <InlineText
-                  label="Issue impact"
+                  label={t("detail.issueImpact", { ns: "issues" })}
                   value={issue.impact}
                   onSave={(value) => onUpdateIssue(issue.id, { impact: value })}
                 />
@@ -424,25 +495,27 @@ export function IssueDetailPage({
             </div>
           </section>
           <section className="detail-section">
-            <SectionTitle title="Activity" />
+            <SectionTitle title={t("detail.activity", { ns: "issues" })} />
             <div className="comment-box">
-              <div className="avatar avatar-small avatar-violet">OP</div>
+              <div className="avatar avatar-small avatar-violet">
+                {t("detail.operatorInitials", { ns: "issues" })}
+              </div>
               <div>
                 <textarea
-                  aria-label="Internal comment"
+                  aria-label={t("detail.internalComment", { ns: "issues" })}
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
-                  placeholder="Leave an internal comment…"
+                  placeholder={t("detail.commentPlaceholder", { ns: "issues" })}
                 />
                 <div className="comment-actions">
-                  <span>Markdown supported</span>
+                  <span>{t("detail.markdownSupported", { ns: "issues" })}</span>
                   <button
                     className="button button-primary button-small"
                     type="button"
                     disabled={savingActivity || !comment.trim()}
                     onClick={() => void addComment()}
                   >
-                    Comment
+                    {t("detail.comment", { ns: "issues" })}
                   </button>
                 </div>
               </div>
@@ -451,8 +524,8 @@ export function IssueDetailPage({
               icon={<CircleDot size={14} />}
               title={
                 issue.source === "Conversation"
-                  ? "Issue created from conversation"
-                  : "Issue created in workspace"
+                  ? t("detail.createdFromConversation", { ns: "issues" })
+                  : t("detail.createdInWorkspace", { ns: "issues" })
               }
               detail={`${issue.customer ?? "Internal workspace"} · ${issue.createdAt}`}
             />
@@ -460,7 +533,7 @@ export function IssueDetailPage({
               <ActivityItem
                 key={item.id}
                 icon={<MessageCircle size={14} />}
-                title="Internal comment"
+                title={t("detail.internalComment", { ns: "issues" })}
                 detail={`${item.body} · ${item.createdAt}`}
               />
             ))}
@@ -472,22 +545,26 @@ export function IssueDetailPage({
                 detail={item.createdAt}
               />
             ))}
-            {historyLoading && <LoadingState label="Loading issue activity…" />}
+            {historyLoading && (
+              <LoadingState
+                label={t("detail.loadingActivity", { ns: "issues" })}
+              />
+            )}
           </section>
           <section className="detail-section">
-            <SectionTitle title="Evidence" />
+            <SectionTitle title={t("detail.evidenceTitle", { ns: "issues" })} />
             <div className="evidence-form">
               <input
-                aria-label="Evidence label"
+                aria-label={t("detail.evidenceLabel", { ns: "issues" })}
                 value={evidenceLabel}
                 onChange={(event) => setEvidenceLabel(event.target.value)}
-                placeholder="Evidence label"
+                placeholder={t("detail.evidenceLabel", { ns: "issues" })}
               />
               <textarea
-                aria-label="Evidence text"
+                aria-label={t("detail.evidenceText", { ns: "issues" })}
                 value={evidenceBody}
                 onChange={(event) => setEvidenceBody(event.target.value)}
-                placeholder="Paste the relevant customer message, log excerpt or reproduction note…"
+                placeholder={t("detail.evidencePlaceholder", { ns: "issues" })}
               />
               <button
                 className="button button-ghost button-small"
@@ -497,7 +574,8 @@ export function IssueDetailPage({
                 }
                 onClick={() => void addEvidence()}
               >
-                <FileText size={13} /> Add evidence
+                <FileText size={13} />{" "}
+                {t("detail.addEvidence", { ns: "issues" })}
               </button>
             </div>
             {evidenceItems.length > 0 && (
@@ -517,8 +595,12 @@ export function IssueDetailPage({
           </section>
           <section className="detail-section">
             <SectionTitle
-              title="Codex runs"
-              action={issueRuns.length ? "View all" : undefined}
+              title={t("detail.codexRuns", { ns: "issues" })}
+              action={
+                issueRuns.length
+                  ? t("detail.viewAll", { ns: "issues" })
+                  : undefined
+              }
             />
             {issueRuns.length ? (
               issueRuns.map((run) => (
@@ -531,13 +613,13 @@ export function IssueDetailPage({
             ) : (
               <div className="inline-empty">
                 <TerminalSquare size={18} />
-                <span>No Codex runs yet.</span>
+                <span>{t("detail.noRuns", { ns: "issues" })}</span>
                 <button
                   className="text-button"
                   type="button"
                   onClick={() => onStartRun(issue.id)}
                 >
-                  Start one
+                  {t("detail.startOne", { ns: "issues" })}
                 </button>
               </div>
             )}
@@ -545,7 +627,9 @@ export function IssueDetailPage({
         </div>
         <aside className="issue-side-column">
           <div className="side-block">
-            <div className="side-block-title">Linked conversation</div>
+            <div className="side-block-title">
+              {t("detail.linkedConversation", { ns: "issues" })}
+            </div>
             {issue.customer && (
               <button
                 className="linked-conversation"
@@ -564,7 +648,12 @@ export function IssueDetailPage({
                 <div>
                   <strong>{issue.customer}</strong>
                   <small>
-                    WhatsApp · {issue.conversationId ? "open" : "internal"}
+                    {t("detail.whatsappState", {
+                      ns: "issues",
+                      state: issue.conversationId
+                        ? t("detail.open", { ns: "issues" })
+                        : t("detail.internal", { ns: "issues" }),
+                    })}
                   </small>
                 </div>
                 <ChevronRight size={15} />
@@ -572,7 +661,9 @@ export function IssueDetailPage({
             )}
           </div>
           <div className="side-block">
-            <div className="side-block-title">Labels</div>
+            <div className="side-block-title">
+              {t("detail.labels", { ns: "issues" })}
+            </div>
             <div className="labels-cloud">
               {issue.labels.length ? (
                 issue.labels.map((label) => (
@@ -581,23 +672,25 @@ export function IssueDetailPage({
                   </span>
                 ))
               ) : (
-                <span className="muted-copy">No labels</span>
+                <span className="muted-copy">
+                  {t("detail.noLabels", { ns: "issues" })}
+                </span>
               )}
             </div>
             <div className="label-editor">
               <input
-                aria-label="New issue label"
+                aria-label={t("detail.newLabel", { ns: "issues" })}
                 value={labelDraft}
                 onChange={(event) => setLabelDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") addLabel();
                 }}
-                placeholder="Add a label"
+                placeholder={t("detail.addLabelPlaceholder", { ns: "issues" })}
               />
               <button
                 className="icon-button subtle"
                 type="button"
-                aria-label="Add issue label"
+                aria-label={t("detail.addLabel", { ns: "issues" })}
                 onClick={addLabel}
               >
                 <Plus size={14} />
@@ -605,16 +698,19 @@ export function IssueDetailPage({
             </div>
           </div>
           <div className="side-block">
-            <div className="side-block-title">Details</div>
+            <div className="side-block-title">
+              {t("detail.details", { ns: "issues" })}
+            </div>
             <div className="detail-list">
               <span>
-                Created <b>{issue.createdAt}</b>
+                {t("detail.created", { ns: "issues" })} <b>{issue.createdAt}</b>
               </span>
               <span>
-                Updated <b>{issue.updatedAt}</b>
+                {t("detail.updated", { ns: "issues" })} <b>{issue.updatedAt}</b>
               </span>
               <span>
-                Source <b>{issue.source}</b>
+                {t("detail.source", { ns: "issues" })}{" "}
+                <b>{issueSourceLabel(issue.source, t)}</b>
               </span>
             </div>
           </div>
@@ -635,13 +731,20 @@ export function IssueDetailPage({
           >
             <div className="modal-header">
               <div>
-                <span className="page-kicker">Customer update</span>
-                <h2 id="resolution-title">Resolve {issue.identifier}</h2>
+                <span className="page-kicker">
+                  {t("detail.customerUpdate", { ns: "issues" })}
+                </span>
+                <h2 id="resolution-title">
+                  {t("detail.resolveTitle", {
+                    ns: "issues",
+                    identifier: issue.identifier,
+                  })}
+                </h2>
               </div>
               <button
                 className="icon-button"
                 type="button"
-                aria-label="Close resolution dialog"
+                aria-label={t("detail.closeResolution", { ns: "issues" })}
                 onClick={() => setResolutionOpen(false)}
               >
                 <X size={17} />
@@ -649,7 +752,7 @@ export function IssueDetailPage({
             </div>
             <div className="modal-body">
               <label>
-                Resolution message
+                {t("detail.resolutionMessage", { ns: "issues" })}
                 <textarea
                   autoFocus
                   value={resolutionMessage}
@@ -660,8 +763,7 @@ export function IssueDetailPage({
               <div className="modal-note">
                 <Send size={14} />
                 <span>
-                  This sends one WhatsApp message, marks the issue Done and
-                  resolves the conversation.
+                  {t("detail.resolutionDescription", { ns: "issues" })}
                 </span>
               </div>
             </div>
@@ -671,7 +773,7 @@ export function IssueDetailPage({
                 type="button"
                 onClick={() => setResolutionOpen(false)}
               >
-                Cancel
+                {t("actions.cancel", { ns: "common" })}
               </button>
               <button
                 className="button button-primary"
@@ -688,7 +790,9 @@ export function IssueDetailPage({
                 }}
               >
                 <Send size={14} />
-                {resolutionSaving ? "Sending…" : "Resolve and send"}
+                {resolutionSaving
+                  ? t("detail.sending", { ns: "issues" })
+                  : t("detail.resolveAndSend", { ns: "issues" })}
               </button>
             </div>
           </div>
@@ -714,6 +818,7 @@ export function IssueInspector({
   onStartRun: (id: string) => void;
   onUpdateIssue: (id: string, patch: Partial<Issue>) => void;
 }) {
+  const { t } = useTranslation(["common", "issues"]);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (issue) closeButtonRef.current?.focus();
@@ -730,7 +835,9 @@ export function IssueInspector({
       >
         <div className="inspector-header">
           <div>
-            <span className="page-kicker">Issue inspector</span>
+            <span className="page-kicker">
+              {t("detail.inspector", { ns: "issues" })}
+            </span>
             <h2 id="issue-inspector-title">{issue.identifier}</h2>
           </div>
           <button
@@ -738,7 +845,7 @@ export function IssueInspector({
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close issue inspector"
+            aria-label={t("detail.closeInspector", { ns: "issues" })}
           >
             <X size={17} />
           </button>
@@ -747,17 +854,9 @@ export function IssueInspector({
           <h3>{issue.title}</h3>
           <div className="inspector-props">
             <InlineSelect
-              label="Status"
+              label={t("detail.status", { ns: "issues" })}
               value={issue.status}
-              options={[
-                "Triage",
-                "Backlog",
-                "Todo",
-                "In Progress",
-                "Review",
-                "Done",
-                "Canceled",
-              ]}
+              options={issueStatusOptions(t)}
               renderValue={(value) => (
                 <StatusPill status={value as IssueStatus} />
               )}
@@ -766,9 +865,9 @@ export function IssueInspector({
               }
             />
             <InlineSelect
-              label="Priority"
+              label={t("detail.priority", { ns: "issues" })}
               value={issue.priority}
-              options={["Urgent", "High", "Medium", "Low", "No priority"]}
+              options={priorityOptions(t)}
               renderValue={(value) => (
                 <PriorityDot priority={value as Priority} showLabel />
               )}
@@ -777,7 +876,7 @@ export function IssueInspector({
               }
             />
             <InlineSelect
-              label="Assignee"
+              label={t("detail.assignee", { ns: "issues" })}
               value={issue.assignee}
               options={assigneeOptions}
               renderValue={(value) => (
@@ -786,21 +885,13 @@ export function IssueInspector({
               onChange={(value) => onUpdateIssue(issue.id, { assignee: value })}
             />
             <InlineSelect
-              label="Type"
+              label={t("detail.type", { ns: "issues" })}
               value={issue.type}
-              options={[
-                "Production Bug",
-                "Bug",
-                "Incident",
-                "Feature",
-                "Task",
-                "Billing",
-                "Commercial",
-                "Question",
-                "Other",
-              ]}
+              options={issueTypeOptions(t)}
               renderValue={(value) => (
-                <span className="plain-value">{value}</span>
+                <span className="plain-value">
+                  {issueTypeLabel(value as IssueType, t)}
+                </span>
               )}
               onChange={(value) =>
                 onUpdateIssue(issue.id, { type: value as IssueType })
@@ -808,27 +899,27 @@ export function IssueInspector({
             />
           </div>
           <section className="inspector-section">
-            <SectionTitle title="Summary" />
+            <SectionTitle title={t("detail.summary", { ns: "issues" })} />
             <InlineText
-              label="Issue summary"
+              label={t("detail.issueSummary", { ns: "issues" })}
               value={issue.summary}
               onSave={(value) => onUpdateIssue(issue.id, { summary: value })}
             />
           </section>
           <section className="inspector-section">
-            <SectionTitle title="Impact" />
+            <SectionTitle title={t("detail.impact", { ns: "issues" })} />
             <InlineText
-              label="Issue impact"
+              label={t("detail.issueImpact", { ns: "issues" })}
               value={issue.impact}
               onSave={(value) => onUpdateIssue(issue.id, { impact: value })}
             />
           </section>
           <section className="inspector-section">
-            <SectionTitle title="Activity" />
+            <SectionTitle title={t("detail.activity", { ns: "issues" })} />
             <ActivityItem
               icon={<CircleDot size={13} />}
-              title="Issue linked to conversation"
-              detail={`${issue.customer ?? "Internal"} · ${issue.updatedAt}`}
+              title={t("detail.issueLinked", { ns: "issues" })}
+              detail={`${issue.customer ?? t("detail.internal", { ns: "issues" })} · ${issue.updatedAt}`}
             />
           </section>
         </div>
@@ -838,14 +929,15 @@ export function IssueInspector({
             type="button"
             onClick={() => onOpenFull(issue.identifier)}
           >
-            Open full issue <ArrowUp size={14} />
+            {t("detail.openFull", { ns: "issues" })} <ArrowUp size={14} />
           </button>
           <button
             className="button button-primary"
             type="button"
             onClick={() => onStartRun(issue.id)}
           >
-            <TerminalSquare size={14} /> Run Codex
+            <TerminalSquare size={14} />{" "}
+            {t("detail.runCodex", { ns: "issues" })}
           </button>
         </div>
       </aside>

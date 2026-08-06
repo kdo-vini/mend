@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import i18n from "../i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -46,19 +47,17 @@ export class ErrorBoundary extends Component<
         <div className="app-error-icon">
           <AlertTriangle size={19} />
         </div>
-        <span className="page-kicker">Interface unavailable</span>
-        <h1>Something went wrong</h1>
-        <p>
-          The workspace could not render this view. Your data is still safe; try
-          again or reload the page.
-        </p>
-        {this.state.message && <code>{this.state.message}</code>}
+        <span className="page-kicker">
+          {i18n.t("errors.interfaceUnavailable", { ns: "common" })}
+        </span>
+        <h1>{i18n.t("errors.somethingWentWrong", { ns: "common" })}</h1>
+        <p>{i18n.t("errors.interfaceDescription", { ns: "common" })}</p>
         <button
           className="button button-primary"
           type="button"
           onClick={this.reset}
         >
-          <RefreshCw size={14} /> Try again
+          <RefreshCw size={14} /> {i18n.t("actions.retry", { ns: "common" })}
         </button>
       </main>
     );

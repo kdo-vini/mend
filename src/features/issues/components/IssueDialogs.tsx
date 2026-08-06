@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   BookOpen,
   CircleDot,
@@ -57,35 +58,41 @@ export function CommandPalette({
   onSwitchWorkspace: (workspaceId: string) => void;
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation(["common", "issues"]);
   const [query, setQuery] = useState("");
   const actions = [
     {
-      label: "Open inbox",
+      label: t("command.openInbox", { ns: "issues" }),
       hint: "G then I",
       icon: InboxIcon,
       action: () => navigate("/inbox"),
     },
     {
-      label: "Browse issues",
+      label: t("command.browseIssues", { ns: "issues" }),
       hint: "G then X",
       icon: CircleDot,
       action: () => navigate("/issues"),
     },
-    { label: "Create new issue", hint: "C", icon: Plus, action: onNewIssue },
     {
-      label: "View Codex runs",
+      label: t("command.createIssue", { ns: "issues" }),
+      hint: "C",
+      icon: Plus,
+      action: onNewIssue,
+    },
+    {
+      label: t("command.viewRuns", { ns: "issues" }),
       hint: "G then R",
       icon: TerminalSquare,
       action: () => navigate("/codex-runs"),
     },
     {
-      label: "Open knowledge",
+      label: t("command.openKnowledge", { ns: "issues" }),
       hint: "G then K",
       icon: BookOpen,
       action: () => navigate("/knowledge"),
     },
     {
-      label: "Open settings",
+      label: t("command.openSettings", { ns: "issues" }),
       hint: "",
       icon: SettingsIcon,
       action: () => navigate("/settings"),
@@ -176,19 +183,19 @@ export function CommandPalette({
           <input
             id="command-palette-title"
             autoFocus
-            aria-label="Search actions"
+            aria-label={t("command.searchActions", { ns: "issues" })}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={selectFirst}
-            placeholder="Search actions or jump to…"
+            placeholder={t("command.searchPlaceholder", { ns: "issues" })}
           />
-          <kbd>ESC</kbd>
+          <kbd>{t("command.escape", { ns: "issues" })}</kbd>
         </div>
         <div className="palette-group">
           <span className="palette-label">
             {normalizedQuery
-              ? "Actions and workspace results"
-              : "Quick actions"}
+              ? t("command.results", { ns: "issues" })
+              : t("command.quickActions", { ns: "issues" })}
           </span>
           {filteredActions.length ? (
             filteredActions.map(({ label, hint, icon: Icon, action }) => (
@@ -207,21 +214,22 @@ export function CommandPalette({
             ))
           ) : (
             <EmptyState
-              title="No matching actions"
-              description="Try a different command."
+              title={t("command.noMatching", { ns: "issues" })}
+              description={t("command.tryDifferent", { ns: "issues" })}
               search
             />
           )}
         </div>
         <div className="palette-footer">
           <span>
-            <Command size={13} /> Navigate
+            <Command size={13} /> {t("command.navigate", { ns: "issues" })}
           </span>
           <span>
-            <CornerDownRight size={13} /> Select
+            <CornerDownRight size={13} />{" "}
+            {t("command.select", { ns: "issues" })}
           </span>
           <span>
-            <Keyboard size={13} /> Shortcuts
+            <Keyboard size={13} /> {t("command.shortcuts", { ns: "issues" })}
           </span>
         </div>
       </div>
@@ -243,6 +251,39 @@ export function CreateIssueDialog({
     conversationId?: string;
   }) => void;
 }) {
+  const { t } = useTranslation(["common", "issues"]);
+  const typeLabel = (value: IssueType) => {
+    switch (value) {
+      case "Production Bug":
+        return t("ui.types.productionBug", { ns: "issues" });
+      case "Bug":
+        return t("ui.types.bug", { ns: "issues" });
+      case "Incident":
+        return t("ui.types.incident", { ns: "issues" });
+      case "Feature":
+        return t("ui.types.feature", { ns: "issues" });
+      case "Task":
+        return t("ui.types.task", { ns: "issues" });
+      case "Billing":
+        return t("ui.types.billing", { ns: "issues" });
+      case "Commercial":
+        return t("ui.types.commercial", { ns: "issues" });
+      case "Question":
+        return t("ui.types.question", { ns: "issues" });
+      default:
+        return t("ui.types.other", { ns: "issues" });
+    }
+  };
+  const priorityLabel = (value: Priority) =>
+    value === "Urgent"
+      ? t("data.priority.urgent", { ns: "common" })
+      : value === "High"
+        ? t("data.priority.high", { ns: "common" })
+        : value === "Medium"
+          ? t("data.priority.medium", { ns: "common" })
+          : value === "Low"
+            ? t("data.priority.low", { ns: "common" })
+            : t("data.priority.noPriority", { ns: "common" });
   const [title, setTitle] = useState("");
   const [type, setType] = useState<IssueType>("Task");
   const [priority, setPriority] = useState<Priority>("Medium");
@@ -251,7 +292,7 @@ export function CreateIssueDialog({
   const submit = () => {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
-      setError("Add a short title so the team knows what needs attention.");
+      setError(t("dialogs.createTitleError", { ns: "issues" }));
       return;
     }
     onCreate({
@@ -272,21 +313,25 @@ export function CreateIssueDialog({
       >
         <div className="modal-header">
           <div>
-            <span className="page-kicker">New work item</span>
-            <h2 id="create-issue-title">Create issue</h2>
+            <span className="page-kicker">
+              {t("dialogs.newWorkItem", { ns: "issues" })}
+            </span>
+            <h2 id="create-issue-title">
+              {t("dialogs.createIssue", { ns: "issues" })}
+            </h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close create issue dialog"
+            aria-label={t("dialogs.closeCreate", { ns: "issues" })}
           >
             <X size={17} />
           </button>
         </div>
         <div className="modal-body">
           <label>
-            Title
+            {t("dialogs.title", { ns: "issues" })}
             <input
               autoFocus
               required
@@ -298,7 +343,9 @@ export function CreateIssueDialog({
                 setTitle(event.target.value);
                 if (event.target.value.trim()) setError("");
               }}
-              placeholder="What needs to be done?"
+              placeholder={t("dialogs.createTitlePlaceholder", {
+                ns: "issues",
+              })}
             />
             {error && (
               <span className="field-error" id="create-issue-error">
@@ -308,7 +355,7 @@ export function CreateIssueDialog({
           </label>
           <div className="form-row">
             <label>
-              Type
+              {t("dialogs.type", { ns: "issues" })}
               <Select
                 value={type}
                 options={[
@@ -321,27 +368,36 @@ export function CreateIssueDialog({
                   "Commercial",
                   "Question",
                   "Other",
-                ].map((item) => ({ value: item, label: item }))}
+                ].map((item) => ({
+                  value: item,
+                  label: typeLabel(item as IssueType),
+                }))}
                 onChange={(value) => setType(value as IssueType)}
               />
             </label>
             <label>
-              Priority
+              {t("dialogs.priority", { ns: "issues" })}
               <Select
                 value={priority}
                 options={["Urgent", "High", "Medium", "Low", "No priority"].map(
-                  (item) => ({ value: item, label: item }),
+                  (item) => ({
+                    value: item,
+                    label: priorityLabel(item as Priority),
+                  }),
                 )}
                 onChange={(value) => setPriority(value as Priority)}
               />
             </label>
           </div>
           <label>
-            Link conversation{" "}
+            {t("dialogs.linkConversation", { ns: "issues" })}{" "}
             <Select
               value={conversationId}
               options={[
-                { value: "", label: "Internal issue" },
+                {
+                  value: "",
+                  label: t("dialogs.internalIssue", { ns: "issues" }),
+                },
                 ...conversations.map((conversation) => ({
                   value: conversation.id,
                   label: `${conversation.name} · ${conversation.lastMessage.slice(0, 42)}`,
@@ -352,10 +408,7 @@ export function CreateIssueDialog({
           </label>
           <div className="modal-note">
             <Info size={14} />
-            <span>
-              Issues stay inside Techne. No external ticket tracker is
-              connected.
-            </span>
+            <span>{t("dialogs.internalNote", { ns: "issues" })}</span>
           </div>
         </div>
         <div className="modal-footer">
@@ -364,7 +417,7 @@ export function CreateIssueDialog({
             type="button"
             onClick={onClose}
           >
-            Cancel
+            {t("actions.cancel", { ns: "common" })}
           </button>
           <button
             className="button button-primary"
@@ -372,7 +425,7 @@ export function CreateIssueDialog({
             disabled={!title.trim()}
             onClick={submit}
           >
-            Create issue
+            {t("dialogs.createIssue", { ns: "issues" })}
           </button>
         </div>
       </div>
@@ -402,6 +455,53 @@ export function EditIssueDialog({
     >,
   ) => void;
 }) {
+  const { t } = useTranslation(["common", "issues"]);
+  const typeLabel = (value: IssueType) => {
+    switch (value) {
+      case "Production Bug":
+        return t("ui.types.productionBug", { ns: "issues" });
+      case "Bug":
+        return t("ui.types.bug", { ns: "issues" });
+      case "Incident":
+        return t("ui.types.incident", { ns: "issues" });
+      case "Feature":
+        return t("ui.types.feature", { ns: "issues" });
+      case "Task":
+        return t("ui.types.task", { ns: "issues" });
+      case "Billing":
+        return t("ui.types.billing", { ns: "issues" });
+      case "Commercial":
+        return t("ui.types.commercial", { ns: "issues" });
+      case "Question":
+        return t("ui.types.question", { ns: "issues" });
+      default:
+        return t("ui.types.other", { ns: "issues" });
+    }
+  };
+  const priorityLabel = (value: Priority) =>
+    value === "Urgent"
+      ? t("data.priority.urgent", { ns: "common" })
+      : value === "High"
+        ? t("data.priority.high", { ns: "common" })
+        : value === "Medium"
+          ? t("data.priority.medium", { ns: "common" })
+          : value === "Low"
+            ? t("data.priority.low", { ns: "common" })
+            : t("data.priority.noPriority", { ns: "common" });
+  const statusLabel = (value: IssueStatus) =>
+    value === "Triage"
+      ? t("data.issueStatus.triage", { ns: "common" })
+      : value === "Backlog"
+        ? t("data.issueStatus.backlog", { ns: "common" })
+        : value === "Todo"
+          ? t("data.issueStatus.todo", { ns: "common" })
+          : value === "In Progress"
+            ? t("data.issueStatus.inProgress", { ns: "common" })
+            : value === "Review"
+              ? t("data.issueStatus.review", { ns: "common" })
+              : value === "Done"
+                ? t("data.issueStatus.done", { ns: "common" })
+                : t("data.issueStatus.canceled", { ns: "common" });
   const [title, setTitle] = useState(issue?.title ?? "");
   const [type, setType] = useState<IssueType>(issue?.type ?? "Task");
   const [priority, setPriority] = useState<Priority>(
@@ -417,7 +517,7 @@ export function EditIssueDialog({
   const submit = () => {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
-      setError("Add a short title so the issue remains actionable.");
+      setError(t("dialogs.editTitleError", { ns: "issues" }));
       return;
     }
     onSave({
@@ -443,20 +543,22 @@ export function EditIssueDialog({
         <div className="modal-header">
           <div>
             <span className="page-kicker">{issue.identifier}</span>
-            <h2 id="edit-issue-title">Edit issue</h2>
+            <h2 id="edit-issue-title">
+              {t("dialogs.editIssue", { ns: "issues" })}
+            </h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close edit issue dialog"
+            aria-label={t("dialogs.closeEdit", { ns: "issues" })}
           >
             <X size={17} />
           </button>
         </div>
         <div className="modal-body">
           <label>
-            Title
+            {t("dialogs.title", { ns: "issues" })}
             <input
               autoFocus
               required
@@ -472,7 +574,7 @@ export function EditIssueDialog({
           </label>
           <div className="form-row">
             <label>
-              Type
+              {t("dialogs.type", { ns: "issues" })}
               <Select
                 value={type}
                 options={[
@@ -485,23 +587,29 @@ export function EditIssueDialog({
                   "Commercial",
                   "Question",
                   "Other",
-                ].map((item) => ({ value: item, label: item }))}
+                ].map((item) => ({
+                  value: item,
+                  label: typeLabel(item as IssueType),
+                }))}
                 onChange={(value) => setType(value as IssueType)}
               />
             </label>
             <label>
-              Priority
+              {t("dialogs.priority", { ns: "issues" })}
               <Select
                 value={priority}
                 options={["Urgent", "High", "Medium", "Low", "No priority"].map(
-                  (item) => ({ value: item, label: item }),
+                  (item) => ({
+                    value: item,
+                    label: priorityLabel(item as Priority),
+                  }),
                 )}
                 onChange={(value) => setPriority(value as Priority)}
               />
             </label>
           </div>
           <label>
-            Status
+            {t("dialogs.status", { ns: "issues" })}
             <Select
               value={status}
               options={[
@@ -512,12 +620,15 @@ export function EditIssueDialog({
                 "Review",
                 "Done",
                 "Canceled",
-              ].map((item) => ({ value: item, label: item }))}
+              ].map((item) => ({
+                value: item,
+                label: statusLabel(item as IssueStatus),
+              }))}
               onChange={(value) => setStatus(value as IssueStatus)}
             />
           </label>
           <label>
-            Assignee
+            {t("dialogs.assignee", { ns: "issues" })}
             <Select
               value={assignee}
               options={assigneeOptions}
@@ -525,22 +636,22 @@ export function EditIssueDialog({
             />
           </label>
           <label>
-            Summary
+            {t("dialogs.summary", { ns: "issues" })}
             <textarea
               maxLength={20000}
               value={summary}
               onChange={(event) => setSummary(event.target.value)}
-              placeholder="What is happening?"
+              placeholder={t("dialogs.summaryPlaceholder", { ns: "issues" })}
               rows={4}
             />
           </label>
           <label>
-            Impact
+            {t("dialogs.impact", { ns: "issues" })}
             <textarea
               maxLength={20000}
               value={impact}
               onChange={(event) => setImpact(event.target.value)}
-              placeholder="Who or what is affected?"
+              placeholder={t("dialogs.impactPlaceholder", { ns: "issues" })}
               rows={3}
             />
           </label>
@@ -551,7 +662,7 @@ export function EditIssueDialog({
             type="button"
             onClick={onClose}
           >
-            Cancel
+            {t("actions.cancel", { ns: "common" })}
           </button>
           <button
             className="button button-primary"
@@ -559,7 +670,7 @@ export function EditIssueDialog({
             disabled={!title.trim()}
             onClick={submit}
           >
-            <Save size={14} /> Save changes
+            <Save size={14} /> {t("dialogs.saveChanges", { ns: "issues" })}
           </button>
         </div>
       </div>
@@ -584,6 +695,13 @@ export function RunCodexDialog({
     options?: { repositoryId?: string; instructions?: string },
   ) => void;
 }) {
+  const { t } = useTranslation(["common", "issues"]);
+  const modeLabel = (value: CodingRun["mode"]) =>
+    value === "Investigate"
+      ? t("data.runMode.investigate", { ns: "common" })
+      : value === "Propose fix"
+        ? t("data.runMode.proposeFix", { ns: "common" })
+        : t("data.runMode.implementFix", { ns: "common" });
   const [mode, setMode] = useState<CodingRun["mode"]>("Propose fix");
   const [repositoryId, setRepositoryId] = useState("");
   const [repositories, setRepositories] = useState<
@@ -617,14 +735,21 @@ export function RunCodexDialog({
       >
         <div className="modal-header">
           <div>
-            <span className="page-kicker">OpenAI Codex</span>
-            <h2 id="run-codex-title">Run on {issue.identifier}</h2>
+            <span className="page-kicker">
+              {t("brand.codex", { ns: "common" })}
+            </span>
+            <h2 id="run-codex-title">
+              {t("dialogs.runOn", {
+                ns: "issues",
+                identifier: issue.identifier,
+              })}
+            </h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close Codex run dialog"
+            aria-label={t("dialogs.closeRun", { ns: "issues" })}
           >
             <X size={17} />
           </button>
@@ -638,26 +763,39 @@ export function RunCodexDialog({
             </div>
           </div>
           <label>
-            Mode
+            {t("dialogs.mode", { ns: "issues" })}
             <Select
               value={mode}
               options={["Investigate", "Propose fix", "Implement fix"].map(
-                (item) => ({ value: item, label: item }),
+                (item) => ({
+                  value: item,
+                  label: modeLabel(item as CodingRun["mode"]),
+                }),
               )}
               onChange={(value) => setMode(value as CodingRun["mode"])}
             />
           </label>
           <label>
-            Repository
+            {t("dialogs.repository", { ns: "issues" })}
             <Select
-              ariaLabel="Codex repository"
+              ariaLabel={t("dialogs.codexRepository", { ns: "issues" })}
               value={repositoryId}
               options={[
                 ...(!liveMode
-                  ? [{ value: "demo-repository", label: "Demo repository" }]
+                  ? [
+                      {
+                        value: "demo-repository",
+                        label: t("dialogs.demoRepository", { ns: "issues" }),
+                      },
+                    ]
                   : []),
                 ...(liveMode && !repositories.length
-                  ? [{ value: "", label: "No repository configured" }]
+                  ? [
+                      {
+                        value: "",
+                        label: t("dialogs.noRepository", { ns: "issues" }),
+                      },
+                    ]
                   : []),
                 ...repositories.map((repository) => ({
                   value: repository.id,
@@ -671,26 +809,23 @@ export function RunCodexDialog({
           {liveMode && !loadingRepositories && !repositories.length && (
             <div className="inline-empty">
               <GitBranch size={15} />
-              <span>
-                Configure a local repository in Settings before starting Codex.
-              </span>
+              <span>{t("dialogs.repositoryRequired", { ns: "issues" })}</span>
             </div>
           )}
           <label>
-            Additional instructions
+            {t("dialogs.additionalInstructions", { ns: "issues" })}
             <textarea
-              aria-label="Additional run instructions"
+              aria-label={t("dialogs.additionalInstructions", { ns: "issues" })}
               value={instructions}
               onChange={(event) => setInstructions(event.target.value)}
-              placeholder="Optional acceptance criteria or context…"
+              placeholder={t("dialogs.instructionsPlaceholder", {
+                ns: "issues",
+              })}
             />
           </label>
           <div className="modal-note">
             <ShieldCheck size={14} />
-            <span>
-              Secrets are excluded. Push, merge, deploy and unrestricted shell
-              are disabled.
-            </span>
+            <span>{t("dialogs.safetyNote", { ns: "issues" })}</span>
           </div>
         </div>
         <div className="modal-footer">
@@ -699,7 +834,7 @@ export function RunCodexDialog({
             type="button"
             onClick={onClose}
           >
-            Cancel
+            {t("actions.cancel", { ns: "common" })}
           </button>
           <button
             className="button button-primary"
@@ -712,7 +847,8 @@ export function RunCodexDialog({
               })
             }
           >
-            <TerminalSquare size={15} /> Start run
+            <TerminalSquare size={15} />{" "}
+            {t("dialogs.startRun", { ns: "issues" })}
           </button>
         </div>
       </div>

@@ -76,51 +76,7 @@ import { PageHeader } from "../../../shared/ui/PageHeader";
 import { Select } from "../../../shared/ui/Select";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
 import { MembersPanel } from "../components/MembersPanel";
-
-const triageIntentLabels: Record<TriageIntent, string> = {
-  question: "Question / pricing",
-  how_to: "How-to",
-  status: "Status",
-  bug: "Bug report",
-  incident: "Incident",
-  billing: "Billing",
-  feature: "Feature request",
-  social: "Greeting / thanks / farewell",
-  other: "Other / unknown",
-};
-
-const triageRouteLabels: Record<AiTriageRoute, string> = {
-  knowledge_auto_reply: "Answer from published knowledge",
-  safe_auto_reply: "Low-risk reply without knowledge",
-  draft_for_review: "Draft for human review",
-  human_escalation: "Escalate and notify human",
-  bug_triage: "Bug triage",
-  no_action: "No action",
-};
-
-const aiPolicyActionLabels: Record<AiPolicyAction, string> = {
-  respond: "Respond to customers",
-  triage: "Triage conversations",
-  create_issue: "Create issues",
-  investigate: "Investigate with Codex",
-  propose_fix: "Propose code fixes",
-  implement_fix: "Implement code fixes",
-  publish: "Publish changes",
-  deploy: "Deploy changes",
-  delete: "Delete data",
-};
-
-const aiPolicyChannelLabels: Record<AiPolicyChannel, string> = {
-  whatsapp: "WhatsApp",
-  web: "Web conversations",
-};
-
-const aiPolicyIntegrationLabels: Record<AiPolicyIntegration, string> = {
-  knowledge: "Published knowledge",
-  google_calendar: "Google Calendar",
-  codex: "Codex",
-  mcp: "MCP plugins",
-};
+import { localizedError } from "../../../shared/ui/localizedError";
 
 export function SettingsPage({
   workspaceId,
@@ -134,6 +90,20 @@ export function SettingsPage({
   onConfirm: Confirm;
 }) {
   const { t } = useTranslation("settings");
+  const triageIntentLabel = (intent: TriageIntent) => t(`ai.intents.${intent}`);
+  const triageRouteLabel = (route: AiTriageRoute) => t(`ai.routes.${route}`);
+  const aiPolicyActionLabel = (action: AiPolicyAction) =>
+    t(`ai.actions.${action}`);
+  const aiPolicyChannelLabel = (channel: AiPolicyChannel) =>
+    t(`ai.channels.${channel}`);
+  const aiPolicyIntegrationLabel = (integration: AiPolicyIntegration) =>
+    t(`ai.integrations.${integration}`);
+  const providerStateLabel = (state: string) =>
+    t(`whatsapp.states.${state}`, { defaultValue: state });
+  const googleStatusLabel = (status: GoogleConnection["status"]) =>
+    t(`google.statuses.${status}`, { defaultValue: status });
+  const mcpStatusLabel = (status: McpConnection["status"]) =>
+    t(`mcp.statuses.${status}`, { defaultValue: status });
   type SettingsTab =
     | "whatsapp"
     | "connections"
@@ -212,11 +182,7 @@ export function SettingsPage({
       onChannelChange(next);
       if (next?.state === "open" || next?.state === "closed") setQr(null);
     } catch (reason) {
-      setChannelError(
-        reason instanceof Error
-          ? reason.message
-          : "WhatsApp provider is unavailable.",
-      );
+      setChannelError(localizedError(reason, t("errors.whatsappUnavailable")));
     } finally {
       setLoading(false);
     }
@@ -224,6 +190,7 @@ export function SettingsPage({
     onChannelChange,
     selected?.channelId,
     selected?.instanceName,
+    t,
     workspaceId,
   ]);
 
@@ -259,12 +226,12 @@ export function SettingsPage({
         onChannelChange(next);
         if (next.state === "open") {
           setQr(null);
-          onToast("WhatsApp connected");
+          onToast(t("toasts.whatsappConnected"));
           return;
         }
         if (next.state === "closed") {
           setQr(null);
-          onToast("WhatsApp pairing expired or disconnected.");
+          onToast(t("toasts.whatsappPairingExpired"));
           return;
         }
       } catch {
@@ -282,6 +249,7 @@ export function SettingsPage({
     onToast,
     selected?.channelId,
     selected?.state,
+    t,
     workspaceId,
   ]);
 
@@ -349,15 +317,11 @@ export function SettingsPage({
         );
       }
     } catch (reason) {
-      setSettingsError(
-        reason instanceof Error
-          ? reason.message
-          : "Live settings could not be loaded.",
-      );
+      setSettingsError(localizedError(reason, t("errors.settingsLoad")));
     } finally {
       setSettingsLoading(false);
     }
-  }, [activeTab, selected?.channelId, workspaceId]);
+  }, [activeTab, selected?.channelId, t, workspaceId]);
 
   useEffect(() => {
     void loadSettingsData();
@@ -372,16 +336,12 @@ export function SettingsPage({
       })
       .catch((reason) => {
         if (active)
-          onToast(
-            reason instanceof Error
-              ? reason.message
-              : "Repositories could not be loaded.",
-          );
+          onToast(localizedError(reason, t("errors.repositoriesLoad")));
       });
     return () => {
       active = false;
     };
-  }, [activeTab, onToast, workspaceId]);
+  }, [activeTab, onToast, t, workspaceId]);
 
   const connect = async () => {
     if (!selected) return;
@@ -399,13 +359,9 @@ export function SettingsPage({
             });
       setQr(result.qr ?? null);
       await refresh();
-      onToast("Connection request sent");
+      onToast(t("toasts.connectionRequestSent"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Could not connect this number.",
-      );
+      onToast(localizedError(reason, t("errors.connectWhatsApp")));
     } finally {
       setChannelAction(false);
     }
@@ -428,13 +384,9 @@ export function SettingsPage({
       setSelected(created);
       setQr(created.qr ?? null);
       await refresh();
-      onToast("WhatsApp instance created");
+      onToast(t("toasts.whatsappInstanceCreated"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Could not create this instance.",
-      );
+      onToast(localizedError(reason, t("errors.createWhatsAppInstance")));
     } finally {
       setChannelAction(false);
     }
@@ -456,13 +408,9 @@ export function SettingsPage({
         });
       setQr(null);
       await refresh();
-      onToast("WhatsApp disconnected");
+      onToast(t("toasts.whatsappDisconnected"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Could not disconnect this number.",
-      );
+      onToast(localizedError(reason, t("errors.disconnectWhatsApp")));
     } finally {
       setChannelAction(false);
     }
@@ -483,9 +431,7 @@ export function SettingsPage({
             });
       setQr("qr" in result ? result.qr : result.data);
     } catch (reason) {
-      onToast(
-        reason instanceof Error ? reason.message : "QR code is not available.",
-      );
+      onToast(localizedError(reason, t("errors.qrUnavailable")));
     }
   };
 
@@ -503,13 +449,9 @@ export function SettingsPage({
       setRepositories((current) => [repository, ...current]);
       setRepositoryName("");
       setRepositoryPath("");
-      onToast("Repository configured");
+      onToast(t("toasts.repositoryConfigured"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Repository could not be configured.",
-      );
+      onToast(localizedError(reason, t("errors.repositoryCreate")));
     } finally {
       setChannelAction(false);
     }
@@ -520,33 +462,22 @@ export function SettingsPage({
     if (
       aiMode === "safe_auto" &&
       !(await onConfirm({
-        title: "Enable Auto-reply?",
-        description:
-          "Auto-reply remains blocked unless the explicit send policy is enabled.",
-        confirmLabel: "Enable Auto-reply",
+        title: t("confirmations.enableAutoReplyTitle"),
+        description: t("confirmations.enableAutoReplyDescription"),
+        confirmLabel: t("confirmations.enableAutoReplyConfirm"),
       }))
     )
       return;
     setAiSaving(true);
     try {
       const result = await saveLiveConversationAiPolicy(workspaceId, aiMode);
-      if (result.updatedCount === 0)
-        onToast("No live conversations were updated.");
+      if (result.updatedCount === 0) onToast(t("toasts.noLiveConversations"));
       else {
-        onToast(
-          "AI mode saved for " +
-            result.updatedCount +
-            " live conversation" +
-            (result.updatedCount === 1 ? "" : "s"),
-        );
+        onToast(t("toasts.aiModeSaved", { count: result.updatedCount }));
         await loadSettingsData();
       }
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "AI behavior could not be saved.",
-      );
+      onToast(localizedError(reason, t("errors.aiSave")));
     } finally {
       setAiSaving(false);
     }
@@ -557,24 +488,19 @@ export function SettingsPage({
     if (
       aiPolicy.safeAutoSendEnabled &&
       !(await onConfirm({
-        title: "Enable automatic replies?",
-        description:
-          "Only configured routes with relevant published knowledge can send replies.",
-        confirmLabel: "Enable automatic replies",
+        title: t("confirmations.automaticRepliesTitle"),
+        description: t("confirmations.automaticRepliesDescription"),
+        confirmLabel: t("confirmations.automaticRepliesConfirm"),
       }))
     )
       return;
     setAiPolicySaving(true);
     try {
       await saveLiveWorkspaceAiPolicy(workspaceId, aiPolicy);
-      onToast("Workspace AI routing saved");
+      onToast(t("toasts.workspaceAiRoutingSaved"));
       await loadSettingsData();
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Workspace AI routing could not be saved.",
-      );
+      onToast(localizedError(reason, t("errors.workspaceAiSave")));
     } finally {
       setAiPolicySaving(false);
     }
@@ -602,11 +528,7 @@ export function SettingsPage({
       const { oauthUrl } = await startLiveGoogleOAuth(workspaceId);
       window.location.assign(oauthUrl);
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Google OAuth is not configured.",
-      );
+      onToast(localizedError(reason, t("errors.googleOAuth")));
     } finally {
       setGoogleAction(null);
     }
@@ -627,13 +549,9 @@ export function SettingsPage({
       setGoogleConnections((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
-      onToast("Google calendar selection saved");
+      onToast(t("toasts.googleCalendarSelectionSaved"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Google calendar selection could not be saved.",
-      );
+      onToast(localizedError(reason, t("errors.googleCalendarSave")));
     } finally {
       setGoogleAction(null);
     }
@@ -643,9 +561,11 @@ export function SettingsPage({
     if (!workspaceId) return;
     if (
       !(await onConfirm({
-        title: "Disconnect Google account?",
-        description: `Disconnect ${connection.accountEmail ?? "this Google account"}? Its server-side tokens will be removed.`,
-        confirmLabel: "Disconnect",
+        title: t("confirmations.disconnectGoogleTitle"),
+        description: t("confirmations.disconnectGoogleDescription", {
+          account: connection.accountEmail ?? t("google.account"),
+        }),
+        confirmLabel: t("confirmations.disconnectLabel"),
         destructive: true,
       }))
     )
@@ -659,13 +579,9 @@ export function SettingsPage({
       setGoogleConnections((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
-      onToast("Google account disconnected");
+      onToast(t("toasts.googleAccountDisconnected"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Google account could not be disconnected.",
-      );
+      onToast(localizedError(reason, t("errors.googleDisconnect")));
     } finally {
       setGoogleAction(null);
     }
@@ -678,11 +594,9 @@ export function SettingsPage({
       const parsed = JSON.parse(mcpHeaders || "{}");
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
         headers = parsed;
-      else throw new Error("Headers must be a JSON object.");
+      else throw new Error("invalid_mcp_headers");
     } catch (error) {
-      onToast(
-        error instanceof Error ? error.message : "Headers JSON is invalid.",
-      );
+      onToast(localizedError(error, t("errors.mcpHeadersInvalid")));
       return;
     }
     setMcpAction("create");
@@ -698,13 +612,9 @@ export function SettingsPage({
       setMcpName("");
       setMcpDescription("");
       setMcpUrl("");
-      onToast("MCP plugin connected. Select tools before using it.");
+      onToast(t("toasts.mcpConnected"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "MCP plugin could not be connected.",
-      );
+      onToast(localizedError(reason, t("errors.mcpConnect")));
     } finally {
       setMcpAction(null);
     }
@@ -718,13 +628,9 @@ export function SettingsPage({
       setMcpConnections((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
-      onToast(
-        `Discovered ${updated.tools.length} MCP tools. None were enabled automatically.`,
-      );
+      onToast(t("toasts.mcpToolsDiscovered", { count: updated.tools.length }));
     } catch (reason) {
-      onToast(
-        reason instanceof Error ? reason.message : "MCP plugin test failed.",
-      );
+      onToast(localizedError(reason, t("errors.mcpTest")));
     } finally {
       setMcpAction(null);
     }
@@ -737,10 +643,9 @@ export function SettingsPage({
     if (!workspaceId) return;
     if (update.writeModes?.length && !connection.writeModes.length) {
       const confirmed = await onConfirm({
-        title: "Allow MCP writes?",
-        description:
-          "Copilot may alter the connected system before showing a draft. Auto-reply may alter it and respond without human review. Generic or SQL tools can have broad access.",
-        confirmLabel: "Allow writes",
+        title: t("confirmations.allowMcpWritesTitle"),
+        description: t("confirmations.allowMcpWritesDescription"),
+        confirmLabel: t("confirmations.allowWrites"),
         destructive: true,
       });
       if (!confirmed) return;
@@ -762,11 +667,7 @@ export function SettingsPage({
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "MCP plugin settings could not be saved.",
-      );
+      onToast(localizedError(reason, t("errors.mcpSave")));
     } finally {
       setMcpAction(null);
     }
@@ -776,10 +677,9 @@ export function SettingsPage({
     if (
       !workspaceId ||
       !(await onConfirm({
-        title: "Disconnect MCP plugin?",
-        description:
-          "This removes its server-side credentials and disables all tools.",
-        confirmLabel: "Disconnect",
+        title: t("confirmations.disconnectMcpTitle"),
+        description: t("confirmations.disconnectMcpDescription"),
+        confirmLabel: t("confirmations.disconnectLabel"),
         destructive: true,
       }))
     )
@@ -793,13 +693,9 @@ export function SettingsPage({
       setMcpConnections((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
-      onToast("MCP plugin disconnected");
+      onToast(t("toasts.mcpDisconnected"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "MCP plugin could not be disconnected.",
-      );
+      onToast(localizedError(reason, t("errors.mcpDisconnect")));
     } finally {
       setMcpAction(null);
     }
@@ -809,7 +705,7 @@ export function SettingsPage({
     if (!workspaceId || !selected?.channelId || !flow) return;
     const parsed = supportFlowSchema.safeParse(flow);
     if (!parsed.success) {
-      onToast(parsed.error.issues[0]?.message ?? "Flow is invalid.");
+      onToast(t("errors.flowInvalid"));
       return;
     }
     setFlowSaving(true);
@@ -820,13 +716,9 @@ export function SettingsPage({
         flow: parsed.data,
       });
       setFlow(parsed.data);
-      onToast("Support flow saved");
+      onToast(t("toasts.supportFlowSaved"));
     } catch (reason) {
-      onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Support flow could not be saved.",
-      );
+      onToast(localizedError(reason, t("errors.flowSave")));
     } finally {
       setFlowSaving(false);
     }
@@ -843,9 +735,9 @@ export function SettingsPage({
           ...current.nodes,
           {
             id,
-            title: "New step",
+            title: t("flow.newStep"),
             type: "message",
-            message: "Write the message this step should send.",
+            message: t("flow.newStepMessage"),
             options: [],
           },
         ],
@@ -890,12 +782,13 @@ export function SettingsPage({
     flow?.nodes.find((node) => node.id === flowNodeId) ?? flow?.nodes[0];
   const health = (() => {
     if (!selected || selected.state !== "open")
-      return { label: "Offline", tone: "offline" };
-    if (!selected.lastEventAt) return { label: "Connected", tone: "connected" };
+      return { label: t("whatsapp.healthOffline"), tone: "offline" };
+    if (!selected.lastEventAt)
+      return { label: t("whatsapp.healthConnected"), tone: "connected" };
     const age = Date.now() - new Date(selected.lastEventAt).getTime();
     return age > 90_000
-      ? { label: "Needs attention", tone: "warning" }
-      : { label: "Healthy", tone: "connected" };
+      ? { label: t("whatsapp.healthNeedsAttention"), tone: "warning" }
+      : { label: t("whatsapp.healthHealthy"), tone: "connected" };
   })();
 
   return (
@@ -909,7 +802,7 @@ export function SettingsPage({
         <div
           className="settings-nav"
           role="tablist"
-          aria-label="Workspace settings"
+          aria-label={t("ui.workspaceSettings")}
         >
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
@@ -939,16 +832,13 @@ export function SettingsPage({
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
-                    <h2>MCP plugins</h2>
-                    <p>
-                      Connect a trusted company MCP server. Tools are discovered
-                      for review and none are enabled automatically.
-                    </p>
+                    <h2>{t("mcp.title")}</h2>
+                    <p>{t("mcp.description")}</p>
                   </div>
                 </div>
                 <div className="settings-form-grid">
                   <label>
-                    Plugin name
+                    {t("mcp.pluginName")}
                     <input
                       value={mcpName}
                       onChange={(event) => setMcpName(event.target.value)}
@@ -956,7 +846,7 @@ export function SettingsPage({
                     />
                   </label>
                   <label>
-                    Purpose
+                    {t("mcp.purpose")}
                     <input
                       value={mcpDescription}
                       onChange={(event) =>
@@ -966,7 +856,7 @@ export function SettingsPage({
                     />
                   </label>
                   <label>
-                    MCP server URL
+                    {t("mcp.serverUrl")}
                     <input
                       value={mcpUrl}
                       onChange={(event) => setMcpUrl(event.target.value)}
@@ -975,27 +865,27 @@ export function SettingsPage({
                     />
                   </label>
                   <label>
-                    Authentication
+                    {t("mcp.authentication")}
                     <Select
                       value={mcpAuthMode}
                       onChange={(value) =>
                         setMcpAuthMode(value as McpConnection["authMode"])
                       }
                       options={[
-                        { value: "none", label: "None" },
-                        { value: "headers", label: "Secret headers" },
-                        { value: "oauth", label: "OAuth" },
+                        { value: "none", label: t("mcp.none") },
+                        { value: "headers", label: t("mcp.secretHeaders") },
+                        { value: "oauth", label: t("mcp.oauth") },
                       ]}
                     />
                   </label>
                   {mcpAuthMode === "headers" && (
                     <label className="settings-form-wide">
-                      Secret headers (JSON; stored encrypted)
+                      {t("mcp.secretHeadersStored")}
                       <textarea
                         value={mcpHeaders}
                         onChange={(event) => setMcpHeaders(event.target.value)}
                         rows={3}
-                        placeholder={'{"Authorization":"Bearer …"}'}
+                        placeholder={t("mcp.headersPlaceholder")}
                       />
                     </label>
                   )}
@@ -1006,14 +896,14 @@ export function SettingsPage({
                   disabled={mcpAction === "create" || !workspaceId}
                   onClick={() => void createMcp()}
                 >
-                  <Plus size={14} /> Add plugin
+                  <Plus size={14} /> {t("mcp.addPlugin")}
                 </button>
                 {settingsLoading ? (
-                  <LoadingState label="Loading MCP plugins…" />
+                  <LoadingState label={t("mcp.loading")} />
                 ) : !mcpConnections.length ? (
                   <EmptyState
-                    title="No MCP plugins connected"
-                    description="Connect your Zelo or another trusted workspace MCP server above."
+                    title={t("mcp.empty")}
+                    description={t("mcp.emptyDescription")}
                   />
                 ) : (
                   <div className="settings-list">
@@ -1029,12 +919,16 @@ export function SettingsPage({
                                 {connection.description || connection.serverUrl}
                               </span>
                               <small>
-                                Status: {connection.status} ·{" "}
-                                {connection.tools.length} discovered tools
+                                {t("mcp.status", {
+                                  status: mcpStatusLabel(connection.status),
+                                  count: connection.tools.length,
+                                })}
                               </small>
                               {connection.lastError && (
                                 <small role="alert">
-                                  {connection.lastError}
+                                  {t("errors.providerReported", {
+                                    detail: connection.lastError,
+                                  })}
                                 </small>
                               )}
                             </div>
@@ -1055,14 +949,15 @@ export function SettingsPage({
                                     )
                                     .catch((reason) =>
                                       onToast(
-                                        reason instanceof Error
-                                          ? reason.message
-                                          : "OAuth could not start.",
+                                        localizedError(
+                                          reason,
+                                          t("errors.oauthStart"),
+                                        ),
                                       ),
                                     )
                                 }
                               >
-                                Authorize OAuth
+                                {t("mcp.authorizeOauth")}
                               </button>
                             )}
                           {connection.tools.length > 0 && (
@@ -1085,12 +980,12 @@ export function SettingsPage({
                                   />
                                   {tool.name}{" "}
                                   {tool.readOnly
-                                    ? "(read)"
-                                    : "(write — confirm risk)"}
+                                    ? t("mcp.read")
+                                    : t("mcp.writeConfirm")}
                                 </label>
                               ))}
                               <label>
-                                Write access
+                                {t("mcp.writeAccess")}
                                 <Select
                                   value={
                                     connection.writeModes.length === 2
@@ -1099,15 +994,18 @@ export function SettingsPage({
                                   }
                                   disabled={mcpAction === connection.id}
                                   options={[
-                                    { value: "none", label: "None" },
+                                    { value: "none", label: t("mcp.none") },
                                     {
                                       value: "draft",
-                                      label: "Copilot / draft",
+                                      label: t("mcp.copilotDraft"),
                                     },
-                                    { value: "safe_auto", label: "Auto-reply" },
+                                    {
+                                      value: "safe_auto",
+                                      label: t("mcp.autoReply"),
+                                    },
                                     {
                                       value: "both",
-                                      label: "Copilot and Auto-reply",
+                                      label: t("mcp.copilotAutoReply"),
                                     },
                                   ]}
                                   onChange={(value) => {
@@ -1131,7 +1029,7 @@ export function SettingsPage({
                               disabled={mcpAction === connection.id}
                               onClick={() => void testMcp(connection)}
                             >
-                              <RefreshCw size={14} /> Test / rediscover
+                              <RefreshCw size={14} /> {t("mcp.test")}
                             </button>
                             <button
                               className="button button-danger"
@@ -1139,7 +1037,7 @@ export function SettingsPage({
                               disabled={mcpAction === connection.id}
                               onClick={() => void disconnectMcp(connection)}
                             >
-                              <Trash2 size={14} /> Disconnect
+                              <Trash2 size={14} /> {t("mcp.disconnect")}
                             </button>
                           </div>
                         </div>
@@ -1151,11 +1049,8 @@ export function SettingsPage({
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
-                    <h2>WhatsApp connection</h2>
-                    <p>
-                      Live state from Whatsmiau. No sample customer or phone is
-                      displayed.
-                    </p>
+                    <h2>{t("whatsapp.title")}</h2>
+                    <p>{t("whatsapp.description")}</p>
                   </div>
                   <span className={"connection-pill " + health.tone}>
                     <span className="live-dot" /> {health.label}
@@ -1170,7 +1065,7 @@ export function SettingsPage({
                       type="button"
                       onClick={() => void refresh()}
                     >
-                      Retry
+                      {t("ui.retry")}
                     </button>
                   </div>
                 )}
@@ -1178,16 +1073,13 @@ export function SettingsPage({
                   ["qr-code", "connecting"].includes(selected.state) && (
                     <div className="inline-empty" role="status">
                       <RefreshCw size={16} />
-                      <span>
-                        Checking WhatsApp connection… This screen updates
-                        automatically after you scan the QR code.
-                      </span>
+                      <span>{t("whatsapp.checking")}</span>
                     </div>
                   )}
                 {!loading && !instances.length && (
                   <EmptyState
-                    title="No WhatsApp instances"
-                    description="Create an instance on the server, then pair your WhatsApp Business number."
+                    title={t("whatsapp.noInstances")}
+                    description={t("whatsapp.noInstancesDescription")}
                   />
                 )}
                 {selected && (
@@ -1197,18 +1089,26 @@ export function SettingsPage({
                       <div>
                         <strong>{selected.instanceName}</strong>
                         <span>
-                          {selected.phoneNumber ?? "Phone not reported"} ·
-                          Whatsmiau
+                          {selected.phoneNumber ??
+                            t("whatsapp.phoneNotReported")}{" "}
+                          ·{t("whatsapp.provider")}
                         </span>
                         <small>
-                          Provider state: {selected.state} ·{" "}
+                          {t("whatsapp.providerState", {
+                            state: providerStateLabel(selected.state),
+                          })}{" "}
+                          ·{" "}
                           {selected.lastEventAt
-                            ? `Last event ${formatDate(selected.lastEventAt)}`
-                            : "No webhook event received yet"}
+                            ? t("whatsapp.lastEvent", {
+                                date: formatDate(selected.lastEventAt),
+                              })
+                            : t("whatsapp.noWebhook")}
                         </small>
                         {selected.historySyncComplete === false && (
                           <small className="history-sync-status">
-                            Syncing history {selected.historySyncProgress ?? 0}%
+                            {t("whatsapp.syncingHistory", {
+                              progress: selected.historySyncProgress ?? 0,
+                            })}
                           </small>
                         )}
                       </div>
@@ -1220,7 +1120,7 @@ export function SettingsPage({
                         disabled={loading || channelAction}
                         onClick={() => void refresh()}
                       >
-                        <RefreshCw size={14} /> Refresh
+                        <RefreshCw size={14} /> {t("ui.refresh")}
                       </button>
                       {selected.state === "open" ? (
                         <button
@@ -1229,7 +1129,7 @@ export function SettingsPage({
                           disabled={channelAction}
                           onClick={() => void disconnect()}
                         >
-                          Disconnect
+                          {t("whatsapp.disconnect")}
                         </button>
                       ) : (
                         <button
@@ -1238,7 +1138,7 @@ export function SettingsPage({
                           disabled={channelAction}
                           onClick={() => void connect()}
                         >
-                          Connect
+                          {t("whatsapp.connect")}
                         </button>
                       )}
                     </div>
@@ -1250,13 +1150,11 @@ export function SettingsPage({
                       <img
                         className="qr-image"
                         src={qr}
-                        alt="WhatsApp pairing QR code"
+                        alt={t("whatsapp.qrAlt")}
                       />
                       <div>
-                        <strong>Scan this QR code</strong>
-                        <p>
-                          Keep this screen open while WhatsApp Business pairs.
-                        </p>
+                        <strong>{t("whatsapp.scanQr")}</strong>
+                        <p>{t("whatsapp.scanDescription")}</p>
                       </div>
                     </div>
                   </div>
@@ -1268,8 +1166,8 @@ export function SettingsPage({
                         <QrCode size={34} />
                       </div>
                       <div>
-                        <strong>Pair this number</strong>
-                        <p>Generate a fresh QR code from the provider.</p>
+                        <strong>{t("whatsapp.pairNumber")}</strong>
+                        <p>{t("whatsapp.generateDescription")}</p>
                       </div>
                     </div>
                     <button
@@ -1278,7 +1176,7 @@ export function SettingsPage({
                       disabled={channelAction}
                       onClick={() => void loadQr()}
                     >
-                      Generate QR <ChevronRight size={14} />
+                      {t("whatsapp.generateQr")} <ChevronRight size={14} />
                     </button>
                   </div>
                 )}
@@ -1286,16 +1184,13 @@ export function SettingsPage({
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
-                    <h2>Pair a new number</h2>
-                    <p>
-                      Create a server-side Whatsmiau instance without exposing
-                      its API key.
-                    </p>
+                    <h2>{t("whatsapp.pairNewNumber")}</h2>
+                    <p>{t("whatsapp.pairNewDescription")}</p>
                   </div>
                 </div>
                 <div className="settings-form-grid">
                   <label>
-                    Instance name
+                    {t("whatsapp.instanceName")}
                     <input
                       value={instanceName}
                       onChange={(event) => setInstanceName(event.target.value)}
@@ -1309,7 +1204,7 @@ export function SettingsPage({
                   disabled={channelAction || !instanceName.trim()}
                   onClick={() => void create()}
                 >
-                  Create instance
+                  {t("whatsapp.createInstance")}
                 </button>
               </section>
             </div>
@@ -1324,8 +1219,8 @@ export function SettingsPage({
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
-                    <h2>Google connections</h2>
-                    <p>Choose which calendars authorized actions can use.</p>
+                    <h2>{t("google.title")}</h2>
+                    <p>{t("google.description")}</p>
                   </div>
                   <button
                     className="button button-ghost button-small google-connect-button"
@@ -1333,7 +1228,7 @@ export function SettingsPage({
                     disabled={googleAction === "connect" || !workspaceId}
                     onClick={() => void connectGoogle()}
                   >
-                    <Plus size={13} /> Connect account
+                    <Plus size={13} /> {t("google.connect")}
                   </button>
                 </div>
                 {settingsError && (
@@ -1344,16 +1239,16 @@ export function SettingsPage({
                       type="button"
                       onClick={() => void loadSettingsData()}
                     >
-                      Retry
+                      {t("ui.retry")}
                     </button>
                   </div>
                 )}
                 {settingsLoading ? (
-                  <LoadingState label="Loading Google connections…" />
+                  <LoadingState label={t("google.loading")} />
                 ) : !googleConnections.length ? (
                   <EmptyState
-                    title="No Google accounts connected"
-                    description="Connect a Google account when OAuth credentials are configured for this server."
+                    title={t("google.empty")}
+                    description={t("google.emptyDescription")}
                   />
                 ) : (
                   <div className="settings-list">
@@ -1372,29 +1267,30 @@ export function SettingsPage({
                               <strong>
                                 {connection.accountName ??
                                   connection.accountEmail ??
-                                  "Google account"}
+                                  t("google.account")}
                               </strong>
                               <span>
                                 {connection.accountEmail ??
-                                  "Email not reported"}
+                                  t("google.emailNotReported")}
                               </span>
                               <small>
-                                {connection.status === "connected"
-                                  ? "Connected"
-                                  : connection.status}{" "}
-                                · {connection.calendars.length} calendar
-                                {connection.calendars.length === 1 ? "" : "s"}
+                                {googleStatusLabel(connection.status)}{" "}
+                                {t("google.calendarCount", {
+                                  count: connection.calendars.length,
+                                })}
                               </small>
                               {connection.lastError && (
                                 <small role="alert">
-                                  {connection.lastError}
+                                  {t("errors.providerReported", {
+                                    detail: connection.lastError,
+                                  })}
                                 </small>
                               )}
                             </div>
                           </div>
                           {connection.calendars.length > 0 && (
                             <fieldset className="connection-calendar-list">
-                              <legend>Available calendars</legend>
+                              <legend>{t("google.availableCalendars")}</legend>
                               {connection.calendars.map((calendar) => (
                                 <label
                                   className="connection-calendar-option"
@@ -1418,7 +1314,9 @@ export function SettingsPage({
                                   />
                                   <span>
                                     {calendar.summary}
-                                    {calendar.primary ? " (primary)" : ""}
+                                    {calendar.primary
+                                      ? t("google.primarySuffix")
+                                      : ""}
                                   </span>
                                 </label>
                               ))}
@@ -1431,7 +1329,7 @@ export function SettingsPage({
                               disabled={googleAction === connection.id}
                               onClick={() => void disconnectGoogle(connection)}
                             >
-                              <Trash2 size={13} /> Disconnect
+                              <Trash2 size={13} /> {t("google.disconnect")}
                             </button>
                           </div>
                         </div>
@@ -1466,12 +1364,8 @@ export function SettingsPage({
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
-                    <h2>AI behavior</h2>
-                    <p>
-                      Manage the mode stored on live conversations. This control
-                      never seeds a policy or pretends to update an empty
-                      workspace.
-                    </p>
+                    <h2>{t("ai.title")}</h2>
+                    <p>{t("ai.description")}</p>
                   </div>
                 </div>
                 {settingsError && (
@@ -1483,32 +1377,34 @@ export function SettingsPage({
                       type="button"
                       onClick={() => void loadSettingsData()}
                     >
-                      Retry
+                      {t("ui.retry")}
                     </button>
                   </div>
                 )}
                 {settingsLoading ? (
-                  <LoadingState label="Loading conversation policy…" />
+                  <LoadingState label={t("ai.loading")} />
                 ) : !settingsError && aiPolicy ? (
                   <>
                     <div className="policy-row">
                       <div>
-                        <strong>Apply mode to current conversations</strong>
+                        <strong>{t("ai.applyMode")}</strong>
                         <p>
-                          {aiPolicy.totalConversations} live conversation
-                          {aiPolicy.totalConversations === 1 ? "" : "s"} ·{" "}
-                          {aiPolicy.counts.off} off · {aiPolicy.counts.draft}{" "}
-                          drafts · {aiPolicy.counts.safe_auto} auto-reply
+                          {t("ai.modeSummary", {
+                            total: aiPolicy.totalConversations,
+                            off: aiPolicy.counts.off,
+                            drafts: aiPolicy.counts.draft,
+                            autoReply: aiPolicy.counts.safe_auto,
+                          })}
                         </p>
                       </div>
                       <Select
                         className="settings-inline-select"
-                        ariaLabel="AI mode for live conversations"
+                        ariaLabel={t("ai.modeForConversations")}
                         value={aiMode}
                         options={[
-                          { value: "draft", label: "Copilot" },
-                          { value: "safe_auto", label: "Auto-reply" },
-                          { value: "off", label: "Manual" },
+                          { value: "draft", label: t("ai.copilot") },
+                          { value: "safe_auto", label: t("ai.autoReply") },
+                          { value: "off", label: t("ai.manual") },
                         ]}
                         disabled={aiSaving}
                         onChange={(value) => setAiMode(value as AiMode)}
@@ -1516,11 +1412,7 @@ export function SettingsPage({
                     </div>
                     <div className="settings-note">
                       <Sparkles size={14} />
-                      <span>
-                        The mode is per conversation. The routing rules below
-                        are workspace-wide and apply to every new inbound
-                        message.
-                      </span>
+                      <span>{t("ai.modeNote")}</span>
                     </div>
                     <button
                       className="button button-primary"
@@ -1529,28 +1421,28 @@ export function SettingsPage({
                       onClick={() => void saveAiPolicy()}
                     >
                       <Save size={14} />{" "}
-                      {aiSaving ? "Saving…" : "Save conversation policy"}
+                      {aiSaving
+                        ? t("ui.saving")
+                        : t("ai.saveConversationPolicy")}
                     </button>
                     <div className="settings-section-header settings-subsection-header">
                       <div>
-                        <h3>AI triage routing</h3>
-                        <p>
-                          The company decides what the AI does for each type of
-                          situation. A knowledge route without a relevant
-                          published article falls back to human escalation.
-                        </p>
+                        <h3>{t("ai.triageTitle")}</h3>
+                        <p>{t("ai.triageDescription")}</p>
                       </div>
                     </div>
                     <div className="automation-route-grid">
                       {triageIntentValues.map((intent) => (
                         <label key={intent}>
-                          {triageIntentLabels[intent]}
+                          {triageIntentLabel(intent)}
                           <Select
-                            ariaLabel={`AI route for ${triageIntentLabels[intent]}`}
+                            ariaLabel={t("ai.routeFor", {
+                              intent: triageIntentLabel(intent),
+                            })}
                             value={aiPolicy.routes[intent]}
                             options={aiTriageRouteValues.map((route) => ({
                               value: route,
-                              label: triageRouteLabels[route],
+                              label: triageRouteLabel(route),
                             }))}
                             disabled={aiPolicySaving}
                             onChange={(value) =>
@@ -1563,13 +1455,13 @@ export function SettingsPage({
                         </label>
                       ))}
                       <label>
-                        Unknown or unmatched fallback
+                        {t("ai.fallback")}
                         <Select
-                          ariaLabel="AI fallback route"
+                          ariaLabel={t("ai.fallbackRoute")}
                           value={aiPolicy.fallbackRoute}
                           options={aiTriageRouteValues.map((route) => ({
                             value: route,
-                            label: triageRouteLabels[route],
+                            label: triageRouteLabel(route),
                           }))}
                           disabled={aiPolicySaving}
                           onChange={(value) =>
@@ -1587,19 +1479,19 @@ export function SettingsPage({
                     </div>
                     <div className="settings-form-grid automation-toggles">
                       <label>
-                        MCP failure policy
+                        {t("ai.mcpFailurePolicy")}
                         <Select
-                          ariaLabel="MCP failure policy"
+                          ariaLabel={t("ai.mcpFailurePolicy")}
                           value={aiPolicy.mcpFailurePolicy}
                           options={[
-                            { value: "review", label: "Send to human review" },
+                            { value: "review", label: t("ai.sendToHuman") },
                             {
                               value: "generic_reply",
-                              label: "Generic published-knowledge reply",
+                              label: t("ai.genericKnowledgeReply"),
                             },
                             {
                               value: "retry_then_review",
-                              label: "Retry twice, then review",
+                              label: t("ai.retryThenReview"),
                             },
                           ]}
                           disabled={aiPolicySaving}
@@ -1632,10 +1524,10 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Enable safe auto-reply decisions
+                        {t("ai.enableSafeAuto")}
                       </label>
                       <label className="confidence-control">
-                        Minimum confidence for safe auto-reply
+                        {t("ai.minimumConfidence")}
                         <input
                           type="number"
                           min="0"
@@ -1675,7 +1567,7 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Require published knowledge for AI answers
+                        {t("ai.requireKnowledge")}
                       </label>
                       <label>
                         <input
@@ -1694,7 +1586,7 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Notify the company on human escalation
+                        {t("ai.notifyEscalation")}
                       </label>
                       <label>
                         <input
@@ -1712,7 +1604,7 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Notify the company immediately on bug reports
+                        {t("ai.notifyBug")}
                       </label>
                       <label>
                         <input
@@ -1730,7 +1622,7 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Start Codex automatically for confirmed bugs
+                        {t("ai.startCodexForBugs")}
                       </label>
                       <label>
                         <input
@@ -1748,7 +1640,7 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Allow deployment actions after explicit approval
+                        {t("ai.allowDeploy")}
                       </label>
                       <label>
                         <input
@@ -1766,15 +1658,12 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Allow automatic customer replies
+                        {t("ai.allowAutoReplies")}
                       </label>
                     </div>
                     <div className="safe-auto-intents">
-                      <strong>Safe auto-reply eligible intents</strong>
-                      <p>
-                        Only these intent types can send automatically when all
-                        other policy gates pass.
-                      </p>
+                      <strong>{t("ai.safeAutoIntents")}</strong>
+                      <p>{t("ai.safeAutoIntentsDescription")}</p>
                       <div className="settings-form-grid automation-toggles">
                         {triageIntentValues.map((intent) => (
                           <label key={intent}>
@@ -1784,7 +1673,9 @@ export function SettingsPage({
                                 intent,
                               )}
                               disabled={aiPolicySaving}
-                              aria-label={`Safe auto-reply intent ${triageIntentLabels[intent]}`}
+                              aria-label={t("ai.safeAutoIntent", {
+                                intent: triageIntentLabel(intent),
+                              })}
                               onChange={(event) =>
                                 setAiPolicy((current) => {
                                   if (!current) return current;
@@ -1802,24 +1693,20 @@ export function SettingsPage({
                                 })
                               }
                             />
-                            {triageIntentLabels[intent]}
+                            {triageIntentLabel(intent)}
                           </label>
                         ))}
                       </div>
                     </div>
                     <div className="settings-section-header settings-subsection-header">
                       <div>
-                        <h3>Workspace AI autonomy</h3>
-                        <p>
-                          Each workspace chooses the channels, integrations and
-                          capabilities available to its AI. Sensitive actions
-                          always remain behind human approval.
-                        </p>
+                        <h3>{t("ai.autonomyTitle")}</h3>
+                        <p>{t("ai.autonomyDescription")}</p>
                       </div>
                     </div>
                     <div className="settings-form-grid automation-toggles">
                       <div>
-                        <strong>Allowed channels</strong>
+                        <strong>{t("ai.allowedChannels")}</strong>
                         {aiPolicyChannelValues.map((channel) => (
                           <label key={channel}>
                             <input
@@ -1836,12 +1723,12 @@ export function SettingsPage({
                                 )
                               }
                             />
-                            {aiPolicyChannelLabels[channel]}
+                            {aiPolicyChannelLabel(channel)}
                           </label>
                         ))}
                       </div>
                       <div>
-                        <strong>Allowed integrations</strong>
+                        <strong>{t("ai.allowedIntegrations")}</strong>
                         {aiPolicyIntegrationValues.map((integration) => (
                           <label key={integration}>
                             <input
@@ -1858,12 +1745,12 @@ export function SettingsPage({
                                 )
                               }
                             />
-                            {aiPolicyIntegrationLabels[integration]}
+                            {aiPolicyIntegrationLabel(integration)}
                           </label>
                         ))}
                       </div>
                       <div>
-                        <strong>Allowed AI actions</strong>
+                        <strong>{t("ai.allowedActions")}</strong>
                         {aiPolicyActionValues.map((action) => (
                           <label key={action}>
                             <input
@@ -1878,16 +1765,16 @@ export function SettingsPage({
                                 )
                               }
                             />
-                            {aiPolicyActionLabels[action]}
+                            {aiPolicyActionLabel(action)}
                           </label>
                         ))}
                       </div>
                       <div>
-                        <strong>Human approval required</strong>
+                        <strong>{t("ai.humanApprovalRequired")}</strong>
                         {aiPolicy.humanApprovalActions.map((action) => (
                           <label key={action}>
                             <input type="checkbox" checked disabled readOnly />
-                            {aiPolicyActionLabels[action]}
+                            {aiPolicyActionLabel(action)}
                           </label>
                         ))}
                       </div>
@@ -1898,7 +1785,7 @@ export function SettingsPage({
                       disabled={aiPolicySaving}
                       onClick={() => void saveAutomationPolicy()}
                     >
-                      <Save size={14} /> Save AI triage rules
+                      <Save size={14} /> {t("ai.saveTriageRules")}
                     </button>
                   </>
                 ) : null}
@@ -1915,26 +1802,20 @@ export function SettingsPage({
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
-                    <h2>Support flow</h2>
-                    <p>
-                      Build the first WhatsApp steps visually. Mend sends the
-                      menu and follows the customer&apos;s choice before AI or a
-                      human takes over.
-                    </p>
+                    <h2>{t("flow.title")}</h2>
+                    <p>{t("flow.description")}</p>
                   </div>
                   <span className="section-count">
-                    {flow?.nodes.length ?? 0} steps
+                    {t("flow.stepsCount", { count: flow?.nodes.length ?? 0 })}
                   </span>
                 </div>
                 {!workspaceId || !selected?.channelId ? (
                   <div className="inline-empty">
                     <MessageCircle size={16} />
-                    <span>
-                      Connect a WhatsApp number before configuring its flow.
-                    </span>
+                    <span>{t("flow.connectFirst")}</span>
                   </div>
                 ) : settingsLoading || !flow ? (
-                  <LoadingState label="Loading support flow..." />
+                  <LoadingState label={t("flow.loading")} />
                 ) : (
                   <>
                     <div className="flow-settings-row">
@@ -1950,25 +1831,23 @@ export function SettingsPage({
                           }
                         />
                         <span>
-                          <strong>Enable this flow</strong>
-                          <small>
-                            When enabled, it runs before AI triage on new chats.
-                          </small>
+                          <strong>{t("flow.enable")}</strong>
+                          <small>{t("flow.enableDescription")}</small>
                         </span>
                       </label>
                       <label>
-                        Start flow when
+                        {t("flow.startWhen")}
                         <Select
-                          ariaLabel="Flow trigger"
+                          ariaLabel={t("flow.trigger")}
                           value={flow.trigger.type}
                           options={[
                             {
                               value: "first_message",
-                              label: "A new chat starts",
+                              label: t("flow.firstMessage"),
                             },
                             {
                               value: "keywords",
-                              label: "A keyword is detected",
+                              label: t("flow.keywordDetected"),
                             },
                           ]}
                           onChange={(value) =>
@@ -1985,7 +1864,7 @@ export function SettingsPage({
                     </div>
                     {flow.trigger.type === "keywords" && (
                       <label className="flow-keywords-field">
-                        Keywords
+                        {t("flow.keywords")}
                         <input
                           value={flow.trigger.keywords.join(", ")}
                           onChange={(event) =>
@@ -2000,19 +1879,22 @@ export function SettingsPage({
                               },
                             }))
                           }
-                          placeholder="preço, pedido, ajuda"
+                          placeholder={t("flow.keywordsPlaceholder")}
                         />
-                        <small>Separate keywords with commas.</small>
+                        <small>{t("flow.keywordsHelp")}</small>
                       </label>
                     )}
                     <div className="flow-builder">
-                      <aside className="flow-node-list" aria-label="Flow steps">
+                      <aside
+                        className="flow-node-list"
+                        aria-label={t("flow.steps")}
+                      >
                         <div className="flow-node-list-header">
-                          <strong>Steps</strong>
+                          <strong>{t("flow.steps")}</strong>
                           <button
                             className="icon-button subtle"
                             type="button"
-                            aria-label="Add flow step"
+                            aria-label={t("flow.addStep")}
                             onClick={addFlowNode}
                           >
                             <Plus size={15} />
@@ -2029,10 +1911,12 @@ export function SettingsPage({
                             <strong>{node.title}</strong>
                             <small>
                               {node.type === "menu"
-                                ? `${node.options.length} options`
+                                ? t("flow.optionsCount", {
+                                    count: node.options.length,
+                                  })
                                 : node.type === "handoff"
-                                  ? "Human handoff"
-                                  : "Message"}
+                                  ? t("flow.humanHandoff")
+                                  : t("flow.message")}
                             </small>
                           </button>
                         ))}
@@ -2041,7 +1925,9 @@ export function SettingsPage({
                         <div className="flow-node-editor">
                           <div className="flow-node-editor-header">
                             <div>
-                              <span className="eyebrow">Selected step</span>
+                              <span className="eyebrow">
+                                {t("flow.selectedStep")}
+                              </span>
                               <h3>{selectedFlowNode.title}</h3>
                             </div>
                             {flow.nodes.length > 1 && (
@@ -2065,13 +1951,13 @@ export function SettingsPage({
                                   setFlowNodeId(undefined);
                                 }}
                               >
-                                <Trash2 size={13} /> Remove step
+                                <Trash2 size={13} /> {t("flow.removeStep")}
                               </button>
                             )}
                           </div>
                           <div className="settings-form-grid flow-node-fields">
                             <label>
-                              Step name
+                              {t("flow.stepName")}
                               <input
                                 value={selectedFlowNode.title}
                                 onChange={(event) =>
@@ -2087,16 +1973,19 @@ export function SettingsPage({
                               />
                             </label>
                             <label>
-                              Step type
+                              {t("flow.stepType")}
                               <Select
-                                ariaLabel="Flow step type"
+                                ariaLabel={t("flow.stepType")}
                                 value={selectedFlowNode.type}
                                 options={[
-                                  { value: "menu", label: "Menu with choices" },
-                                  { value: "message", label: "Send a message" },
+                                  { value: "menu", label: t("flow.menu") },
+                                  {
+                                    value: "message",
+                                    label: t("flow.sendMessage"),
+                                  },
                                   {
                                     value: "handoff",
-                                    label: "Hand off to a human",
+                                    label: t("flow.handOff"),
                                   },
                                 ]}
                                 onChange={(value) =>
@@ -2123,7 +2012,7 @@ export function SettingsPage({
                             </label>
                           </div>
                           <label>
-                            Message
+                            {t("flow.message")}
                             <textarea
                               value={selectedFlowNode.message}
                               onChange={(event) =>
@@ -2137,18 +2026,15 @@ export function SettingsPage({
                                 }))
                               }
                               rows={4}
-                              placeholder="What should the customer see?"
+                              placeholder={t("flow.messagePlaceholder")}
                             />
                           </label>
                           {selectedFlowNode.type === "menu" && (
                             <div className="flow-options-editor">
                               <div className="flow-options-header">
                                 <div>
-                                  <strong>Choices</strong>
-                                  <small>
-                                    Use up to 3 buttons or a list for more
-                                    choices.
-                                  </small>
+                                  <strong>{t("flow.choices")}</strong>
+                                  <small>{t("flow.choicesHelp")}</small>
                                 </div>
                                 <button
                                   className="button button-ghost"
@@ -2167,7 +2053,7 @@ export function SettingsPage({
                                                 ...node.options,
                                                 {
                                                   id: `option-${Date.now()}`,
-                                                  label: "New choice",
+                                                  label: t("flow.newChoice"),
                                                 },
                                               ],
                                             }
@@ -2176,7 +2062,7 @@ export function SettingsPage({
                                     }))
                                   }
                                 >
-                                  <Plus size={14} /> Add choice
+                                  <Plus size={14} /> {t("flow.addChoice")}
                                 </button>
                               </div>
                               {selectedFlowNode.options.map((option) => (
@@ -2216,7 +2102,7 @@ export function SettingsPage({
                                     options={[
                                       {
                                         value: "",
-                                        label: "End or wait for human",
+                                        label: t("flow.endOrHuman"),
                                       },
                                       ...flow.nodes
                                         .filter(
@@ -2261,7 +2147,9 @@ export function SettingsPage({
                                   <button
                                     className="icon-button subtle"
                                     type="button"
-                                    aria-label={`Remove choice ${option.label}`}
+                                    aria-label={t("flow.removeChoice", {
+                                      label: option.label,
+                                    })}
                                     disabled={
                                       selectedFlowNode.options.length <= 1
                                     }
@@ -2298,7 +2186,7 @@ export function SettingsPage({
                       onClick={() => void saveFlow()}
                     >
                       <Save size={14} />{" "}
-                      {flowSaving ? "Saving..." : "Save support flow"}
+                      {flowSaving ? t("ui.saving") : t("flow.save")}
                     </button>
                   </>
                 )}
@@ -2315,11 +2203,8 @@ export function SettingsPage({
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
-                    <h2>Repositories</h2>
-                    <p>
-                      Register a local repository before starting a controlled
-                      Codex run.
-                    </p>
+                    <h2>{t("repositories.title")}</h2>
+                    <p>{t("repositories.description")}</p>
                   </div>
                 </div>
                 {repositories.map((repository) => (
@@ -2336,12 +2221,12 @@ export function SettingsPage({
                 {!repositories.length && (
                   <div className="inline-empty">
                     <GitBranch size={16} />
-                    <span>No repositories configured for this workspace.</span>
+                    <span>{t("repositories.empty")}</span>
                   </div>
                 )}
                 <div className="settings-form-grid">
                   <label>
-                    Name
+                    {t("repositories.name")}
                     <input
                       value={repositoryName}
                       onChange={(event) =>
@@ -2351,7 +2236,7 @@ export function SettingsPage({
                     />
                   </label>
                   <label>
-                    Local path
+                    {t("repositories.localPath")}
                     <input
                       value={repositoryPath}
                       onChange={(event) =>
@@ -2361,7 +2246,7 @@ export function SettingsPage({
                     />
                   </label>
                   <label>
-                    Default branch
+                    {t("repositories.defaultBranch")}
                     <input
                       value={repositoryBranch}
                       onChange={(event) =>
@@ -2382,7 +2267,7 @@ export function SettingsPage({
                   }
                   onClick={() => void createRepository()}
                 >
-                  <Plus size={14} /> Add repository
+                  <Plus size={14} /> {t("repositories.add")}
                 </button>
               </section>
             </div>
@@ -2397,14 +2282,11 @@ export function SettingsPage({
               <section className="settings-section">
                 <div className="settings-section-header">
                   <div>
-                    <h2>Audit log</h2>
-                    <p>
-                      Immutable workspace events returned by the authenticated
-                      Supabase session.
-                    </p>
+                    <h2>{t("audit.title")}</h2>
+                    <p>{t("audit.description")}</p>
                   </div>
                   <span className="section-count">
-                    {auditLog.length} events
+                    {t("audit.eventsCount", { count: auditLog.length })}
                   </span>
                 </div>
                 {settingsError && (
@@ -2416,20 +2298,23 @@ export function SettingsPage({
                       type="button"
                       onClick={() => void loadSettingsData()}
                     >
-                      Retry
+                      {t("ui.retry")}
                     </button>
                   </div>
                 )}
                 {settingsLoading ? (
-                  <LoadingState label="Loading audit log…" />
+                  <LoadingState label={t("audit.loading")} />
                 ) : !settingsError && auditLog.length === 0 ? (
                   <EmptyState
-                    title="No audit events yet"
-                    description="Actions will appear here after live workspace activity. No sample events are displayed."
+                    title={t("audit.empty")}
+                    description={t("audit.emptyDescription")}
                   />
                 ) : (
                   !settingsError && (
-                    <div className="audit-list" aria-label="Live audit events">
+                    <div
+                      className="audit-list"
+                      aria-label={t("audit.liveEvents")}
+                    >
                       {auditLog.map((event) => (
                         <div className="audit-row" key={event.id}>
                           <div className="audit-row-main">
@@ -2445,7 +2330,7 @@ export function SettingsPage({
                             <span>
                               {event.actor_user_id
                                 ? event.actor_user_id.slice(0, 8)
-                                : "System"}
+                                : t("audit.system")}
                             </span>
                             <time dateTime={event.created_at}>
                               {formatDate(event.created_at)}

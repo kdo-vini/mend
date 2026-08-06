@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorState, LoadingState } from "./shared/ui/ResourceState";
 import { useConfirmation } from "./shared/ui/useConfirmation";
@@ -18,6 +19,7 @@ import type {
 import { supabase } from "./lib/supabase";
 import { normalizeLocale, type SupportedLocale } from "./i18n/resources";
 import { currentInterfaceLanguage } from "./i18n/preferences";
+import { localizedError } from "./shared/ui/localizedError";
 import {
   enableNativePush,
   dismissWorkspaceNotification,
@@ -167,6 +169,7 @@ function mergeConversationSnapshot(
 }
 
 function App() {
+  const { t } = useTranslation("common");
   const [demoMode] = useState(() => isDemoModeRequested() || !isLiveConfigured);
   const [conversations, setConversations] = useState<Conversation[]>(
     demoMode ? seedConversations : [],
@@ -184,7 +187,7 @@ function App() {
   );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [operationalLanguage, setOperationalLanguage] =
-    useState<SupportedLocale>("en-US");
+    useState<SupportedLocale>("pt-BR");
   const [workspaceOptions, setWorkspaceOptions] = useState<
     Array<{ id: string; name: string; defaultLanguage?: SupportedLocale }>
   >(demoMode ? [{ id: "demo", name: "Techne" }] : []);
@@ -210,7 +213,7 @@ function App() {
   );
   const [operatorIdentity, setOperatorIdentity] = useState({
     id: "",
-    name: "Current operator",
+    name: "",
     email: "",
   });
   const [workspaceMemberNames, setWorkspaceMemberNames] = useState<
@@ -291,7 +294,7 @@ function App() {
       const name =
         typeof metadataName === "string" && metadataName.trim()
           ? metadataName.trim()
-          : (data.user.email?.split("@")[0] ?? "Current operator");
+          : (data.user.email?.split("@")[0] ?? t("app.currentOperator"));
       setOperatorIdentity({
         id: data.user.id,
         name,
@@ -301,7 +304,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (demoMode || !workspaceId || !supabase) return;
@@ -314,7 +317,9 @@ function App() {
               members.map((member) => [
                 member.user_id,
                 member.display_name?.trim() ||
-                  `Workspace member ${member.user_id.slice(0, 8)}`,
+                  t("app.workspaceMember", {
+                    id: member.user_id.slice(0, 8),
+                  }),
               ]),
             ),
           );
@@ -325,16 +330,16 @@ function App() {
     return () => {
       active = false;
     };
-  }, [demoMode, workspaceId]);
+  }, [demoMode, t, workspaceId]);
 
   const assigneeOptions: AssigneeOption[] = demoMode
     ? [
-        { value: "Unassigned", label: "Unassigned" },
+        { value: "Unassigned", label: t("app.unassigned") },
         { value: "Marina", label: "Marina" },
         { value: "João", label: "João" },
       ]
     : [
-        { value: "Unassigned", label: "Unassigned" },
+        { value: "Unassigned", label: t("app.unassigned") },
         ...Object.entries(workspaceMemberNames).map(([userId, name]) => ({
           value: userId,
           label: userId === operatorIdentity.id ? operatorIdentity.name : name,
@@ -342,7 +347,9 @@ function App() {
       ];
   const assigneeLabel = (value: string) =>
     assigneeOptions.find((option) => option.value === value)?.label ??
-    (value === "Unassigned" ? value : `User ${value.slice(0, 8)}`);
+    (value === "Unassigned"
+      ? t("app.unassigned")
+      : t("app.user", { id: value.slice(0, 8) }));
 
   useEffect(() => {
     if (demoMode || localOperatorMode) return;
@@ -443,9 +450,7 @@ function App() {
                 .catch((error) => {
                   if (active)
                     setLiveDataError(
-                      error instanceof Error
-                        ? error.message
-                        : "Live workspace reconciliation failed.",
+                      localizedError(error, t("errors.liveReconciliation")),
                     );
                 });
             },
@@ -461,12 +466,12 @@ function App() {
         }
       } catch (error) {
         if (active) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : "The live workspace data could not be loaded.";
+          const message = localizedError(
+            error,
+            t("errors.liveDataUnavailable"),
+          );
           setLiveDataError(message);
-          setToast(`Live data unavailable: ${message}`);
+          setToast(t("toasts.liveDataUnavailable", { message }));
         }
       } finally {
         if (active && showLoading) setWorkspaceLoading(false);
@@ -482,9 +487,7 @@ function App() {
           .catch((error) => {
             if (active)
               setLiveDataError(
-                error instanceof Error
-                  ? error.message
-                  : "Live workspace reconciliation failed.",
+                localizedError(error, t("errors.liveReconciliation")),
               );
           });
       },
@@ -496,7 +499,7 @@ function App() {
       unsubscribe();
       realtimeFallback.stop();
     };
-  }, [demoMode, liveDataRetry, workspaceId]);
+  }, [demoMode, liveDataRetry, t, workspaceId]);
 
   useEffect(() => {
     if (demoMode || !mendApiBaseUrl) return;
@@ -525,13 +528,9 @@ function App() {
         await createLiveIssue({ workspaceId, ...input });
         setCreateIssueOpen(false);
         setLiveDataRetry((current) => current + 1);
-        setToast("Issue created in the live workspace");
+        setToast(t("toasts.issueCreatedLive"));
       } catch (error) {
-        setToast(
-          error instanceof Error
-            ? error.message
-            : "Issue could not be created.",
-        );
+        setToast(localizedError(error, t("errors.issueCreate")));
       }
       return;
     }
@@ -557,8 +556,8 @@ function App() {
       source: conversation ? "Conversation" : "Internal",
       summary: conversation
         ? conversation.lastMessage
-        : "Internal work item created from the workspace.",
-      impact: "Impact to be assessed during triage.",
+        : t("app.internalIssueSummary"),
+      impact: t("app.issueImpactPending"),
       updatedAt: "Just now",
       createdAt: "Just now",
       codexRuns: 0,
@@ -580,7 +579,7 @@ function App() {
     }
     setInspectorIssueId(issue.id);
     setCreateIssueOpen(false);
-    setToast(`${issue.identifier} created`);
+    setToast(t("toasts.issueCreated", { identifier: issue.identifier }));
   };
 
   const dismissNotification = async (notificationId: string) => {
@@ -592,11 +591,7 @@ function App() {
     try {
       await dismissWorkspaceNotification(supabase, workspaceId, notificationId);
     } catch (error) {
-      setToast(
-        error instanceof Error
-          ? error.message
-          : "Notification could not be dismissed.",
-      );
+      setToast(localizedError(error, t("errors.notificationDismiss")));
       setNotifications(previous);
     }
   };
@@ -608,11 +603,7 @@ function App() {
     try {
       await dismissWorkspaceNotifications(supabase, workspaceId);
     } catch (error) {
-      setToast(
-        error instanceof Error
-          ? error.message
-          : "Notifications could not be dismissed.",
-      );
+      setToast(localizedError(error, t("errors.notificationsDismiss")));
       setNotifications(previous);
     }
   };
@@ -624,19 +615,15 @@ function App() {
       setPushStatus(status);
       setToast(
         status === "enabled"
-          ? "Native notifications enabled"
+          ? t("navigation.nativeNotificationsEnabled")
           : status === "denied"
-            ? "Browser notifications are blocked"
+            ? t("toasts.browserNotificationsBlocked")
             : status === "unsupported"
-              ? "This browser does not support native notifications here"
-              : "Native notifications are not configured yet",
+              ? t("toasts.nativeNotificationsUnsupported")
+              : t("toasts.nativeNotificationsNotConfigured"),
       );
     } catch (error) {
-      setToast(
-        error instanceof Error
-          ? error.message
-          : "Native notifications could not be enabled.",
-      );
+      setToast(localizedError(error, t("errors.nativeNotificationsEnable")));
     }
   };
 
@@ -660,11 +647,7 @@ function App() {
             setIssues((current) =>
               current.map((item) => (item.id === issueId ? previous : item)),
             );
-          setToast(
-            error instanceof Error
-              ? error.message
-              : "Issue could not be updated.",
-          );
+          setToast(localizedError(error, t("errors.issueUpdate")));
         });
     }
     setIssues((current) =>
@@ -681,9 +664,11 @@ function App() {
     if (!issue) return;
     if (
       !(await requestConfirmation({
-        title: "Delete issue?",
-        description: `Delete ${issue.identifier}? This cannot be undone.`,
-        confirmLabel: "Delete issue",
+        title: t("confirmations.deleteIssueTitle"),
+        description: t("confirmations.deleteIssueDescription", {
+          identifier: issue.identifier,
+        }),
+        confirmLabel: t("confirmations.deleteIssueConfirm"),
         destructive: true,
       }))
     )
@@ -716,11 +701,9 @@ function App() {
         window.history.pushState({}, "", "/issues");
         window.dispatchEvent(new PopStateEvent("popstate"));
       }
-      setToast(`${issue.identifier} deleted`);
+      setToast(t("toasts.issueDeleted", { identifier: issue.identifier }));
     } catch (error) {
-      setToast(
-        error instanceof Error ? error.message : "Issue could not be deleted.",
-      );
+      setToast(localizedError(error, t("errors.issueDelete")));
     }
   };
 
@@ -789,14 +772,10 @@ function App() {
           ),
         );
       }
-      setToast(`${issue.identifier} resolved and customer notified`);
+      setToast(t("toasts.issueResolved", { identifier: issue.identifier }));
       return true;
     } catch (error) {
-      setToast(
-        error instanceof Error
-          ? `Resolution incomplete: ${error.message}`
-          : "Issue could not be resolved and notified.",
-      );
+      setToast(localizedError(error, t("errors.issueResolve")));
       setLiveDataRetry((current) => current + 1);
       return false;
     }
@@ -820,14 +799,12 @@ function App() {
         .then(() => {
           setRunDialogIssueId(null);
           setLiveDataRetry((current) => current + 1);
-          setToast(`Codex run queued for ${issue.identifier}`);
+          setToast(
+            t("toasts.codexRunQueued", { identifier: issue.identifier }),
+          );
         })
         .catch((error) =>
-          setToast(
-            error instanceof Error
-              ? error.message
-              : "Codex run could not be queued.",
-          ),
+          setToast(localizedError(error, t("errors.codexRunQueue"))),
         );
       return;
     }
@@ -840,14 +817,13 @@ function App() {
       progress: 8,
       startedAt: "Just now",
       duration: "00:00",
-      summary:
-        "Preparing an isolated workspace and assembling the issue context.",
+      summary: t("app.codexRunPreparing"),
       files: [],
       events: [
         {
           id: `event-${Date.now()}`,
           label: "run_started",
-          detail: "Run queued with a clean repository context",
+          detail: t("app.codexRunStartedDetail"),
           time: "Just now",
           tone: "accent",
         },
@@ -859,7 +835,7 @@ function App() {
       status: issue.status === "Triage" ? "In Progress" : issue.status,
     });
     setRunDialogIssueId(null);
-    setToast(`Codex run started for ${issue.identifier}`);
+    setToast(t("toasts.codexRunStarted", { identifier: issue.identifier }));
   };
 
   const updateRun = (
@@ -870,11 +846,7 @@ function App() {
       void updateLiveCodexRun({ workspaceId, runId, action })
         .then(() => setLiveDataRetry((current) => current + 1))
         .catch((error) =>
-          setToast(
-            error instanceof Error
-              ? error.message
-              : "Codex run could not be updated.",
-          ),
+          setToast(localizedError(error, t("errors.codexRunUpdate"))),
         );
     }
     const nextStatus: CodingRun["status"] =
@@ -900,14 +872,14 @@ function App() {
     );
     setToast(
       action === "cancel"
-        ? "Codex run canceled"
+        ? t("toasts.codexRunCanceled")
         : action === "approve"
-          ? "Codex result approved and committed locally"
+          ? t("toasts.codexResultApproved")
           : action === "publish"
-            ? "Codex branch published"
+            ? t("toasts.codexBranchPublished")
             : action === "deploy"
-              ? "Codex deployment started"
-              : "Codex result rejected",
+              ? t("toasts.codexDeploymentStarted")
+              : t("toasts.codexResultRejected"),
     );
   };
 
@@ -926,7 +898,7 @@ function App() {
         }
         onSignOut={() => {
           if (demoMode) {
-            setToast("Demo mode has no signed-in session");
+            setToast(t("toasts.demoNoSession"));
             return;
           }
           void supabase?.auth.signOut().then(() => window.location.reload());
@@ -952,8 +924,10 @@ function App() {
         {liveDataError && (
           <div className="live-data-error">
             <ErrorState
-              title="Live data unavailable"
-              description={`${liveDataError} No demo records are being shown.`}
+              title={t("errors.liveDataTitle")}
+              description={t("errors.liveDataDescription", {
+                message: liveDataError,
+              })}
               onRetry={() => setLiveDataRetry((current) => current + 1)}
             />
           </div>
@@ -967,7 +941,7 @@ function App() {
               initialLanguage={currentInterfaceLanguage()}
               onCreated={(workspace) => {
                 setWorkspaceId(workspace.id);
-                setOperationalLanguage("en-US");
+                setOperationalLanguage("pt-BR");
                 setWorkspaceOptions((current) => [
                   ...current.filter((item) => item.id !== workspace.id),
                   { id: workspace.id, name: workspace.name },
@@ -978,7 +952,7 @@ function App() {
           ) : (
             <WorkspaceRoutes
               inbox={
-                <FeatureBoundary label="Loading inbox…">
+                <FeatureBoundary label={t("states.loadingInbox")}>
                   <FeatureInboxPage
                     workspaceId={workspaceId}
                     conversations={conversations}
@@ -1004,7 +978,7 @@ function App() {
                 </FeatureBoundary>
               }
               issues={
-                <FeatureBoundary label="Loading issues…">
+                <FeatureBoundary label={t("states.loadingIssues")}>
                   <FeatureIssuesPage
                     issues={issues}
                     assigneeOptions={assigneeOptions}
@@ -1017,7 +991,7 @@ function App() {
                 </FeatureBoundary>
               }
               kanban={
-                <FeatureBoundary label="Loading Kanban…">
+                <FeatureBoundary label={t("states.loadingKanban")}>
                   <FeatureKanbanPage
                     workspaceId={workspaceId ?? ""}
                     currentUserId={operatorIdentity.id}
@@ -1059,7 +1033,7 @@ function App() {
                 />
               }
               runs={
-                <FeatureBoundary label="Loading Codex runs…">
+                <FeatureBoundary label={t("states.loadingCodexRuns")}>
                   <FeatureRunsPage
                     runs={runs}
                     onOpenIssue={setInspectorIssueId}
@@ -1070,7 +1044,7 @@ function App() {
                 </FeatureBoundary>
               }
               knowledge={
-                <FeatureBoundary label="Loading knowledge…">
+                <FeatureBoundary label={t("states.loadingKnowledge")}>
                   {demoMode ? (
                     <FeatureKnowledgePage />
                   ) : (
@@ -1082,7 +1056,7 @@ function App() {
                 </FeatureBoundary>
               }
               settings={
-                <FeatureBoundary label="Loading settings…">
+                <FeatureBoundary label={t("states.loadingSettings")}>
                   <FeatureSettingsPage
                     workspaceId={workspaceId}
                     onToast={setToast}
@@ -1100,7 +1074,7 @@ function App() {
                 />
               }
               fallback={
-                <FeatureBoundary label="Loading inbox…">
+                <FeatureBoundary label={t("states.loadingInbox")}>
                   <FeatureInboxPage
                     workspaceId={workspaceId}
                     conversations={conversations}
@@ -1176,9 +1150,9 @@ function App() {
             );
             if (!workspace || nextWorkspaceId === "demo") return;
             setWorkspaceId(workspace.id);
-            setOperationalLanguage(workspace.defaultLanguage ?? "en-US");
+            setOperationalLanguage(workspace.defaultLanguage ?? "pt-BR");
             setSelectedConversationId("");
-            setToast(`Switched to ${workspace.name}`);
+            setToast(t("toasts.workspaceSwitched", { name: workspace.name }));
           }}
         />
       )}

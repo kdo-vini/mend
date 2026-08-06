@@ -5,7 +5,7 @@ export const seedConversations: Conversation[] = [
     id: "conv-cliente-exemplo",
     chatType: "direct",
     name: "Cliente Exemplo",
-    company: "Workspace de demonstração",
+    company: "Espaço de demonstração",
     phone: "+55 11 90000-0000",
     initials: "CE",
     accent: "#7c91ff",
@@ -146,7 +146,7 @@ export const seedConversations: Conversation[] = [
         id: "m-rv-2",
         conversationId: "conv-rodrigo",
         direction: "outbound",
-        sender: "AI draft",
+        sender: "Rascunho de IA",
         text: "Vou verificar as opções de exportação disponíveis e já te retorno.",
         time: "13:30",
         type: "text",
@@ -254,8 +254,8 @@ export const seedIssues: Issue[] = [
       "O fechamento do caixa não conclui quando a loja tenta finalizar o último pedido do turno.",
     impact:
       "A operação não consegue encerrar o caixa e há risco de atraso no fechamento da loja.",
-    updatedAt: "3m ago",
-    createdAt: "Today, 13:58",
+    updatedAt: "há 3 min",
+    createdAt: "Hoje, 13:58",
     codexRuns: 1,
   },
   {
@@ -272,8 +272,8 @@ export const seedIssues: Issue[] = [
     source: "Conversation",
     summary: "Webhook de pagamento recebido sem refletir o status do pedido.",
     impact: "Pedidos pagos ficam retidos no fluxo até uma intervenção manual.",
-    updatedAt: "18m ago",
-    createdAt: "Today, 13:42",
+    updatedAt: "há 18 min",
+    createdAt: "Hoje, 13:42",
     codexRuns: 0,
   },
   {
@@ -291,14 +291,14 @@ export const seedIssues: Issue[] = [
     summary: "Adicionar agrupamento por vendedor na exportação de leads.",
     impact:
       "O time comercial precisa cruzar dados manualmente para acompanhar a performance.",
-    updatedAt: "42m ago",
-    createdAt: "Today, 13:29",
+    updatedAt: "há 42 min",
+    createdAt: "Hoje, 13:29",
     codexRuns: 0,
   },
   {
     id: "issue-21",
     identifier: "TEC-21",
-    title: "Revisar permissões do workspace",
+    title: "Revisar permissões do espaço de trabalho",
     type: "Task",
     priority: "Low",
     status: "Todo",
@@ -306,9 +306,9 @@ export const seedIssues: Issue[] = [
     labels: ["security", "internal"],
     source: "Internal",
     summary: "Auditar permissões de agentes e viewers nas rotas operacionais.",
-    impact: "Reduzir risco de exposição entre workspaces.",
-    updatedAt: "Yesterday",
-    createdAt: "Aug 02, 09:20",
+    impact: "Reduzir risco de exposição entre espaços de trabalho.",
+    updatedAt: "Ontem",
+    createdAt: "02 de ago., 09:20",
     codexRuns: 0,
   },
   {
@@ -326,8 +326,8 @@ export const seedIssues: Issue[] = [
     summary:
       "Convite para uma nova pessoa falhava em um dispositivo recém-configurado.",
     impact: "Usuários não conseguiam completar o primeiro acesso.",
-    updatedAt: "2h ago",
-    createdAt: "Aug 02, 11:45",
+    updatedAt: "há 2 h",
+    createdAt: "02 de ago., 11:45",
     codexRuns: 1,
   },
   {
@@ -342,8 +342,8 @@ export const seedIssues: Issue[] = [
     source: "Internal",
     summary: "Ajustar texto do estado de processamento.",
     impact: "Melhorar entendimento do cliente durante a confirmação.",
-    updatedAt: "Aug 01",
-    createdAt: "Aug 01, 15:42",
+    updatedAt: "01 de ago.",
+    createdAt: "01 de ago., 15:42",
     codexRuns: 0,
   },
 ];
@@ -399,7 +399,7 @@ export const seedRuns: CodingRun[] = [
     mode: "Implement fix",
     status: "Completed",
     progress: 100,
-    startedAt: "Yesterday, 16:04",
+    startedAt: "Ontem, 16:04",
     duration: "08:21",
     summary:
       "Corrigido o parsing do convite quando o dispositivo ainda não possui uma sessão local.",
@@ -439,7 +439,7 @@ export const seedRuns: CodingRun[] = [
     mode: "Investigate",
     status: "Failed",
     progress: 44,
-    startedAt: "Aug 01, 15:52",
+    startedAt: "01 de ago., 15:52",
     duration: "01:07",
     summary: "O runner não conseguiu acessar a pasta de trabalho configurada.",
     files: [],
@@ -447,7 +447,7 @@ export const seedRuns: CodingRun[] = [
       {
         id: "e-8",
         label: "run_failed",
-        detail: "Workspace path não encontrado",
+        detail: "Caminho do espaço de trabalho não encontrado",
         time: "15:53:07",
         tone: "danger",
       },
@@ -476,7 +476,7 @@ export const seedKnowledge: KnowledgeArticle[] = [
   {
     id: "kb-3",
     title: "Política de respostas automáticas",
-    category: "Support",
+    category: "Suporte",
     updatedAt: "Jul 29",
     excerpt:
       "Quando a IA pode responder com segurança e quando deve pedir ajuda humana.",

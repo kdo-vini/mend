@@ -52,13 +52,13 @@ export const resources = {
 
 export type SupportedLocale = keyof typeof resources;
 export const supportedLocales = [
-  "en-US",
   "pt-BR",
+  "en-US",
 ] as const satisfies readonly SupportedLocale[];
 
 export function normalizeLocale(value: unknown): SupportedLocale {
-  return String(value ?? "").toLowerCase() === "pt-br" ||
-    String(value ?? "").toLowerCase() === "pt"
-    ? "pt-BR"
-    : "en-US";
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return normalized === "en" || normalized === "en-us" ? "en-US" : "pt-BR";
 }

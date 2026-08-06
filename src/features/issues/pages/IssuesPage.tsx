@@ -88,7 +88,53 @@ export function IssuesPage({
   onEditIssue: (id: string) => void;
   onDeleteIssue: (id: string) => void;
 }) {
-  const { t } = useTranslation("issues");
+  const { t } = useTranslation(["issues", "common"]);
+  const statusLabel = (status: IssueStatus) =>
+    status === "Triage"
+      ? t("data.issueStatus.triage", { ns: "common" })
+      : status === "Backlog"
+        ? t("data.issueStatus.backlog", { ns: "common" })
+        : status === "Todo"
+          ? t("data.issueStatus.todo", { ns: "common" })
+          : status === "In Progress"
+            ? t("data.issueStatus.inProgress", { ns: "common" })
+            : status === "Review"
+              ? t("data.issueStatus.review", { ns: "common" })
+              : status === "Done"
+                ? t("data.issueStatus.done", { ns: "common" })
+                : t("data.issueStatus.canceled", { ns: "common" });
+  const priorityLabel = (priority: Priority) =>
+    priority === "Urgent"
+      ? t("data.priority.urgent", { ns: "common" })
+      : priority === "High"
+        ? t("data.priority.high", { ns: "common" })
+        : priority === "Medium"
+          ? t("data.priority.medium", { ns: "common" })
+          : priority === "Low"
+            ? t("data.priority.low", { ns: "common" })
+            : t("data.priority.noPriority", { ns: "common" });
+  const typeLabel = (type: IssueType) => {
+    switch (type) {
+      case "Production Bug":
+        return t("ui.types.productionBug");
+      case "Bug":
+        return t("ui.types.bug");
+      case "Incident":
+        return t("ui.types.incident");
+      case "Feature":
+        return t("ui.types.feature");
+      case "Task":
+        return t("ui.types.task");
+      case "Billing":
+        return t("ui.types.billing");
+      case "Commercial":
+        return t("ui.types.commercial");
+      case "Question":
+        return t("ui.types.question");
+      default:
+        return t("ui.types.other");
+    }
+  };
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<IssueStatus | "All">("All");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "All">("All");
@@ -168,7 +214,7 @@ export function IssuesPage({
             placeholder={t("ui.search")}
             aria-label={t("ui.search")}
           />
-          <kbd>⌘ K</kbd>
+          <kbd>{t("ui.shortcutCommand")}</kbd>
         </label>
         <div className="select-control">
           <ListFilter size={14} />
@@ -179,7 +225,7 @@ export function IssuesPage({
               { value: "All", label: t("ui.allStatuses") },
               ...issueStatuses.map((status) => ({
                 value: status,
-                label: status,
+                label: statusLabel(status),
               })),
             ]}
             onChange={(value) => setStatusFilter(value as IssueStatus | "All")}
@@ -189,13 +235,27 @@ export function IssuesPage({
           label={t("ui.filterPriority")}
           value={priorityFilter}
           onChange={(value) => setPriorityFilter(value as Priority | "All")}
-          options={["All", "Urgent", "High", "Medium", "Low", "No priority"]}
+          options={[
+            { value: "All", label: t("ui.all") },
+            ...(
+              ["Urgent", "High", "Medium", "Low", "No priority"] as Priority[]
+            ).map((priority) => ({
+              value: priority,
+              label: priorityLabel(priority),
+            })),
+          ]}
         />
         <FilterSelect
           label={t("ui.filterType")}
           value={typeFilter}
           onChange={(value) => setTypeFilter(value as IssueType | "All")}
-          options={["All", ...issueTypes]}
+          options={[
+            { value: "All", label: t("ui.all") },
+            ...issueTypes.map((type) => ({
+              value: type,
+              label: typeLabel(type),
+            })),
+          ]}
         />
         <FilterSelect
           label={t("ui.filterAssignee")}
@@ -212,7 +272,11 @@ export function IssuesPage({
           onChange={(value) =>
             setSourceFilter(value as Issue["source"] | "All")
           }
-          options={["All", "Conversation", "Internal"]}
+          options={[
+            { value: "All", label: t("ui.all") },
+            { value: "Conversation", label: t("ui.conversation") },
+            { value: "Internal", label: t("ui.internal") },
+          ]}
         />
         <FilterSelect
           label={t("ui.filterLabel")}
@@ -227,7 +291,11 @@ export function IssuesPage({
           label={t("ui.filterRuns")}
           value={codexFilter}
           onChange={(value) => setCodexFilter(value as typeof codexFilter)}
-          options={["All", "With runs", "Without runs"]}
+          options={[
+            { value: "All", label: t("ui.all") },
+            { value: "With runs", label: t("ui.withRuns") },
+            { value: "Without runs", label: t("ui.withoutRuns") },
+          ]}
         />
         <button
           className="button button-ghost"

@@ -130,9 +130,7 @@ function ProductPreview() {
           <div className="marketing-conversation-head">
             <span>
               <strong>{t("preview.threads.one.customer")}</strong>
-              <small>
-                {t("preview.channel")} · {t("preview.needsAttention")}
-              </small>
+              <small>{t("preview.channelAttention")}</small>
             </span>
             <span className="marketing-ai-pill">
               <Sparkles size={11} /> {t("preview.aiDrafts")}
@@ -152,7 +150,10 @@ function ProductPreview() {
               <span>
                 <strong>{t("preview.issueTitle")}</strong>
                 <small>
-                  {t("preview.issueId")} · {t("preview.issueStatus")}
+                  {t("preview.issueMeta", {
+                    id: t("preview.issueId"),
+                    status: t("preview.issueStatus"),
+                  })}
                 </small>
               </span>
               <ArrowRight size={14} />

@@ -16,14 +16,14 @@
     "releaseLabel": "Novo",
     "releaseText": "O loop de suporte ao código está no ar",
     "title": "Keep shipping. Mend the support loop.",
-    "description": "O Mend transforma suporte via WhatsApp em respostas claras, issues rastreáveis e trabalho de engenharia revisável — para o contexto do cliente chegar ao fix sem frear quem constrói o produto.",
+    "description": "O Mend transforma suporte via WhatsApp em respostas claras, chamados rastreáveis e trabalho de engenharia revisável — para o contexto do cliente chegar ao fix sem frear quem constrói o produto.",
     "primaryCta": "Conectar WhatsApp",
     "secondaryCta": "Ver o produto"
   },
   "preview": {
-    "ariaLabel": "Preview do Inbox, issue e run do Codex no Mend",
-    "inbox": "Mend Inbox",
-    "live": "Workspace ao vivo",
+    "ariaLabel": "Prévia da Caixa de entrada, chamado e execução do Codex no Mend",
+    "inbox": "Caixa de entrada do Mend",
+    "live": "Espaço de trabalho ao vivo",
     "conversations": "Conversas",
     "search": "Buscar conversas",
     "threads": {
@@ -45,12 +45,14 @@
     },
     "channel": "WhatsApp",
     "needsAttention": "precisa de atenção",
+    "channelAttention": "WhatsApp · precisa de atenção",
     "aiDrafts": "Rascunho de IA",
     "customerMessage": "O checkout falhou de novo para dois clientes depois da mudança de plano. Você consegue olhar?",
     "agentMessage": "Já estou olhando. Vinculei a versão afetada e atualizo você por aqui depois da revisão.",
     "issueTitle": "Erro no checkout após mudança de plano",
     "issueStatus": "Em andamento",
     "issueId": "MEND-184",
+    "issueMeta": "{{id}} · {{status}}",
     "composer": "Escreva uma resposta…",
     "runTitle": "Support loop",
     "runStatus": "Revisão humana obrigatória",
@@ -85,7 +87,7 @@
     "cards": {
       "reply": {
         "title": "Responda com toda a história do cliente",
-        "description": "Trabalhe em um Inbox operacional em vez de reconstruir contexto entre chats, documentos e memória.",
+        "description": "Trabalhe em uma Caixa de entrada operacional em vez de reconstruir contexto entre chats, documentos e memória.",
         "points": {
           "0": "Histórico do WhatsApp em uma tela",
           "1": "Rascunhos de IA com grounding",
@@ -96,23 +98,23 @@
         "title": "Baseie cada sugestão em conhecimento confiável",
         "description": "Dê à IA os fatos do produto e deixe qualidade da fonte e estado de revisão visíveis para o operador.",
         "points": {
-          "0": "Fontes de conhecimento do workspace",
+          "0": "Fontes de conhecimento do espaço de trabalho",
           "1": "Confiança e rastreio da fonte",
           "2": "Limites de automação revisáveis"
         }
       },
       "issue": {
-        "title": "Transforme um sinal em issue sem copiar",
+        "title": "Transforme um sinal em chamado sem copiar",
         "description": "Crie trabalho nativo direto da conversa e mantenha o impacto no cliente ligado a cada decisão.",
         "points": {
-          "0": "Issues vinculadas à conversa",
+          "0": "Chamados vinculados à conversa",
           "1": "Responsável e próxima ação",
-          "2": "Sem handoff para tracker externo"
+          "2": "Sem repasse para tracker externo"
         }
       },
       "run": {
         "title": "Rode mudanças de código atrás de uma revisão",
-        "description": "Deixe o Codex inspecionar, implementar e testar em um workspace restrito enquanto o founder mantém o controle final.",
+        "description": "Deixe o Codex inspecionar, implementar e testar em um espaço de trabalho restrito enquanto o founder mantém o controle final.",
         "points": {
           "0": "Execução local com escopo",
           "1": "Checks e evidência do diff",
@@ -146,7 +148,7 @@
     "description": "O Mend combina a velocidade de um Inbox focado com a estrutura necessária para tornar trabalho assistido por IA seguro e rastreável.",
     "items": {
       "0": {
-        "title": "Inbox nativo para WhatsApp",
+        "title": "Caixa de entrada nativa para WhatsApp",
         "description": "Receba, faça triagem e responda sem forçar o cliente a usar um novo canal."
       },
       "1": {
@@ -154,11 +156,11 @@
         "description": "Rascunhe a partir da conversa e do conhecimento aprovado, mantendo o operador no controle."
       },
       "2": {
-        "title": "Issues vinculadas à conversa",
+        "title": "Chamados vinculados à conversa",
         "description": "Preserve evidência do cliente, responsabilidade e estado do sinal ao fix."
       },
       "3": {
-        "title": "Runs controladas do Codex",
+        "title": "Execuções controladas do Codex",
         "description": "Defina o escopo do trabalho local, inspecione checks e aprove o diff resultante."
       },
       "4": {
@@ -167,7 +169,7 @@
       },
       "5": {
         "title": "Um grafo operacional",
-        "description": "Mantenha mensagens, decisões, issues, conhecimento e runs conectados no mesmo workspace."
+        "description": "Mantenha mensagens, decisões, chamados, conhecimento e execuções conectados no mesmo espaço de trabalho."
       }
     }
   },
@@ -237,9 +239,9 @@
         "monthly": "$0",
         "annual": "$0",
         "features": {
-          "0": "1 workspace e 1 operador",
-          "1": "Inbox de conversas do WhatsApp",
-          "2": "Issues vinculadas à conversa",
+          "0": "1 espaço de trabalho e 1 operador",
+          "1": "Caixa de entrada de conversas do WhatsApp",
+          "2": "Chamados vinculados à conversa",
           "3": "Sem cartão de crédito"
         },
         "cta": "Começar grátis"
@@ -253,7 +255,7 @@
           "0": "Até 5 operadores",
           "1": "Rascunhos de IA com grounding",
           "2": "Runs controladas do Codex",
-          "3": "Suporte prioritário do workspace"
+          "3": "Suporte prioritário do espaço de trabalho"
         },
         "cta": "Começar no Builder"
       },
@@ -265,7 +267,7 @@
         "features": {
           "0": "Operadores e volume personalizados",
           "1": "Políticas avançadas de automação",
-          "2": "Onboarding do workspace",
+          "2": "Onboarding do espaço de trabalho",
           "3": "Canal de resposta prioritário"
         },
         "cta": "Falar com a gente"
@@ -274,19 +276,19 @@
   },
   "finalCta": {
     "title": "Construa seu primeiro support loop hoje.",
-    "description": "Traga uma conversa real do WhatsApp. Saia com resposta, issue e próxima ação de engenharia conectadas.",
+    "description": "Traga uma conversa real do WhatsApp. Saia com resposta, chamado e próxima ação de engenharia conectados.",
     "primary": "Conectar WhatsApp",
     "secondary": "Ver como funciona"
   },
   "footer": {
-    "description": "O Mend ajuda builders de SaaS a transformar suporte via WhatsApp em respostas claras, issues rastreáveis e trabalho de produto revisado.",
+    "description": "O Mend ajuda builders de SaaS a transformar suporte via WhatsApp em respostas claras, chamados rastreáveis e trabalho de produto revisado.",
     "status": "Todos os sistemas operacionais",
     "columns": {
       "product": {
         "title": "Produto",
         "links": {
-          "0": "Inbox",
-          "1": "Issues",
+          "0": "Caixa de entrada",
+          "1": "Chamados",
           "2": "Conhecimento",
           "3": "Runs do Codex"
         }

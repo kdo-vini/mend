@@ -60,9 +60,10 @@ import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { useConversationScroll } from "../hooks/useConversationScroll";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { PriorityDot } from "../../../shared/ui/DataDisplay";
+import { PriorityDot, StatusPill } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
+import { localizedError } from "../../../shared/ui/localizedError";
 import {
   dismissAiCard,
   getAiCardDismissalStorage,
@@ -398,13 +399,7 @@ export function InboxPage({
       void markLiveConversationRead({
         workspaceId,
         conversationId: conversation.id,
-      }).catch((error) =>
-        onToast(
-          error instanceof Error
-            ? error.message
-            : "Could not mark conversation as read.",
-        ),
-      );
+      }).catch((error) => onToast(localizedError(error, t("errors.markRead"))));
   };
 
   const sendMessage = async (text: string): Promise<boolean> => {
@@ -418,9 +413,9 @@ export function InboxPage({
       clientId,
       conversationId,
       direction: "outbound",
-      sender: "You",
+      sender: t("ui.you"),
       text: text.trim(),
-      time: "now",
+      time: t("ui.now"),
       type: "text",
       status: "sending",
     };
@@ -460,8 +455,8 @@ export function InboxPage({
         onToast(
           selected.aiMode === "safe_auto" &&
             selected.automationState === "ai_active"
-            ? "Message sent. AI paused after your reply - choose Resume AI in the three dots menu to continue."
-            : "Message accepted by WhatsApp",
+            ? t("toasts.messageSentAiPaused")
+            : t("toasts.messageAccepted"),
         );
         return true;
       } catch (error) {
@@ -479,9 +474,7 @@ export function InboxPage({
               : item,
           ),
         );
-        onToast(
-          error instanceof Error ? error.message : "Message could not be sent.",
-        );
+        onToast(localizedError(error, t("errors.sendMessage")));
         return false;
       }
     }
@@ -499,7 +492,7 @@ export function InboxPage({
           : item,
       ),
     );
-    onToast("Message sent");
+    onToast(t("toasts.messageSent"));
     return true;
   };
 
@@ -507,7 +500,7 @@ export function InboxPage({
     inputs: ComposerMediaInput[],
   ): Promise<boolean> => {
     if (!liveMode || !workspaceId) {
-      onToast("Attachments are available only for a live WhatsApp workspace.");
+      onToast(t("toasts.attachmentsUnavailable"));
       return false;
     }
     const conversationId = selected.id;
@@ -547,8 +540,9 @@ export function InboxPage({
                   ...item.messages,
                   ...pending.map((item) => item.optimistic),
                 ],
-                lastMessage: pending.at(-1)?.optimistic.text || "Attachment",
-                lastTime: "now",
+                lastMessage:
+                  pending.at(-1)?.optimistic.text || t("ui.attachment"),
+                lastTime: t("ui.now"),
                 lastMessageAt: new Date().toISOString(),
                 attention: "waiting_customer",
                 unread: 0,
@@ -603,7 +597,7 @@ export function InboxPage({
         setConversations((current) =>
           mergeConversationSnapshot(current, snapshot),
         );
-      onToast("Attachment accepted by WhatsApp");
+      onToast(t("toasts.attachmentAccepted"));
       return true;
     } catch (error) {
       setConversations((current) =>
@@ -620,11 +614,7 @@ export function InboxPage({
             : item,
         ),
       );
-      onToast(
-        error instanceof Error
-          ? error.message
-          : "Attachment could not be sent.",
-      );
+      onToast(localizedError(error, t("errors.sendAttachment")));
       return false;
     }
   };
@@ -633,9 +623,9 @@ export function InboxPage({
     if (
       mode === "safe_auto" &&
       !(await onConfirm({
-        title: "Enable Auto-reply for this conversation?",
-        description: "Only allowlisted, high-confidence messages can be sent.",
-        confirmLabel: "Enable Auto-reply",
+        title: t("confirmations.enableAutoReplyTitle"),
+        description: t("confirmations.enableAutoReplyDescription"),
+        confirmLabel: t("confirmations.enableAutoReplyConfirm"),
       }))
     )
       return;
@@ -645,11 +635,7 @@ export function InboxPage({
         conversationId: selected.id,
         updates: { ai_mode: mode },
       }).catch((error) =>
-        onToast(
-          error instanceof Error
-            ? error.message
-            : "AI mode could not be saved.",
-        ),
+        onToast(localizedError(error, t("errors.saveAiMode"))),
       );
     setConversations((current) =>
       current.map((item) =>
@@ -694,7 +680,7 @@ export function InboxPage({
             conversationId: selected.id,
           });
       }
-      onToast(paused ? "AI paused for this conversation" : "AI resumed");
+      onToast(paused ? t("toasts.aiPaused") : t("toasts.aiResumed"));
     } catch (error) {
       setConversations((current) =>
         current.map((item) =>
@@ -703,9 +689,7 @@ export function InboxPage({
             : item,
         ),
       );
-      onToast(
-        error instanceof Error ? error.message : "AI state could not be saved.",
-      );
+      onToast(localizedError(error, t("errors.saveAiState")));
     }
   };
 
@@ -732,28 +716,23 @@ export function InboxPage({
       }
       onToast(
         status === "snoozed"
-          ? "Conversation snoozed for 1 hour"
-          : "Conversation resolved",
+          ? t("toasts.conversationSnoozed")
+          : t("toasts.conversationResolved"),
       );
     } catch (error) {
       setConversations((current) =>
         current.map((item) => (item.id === previous.id ? previous : item)),
       );
-      onToast(
-        error instanceof Error
-          ? error.message
-          : `Conversation could not be ${status}.`,
-      );
+      onToast(localizedError(error, t("errors.conversationState")));
     }
   };
 
   const deleteConversation = async (conversationId = selected.id) => {
     if (
       !(await onConfirm({
-        title: "Delete conversation?",
-        description:
-          "This removes the conversation from Mend. The WhatsApp chat will not be deleted.",
-        confirmLabel: "Delete conversation",
+        title: t("confirmations.deleteConversationTitle"),
+        description: t("confirmations.deleteConversationDescription"),
+        confirmLabel: t("confirmations.deleteConversationConfirm"),
         destructive: true,
       }))
     )
@@ -772,13 +751,9 @@ export function InboxPage({
         setSelectedConversationId(nextConversation?.id ?? "");
         setMobileConversationOpen(false);
       }
-      onToast("Conversation deleted from Mend");
+      onToast(t("toasts.conversationDeleted"));
     } catch (error) {
-      onToast(
-        error instanceof Error
-          ? error.message
-          : "Conversation could not be deleted.",
-      );
+      onToast(localizedError(error, t("errors.deleteConversation")));
     } finally {
       setConversationDeleting(false);
     }
@@ -787,15 +762,15 @@ export function InboxPage({
   const deleteMessage = async (message: Message) => {
     if (
       !(await onConfirm({
-        title: "Delete message for everyone?",
-        description: "This message will be deleted for everyone on WhatsApp.",
-        confirmLabel: "Delete message",
+        title: t("confirmations.deleteMessageTitle"),
+        description: t("confirmations.deleteMessageDescription"),
+        confirmLabel: t("confirmations.deleteMessageConfirm"),
         destructive: true,
       }))
     )
       return;
     if (liveMode && workspaceId && !message.providerMessageId) {
-      onToast("This message does not have a WhatsApp message id yet.");
+      onToast(t("errors.missingMessageId"));
       return;
     }
     setMessageActionId(message.id);
@@ -820,13 +795,9 @@ export function InboxPage({
             : conversation,
         ),
       );
-      onToast("Message deleted for everyone");
+      onToast(t("toasts.messageDeleted"));
     } catch (error) {
-      onToast(
-        error instanceof Error
-          ? error.message
-          : "Message could not be deleted.",
-      );
+      onToast(localizedError(error, t("errors.deleteMessage")));
     } finally {
       setMessageActionId(undefined);
     }
@@ -835,11 +806,11 @@ export function InboxPage({
   const reactToMessage = async (message: Message, reaction: string) => {
     if (reactionPendingId) return;
     if (liveMode && workspaceId && !uuidPattern.test(message.id)) {
-      onToast("This message is still syncing with WhatsApp.");
+      onToast(t("errors.syncingMessage"));
       return;
     }
     if (liveMode && workspaceId && !message.providerMessageId) {
-      onToast("This message is still syncing with WhatsApp.");
+      onToast(t("errors.syncingMessage"));
       return;
     }
     const currentReaction = message.reactions?.find((item) => item.mine)?.emoji;
@@ -878,12 +849,12 @@ export function InboxPage({
         ),
       );
       onToast(
-        nextReaction ? `Reaction ${nextReaction} sent` : "Reaction removed",
+        nextReaction
+          ? t("toasts.reactionSent", { emoji: nextReaction })
+          : t("toasts.reactionRemoved"),
       );
     } catch (error) {
-      onToast(
-        error instanceof Error ? error.message : "Reaction could not be sent.",
-      );
+      onToast(localizedError(error, t("errors.reaction")));
     } finally {
       setReactionPendingId(undefined);
     }
@@ -917,18 +888,14 @@ export function InboxPage({
             assigned_user_id: assignee === "Unassigned" ? null : assignee,
           },
         });
-      onToast(`Assigned to ${assigneeLabel(assignee)}`);
+      onToast(t("toasts.assigned", { assignee: assigneeLabel(assignee) }));
     } catch (error) {
       setConversations((current) =>
         current.map((item) =>
           item.id === selected.id ? { ...item, assignee: previous } : item,
         ),
       );
-      onToast(
-        error instanceof Error
-          ? error.message
-          : "Assignment could not be saved.",
-      );
+      onToast(localizedError(error, t("errors.assignment")));
     }
   };
 
@@ -960,18 +927,14 @@ export function InboxPage({
         contactId: selected.contactId,
         displayName: nextName,
       });
-      onToast("Contact name saved");
+      onToast(t("toasts.contactSaved"));
     } catch (error) {
       setConversations((current) =>
         current.map((item) =>
           item.id === selected.id ? { ...item, ...previous } : item,
         ),
       );
-      onToast(
-        error instanceof Error
-          ? error.message
-          : "Contact name could not be saved.",
-      );
+      onToast(localizedError(error, t("errors.contactName")));
     }
   };
 
@@ -982,7 +945,7 @@ export function InboxPage({
       <div className="inbox-toolbar">
         <div>
           <h1>
-            Inbox{" "}
+            {t("title")}{" "}
             <span className="title-count">
               {conversations.filter((item) => item.unread > 0).length}
             </span>
@@ -1163,9 +1126,9 @@ export function InboxPage({
                       if (!message.text) return;
                       try {
                         await navigator.clipboard.writeText(message.text);
-                        onToast("Message copied");
+                        onToast(t("toasts.messageCopied"));
                       } catch {
-                        onToast("Message could not be copied.");
+                        onToast(t("errors.copyMessage"));
                       }
                     }}
                     onReact={(reaction) =>
@@ -1193,8 +1156,9 @@ export function InboxPage({
                       {activeIssue.identifier} · {activeIssue.title}
                     </strong>
                     <small>
-                      Issue linked · {activeIssue.status} ·{" "}
-                      {activeIssue.priority}
+                      {t("ui.issueLinked")} ·{" "}
+                      <StatusPill status={activeIssue.status} /> ·{" "}
+                      <PriorityDot priority={activeIssue.priority} showLabel />
                     </small>
                   </span>
                   <ChevronRight size={15} />
@@ -1205,10 +1169,10 @@ export function InboxPage({
               <button
                 className="scroll-down-cta"
                 type="button"
-                aria-label="Scroll to latest messages"
+                aria-label={t("ui.scrollLatest")}
                 onClick={() => scrollMessagesToBottom("smooth")}
               >
-                <ChevronDown size={14} /> New messages
+                <ChevronDown size={14} /> {t("ui.newMessages")}
               </button>
             )}
           </div>
@@ -1225,8 +1189,7 @@ export function InboxPage({
                 : undefined
             }
             onUseDraft={async () => {
-              if (!liveMode)
-                return "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um próximo passo.";
+              if (!liveMode) return t("toasts.draftFallback");
               try {
                 const result = await requestAiDraft(
                   selected.messages
@@ -1241,11 +1204,7 @@ export function InboxPage({
                 );
                 return result.draft;
               } catch (error) {
-                onToast(
-                  error instanceof Error
-                    ? error.message
-                    : "AI draft unavailable.",
-                );
+                onToast(localizedError(error, t("errors.draftUnavailable")));
                 return "";
               }
             }}
@@ -1267,13 +1226,14 @@ function ConversationRow({
   onClick: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation("inbox");
   return (
     <div className={`conversation-row ${selected ? "selected" : ""}`}>
       <button
         className="conversation-row-hit"
         type="button"
         aria-current={selected ? "true" : undefined}
-        aria-label={`Open conversation with ${conversation.name}`}
+        aria-label={t("ui.openConversation", { name: conversation.name })}
         onClick={onClick}
       >
         <div
@@ -1290,7 +1250,7 @@ function ConversationRow({
             <strong>
               {conversation.name}
               {conversation.chatType === "group" && (
-                <span className="group-badge">Group</span>
+                <span className="group-badge">{t("ui.group")}</span>
               )}
             </strong>
             <span>{conversation.lastTime}</span>
@@ -1323,7 +1283,7 @@ function ConversationRow({
             role="menuitem"
             onClick={onDelete}
           >
-            <Trash2 size={14} /> Delete conversation
+            <Trash2 size={14} /> {t("ui.deleteConversation")}
           </button>
         </ActionMenu>
       </div>
@@ -1389,7 +1349,11 @@ function AiDecisionSummary({
       </div>
       <div className="ai-decision-meta">
         {conversation.aiIntent && (
-          <span>Intent: {conversation.aiIntent.replaceAll("_", " ")}</span>
+          <span>
+            {t("ui.intent", {
+              intent: conversation.aiIntent.replaceAll("_", " "),
+            })}
+          </span>
         )}
         {conversation.aiDecisionReason && (
           <span>{conversation.aiDecisionReason}</span>
@@ -1444,7 +1408,9 @@ function AiDraftCard({
           {draft.safetyReason && <span>{draft.safetyReason}</span>}
           {draft.sources.length > 0 && (
             <span>
-              Sources: {draft.sources.map((source) => source.title).join(", ")}
+              {t("ui.sources", {
+                sources: draft.sources.map((source) => source.title).join(", "),
+              })}
             </span>
           )}
         </div>
@@ -1589,7 +1555,7 @@ function ConversationHeader({
                 : t("ui.manual")}
         </span>
         {conversation.humanTakeoverReason && (
-          <span className="ai-reason" title="Human takeover reason">
+          <span className="ai-reason" title={t("ui.humanTakeoverReason")}>
             {conversation.humanTakeoverReason.replaceAll("_", " ")}
           </span>
         )}
@@ -1758,13 +1724,14 @@ function MessageBubble({
   onCopy: () => void;
   onReact: (reaction: string) => void;
 }) {
+  const { t } = useTranslation("inbox");
   const attachmentUrl = message.attachment?.url;
   return (
     <div className={`message-row ${message.direction}`}>
       <div className="message-meta">
         {message.direction === "outbound" && message.aiGenerated && (
           <span className="ai-tag">
-            <Sparkles size={11} /> AI generated
+            <Sparkles size={11} /> {t("ui.aiGenerated")}
           </span>
         )}
         {senderName || message.sender} · {message.time}
@@ -1773,7 +1740,7 @@ function MessageBubble({
         <div className="message-bubble-wrap">
           {message.deleted ? (
             <div className="message-bubble deleted-message">
-              Message deleted
+              {t("ui.messageDeleted")}
             </div>
           ) : message.type !== "text" &&
             message.mediaStatus &&
@@ -1835,7 +1802,10 @@ function MessageBubble({
           )}
         </div>
         {message.reactions && message.reactions.length > 0 && (
-          <div className="message-reactions" aria-label="Message reactions">
+          <div
+            className="message-reactions"
+            aria-label={t("ui.messageReactions")}
+          >
             {message.reactions.map((reaction, index) =>
               reaction.mine ? (
                 <button
@@ -1843,8 +1813,10 @@ function MessageBubble({
                   className="message-reaction-button"
                   type="button"
                   disabled={reactionPending}
-                  title="Remove reaction"
-                  aria-label={`Remove reaction ${reaction.emoji}`}
+                  title={t("ui.removeReaction")}
+                  aria-label={t("ui.removeReactionWithEmoji", {
+                    emoji: reaction.emoji,
+                  })}
                   onClick={() => onReact("")}
                 >
                   {reaction.emoji}
@@ -1858,7 +1830,7 @@ function MessageBubble({
         <ActionMenu label={`${senderName || message.sender} message`}>
           {!message.deleted && message.text && (
             <button type="button" role="menuitem" onClick={onCopy}>
-              <Copy size={14} /> Copy message
+              <Copy size={14} /> {t("ui.copyMessage")}
             </button>
           )}
           {!message.deleted && message.direction === "outbound" && (
@@ -1870,7 +1842,7 @@ function MessageBubble({
               onClick={onDelete}
             >
               <Trash2 size={14} />
-              {actionPending ? "Deleting…" : "Delete for everyone"}
+              {actionPending ? t("ui.deleting") : t("ui.deleteForEveryone")}
             </button>
           )}
           {!message.deleted && (
@@ -1884,7 +1856,7 @@ function MessageBubble({
                   disabled={reactionPending}
                   onClick={() => onReact(reaction)}
                 >
-                  {reaction} {reactionPending ? "Sending…" : "React"}
+                  {reaction} {reactionPending ? t("ui.sending") : t("ui.react")}
                 </button>
               ))}
             </>
@@ -1894,7 +1866,7 @@ function MessageBubble({
       {message.direction === "outbound" && (
         <span
           className={`delivery-status ${message.status === "failed" ? "failed" : ""}`}
-          aria-label={message.status ?? "sent"}
+          aria-label={message.status ?? t("ui.sent")}
         >
           {message.status === "sending" ? (
             "Sending…"
@@ -2186,7 +2158,10 @@ function MediaComposer({
         <span className="composer-hint">{t("ui.composerHint")}</span>
       </div>
       {pendingFiles.length > 0 && (
-        <div className="attachment-preview-bar" aria-label="Selected files">
+        <div
+          className="attachment-preview-bar"
+          aria-label={t("ui.selectedFiles")}
+        >
           <div className="attachment-preview-grid">
             {pendingFiles.map((item) => (
               <div className="attachment-preview-card" key={item.id}>
@@ -2202,7 +2177,7 @@ function MediaComposer({
                 <button
                   className="icon-button subtle attachment-remove"
                   type="button"
-                  aria-label={`Remove ${item.file.name}`}
+                  aria-label={t("ui.removeFile", { name: item.file.name })}
                   disabled={sending}
                   onClick={() => removeFile(item.id)}
                 >
@@ -2210,8 +2185,8 @@ function MediaComposer({
                 </button>
                 <strong title={item.file.name}>{item.file.name}</strong>
                 <small>
-                  {(item.file.size / 1024 / 1024).toFixed(1)} MB ·{" "}
-                  {item.progress}%
+                  {(item.file.size / 1024 / 1024).toFixed(1)}{" "}
+                  {t("ui.megabytes")} · {item.progress}%
                 </small>
               </div>
             ))}
@@ -2229,8 +2204,8 @@ function MediaComposer({
                 <Send size={14} />
               )}{" "}
               {sending
-                ? "Sending…"
-                : `Send ${pendingFiles.length} file${pendingFiles.length === 1 ? "" : "s"}`}
+                ? t("ui.sending")
+                : t("ui.sendFiles", { count: pendingFiles.length })}
             </button>
           </div>
         </div>

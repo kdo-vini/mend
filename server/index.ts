@@ -94,7 +94,7 @@ const WebhookPayloadSchema = z.record(z.unknown());
 const DraftSchema = z.object({
   conversation: z.string().min(1).max(12_000),
   knowledge: z.string().max(50_000).optional(),
-  language: z.enum(["en-US", "pt-BR"]).default("en-US"),
+  language: z.enum(["pt-BR", "en-US"]).default("pt-BR"),
 });
 const TriageSchema = z.object({
   conversation: z.string().min(1).max(12_000),

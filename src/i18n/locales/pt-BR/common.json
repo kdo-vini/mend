@@ -1,9 +1,10 @@
 {
   "brand": {
     "name": "Mend",
+    "codex": "OpenAI Codex",
     "descriptor": "Suporte com IA para quem constrói SaaS",
     "tagline": "Keep shipping. Mend the support loop.",
-    "workspaceEyebrow": "Workspace Mend"
+    "workspaceEyebrow": "Espaço de trabalho Mend"
   },
   "language": {
     "label": "Idioma da interface",
@@ -14,54 +15,157 @@
     "save": "Salvar",
     "cancel": "Cancelar",
     "close": "Fechar",
+    "confirm": "Confirmar",
     "retry": "Tentar novamente",
-    "back": "Voltar"
+    "back": "Voltar",
+    "editValue": "Editar {{label}}",
+    "actionsFor": "Ações para {{label}}"
   },
   "states": {
     "loading": "Carregando…",
     "saving": "Salvando…",
     "unknownTime": "Horário desconhecido",
-    "allCaughtUp": "Tudo em dia"
+    "allCaughtUp": "Tudo em dia",
+    "loadingInbox": "Carregando caixa de entrada…",
+    "loadingIssues": "Carregando chamados…",
+    "loadingKanban": "Carregando Kanban…",
+    "loadingCodexRuns": "Carregando execuções do Codex…",
+    "loadingKnowledge": "Carregando base de conhecimento…",
+    "loadingSettings": "Carregando configurações…",
+    "loadingDescription": "Mantendo o contexto do espaço de trabalho pronto."
   },
   "errors": {
     "generic": "Algo deu errado. Tente novamente.",
     "preferencesSave": "Não foi possível salvar sua preferência de idioma.",
     "supabaseUnavailable": "O Supabase é necessário para carregar seu perfil.",
     "invalidInput": "Confira as informações e tente novamente.",
-    "workspaceNotFound": "Não foi possível encontrar esse Workspace.",
+    "workspaceNotFound": "Não foi possível encontrar esse espaço de trabalho.",
     "permissionDenied": "Você não tem permissão para fazer isso.",
-    "technical": "Ocorreu um erro técnico. Tente novamente."
+    "technical": "Ocorreu um erro técnico. Tente novamente.",
+    "viewUnavailable": "Não foi possível carregar esta tela",
+    "viewUnavailableDescription": "Os dados mais recentes não estão disponíveis. Tente novamente em instantes.",
+    "interfaceUnavailable": "Interface indisponível",
+    "somethingWentWrong": "Algo deu errado",
+    "interfaceDescription": "Não foi possível renderizar esta tela. Seus dados continuam seguros; tente novamente ou recarregue a página.",
+    "liveReconciliation": "Não foi possível atualizar os dados em tempo real.",
+    "liveDataUnavailable": "Os dados do espaço de trabalho não estão disponíveis agora.",
+    "liveDataTitle": "Dados ao vivo indisponíveis",
+    "liveDataDescription": "{{message}} Nenhum registro de demonstração está sendo exibido.",
+    "issueCreate": "Não foi possível criar o chamado.",
+    "issueUpdate": "Não foi possível atualizar o chamado.",
+    "issueDelete": "Não foi possível excluir o chamado.",
+    "issueResolve": "Não foi possível concluir o chamado e avisar o cliente.",
+    "notificationDismiss": "Não foi possível dispensar a notificação.",
+    "notificationsDismiss": "Não foi possível dispensar as notificações.",
+    "nativeNotificationsEnable": "Não foi possível ativar as notificações nativas.",
+    "codexRunQueue": "Não foi possível enfileirar a execução do Codex.",
+    "codexRunUpdate": "Não foi possível atualizar a execução do Codex."
   },
   "navigation": {
-    "inbox": "Inbox",
-    "issues": "Issues",
-    "codexRuns": "Codex Runs",
-    "knowledge": "Knowledge",
+    "inbox": "Caixa de entrada",
+    "issues": "Chamados",
+    "codexRuns": "Execuções do Codex",
+    "knowledge": "Base de conhecimento",
     "settings": "Configurações",
     "profile": "Perfil",
     "kanban": "Kanban",
     "codexRunsShort": "Execuções",
     "more": "Mais",
-    "workspace": "Workspace",
+    "workspace": "Espaço de trabalho",
     "session": "Sessão",
     "searchEverything": "Pesquisar em tudo",
     "notifications": "Notificações",
     "unread": "{{count}} não lida(s)",
     "dismissAll": "Dispensar tudo",
-    "noNotifications": "Nenhuma notificação do Workspace ainda.",
+    "noNotifications": "Nenhuma notificação do espaço de trabalho ainda.",
     "enableNativeAlerts": "Ativar alertas nativos",
     "nativeNotificationsEnabled": "Notificações nativas ativadas",
     "awayAlerts": "Receba alertas quando estiver ausente",
     "signedInAs": "Sessão de",
-    "workspaceMember": "Membro do Workspace",
+    "workspaceMember": "Membro do espaço de trabalho",
     "primaryNavigation": "Navegação principal",
     "mobileNavigation": "Navegação mobile",
-    "openInbox": "Abrir Inbox",
+    "openInbox": "Abrir caixa de entrada",
     "openProfile": "Abrir perfil",
-    "searchWorkspace": "Pesquisar no Workspace",
+    "searchWorkspace": "Pesquisar no espaço de trabalho",
     "logout": "Sair",
     "expandSidebar": "Expandir barra lateral",
     "collapseSidebar": "Recolher barra lateral",
-    "useTheme": "Usar tema {{theme}}"
+    "useTheme": "Usar tema {{theme}}",
+    "notificationsLabel": "Notificações{{count}}",
+    "notificationsLabel_one": "Notificações{{count}}",
+    "notificationsLabel_other": "Notificações{{count}}",
+    "unread_one": "{{count}} não lida(s)",
+    "unread_other": "{{count}} não lidas",
+    "shortcutCommand": "⌘ K"
+  },
+  "app": {
+    "currentOperator": "Operador atual",
+    "workspaceMember": "Membro do espaço {{id}}",
+    "unassigned": "Não atribuído",
+    "user": "Usuário {{id}}",
+    "internalIssueSummary": "Item interno criado a partir do espaço de trabalho.",
+    "issueImpactPending": "Impacto a ser avaliado durante a triagem.",
+    "codexRunPreparing": "Preparando um espaço isolado e reunindo o contexto do chamado.",
+    "codexRunStartedDetail": "Execução enfileirada com um contexto limpo do repositório."
+  },
+  "toasts": {
+    "liveDataUnavailable": "Dados ao vivo indisponíveis: {{message}}",
+    "issueCreatedLive": "Chamado criado no espaço de trabalho ao vivo",
+    "issueCreated": "{{identifier}} criado",
+    "issueDeleted": "{{identifier}} excluído",
+    "issueResolved": "{{identifier}} concluído e cliente avisado",
+    "browserNotificationsBlocked": "As notificações do navegador estão bloqueadas",
+    "nativeNotificationsUnsupported": "Este navegador não oferece notificações nativas aqui",
+    "nativeNotificationsNotConfigured": "As notificações nativas ainda não estão configuradas",
+    "codexRunQueued": "Execução do Codex enfileirada para {{identifier}}",
+    "codexRunStarted": "Execução do Codex iniciada para {{identifier}}",
+    "codexRunCanceled": "Execução do Codex cancelada",
+    "codexResultApproved": "Resultado do Codex aprovado e commit local criado",
+    "codexBranchPublished": "Branch do Codex publicada",
+    "codexDeploymentStarted": "Deploy do Codex iniciado",
+    "codexResultRejected": "Resultado do Codex rejeitado",
+    "demoNoSession": "O modo de demonstração não tem uma sessão conectada",
+    "workspaceSwitched": "Trocado para {{name}}"
+  },
+  "data": {
+    "priority": {
+      "urgent": "Urgente",
+      "high": "Alta",
+      "medium": "Média",
+      "low": "Baixa",
+      "noPriority": "Sem prioridade"
+    },
+    "issueStatus": {
+      "triage": "Triagem",
+      "backlog": "Backlog",
+      "todo": "A fazer",
+      "inProgress": "Em andamento",
+      "review": "Revisão",
+      "done": "Concluído",
+      "canceled": "Cancelado"
+    },
+    "runStatus": {
+      "completed": "Concluída",
+      "running": "Em execução",
+      "failed": "Falhou",
+      "canceled": "Cancelada",
+      "approved": "Aprovada",
+      "rejected": "Rejeitada"
+    },
+    "articleStatus": {
+      "published": "Publicado",
+      "draft": "Rascunho"
+    },
+    "runMode": {
+      "investigate": "Investigar",
+      "proposeFix": "Propor correção",
+      "implementFix": "Implementar correção"
+    }
+  },
+  "confirmations": {
+    "deleteIssueTitle": "Excluir chamado?",
+    "deleteIssueDescription": "Excluir {{identifier}}? Essa ação não pode ser desfeita.",
+    "deleteIssueConfirm": "Excluir chamado"
   }
 }

@@ -21,28 +21,30 @@ function placeholders(value: string): string[] {
 
 describe("i18n catalogs", () => {
   it("keeps the supported locale contract stable", () => {
-    expect(supportedLocales).toEqual(["en-US", "pt-BR"]);
+    expect(supportedLocales).toEqual(["pt-BR", "en-US"]);
     expect(normalizeLocale("en")).toBe("en-US");
     expect(normalizeLocale("pt")).toBe("pt-BR");
-    expect(normalizeLocale("es")).toBe("en-US");
+    expect(normalizeLocale("es")).toBe("pt-BR");
+    expect(normalizeLocale(undefined)).toBe("pt-BR");
   });
 
   it("keeps common keys, values and placeholders complete", () => {
     const portugueseResources = resources["pt-BR"] as Record<string, unknown>;
-    for (const [namespace, englishCatalog] of Object.entries(
-      resources["en-US"],
+    for (const [namespace, portugueseCatalog] of Object.entries(
+      portugueseResources,
     )) {
-      const english = flatten(englishCatalog);
-      const portuguese = flatten(portugueseResources[namespace]);
-      expect(Object.keys(portuguese).sort(), namespace).toEqual(
-        Object.keys(english).sort(),
+      const portuguese = flatten(portugueseCatalog);
+      const english = flatten(
+        (resources["en-US"] as Record<string, unknown>)[namespace],
       );
-      for (const key of Object.keys(english)) {
-        expect(portuguese[key], `${namespace}.${key}`).toBeTruthy();
-        expect(
+      expect(Object.keys(english).sort(), namespace).toEqual(
+        Object.keys(portuguese).sort(),
+      );
+      for (const key of Object.keys(portuguese)) {
+        expect(english[key], `${namespace}.${key}`).toBeTruthy();
+        expect(placeholders(english[key] ?? ""), `${namespace}.${key}`).toEqual(
           placeholders(portuguese[key] ?? ""),
-          `${namespace}.${key}`,
-        ).toEqual(placeholders(english[key] ?? ""));
+        );
       }
     }
   });
