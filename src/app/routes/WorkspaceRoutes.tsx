@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 export interface WorkspaceRouteElements {
   inbox: ReactNode;
@@ -16,6 +16,7 @@ export interface WorkspaceRouteElements {
 export function WorkspaceRoutes(elements: WorkspaceRouteElements) {
   return (
     <Routes>
+      <Route path="/" element={<Navigate replace to="/inbox" />} />
       <Route path="/inbox" element={elements.inbox} />
       <Route path="/issues" element={elements.issues} />
       <Route path="/issues/:identifier" element={elements.issueDetail} />

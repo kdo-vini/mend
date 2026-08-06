@@ -1,5 +1,16 @@
 {
   "title": "Knowledge",
   "empty": "Nenhum artigo ainda",
-  "create": "Novo artigo"
+  "create": "Novo artigo",
+  "ui": {
+    "eyebrow": "Contexto de suporte",
+    "description": "Respostas pequenas e confiáveis que suporte e IA podem usar.",
+    "search": "Buscar conhecimento",
+    "filterCategory": "Filtrar conhecimento por categoria",
+    "allCategories": "Todas as categorias",
+    "noMatching": "Nenhum artigo corresponde",
+    "tryDifferent": "Tente outra busca ou categoria.",
+    "createAnswer": "Crie uma resposta confiável para seu time reutilizar.",
+    "clearFilters": "Limpar filtros"
+  }
 }

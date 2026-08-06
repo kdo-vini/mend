@@ -1,4 +1,10 @@
 {
+  "brand": {
+    "name": "Mend",
+    "descriptor": "AI support for SaaS builders",
+    "tagline": "Keep shipping. Mend the support loop.",
+    "workspaceEyebrow": "Mend workspace"
+  },
   "language": {
     "label": "Interface language",
     "english": "English",

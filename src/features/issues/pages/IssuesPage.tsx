@@ -1,4 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Filter,
   Keyboard,
@@ -87,6 +88,7 @@ export function IssuesPage({
   onEditIssue: (id: string) => void;
   onDeleteIssue: (id: string) => void;
 }) {
+  const { t } = useTranslation("issues");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<IssueStatus | "All">("All");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "All">("All");
@@ -142,16 +144,16 @@ export function IssuesPage({
   return (
     <div className="page">
       <PageHeader
-        eyebrow={`Work tracker · ${issues.length} issues`}
-        title="Issues"
-        description="The internal work queue built from conversations and engineering follow-up."
+        eyebrow={`${t("ui.eyebrow")} · ${issues.length}`}
+        title={t("title")}
+        description={t("ui.description")}
         actions={
           <button
             className="button button-primary"
             type="button"
             onClick={onNewIssue}
           >
-            <Plus size={15} /> New issue <kbd>C</kbd>
+            <Plus size={15} /> {t("create")} <kbd>C</kbd>
           </button>
         }
       />
@@ -163,18 +165,18 @@ export function IssuesPage({
             data-global-search
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search issues"
-            aria-label="Search issues"
+            placeholder={t("ui.search")}
+            aria-label={t("ui.search")}
           />
           <kbd>⌘ K</kbd>
         </label>
         <div className="select-control">
           <ListFilter size={14} />
           <Select
-            ariaLabel="Filter issues by status"
+            ariaLabel={t("ui.filterStatus")}
             value={statusFilter}
             options={[
-              { value: "All", label: "All statuses" },
+              { value: "All", label: t("ui.allStatuses") },
               ...issueStatuses.map((status) => ({
                 value: status,
                 label: status,
@@ -184,28 +186,28 @@ export function IssuesPage({
           />
         </div>
         <FilterSelect
-          label="Filter issues by priority"
+          label={t("ui.filterPriority")}
           value={priorityFilter}
           onChange={(value) => setPriorityFilter(value as Priority | "All")}
           options={["All", "Urgent", "High", "Medium", "Low", "No priority"]}
         />
         <FilterSelect
-          label="Filter issues by type"
+          label={t("ui.filterType")}
           value={typeFilter}
           onChange={(value) => setTypeFilter(value as IssueType | "All")}
           options={["All", ...issueTypes]}
         />
         <FilterSelect
-          label="Filter issues by assignee"
+          label={t("ui.filterAssignee")}
           value={assigneeFilter}
           onChange={setAssigneeFilter}
           options={[
-            { value: "All", label: "All assignees" },
+            { value: "All", label: t("ui.allAssignees") },
             ...assigneeOptions,
           ]}
         />
         <FilterSelect
-          label="Filter issues by source"
+          label={t("ui.filterSource")}
           value={sourceFilter}
           onChange={(value) =>
             setSourceFilter(value as Issue["source"] | "All")
@@ -213,13 +215,16 @@ export function IssuesPage({
           options={["All", "Conversation", "Internal"]}
         />
         <FilterSelect
-          label="Filter issues by label"
+          label={t("ui.filterLabel")}
           value={labelFilter}
           onChange={setLabelFilter}
-          options={[{ value: "All", label: "All labels" }, ...labelOptions]}
+          options={[
+            { value: "All", label: t("ui.allLabels") },
+            ...labelOptions,
+          ]}
         />
         <FilterSelect
-          label="Filter issues by Codex runs"
+          label={t("ui.filterRuns")}
           value={codexFilter}
           onChange={(value) => setCodexFilter(value as typeof codexFilter)}
           options={["All", "With runs", "Without runs"]}
@@ -229,12 +234,12 @@ export function IssuesPage({
           type="button"
           onClick={clearFilters}
         >
-          <Filter size={15} /> Clear filters
+          <Filter size={15} /> {t("ui.clearFilters")}
         </button>
         <button
           className="icon-button"
           type="button"
-          aria-label="Focus issue search"
+          aria-label={t("ui.focusSearch")}
           onClick={() => searchRef.current?.focus()}
         >
           <MoreHorizontal size={17} />
@@ -245,14 +250,14 @@ export function IssuesPage({
           <table className="issue-table">
             <thead>
               <tr>
-                <th>Priority</th>
-                <th>Issue</th>
-                <th>Status</th>
-                <th>Assignee</th>
-                <th>Labels</th>
-                <th>Customer</th>
-                <th>Updated</th>
-                <th className="actions-column">Actions</th>
+                <th>{t("ui.priority")}</th>
+                <th>{t("ui.issue")}</th>
+                <th>{t("ui.status")}</th>
+                <th>{t("ui.assignee")}</th>
+                <th>{t("ui.labels")}</th>
+                <th>{t("ui.customer")}</th>
+                <th>{t("ui.updated")}</th>
+                <th className="actions-column">{t("ui.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -261,7 +266,10 @@ export function IssuesPage({
                   key={issue.id}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Open ${issue.identifier}: ${issue.title}`}
+                  aria-label={t("ui.openIssue", {
+                    identifier: issue.identifier,
+                    title: issue.title,
+                  })}
                   onKeyDown={(event) => openOnKeyboard(event, issue.id)}
                   onClick={() => onOpenIssue(issue.id)}
                 >
@@ -314,7 +322,7 @@ export function IssuesPage({
                         role="menuitem"
                         onClick={() => onEditIssue(issue.id)}
                       >
-                        <PenLine size={14} /> Edit issue
+                        <PenLine size={14} /> {t("ui.edit")}
                       </button>
                       <button
                         className="danger"
@@ -322,7 +330,7 @@ export function IssuesPage({
                         role="menuitem"
                         onClick={() => onDeleteIssue(issue.id)}
                       >
-                        <Trash2 size={14} /> Delete issue
+                        <Trash2 size={14} /> {t("ui.delete")}
                       </button>
                     </ActionMenu>
                   </td>
@@ -332,11 +340,9 @@ export function IssuesPage({
           </table>
         ) : (
           <EmptyState
-            title={issues.length ? "No matching issues" : "No issues yet"}
+            title={issues.length ? t("ui.noMatching") : t("empty")}
             description={
-              issues.length
-                ? "Try a different query or clear the filter."
-                : "Create the first internal work item from a conversation or directly."
+              issues.length ? t("ui.tryDifferent") : t("ui.firstIssue")
             }
             action={
               issues.length ? (
@@ -345,7 +351,7 @@ export function IssuesPage({
                   type="button"
                   onClick={clearFilters}
                 >
-                  Clear filters
+                  {t("ui.clearFilters")}
                 </button>
               ) : (
                 <button
@@ -353,7 +359,7 @@ export function IssuesPage({
                   type="button"
                   onClick={onNewIssue}
                 >
-                  <Plus size={13} /> New issue
+                  <Plus size={13} /> {t("create")}
                 </button>
               )
             }
@@ -363,11 +369,13 @@ export function IssuesPage({
       </div>
       <div className="table-footer">
         <span>
-          {filtered.length} of {issues.length} issues
+          {t("ui.footerCount", {
+            filtered: filtered.length,
+            total: issues.length,
+          })}
         </span>
         <span>
-          <Keyboard size={13} /> C create · E edit · A assign · P priority · S
-          status
+          <Keyboard size={13} /> {t("ui.shortcuts")}
         </span>
       </div>
     </div>

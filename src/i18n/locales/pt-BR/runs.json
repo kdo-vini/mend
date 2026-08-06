@@ -1,5 +1,12 @@
 {
   "title": "Codex Runs",
   "empty": "Nenhuma execução ainda",
-  "retry": "Executar novamente"
+  "retry": "Executar novamente",
+  "ui": {
+    "eyebrow": "Automação de engenharia",
+    "description": "Investigações isoladas e patches locais, mantidos dentro do workspace.",
+    "refresh": "Atualizar",
+    "refreshing": "Atualizando execuções do Codex…",
+    "emptyDescription": "Inicie uma execução a partir de uma issue quando o contexto estiver pronto."
+  }
 }

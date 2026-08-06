@@ -47,6 +47,10 @@ const profileTabs: Array<{
 const isProfileTab = (value: string | null): value is ProfileTab =>
   profileTabs.some((tab) => tab.id === value);
 
+function profileTabLabel(id: ProfileTab, t: (key: string) => string) {
+  return t(`profileTabs.${id}`);
+}
+
 function initials(name: string) {
   return (
     name
@@ -273,17 +277,15 @@ export function ProfileWorkspacePage({
   if (loading)
     return (
       <div className="page profile-page">
-        <LoadingState label="Loading your profile…" />
+        <LoadingState label={t("profileLoading", { ns: "settings" })} />
       </div>
     );
   if (error || !user || !workspace)
     return (
       <div className="page profile-page">
         <ErrorState
-          title="Profile unavailable"
-          description={
-            error ?? "Your account or workspace could not be loaded."
-          }
+          title={t("profileUnavailable", { ns: "settings" })}
+          description={error ?? t("profileLoadError", { ns: "settings" })}
           onRetry={() => void load()}
         />
       </div>
@@ -293,12 +295,11 @@ export function ProfileWorkspacePage({
     <div className="page profile-page">
       <header className="page-header profile-header">
         <div>
-          <div className="page-kicker">Account & workspace</div>
-          <h1>Profile</h1>
-          <p>
-            Manage one area at a time. Account details, workspace identity,
-            subscription status and security stay separated.
-          </p>
+          <div className="page-kicker">
+            {t("profileEyebrow", { ns: "settings" })}
+          </div>
+          <h1>{t("profileTitle", { ns: "settings" })}</h1>
+          <p>{t("profileDescription", { ns: "settings" })}</p>
         </div>
         <div className="profile-summary">
           <div className="avatar profile-avatar">{initials(accountName)}</div>
@@ -312,9 +313,9 @@ export function ProfileWorkspacePage({
         <nav
           className="profile-tabs"
           role="tablist"
-          aria-label="Profile sections"
+          aria-label={t("profileSections", { ns: "settings" })}
         >
-          {profileTabs.map(({ id, label, icon: Icon }) => (
+          {profileTabs.map(({ id, icon: Icon }) => (
             <button
               key={id}
               id={`profile-tab-${id}`}
@@ -327,7 +328,9 @@ export function ProfileWorkspacePage({
               onClick={() => selectTab(id)}
             >
               <Icon size={16} />
-              <span>{label}</span>
+              <span>
+                {profileTabLabel(id, (key) => t(key, { ns: "settings" }))}
+              </span>
             </button>
           ))}
         </nav>
@@ -342,10 +345,7 @@ export function ProfileWorkspacePage({
               <div className="profile-section-heading">
                 <div>
                   <h2>{t("personalProfile", { ns: "settings" })}</h2>
-                  <p>
-                    This name identifies you inside Mend. Your email comes from
-                    the authenticated Supabase account.
-                  </p>
+                  <p>{t("profileDescriptionText", { ns: "settings" })}</p>
                 </div>
               </div>
               <div className="profile-identity-row">
@@ -365,7 +365,7 @@ export function ProfileWorkspacePage({
                   onChange={(locale) => void changeInterfaceLanguage(locale)}
                 />
                 <label>
-                  Display name
+                  {t("displayName", { ns: "settings" })}
                   <input
                     value={profileName}
                     maxLength={100}
@@ -374,7 +374,7 @@ export function ProfileWorkspacePage({
                   />
                 </label>
                 <label>
-                  Email
+                  {t("email", { ns: "settings" })}
                   <div className="readonly-field">
                     <Mail size={14} />
                     <span>{user.email}</span>
@@ -388,7 +388,10 @@ export function ProfileWorkspacePage({
                   disabled={saving || !profileName.trim()}
                   onClick={() => void saveProfile()}
                 >
-                  <Save size={14} /> {saving ? "Saving…" : "Save profile"}
+                  <Save size={14} />{" "}
+                  {saving
+                    ? t("saving", { ns: "settings" })
+                    : t("saveProfile", { ns: "settings" })}
                 </button>
               </div>
             </section>

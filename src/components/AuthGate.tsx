@@ -12,6 +12,8 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { BrandMark } from "./BrandLockup";
+import { LandingPage } from "../features/marketing/LandingPage";
 import {
   applyInterfaceLanguage,
   resolveInterfaceLanguage,
@@ -53,6 +55,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("invitation")
       : null;
+  const publicLanding =
+    typeof window !== "undefined" &&
+    window.location.pathname === "/" &&
+    new URLSearchParams(window.location.search).get("auth") !== "1";
 
   useEffect(() => {
     const syncStoredLanguage = () =>
@@ -101,6 +107,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // The public landing has no dependency on session hydration. Render it
+  // immediately so a slow auth check never flashes a loading shell on "/".
+  if (publicLanding) return <LandingPage />;
   if (!isSupabaseConfigured || localOperatorMode || explicitDemoMode)
     return children;
   if (loading)
@@ -429,14 +438,26 @@ function AuthShell({
   const { t } = useTranslation("auth");
   return (
     <main className="auth-shell">
+      <div className="auth-context">
+        <span className="landing-signal">
+          <span /> {t("contextSignal")}
+        </span>
+        <h2>{t("contextTitle")}</h2>
+        <p>{t("contextDescription")}</p>
+        <div className="auth-context-flow" aria-hidden="true">
+          <span>WhatsApp</span>
+          <i>→</i>
+          <span>{t("contextIssue")}</span>
+          <i>→</i>
+          <span>{t("contextShip")}</span>
+        </div>
+      </div>
       <div className="auth-card">
         <div className="brand-row auth-brand">
-          <div className="brand-mark">
-            <span />
-          </div>
+          <BrandMark />
           <div>
-            <div className="brand-name">Mend</div>
-            <div className="brand-subtitle">{t("supportOperations")}</div>
+            <div className="brand-name">{t("brandName")}</div>
+            <div className="brand-subtitle">{t("supportDescriptor")}</div>
           </div>
         </div>
         <span className="page-kicker">{t("secureWorkspace")}</span>

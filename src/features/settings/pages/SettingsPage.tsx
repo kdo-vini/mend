@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Bot,
   ChevronRight,
@@ -132,6 +133,7 @@ export function SettingsPage({
   onChannelChange: (channel: WhatsAppInstance | null) => void;
   onConfirm: Confirm;
 }) {
+  const { t } = useTranslation("settings");
   type SettingsTab =
     | "whatsapp"
     | "connections"
@@ -867,13 +869,13 @@ export function SettingsPage({
     label: string;
     icon: typeof MessageCircle;
   }> = [
-    { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-    { id: "connections", label: "Plugins", icon: Link2 },
-    { id: "members", label: "Members", icon: UsersRound },
-    { id: "ai", label: "AI behavior", icon: Bot },
-    { id: "flows", label: "Flows", icon: GitBranch },
-    { id: "repositories", label: "Repositories", icon: GitBranch },
-    { id: "audit", label: "Audit log", icon: ShieldCheck },
+    { id: "whatsapp", label: t("tabs.whatsapp"), icon: MessageCircle },
+    { id: "connections", label: t("tabs.plugins"), icon: Link2 },
+    { id: "members", label: t("tabs.members"), icon: UsersRound },
+    { id: "ai", label: t("tabs.ai"), icon: Bot },
+    { id: "flows", label: t("tabs.flows"), icon: GitBranch },
+    { id: "repositories", label: t("tabs.repositories"), icon: GitBranch },
+    { id: "audit", label: t("tabs.audit"), icon: ShieldCheck },
   ];
   const formatDate = (value: string) => {
     const date = new Date(value);
@@ -899,9 +901,9 @@ export function SettingsPage({
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Workspace configuration"
-        title="Settings"
-        description="Connect the real WhatsApp number and keep people, policies and access history grounded in live data."
+        eyebrow={t("ui.eyebrow")}
+        title={t("ui.title")}
+        description={t("ui.description")}
       />
       <div className="settings-layout">
         <div

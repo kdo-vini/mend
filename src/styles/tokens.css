@@ -1,6 +1,6 @@
 :root {
   --bg: oklch(0.105 0 0);
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.125 0.008 113);
   --surface: oklch(0.15 0.012 113);
   --surface-2: oklch(0.18 0.014 113);
   --surface-3: oklch(0.22 0.016 113);
@@ -8,9 +8,9 @@
   --line-strong: oklch(0.44 0.016 113 / 0.56);
   --ink: oklch(0.965 0 0);
   --ink-soft: oklch(0.86 0.008 113);
-  --muted: oklch(0.97 0 0);
+  --muted: oklch(0.69 0.018 113);
   --muted-2: oklch(0.52 0.018 113);
-  --accent: oklch(0.97 0 0);
+  --accent: oklch(0.7 0.15 258);
   --accent-soft: oklch(0.73 0.095 258);
   --accent-wash: oklch(0.7 0.15 258 / 0.13);
   --signal: oklch(0.68 0.12 113);
@@ -39,41 +39,13 @@
   --duration-normal: 160ms;
   --focus-ring: 2px solid var(--accent);
   --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --dropdown-surface: oklch(0.985 0 0);
   --dropdown-ink: oklch(0.18 0 0);
   --dropdown-hover: oklch(0.93 0 0);
   --dropdown-selected: oklch(0.88 0 0);
   --dropdown-line: oklch(0.32 0 0 / 0.48);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-
-  /* shadcn semantic tokens mapped to the existing TechneOS theme. */
   --background: var(--bg);
   --foreground: var(--ink);
   --card: var(--surface);
@@ -90,6 +62,18 @@
   --border: var(--line);
   --input: var(--line);
   --ring: var(--accent-soft);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--accent-soft);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: var(--surface-2);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--accent-soft);
 }
 
 :root[data-theme="light"] {

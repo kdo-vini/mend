@@ -20,6 +20,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import type { Issue, IssueStatus } from "../../../types";
 import { currentInterfaceLanguage } from "../../../i18n/preferences";
 import {
@@ -203,6 +204,7 @@ export function KanbanPage({
   onNewIssue,
   onToast,
 }: KanbanPageProps) {
+  const { t } = useTranslation("kanban");
   const [mode, setMode] = useState<Mode>(initialMode);
   const [range, setRange] = useState<PersonalRange>("today");
   const [showCanceled, setShowCanceled] = useState(false);
@@ -570,19 +572,19 @@ export function KanbanPage({
       )}
       <header className="kanban-header">
         <div className="page-heading">
-          <span className="page-kicker">Workspace flow</span>
-          <h1>Kanban</h1>
+          <span className="page-kicker">{t("ui.eyebrow")}</span>
+          <h1>{t("title")}</h1>
           <p>
             {mode === "shared"
-              ? "A shared view of the work that needs attention."
-              : "Your private plan, linked to the workspace."}
+              ? t("ui.sharedDescription")
+              : t("ui.personalDescription")}
           </p>
         </div>
         <div className="kanban-header-actions">
           <div
             className="kanban-mode-switch"
             role="tablist"
-            aria-label="Kanban view"
+            aria-label={t("ui.view")}
           >
             <button
               className={mode === "shared" ? "active" : ""}
@@ -591,7 +593,7 @@ export function KanbanPage({
               aria-selected={mode === "shared"}
               onClick={() => setMode("shared")}
             >
-              Shared
+              {t("ui.shared")}
             </button>
             <button
               className={mode === "personal" ? "active" : ""}
@@ -600,7 +602,7 @@ export function KanbanPage({
               aria-selected={mode === "personal"}
               onClick={() => setMode("personal")}
             >
-              Personal
+              {t("ui.personal")}
             </button>
           </div>
           {mode === "shared" && (
@@ -610,7 +612,7 @@ export function KanbanPage({
               aria-pressed={showCanceled}
               onClick={() => setShowCanceled((current) => !current)}
             >
-              {showCanceled ? "Hide canceled" : "Canceled"}
+              {showCanceled ? t("ui.hideCanceled") : t("ui.canceled")}
             </button>
           )}
           <button
@@ -619,7 +621,8 @@ export function KanbanPage({
             type="button"
             onClick={mode === "shared" ? onNewIssue : focusTaskInput}
           >
-            <Plus size={14} /> {mode === "shared" ? "New issue" : "New task"}
+            <Plus size={14} />{" "}
+            {mode === "shared" ? t("ui.newIssue") : t("ui.newTask")}
           </button>
         </div>
       </header>
