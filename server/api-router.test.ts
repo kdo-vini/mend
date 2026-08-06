@@ -116,6 +116,35 @@ function createFakeDependencies(
         items: [{ id: "member-1", workspaceId, userId, role: "owner" }],
         query,
       })),
+      listInvitations: vi.fn(async () => [
+        {
+          id: repositoryId,
+          workspaceId,
+          email: "invitee@example.com",
+          role: "agent",
+          status: "sent",
+        },
+      ]),
+      createInvitation: vi.fn(async (_context, input) => ({
+        id: repositoryId,
+        workspaceId,
+        ...input,
+        status: "sent",
+      })),
+      updateInvitationRole: vi.fn(async (_context, invitationId, input) => ({
+        id: invitationId,
+        workspaceId,
+        ...input,
+        status: "sent",
+      })),
+      removeInvitation: vi.fn(async () => true),
+      resendInvitation: vi.fn(async (_context, invitationId) => ({
+        id: invitationId,
+        workspaceId,
+        email: "invitee@example.com",
+        role: "agent",
+        status: "sent",
+      })),
       addMember: vi.fn(async (_context, input) => ({
         id: "member-2",
         workspaceId,
@@ -508,6 +537,69 @@ describe("Mend API router", () => {
           .send({ userId, role: "agent" })
       ).status,
     ).toBe(403);
+  });
+
+  it("routes workspace invitations through the admin-only workspace port", async () => {
+    const dependencies = createFakeDependencies();
+    const app = makeApp(dependencies);
+    const headers = scoped(true);
+
+    expect(
+      (
+        await request(app)
+          .get(`/api/workspaces/${workspaceId}/invitations`)
+          .set(headers)
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post(`/api/workspaces/${workspaceId}/invitations`)
+          .set(headers)
+          .send({ email: "invitee@example.com", role: "agent" })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await request(app)
+          .patch(`/api/workspaces/${workspaceId}/invitations/${repositoryId}`)
+          .set(headers)
+          .send({ role: "viewer" })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post(
+            `/api/workspaces/${workspaceId}/invitations/${repositoryId}/resend`,
+          )
+          .set(headers)
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .delete(`/api/workspaces/${workspaceId}/invitations/${repositoryId}`)
+          .set(headers)
+      ).status,
+    ).toBe(204);
+
+    const viewerDependencies = createFakeDependencies();
+    viewerDependencies.membership.getMembership = vi.fn(async () => ({
+      workspaceId,
+      role: "viewer" as const,
+    }));
+    expect(
+      (
+        await request(makeApp(viewerDependencies))
+          .get(`/api/workspaces/${workspaceId}/invitations`)
+          .set(headers)
+      ).status,
+    ).toBe(403);
+    expect(dependencies.workspaces.createInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "owner" }),
+      { email: "invitee@example.com", role: "agent" },
+    );
   });
 
   it("validates issue inputs and never trusts workspace_id from the body", async () => {

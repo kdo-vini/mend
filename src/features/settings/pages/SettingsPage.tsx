@@ -47,13 +47,11 @@ import {
 } from "../api";
 import {
   listLiveAuditLog,
-  listLiveWorkspaceMembers,
   loadLiveAiConversationPolicy,
   saveLiveConversationAiPolicy,
   saveLiveWorkspaceAiPolicy,
   type AuditLogRecord,
   type LiveWorkspaceAiPolicy,
-  type WorkspaceMemberRecord,
 } from "../api";
 import {
   defaultSupportFlow,
@@ -72,11 +70,11 @@ import {
   type AiPolicyChannel,
   type AiPolicyIntegration,
 } from "../../../ai-policy";
-import { supabase } from "../api";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { Select } from "../../../shared/ui/Select";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
+import { MembersPanel } from "../components/MembersPanel";
 
 const triageIntentLabels: Record<TriageIntent, string> = {
   question: "Question / pricing",
@@ -168,13 +166,10 @@ export function SettingsPage({
   const [loading, setLoading] = useState(true);
   const [channelError, setChannelError] = useState<string | null>(null);
   const [channelAction, setChannelAction] = useState(false);
-  const [members, setMembers] = useState<WorkspaceMemberRecord[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLogRecord[]>([]);
   const [aiPolicy, setAiPolicy] = useState<LiveWorkspaceAiPolicy | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [aiMode, setAiMode] = useState<AiMode>("draft");
   const [aiSaving, setAiSaving] = useState(false);
   const [aiPolicySaving, setAiPolicySaving] = useState(false);
@@ -318,20 +313,6 @@ export function SettingsPage({
     };
   }, [onChannelChange, selected?.channelId, workspaceId]);
 
-  useEffect(() => {
-    let active = true;
-    if (!supabase) return undefined;
-    void supabase.auth.getUser().then(({ data }) => {
-      if (active && data.user) {
-        setCurrentUserId(data.user.id);
-        setCurrentUserEmail(data.user.email ?? null);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const loadSettingsData = useCallback(async () => {
     if (
       !workspaceId ||
@@ -342,8 +323,6 @@ export function SettingsPage({
     setSettingsLoading(true);
     setSettingsError(null);
     try {
-      if (activeTab === "members")
-        setMembers(await listLiveWorkspaceMembers(workspaceId));
       if (activeTab === "audit")
         setAuditLog(await listLiveAuditLog(workspaceId));
       if (activeTab === "ai") {
@@ -896,10 +875,6 @@ export function SettingsPage({
     { id: "repositories", label: "Repositories", icon: GitBranch },
     { id: "audit", label: "Audit log", icon: ShieldCheck },
   ];
-  const memberName = (member: WorkspaceMemberRecord) =>
-    member.user_id === currentUserId
-      ? (currentUserEmail ?? "Current account")
-      : "User " + member.user_id.slice(0, 8);
   const formatDate = (value: string) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime())
@@ -1472,63 +1447,11 @@ export function SettingsPage({
               role="tabpanel"
               aria-labelledby="settings-tab-members"
             >
-              <section className="settings-section">
-                <div className="settings-section-header">
-                  <div>
-                    <h2>Workspace members</h2>
-                    <p>
-                      Memberships are read from Supabase with the current
-                      session's row-level access.
-                    </p>
-                  </div>
-                  <span className="section-count">
-                    {members.length} visible
-                  </span>
-                </div>
-                {settingsError && (
-                  <div className="inline-empty" role="alert">
-                    <Info size={16} />
-                    <span>{settingsError}</span>
-                    <button
-                      className="text-button"
-                      type="button"
-                      onClick={() => void loadSettingsData()}
-                    >
-                      Retry
-                    </button>
-                  </div>
-                )}
-                {settingsLoading ? (
-                  <LoadingState label="Loading workspace members…" />
-                ) : !settingsError && members.length === 0 ? (
-                  <EmptyState
-                    title="No visible members"
-                    description="Supabase returned no workspace membership for this session. No sample members are shown."
-                  />
-                ) : (
-                  !settingsError && (
-                    <div
-                      className="settings-list"
-                      aria-label="Live workspace members"
-                    >
-                      {members.map((member) => (
-                        <div className="settings-list-row" key={member.id}>
-                          <div className="avatar avatar-mini avatar-violet">
-                            {memberName(member).slice(0, 2).toUpperCase()}
-                          </div>
-                          <div className="settings-list-main">
-                            <strong>{memberName(member)}</strong>
-                            <span>
-                              Member since {formatDate(member.created_at)}
-                            </span>
-                          </div>
-                          <span className="role-pill">{member.role}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                )}
-              </section>
+              <MembersPanel
+                workspaceId={workspaceId}
+                onToast={onToast}
+                onConfirm={onConfirm}
+              />
             </div>
           )}
 

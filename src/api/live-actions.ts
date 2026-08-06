@@ -463,7 +463,23 @@ export interface LiveWorkspaceMember {
   workspaceId: string;
   userId: string;
   role: "owner" | "admin" | "agent" | "viewer" | string;
+  displayName?: string | null;
+  email?: string | null;
   createdAt?: string | null;
+}
+
+export interface LiveWorkspaceInvitation {
+  id: string;
+  workspaceId: string;
+  email: string;
+  role: "admin" | "agent" | "viewer" | string;
+  invitedBy: string;
+  status: "pending" | "sent" | "failed" | "expired" | string;
+  deliveryKind?: "invite" | "recovery" | null;
+  sentAt?: string | null;
+  expiresAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface LiveAuditLogEntry {
@@ -538,6 +554,66 @@ export async function removeLiveWorkspaceMember(input: {
 }) {
   return apiRequest<void>(
     `/api/workspaces/${encodeURIComponent(input.workspaceId)}/members/${encodeURIComponent(input.userId)}`,
+    { method: "DELETE" },
+    input.workspaceId,
+  );
+}
+
+export async function listLiveWorkspaceInvitations(
+  workspaceId: string,
+): Promise<LiveWorkspaceInvitation[]> {
+  const result = await apiRequest<{ data: LiveWorkspaceInvitation[] }>(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}/invitations`,
+    {},
+    workspaceId,
+  );
+  return result.data ?? [];
+}
+
+export async function createLiveWorkspaceInvitation(input: {
+  workspaceId: string;
+  email: string;
+  role?: "admin" | "agent" | "viewer";
+}) {
+  return apiRequest<LiveWorkspaceInvitation>(
+    `/api/workspaces/${encodeURIComponent(input.workspaceId)}/invitations`,
+    {
+      method: "POST",
+      body: JSON.stringify({ email: input.email, role: input.role ?? "agent" }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function updateLiveWorkspaceInvitationRole(input: {
+  workspaceId: string;
+  invitationId: string;
+  role: "admin" | "agent" | "viewer";
+}) {
+  return apiRequest<LiveWorkspaceInvitation>(
+    `/api/workspaces/${encodeURIComponent(input.workspaceId)}/invitations/${encodeURIComponent(input.invitationId)}`,
+    { method: "PATCH", body: JSON.stringify({ role: input.role }) },
+    input.workspaceId,
+  );
+}
+
+export async function resendLiveWorkspaceInvitation(input: {
+  workspaceId: string;
+  invitationId: string;
+}) {
+  return apiRequest<LiveWorkspaceInvitation>(
+    `/api/workspaces/${encodeURIComponent(input.workspaceId)}/invitations/${encodeURIComponent(input.invitationId)}/resend`,
+    { method: "POST" },
+    input.workspaceId,
+  );
+}
+
+export async function revokeLiveWorkspaceInvitation(input: {
+  workspaceId: string;
+  invitationId: string;
+}) {
+  return apiRequest<void>(
+    `/api/workspaces/${encodeURIComponent(input.workspaceId)}/invitations/${encodeURIComponent(input.invitationId)}`,
     { method: "DELETE" },
     input.workspaceId,
   );

@@ -472,6 +472,7 @@ if (serverSupabase) {
       const apiAdapters = createSupabaseApiAdapters({
         client,
         privilegedClient: serverSupabase,
+        invitationClient: workerSupabase,
         jobStore: messageJobs,
       });
       return createApiRouter({ auth: apiAuth, ...apiAdapters })(

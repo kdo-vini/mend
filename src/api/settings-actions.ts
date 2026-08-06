@@ -8,7 +8,6 @@ import {
 } from "../ai-policy";
 
 type Tables = Database["public"]["Tables"];
-export type WorkspaceMemberRecord = Tables["workspace_members"]["Row"];
 export type AuditLogRecord = Tables["audit_log"]["Row"];
 
 export interface AiConversationPolicy {
@@ -36,19 +35,6 @@ async function unwrap<T>(
   if (error) throw new Error(error.message);
   if (data === null) throw new Error("Supabase returned no settings data.");
   return data;
-}
-
-export function listLiveWorkspaceMembers(
-  workspaceId: string,
-  client: MendSupabaseClient | null = supabase,
-) {
-  return unwrap(
-    requireClient(client)
-      .from("workspace_members")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: true }),
-  );
 }
 
 export function listLiveAuditLog(

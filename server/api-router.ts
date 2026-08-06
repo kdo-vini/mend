@@ -140,6 +140,94 @@ function requireFound<T>(value: T | null, resource: string): T {
   return value;
 }
 
+function workspaceApiError(error: unknown): ApiHttpError | null {
+  if (!(error instanceof Error)) return null;
+  const reason = error.message;
+  const mappings: Record<string, [number, string, string]> = {
+    workspace_invitation_required: [
+      409,
+      "workspace_invitation_required",
+      "Workspace membership must be created by accepting an invitation.",
+    ],
+    workspace_invitation_exists: [
+      409,
+      "workspace_invitation_exists",
+      "An invitation is already open for this email.",
+    ],
+    workspace_member_exists: [
+      409,
+      "workspace_member_exists",
+      "This user is already a workspace member.",
+    ],
+    workspace_invitation_not_found: [
+      404,
+      "workspace_invitation_not_found",
+      "The workspace invitation was not found.",
+    ],
+    workspace_invitation_closed: [
+      409,
+      "workspace_invitation_closed",
+      "The workspace invitation is already closed.",
+    ],
+    workspace_invitation_expired: [
+      410,
+      "workspace_invitation_expired",
+      "The workspace invitation has expired.",
+    ],
+    workspace_invitation_revoked: [
+      410,
+      "workspace_invitation_revoked",
+      "The workspace invitation was revoked.",
+    ],
+    workspace_invitation_already_accepted: [
+      409,
+      "workspace_invitation_already_accepted",
+      "The workspace invitation was already accepted.",
+    ],
+    workspace_invitation_email_mismatch: [
+      403,
+      "workspace_invitation_email_mismatch",
+      "This invitation belongs to another email address.",
+    ],
+    invalid_invitation_email: [
+      400,
+      "invalid_invitation_email",
+      "The invitation email is invalid.",
+    ],
+    invalid_workspace_role: [
+      400,
+      "invalid_workspace_role",
+      "The workspace role is invalid.",
+    ],
+    workspace_role_denied: [
+      403,
+      "forbidden",
+      "Insufficient workspace permissions.",
+    ],
+    supabase_invitation_admin_unavailable: [
+      503,
+      "invitation_service_unavailable",
+      "The invitation service is not configured.",
+    ],
+    invitation_base_url_missing: [
+      503,
+      "invitation_service_unavailable",
+      "The application URL is not configured for invitation links.",
+    ],
+    invitation_delivery_failed: [
+      502,
+      "invitation_delivery_failed",
+      "The invitation email could not be sent.",
+    ],
+  };
+  const match = Object.keys(mappings).find(
+    (code) => reason === code || reason.includes(code),
+  );
+  if (!match) return null;
+  const [status, code, message] = mappings[match];
+  return new ApiHttpError(status, code, message);
+}
+
 const mediaInputErrorPrefixes = [
   "invalid_media_data_url",
   "media_data_url_must_be_base64",
@@ -371,6 +459,11 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
       if (mediaError)
         return send(response, mediaError.status, {
           error: { code: mediaError.code, message: mediaError.message },
+        });
+      const workspaceError = workspaceApiError(error);
+      if (workspaceError)
+        return send(response, workspaceError.status, {
+          error: { code: workspaceError.code, message: workspaceError.message },
         });
       // Do not reflect provider, database or authentication errors to clients.
       console.error("[mend-api] unhandled request error", error);

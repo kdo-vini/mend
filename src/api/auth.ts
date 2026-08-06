@@ -87,6 +87,21 @@ export function sendMagicLink(
   });
 }
 
+export function updatePassword(password: string, client?: MendSupabaseClient) {
+  return clientOrDefault(client).auth.updateUser({ password });
+}
+
+export function acceptWorkspaceInvitation(
+  invitationId: string,
+  client?: MendSupabaseClient,
+): Promise<WorkspaceMember> {
+  return callRpc<WorkspaceMember>(
+    clientOrDefault(client),
+    "accept_workspace_invitation",
+    { p_invitation_id: invitationId },
+  );
+}
+
 export function signOut(
   client?: MendSupabaseClient,
 ): Promise<{ error: Error | null }> {

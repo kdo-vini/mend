@@ -20,16 +20,17 @@ Antes de escrever código novo:
 
 ## Catálogo de helpers genéricos
 
-| Helper                                                | Local                                                | Uso obrigatório                                                                                                                                                                                                                                 |
-| ----------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `encryptConnectionSecret` / `decryptConnectionSecret` | `server/connection-crypto.ts`                        | Criptografar tokens, headers, client secrets, refresh tokens e qualquer segredo de conexão. O helper é agnóstico à chave; o MCP resolve `CONNECTION_ENCRYPTION_KEY` com fallback legado `GOOGLE_TOKEN_ENCRYPTION_KEY`. Não criar outro AES-GCM. |
-| `connectionEncryptionKey`                             | `server/mcp.ts`                                      | Resolver e validar a chave de criptografia no backend. Nunca chamar essa lógica no navegador.                                                                                                                                                   |
-| `mcpConnectionRecordFromRow`                          | `server/mcp.ts`                                      | Converter uma linha sanitizada de `mcp_connections` para o contrato de domínio. Worker e adapters devem reutilizar o mapper.                                                                                                                    |
-| `normalizePhoneNumber`                                | `server/whatsmiau.ts`                                | Normalizar telefone antes de procurar o contato em qualquer MCP ou integração de atendimento.                                                                                                                                                   |
-| `apiRequest`                                          | `src/api/transport.ts`                               | Toda chamada HTTP autenticada do navegador. Componentes não devem montar `fetch` próprio.                                                                                                                                                       |
-| `checked`, `row`, `rows`, `str`                       | `server/adapters/supabase-mappers.ts`                | Validar resultados Supabase e converter dados no limite do backend. Não duplicar casts espalhados nos serviços.                                                                                                                                 |
-| `policyDecision` / `normalizeWorkspaceAiPolicy`       | `server/automation/decision.ts` e `src/ai-policy.ts` | Toda decisão de draft, Auto-reply, escalonamento e política de falha. A UI apenas edita a política; não reimplementa os gates.                                                                                                                  |
-| `useConfirmation` / `ConfirmDialog`                   | `src/shared/ui/`                                     | Confirmações destrutivas ou que autorizam escrita externa. Não usar `window.confirm`.                                                                                                                                                           |
+| Helper                                                | Local                                                           | Uso obrigatório                                                                                                                                                                                                                                 |
+| ----------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `encryptConnectionSecret` / `decryptConnectionSecret` | `server/connection-crypto.ts`                                   | Criptografar tokens, headers, client secrets, refresh tokens e qualquer segredo de conexão. O helper é agnóstico à chave; o MCP resolve `CONNECTION_ENCRYPTION_KEY` com fallback legado `GOOGLE_TOKEN_ENCRYPTION_KEY`. Não criar outro AES-GCM. |
+| `connectionEncryptionKey`                             | `server/mcp.ts`                                                 | Resolver e validar a chave de criptografia no backend. Nunca chamar essa lógica no navegador.                                                                                                                                                   |
+| `mcpConnectionRecordFromRow`                          | `server/mcp.ts`                                                 | Converter uma linha sanitizada de `mcp_connections` para o contrato de domínio. Worker e adapters devem reutilizar o mapper.                                                                                                                    |
+| `normalizePhoneNumber`                                | `server/whatsmiau.ts`                                           | Normalizar telefone antes de procurar o contato em qualquer MCP ou integração de atendimento.                                                                                                                                                   |
+| `apiRequest`                                          | `src/api/transport.ts`                                          | Toda chamada HTTP autenticada do navegador. Componentes não devem montar `fetch` próprio.                                                                                                                                                       |
+| `checked`, `row`, `rows`, `str`                       | `server/adapters/supabase-mappers.ts`                           | Validar resultados Supabase e converter dados no limite do backend. Não duplicar casts espalhados nos serviços.                                                                                                                                 |
+| `policyDecision` / `normalizeWorkspaceAiPolicy`       | `server/automation/decision.ts` e `src/ai-policy.ts`            | Toda decisão de draft, Auto-reply, escalonamento e política de falha. A UI apenas edita a política; não reimplementa os gates.                                                                                                                  |
+| `useConfirmation` / `ConfirmDialog`                   | `src/shared/ui/`                                                | Confirmações destrutivas ou que autorizam escrita externa. Não usar `window.confirm`.                                                                                                                                                           |
+| `MembersPanel` / workspace invitation API             | `src/features/settings/components/` + `src/api/live-actions.ts` | Gestão de membros e convites sempre passa pela API workspace-scoped. A UI usa apenas os DTOs sanitizados; envio, recuperação, expiração, aceite e auditoria ficam no adapter/RPC protegido.                                                     |
 
 Aliases antigos, como `encryptGoogleToken` e `decryptGoogleToken`, existem
 somente para compatibilidade com chamadas legadas. Código novo deve usar os
@@ -65,6 +66,17 @@ Linhas Supabase são convertidas uma vez, no limite do backend. O mapper deve:
 - ser reutilizado por listagem, worker e rotas.
 
 Não faça um segundo `map` equivalente em worker, página ou adapter diferente.
+
+### Membros e convites
+
+O fluxo de membros é separado em duas fases: a API cria um convite aberto e o
+Supabase Auth entrega o link; somente `accept_workspace_invitation` pode inserir
+`workspace_members`. A função de listagem segura agrega nome/e-mail de
+`auth.users` após validar a associação à workspace, sem expor essa tabela ao
+navegador. Mudanças de função, revogação, reenvio, aceite e remoção devem passar
+pelas funções protegidas e gerar evento no audit log. A tabela de Settings usa
+`MembersPanel` e os primitives shadcn, mantendo busca local e overflow horizontal
+para telas estreitas.
 
 ### Provider-shaped AI
 

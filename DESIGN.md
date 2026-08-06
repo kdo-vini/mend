@@ -38,10 +38,11 @@ These rules are part of the product surface, not optional styling preferences.
 - Keep the visual hierarchy calm: one primary action per surface, compact metadata, no decorative gradients, and no new animation unless it communicates state.
 - Keep data access at the API boundary. UI components may compose API actions and adapters, but must not create direct Supabase queries or duplicate mapping logic.
 - Preserve the dense desktop layout while allowing mobile overflow to become horizontal scrolling or stacked controls; never hide an action without an accessible alternative.
+- New or modified UI uses the local shadcn/ui primitives in `src/components/ui/` (Radix-based, New York style, CSS variables). Do not add a one-off control when a primitive exists. Tailwind utilities are available without Preflight so the legacy base CSS remains authoritative.
 
 ## Confirmation pattern
 
-Confirmations are app-native modal dialogs built from the existing `.modal` structure. Use `useConfirmation()` from `src/shared/ui/useConfirmation.tsx` and await its Promise before running the action.
+Confirmations are app-native AlertDialogs built from the shared shadcn primitive. Use `useConfirmation()` from `src/shared/ui/useConfirmation.tsx` and await its Promise before running the action.
 
 - State the decision in a short, sentence-case title using the action verb: “Delete issue?” or “Enable Auto-reply?”.
 - Explain the consequence in the description. Do not repeat the title or hide important impact in a toast.

@@ -40,6 +40,7 @@ SUPABASE_SERVICE_ROLE_KEY=<Supabase secret/service-role key>
 WHATSMIAU_API_KEY=<Whatsmiau API key>
 WHATSMIAU_WEBHOOK_SECRET=<same secret configured on the Edge Function>
 WHATSMIAU_WEBHOOK_URL=https://uwhugsimhtjtrnuotuki.supabase.co/functions/v1/whats-mend-webhook
+# Public app URL used by workspace invitation and recovery links.
 APP_BASE_URL=https://<mend-domain>
 GOOGLE_CLIENT_ID=<Google OAuth client id>
 GOOGLE_CLIENT_SECRET=<Google OAuth client secret>

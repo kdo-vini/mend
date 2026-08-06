@@ -399,6 +399,17 @@ describe("Supabase API adapters", () => {
         },
       ],
     });
+    client.rpcResults.set("list_workspace_members_with_email", [
+      {
+        id: "member-1",
+        workspace_id: workspaceId,
+        user_id: userId,
+        role: "agent",
+        display_name: "Agent",
+        email: "agent@example.com",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
     const dependencies = adapters(client);
     const context = { userId, workspaceId, role: "owner" as const };
     await expect(

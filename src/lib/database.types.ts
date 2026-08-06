@@ -1634,6 +1634,65 @@ export type Database = {
           },
         ]
       }
+      workspace_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          delivery_kind: string | null
+          delivery_status: string
+          email: string
+          expires_at: string | null
+          id: string
+          invited_by: string
+          last_error_code: string | null
+          revoked_at: string | null
+          role: string
+          sent_at: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          delivery_kind?: string | null
+          delivery_status?: string
+          email: string
+          expires_at?: string | null
+          id?: string
+          invited_by: string
+          last_error_code?: string | null
+          revoked_at?: string | null
+          role?: string
+          sent_at?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          delivery_kind?: string | null
+          delivery_status?: string
+          email?: string
+          expires_at?: string | null
+          id?: string
+          invited_by?: string
+          last_error_code?: string | null
+          revoked_at?: string | null
+          role?: string
+          sent_at?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_invitations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           ai_policy_json: Json
@@ -1719,6 +1778,103 @@ export type Database = {
       is_workspace_member: {
         Args: { target_workspace_id: string }
         Returns: boolean
+      }
+      accept_workspace_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          created_at: string
+          display_name: string | null
+          id: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+      }
+      create_workspace_invitation: {
+        Args: {
+          p_email: string
+          p_role?: string
+          p_workspace_id: string
+        }
+        Returns: {
+          accepted_at: string | null
+          created_at: string
+          delivery_kind: string | null
+          delivery_status: string
+          email: string
+          expires_at: string | null
+          id: string
+          invited_by: string
+          last_error_code: string | null
+          revoked_at: string | null
+          role: string
+          sent_at: string | null
+          updated_at: string
+          workspace_id: string
+        }
+      }
+      list_workspace_members_with_email: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }[]
+      }
+      update_workspace_invitation: {
+        Args: {
+          p_invitation_id: string
+          p_role: string
+          p_workspace_id: string
+        }
+        Returns: {
+          accepted_at: string | null
+          created_at: string
+          delivery_kind: string | null
+          delivery_status: string
+          email: string
+          expires_at: string | null
+          id: string
+          invited_by: string
+          last_error_code: string | null
+          revoked_at: string | null
+          role: string
+          sent_at: string | null
+          updated_at: string
+          workspace_id: string
+        }
+      }
+      revoke_workspace_invitation: {
+        Args: { p_invitation_id: string; p_workspace_id: string }
+        Returns: boolean
+      }
+      record_workspace_invitation_delivery: {
+        Args: {
+          p_error_code?: string | null
+          p_invitation_id: string
+          p_kind?: string | null
+          p_status: string
+        }
+        Returns: {
+          accepted_at: string | null
+          created_at: string
+          delivery_kind: string | null
+          delivery_status: string
+          email: string
+          expires_at: string | null
+          id: string
+          invited_by: string
+          last_error_code: string | null
+          revoked_at: string | null
+          role: string
+          sent_at: string | null
+          updated_at: string
+          workspace_id: string
+        }
       }
       pause_conversation_ai: {
         Args: {

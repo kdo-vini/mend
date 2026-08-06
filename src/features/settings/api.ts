@@ -14,9 +14,21 @@ export {
   refreshLiveChannel,
   loadLiveChannelFlow,
   saveLiveChannelFlow,
+  listLiveWorkspaceMembers,
+  updateLiveWorkspaceMemberRole,
+  removeLiveWorkspaceMember,
+  listLiveWorkspaceInvitations,
+  createLiveWorkspaceInvitation,
+  updateLiveWorkspaceInvitationRole,
+  resendLiveWorkspaceInvitation,
+  revokeLiveWorkspaceInvitation,
 } from "../../api/live-actions";
 export type { SupportFlow, SupportFlowNode } from "../../shared/support-flow";
-export type { WhatsAppInstance } from "../../api/live-actions";
+export type {
+  WhatsAppInstance,
+  LiveWorkspaceMember,
+  LiveWorkspaceInvitation,
+} from "../../api/live-actions";
 export {
   disconnectLiveGoogleConnection,
   listLiveGoogleConnections,
@@ -29,7 +41,6 @@ export type {
 } from "../../api/google-connections";
 export {
   listLiveAuditLog,
-  listLiveWorkspaceMembers,
   loadLiveAiConversationPolicy,
   saveLiveConversationAiPolicy,
   saveLiveWorkspaceAiPolicy,
@@ -37,7 +48,6 @@ export {
 export type {
   AuditLogRecord,
   LiveWorkspaceAiPolicy,
-  WorkspaceMemberRecord,
 } from "../../api/settings-actions";
 export {
   createLiveMcpConnection,

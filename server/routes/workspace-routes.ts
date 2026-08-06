@@ -6,6 +6,9 @@ import {
   workspaceMemberCreateSchema,
   workspaceMemberListQuerySchema,
   workspaceMemberRolePatchSchema,
+  workspaceInvitationCreateSchema,
+  workspaceInvitationParamSchema,
+  workspaceInvitationRolePatchSchema,
   workspaceParamSchema,
   workspacePatchSchema,
 } from "./schemas.js";
@@ -146,6 +149,81 @@ export function registerWorkspaceRoutes(context: ApiRouteModuleContext) {
           "workspace member was not found",
         );
       noContent(response);
+    }),
+  );
+  router.get(
+    "/api/workspaces/:id/invitations",
+    asyncRoute(async (request, response) => {
+      const workspaceId = parse(workspaceParamSchema, request.params).id;
+      const context = await access(response, workspaceId, "admin");
+      send(response, 200, {
+        data: await dependencies.workspaces.listInvitations(context),
+      });
+    }),
+  );
+  router.post(
+    "/api/workspaces/:id/invitations",
+    asyncRoute(async (request, response) => {
+      const workspaceId = parse(workspaceParamSchema, request.params).id;
+      const context = await access(response, workspaceId, "admin");
+      send(
+        response,
+        201,
+        await dependencies.workspaces.createInvitation(
+          context,
+          parse(workspaceInvitationCreateSchema, request.body),
+        ),
+      );
+    }),
+  );
+  router.patch(
+    "/api/workspaces/:id/invitations/:invitationId",
+    asyncRoute(async (request, response) => {
+      const params = parse(workspaceInvitationParamSchema, request.params);
+      const context = await access(response, params.id, "admin");
+      send(
+        response,
+        200,
+        await dependencies.workspaces.updateInvitationRole(
+          context,
+          params.invitationId,
+          parse(workspaceInvitationRolePatchSchema, request.body),
+        ),
+      );
+    }),
+  );
+  router.delete(
+    "/api/workspaces/:id/invitations/:invitationId",
+    asyncRoute(async (request, response) => {
+      const params = parse(workspaceInvitationParamSchema, request.params);
+      const context = await access(response, params.id, "admin");
+      if (
+        !(await dependencies.workspaces.removeInvitation(
+          context,
+          params.invitationId,
+        ))
+      )
+        throw new ApiHttpError(
+          404,
+          "workspace_invitation_not_found",
+          "workspace invitation was not found",
+        );
+      noContent(response);
+    }),
+  );
+  router.post(
+    "/api/workspaces/:id/invitations/:invitationId/resend",
+    asyncRoute(async (request, response) => {
+      const params = parse(workspaceInvitationParamSchema, request.params);
+      const context = await access(response, params.id, "admin");
+      send(
+        response,
+        200,
+        await dependencies.workspaces.resendInvitation(
+          context,
+          params.invitationId,
+        ),
+      );
     }),
   );
   router.get(

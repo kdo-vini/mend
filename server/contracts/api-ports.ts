@@ -10,6 +10,7 @@ import type { GoogleConnectionPort } from "../google-calendar.js";
 import type { McpConnectionPort } from "../mcp.js";
 
 export type WorkspaceRole = "owner" | "admin" | "agent" | "viewer";
+export type WorkspaceInvitationRole = Exclude<WorkspaceRole, "owner">;
 
 export interface AuthenticatedUser {
   id: string;
@@ -64,6 +65,15 @@ export interface WorkspaceMemberRolePatchInput {
   role: WorkspaceRole;
 }
 
+export interface WorkspaceInvitationCreateInput {
+  email: string;
+  role: WorkspaceInvitationRole;
+}
+
+export interface WorkspaceInvitationRolePatchInput {
+  role: WorkspaceInvitationRole;
+}
+
 export interface AuditLogListQuery {
   action?: string;
   entityType?: string;
@@ -94,6 +104,24 @@ export interface WorkspacePort {
     input: WorkspaceMemberRolePatchInput,
   ): Promise<unknown | null>;
   removeMember(context: RequestContext, userId: string): Promise<boolean>;
+  listInvitations(context: RequestContext): Promise<unknown>;
+  createInvitation(
+    context: RequestContext,
+    input: WorkspaceInvitationCreateInput,
+  ): Promise<unknown>;
+  updateInvitationRole(
+    context: RequestContext,
+    invitationId: string,
+    input: WorkspaceInvitationRolePatchInput,
+  ): Promise<unknown>;
+  removeInvitation(
+    context: RequestContext,
+    invitationId: string,
+  ): Promise<boolean>;
+  resendInvitation(
+    context: RequestContext,
+    invitationId: string,
+  ): Promise<unknown>;
   listAuditLog(
     context: RequestContext,
     query: AuditLogListQuery,

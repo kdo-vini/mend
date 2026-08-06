@@ -69,6 +69,40 @@ export function workspaceMember(rowValue: Row): Row {
   };
 }
 
+export function workspaceMemberWithEmail(rowValue: Row): Row {
+  return {
+    ...workspaceMember(rowValue),
+    displayName: nullable(rowValue.display_name),
+    email: nullable(rowValue.email),
+  };
+}
+
+export function workspaceInvitation(rowValue: Row): Row {
+  const expiresAt = nullable(rowValue.expires_at);
+  const deliveryStatus = str(rowValue.delivery_status, "pending");
+  const status =
+    deliveryStatus === "sent" &&
+    expiresAt &&
+    Date.parse(expiresAt) <= Date.now()
+      ? "expired"
+      : deliveryStatus === "sent"
+        ? "pending"
+        : deliveryStatus;
+  return {
+    id: str(rowValue.id),
+    workspaceId: str(rowValue.workspace_id),
+    email: str(rowValue.email),
+    role: str(rowValue.role, "agent"),
+    invitedBy: str(rowValue.invited_by),
+    status,
+    deliveryKind: nullable(rowValue.delivery_kind),
+    sentAt: nullable(rowValue.sent_at),
+    expiresAt,
+    createdAt: nullable(rowValue.created_at),
+    updatedAt: nullable(rowValue.updated_at),
+  };
+}
+
 export function auditLog(rowValue: Row): Row {
   return {
     id: str(rowValue.id),

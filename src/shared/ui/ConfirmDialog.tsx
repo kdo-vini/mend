@@ -1,4 +1,14 @@
 import { useEffect, useRef } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
 
 export interface ConfirmOptions {
   title: string;
@@ -19,57 +29,34 @@ export function ConfirmDialog({
   request: ConfirmationRequest;
   onResolve: (confirmed: boolean) => void;
 }) {
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    (request.destructive
-      ? cancelButtonRef.current
-      : confirmButtonRef.current
-    )?.focus();
+    cancelButtonRef.current?.focus();
   }, [request]);
 
   return (
-    <div className="modal-backdrop confirmation-backdrop" role="presentation">
-      <section
-        className="modal confirmation-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirmation-dialog-title"
-        aria-describedby="confirmation-dialog-description"
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            onResolve(false);
-          }
-        }}
-      >
-        <div className="modal-header">
-          <h2 id="confirmation-dialog-title">{request.title}</h2>
-        </div>
-        <div className="modal-body confirmation-body">
-          <p id="confirmation-dialog-description">{request.description}</p>
-        </div>
-        <div className="modal-footer">
-          <button
+    <AlertDialog open onOpenChange={(open) => !open && onResolve(false)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{request.title}</AlertDialogTitle>
+          <AlertDialogDescription>{request.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel
             ref={cancelButtonRef}
-            className="button button-ghost"
-            type="button"
             onClick={() => onResolve(false)}
           >
             {request.cancelLabel ?? "Cancel"}
-          </button>
-          <button
-            ref={confirmButtonRef}
-            className={`button ${request.destructive ? "button-danger" : "button-primary"}`}
-            type="button"
+          </AlertDialogCancel>
+          <AlertDialogAction
+            variant={request.destructive ? "destructive" : "default"}
             onClick={() => onResolve(true)}
           >
             {request.confirmLabel ?? "Confirm"}
-          </button>
-        </div>
-      </section>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

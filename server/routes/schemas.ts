@@ -14,6 +14,11 @@ export const workspaceRoleSchema = z.enum([
   "agent",
   "viewer",
 ]);
+export const workspaceInvitationRoleSchema = z.enum([
+  "admin",
+  "agent",
+  "viewer",
+]);
 export const allowedCommands = ["install", "lint", "test", "build"] as const;
 export const uuid = z.string().uuid();
 export const idParamSchema = z.object({ id: uuid }).strict();
@@ -54,6 +59,18 @@ export const workspaceMemberCreateSchema = z
   .strict();
 export const workspaceMemberRolePatchSchema = z
   .object({ role: workspaceMemberRoleSchema })
+  .strict();
+export const workspaceInvitationCreateSchema = z
+  .object({
+    email: z.string().trim().email().max(320),
+    role: workspaceInvitationRoleSchema.default("agent"),
+  })
+  .strict();
+export const workspaceInvitationRolePatchSchema = z
+  .object({ role: workspaceInvitationRoleSchema })
+  .strict();
+export const workspaceInvitationParamSchema = z
+  .object({ id: uuid, invitationId: uuid })
   .strict();
 export const auditLogListQuerySchema = z
   .object({

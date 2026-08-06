@@ -34,6 +34,8 @@ import {
   type WorkspaceMemberCreateInput,
   type WorkspaceMemberListQuery,
   type WorkspaceMemberRolePatchInput,
+  type WorkspaceInvitationCreateInput,
+  type WorkspaceInvitationRolePatchInput,
   type AuditLogListQuery,
   type WorkspacePort,
   type WorkspaceRole,
@@ -156,6 +158,8 @@ import {
   str,
   workspace,
   workspaceMember,
+  workspaceMemberWithEmail,
+  workspaceInvitation,
   type DbResult,
   type Row,
 } from "./adapters/supabase-mappers.js";
@@ -188,6 +192,8 @@ export interface SupabaseApiAdapterOptions {
   client?: AnySupabaseClient | null;
   /** Trusted server client used only for backend-only RPCs such as issue-number allocation. */
   privilegedClient?: AnySupabaseClient | null;
+  /** Service-role client reserved for Auth invitation delivery and member e-mail lookups. */
+  invitationClient?: AnySupabaseClient | null;
   /** Convenience for request-scoped RLS clients when the caller does not inject one. */
   accessToken?: string;
   whatsMiau?: WhatsmiauProviderPort;
@@ -240,7 +246,98 @@ export class SupabaseMembershipAdapter implements MembershipAdapter {
 }
 
 export class SupabaseWorkspaceAdapter implements WorkspacePort {
-  constructor(private readonly client: AnySupabaseClient) {}
+  constructor(
+    private readonly client: AnySupabaseClient,
+    private readonly privilegedClient: AnySupabaseClient | null,
+  ) {}
+
+  private requirePrivilegedClient(): AnySupabaseClient {
+    if (!this.privilegedClient)
+      throw new Error("supabase_invitation_admin_unavailable");
+    return this.privilegedClient;
+  }
+
+  private invitationRedirect(invitationId: string): string {
+    const configuredBase =
+      process.env.APP_BASE_URL?.trim() || process.env.PUBLIC_APP_URL?.trim();
+    if (!configuredBase && process.env.NODE_ENV === "production")
+      throw new Error("invitation_base_url_missing");
+    const base = (configuredBase || "http://localhost:5173").replace(/\/$/, "");
+    return `${base}/accept-invite?invitation=${encodeURIComponent(invitationId)}`;
+  }
+
+  private async workspaceName(workspaceId: string): Promise<string> {
+    const result = await this.requirePrivilegedClient()
+      .from("workspaces")
+      .select("name")
+      .eq("id", workspaceId)
+      .maybeSingle();
+    const data = checked("workspace_invitations.workspace_name", result);
+    return str(row(data).name, "TechneOS");
+  }
+
+  private async recordInvitationDelivery(
+    invitationId: string,
+    status: "sent" | "failed",
+    kind: "invite" | "recovery" | null,
+    errorCode?: string,
+  ): Promise<Row> {
+    const result = await this.requirePrivilegedClient().rpc(
+      "record_workspace_invitation_delivery",
+      {
+        p_invitation_id: invitationId,
+        p_status: status,
+        p_kind: kind,
+        p_error_code: errorCode ?? null,
+      },
+    );
+    return rpcRow(checked("workspace_invitations.delivery", result));
+  }
+
+  private async sendInvitationEmail(
+    invitation: Row,
+    workspaceName: string,
+  ): Promise<Row> {
+    const admin = this.requirePrivilegedClient();
+    const email = str(invitation.email);
+    const invitationId = str(invitation.id);
+    const redirectTo = this.invitationRedirect(invitationId);
+    let kind: "invite" | "recovery" = "invite";
+    try {
+      const invite = await admin.auth.admin.inviteUserByEmail(email, {
+        redirectTo,
+        data: { workspace_name: workspaceName },
+      });
+      if (!invite.error) {
+        return this.recordInvitationDelivery(invitationId, "sent", kind);
+      }
+      const code = String(
+        (invite.error as { code?: string }).code ?? "",
+      ).toLowerCase();
+      if (code !== "email_exists" && code !== "user_already_exists")
+        throw invite.error;
+
+      kind = "recovery";
+      const recovery = await admin.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+      if (recovery.error) throw recovery.error;
+      return this.recordInvitationDelivery(invitationId, "sent", kind);
+    } catch (error) {
+      const code = String(
+        (error as { code?: string }).code ?? "auth_invitation_failed",
+      )
+        .toLowerCase()
+        .slice(0, 120);
+      try {
+        await this.recordInvitationDelivery(invitationId, "failed", kind, code);
+      } catch {
+        // Preserve the delivery error for the caller even if the status update
+        // is unavailable. The invitation remains visible for a retry.
+      }
+      throw new Error("invitation_delivery_failed");
+    }
+  }
 
   async list(userId: string) {
     const result = await this.client
@@ -310,16 +407,17 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
   }
 
   async listMembers(context: RequestContext, query: WorkspaceMemberListQuery) {
-    let request = this.client
-      .from("workspace_members")
-      .select("*")
-      .eq("workspace_id", context.workspaceId);
-    if (query.role) request = request.eq("role", query.role);
-    if (query.cursor) request = request.lt("created_at", query.cursor);
-    const result = await request
-      .order("created_at", { ascending: true })
-      .limit(query.limit);
-    return rows(checked("workspace_members.list", result)).map(workspaceMember);
+    const result = await this.client.rpc("list_workspace_members_with_email", {
+      p_workspace_id: context.workspaceId,
+    });
+    const members = rows(checked("workspace_members.list", result));
+    return members
+      .filter((member) => !query.role || str(member.role) === query.role)
+      .filter(
+        (member) => !query.cursor || str(member.created_at) < query.cursor,
+      )
+      .slice(0, query.limit)
+      .map(workspaceMemberWithEmail);
   }
 
   async addMember(context: RequestContext, input: WorkspaceMemberCreateInput) {
@@ -352,6 +450,79 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
       p_user_id: userId,
     });
     return checked("workspace_members.remove", result) === true;
+  }
+
+  async listInvitations(context: RequestContext) {
+    const result = await this.requirePrivilegedClient()
+      .from("workspace_invitations")
+      .select("*")
+      .eq("workspace_id", context.workspaceId)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false });
+    return rows(checked("workspace_invitations.list", result)).map(
+      workspaceInvitation,
+    );
+  }
+
+  async createInvitation(
+    context: RequestContext,
+    input: WorkspaceInvitationCreateInput,
+  ) {
+    this.requirePrivilegedClient();
+    const created = await this.client.rpc("create_workspace_invitation", {
+      p_workspace_id: context.workspaceId,
+      p_email: input.email.trim().toLowerCase(),
+      p_role: input.role,
+    });
+    const invitation = rpcRow(checked("workspace_invitations.create", created));
+    const sent = await this.sendInvitationEmail(
+      invitation,
+      await this.workspaceName(context.workspaceId),
+    );
+    return workspaceInvitation(sent);
+  }
+
+  async updateInvitationRole(
+    context: RequestContext,
+    invitationId: string,
+    input: WorkspaceInvitationRolePatchInput,
+  ) {
+    const result = await this.client.rpc("update_workspace_invitation", {
+      p_workspace_id: context.workspaceId,
+      p_invitation_id: invitationId,
+      p_role: input.role,
+    });
+    return workspaceInvitation(
+      rpcRow(checked("workspace_invitations.update_role", result)),
+    );
+  }
+
+  async removeInvitation(context: RequestContext, invitationId: string) {
+    const result = await this.client.rpc("revoke_workspace_invitation", {
+      p_workspace_id: context.workspaceId,
+      p_invitation_id: invitationId,
+    });
+    return checked("workspace_invitations.revoke", result) === true;
+  }
+
+  async resendInvitation(context: RequestContext, invitationId: string) {
+    const result = await this.requirePrivilegedClient()
+      .from("workspace_invitations")
+      .select("*")
+      .eq("workspace_id", context.workspaceId)
+      .eq("id", invitationId)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .maybeSingle();
+    const invitation = row(checked("workspace_invitations.get", result));
+    if (!Object.keys(invitation).length)
+      throw new Error("workspace_invitation_not_found");
+    const sent = await this.sendInvitationEmail(
+      invitation,
+      await this.workspaceName(context.workspaceId),
+    );
+    return workspaceInvitation(sent);
   }
 
   async listAuditLog(context: RequestContext, query: AuditLogListQuery) {
@@ -3264,12 +3435,16 @@ export function createSupabaseApiAdapters(
     options.client ?? createServerSupabaseClient(options.accessToken),
   );
   const privilegedClient = options.privilegedClient ?? client;
+  const workspacePrivilegedClient = options.invitationClient ?? null;
   const provider =
     options.whatsMiau ??
     (new WhatsmiauMessagingProvider() as WhatsmiauProviderPort);
   const ai = options.aiProvider ?? createSupportAiProvider();
   const membership = new SupabaseMembershipAdapter(client);
-  const workspaces = new SupabaseWorkspaceAdapter(client);
+  const workspaces = new SupabaseWorkspaceAdapter(
+    client,
+    workspacePrivilegedClient,
+  );
   const channels = new SupabaseChannelAdapter(client, provider);
   const mediaStorage = new SupabaseMediaStorage(client);
   const media = new SupabaseMediaPipeline(

@@ -2,8 +2,15 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { signInWithGoogle as startGoogleSignIn } from "../api/auth";
+import {
+  acceptWorkspaceInvitation,
+  signInWithGoogle as startGoogleSignIn,
+  updatePassword,
+} from "../api/auth";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import {
   applyInterfaceLanguage,
@@ -39,6 +46,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
     storedInterfaceLanguage,
   );
   const { t } = useTranslation("auth");
+  const invitePath =
+    typeof window !== "undefined" &&
+    window.location.pathname === "/accept-invite";
+  const invitationId =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("invitation")
+      : null;
 
   useEffect(() => {
     const syncStoredLanguage = () =>
@@ -93,7 +107,31 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <AuthShell title={t("loadingTitle")} message={t("checkingSession")} />
     );
-  if (session) return children;
+  if (session)
+    return invitePath ? (
+      <InviteAcceptance invitationId={invitationId} />
+    ) : (
+      children
+    );
+
+  if (invitePath)
+    return (
+      <AuthShell
+        title={t("inviteSessionTitle")}
+        message={t("inviteSessionRequired")}
+      >
+        <p className="auth-error" role="alert">
+          {invitationId ? t("inviteSessionExpired") : t("inviteLinkInvalid")}
+        </p>
+        <Button
+          className="auth-submit"
+          type="button"
+          onClick={() => window.location.replace("/")}
+        >
+          {t("backToSignIn")} <ArrowRight size={15} />
+        </Button>
+      </AuthShell>
+    );
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -255,6 +293,97 @@ export function AuthGate({ children }: { children: ReactNode }) {
             ? t("createNewAccount")
             : t("alreadyHaveAccount")}
         </button>
+      </form>
+    </AuthShell>
+  );
+}
+
+function InviteAcceptance({ invitationId }: { invitationId: string | null }) {
+  const { t } = useTranslation("auth");
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [action, setAction] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (action) return;
+    if (!invitationId) {
+      setError(t("inviteLinkInvalid"));
+      return;
+    }
+    if (password.length < 8) {
+      setError(t("invitePasswordTooShort"));
+      return;
+    }
+    if (password !== confirmation) {
+      setError(t("invitePasswordsMismatch"));
+      return;
+    }
+    if (!supabase) {
+      setError(t("inviteUnavailable"));
+      return;
+    }
+    setAction(true);
+    setError(null);
+    try {
+      const passwordResult = await updatePassword(password, supabase);
+      if (passwordResult.error) throw new Error(passwordResult.error.message);
+      await acceptWorkspaceInvitation(invitationId, supabase);
+      window.location.replace("/inbox");
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "";
+      const normalized = message.toLowerCase();
+      if (normalized.includes("expired")) setError(t("inviteExpired"));
+      else if (normalized.includes("revoked")) setError(t("inviteRevoked"));
+      else if (normalized.includes("accepted"))
+        setError(t("inviteAlreadyAccepted"));
+      else if (normalized.includes("email")) setError(t("inviteEmailMismatch"));
+      else setError(t("inviteAcceptError"));
+    } finally {
+      setAction(false);
+    }
+  };
+
+  return (
+    <AuthShell title={t("inviteTitle")} message={t("inviteDescription")}>
+      <form className="auth-form" onSubmit={(event) => void submit(event)}>
+        <div className="auth-form-field">
+          <Label htmlFor="invite-password">{t("newPassword")}</Label>
+          <Input
+            id="invite-password"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </div>
+        <div className="auth-form-field">
+          <Label htmlFor="invite-password-confirm">
+            {t("confirmPassword")}
+          </Label>
+          <Input
+            id="invite-password-confirm"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+          />
+        </div>
+        <p className="auth-hint">{t("invitePasswordHint")}</p>
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+        <Button className="auth-submit" type="submit" disabled={action}>
+          {action ? t("acceptingInvite") : t("acceptInvite")}{" "}
+          <ArrowRight size={15} />
+        </Button>
       </form>
     </AuthShell>
   );
