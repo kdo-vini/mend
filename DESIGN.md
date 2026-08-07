@@ -31,6 +31,7 @@ These rules are part of the product surface, not optional styling preferences.
 - Use CSS tokens for color, spacing, radius, focus, motion, and layering. Raw hex colors and one-off spacing values are not allowed in new UI.
 - Prefer existing primitives and patterns before adding a component: `ResourceState` for loading, empty, and error states; `ActionMenu` for row actions; the shared button and field classes for controls.
 - Loading a resource uses a skeleton preview. Spinners are reserved for an active operation whose progress is indeterminate, such as connect, refresh, send, or delete.
+- Async posts use optimistic feedback: render the intended result immediately with `.optimistic-pending` at reduced opacity, disable duplicate controls, and settle it to confirmed or failed only after the server responds. On failure, revert the optimistic result and explain the next action.
 - Row actions stay in an `Actions` column or the equivalent trailing slot. The menu trigger is an icon-only button with an accessible label; destructive actions are separated and confirmed when irreversible.
 - Confirmation actions use the shared `ConfirmDialog` pattern. Never use browser-native `alert()`, `confirm()`, or `prompt()` in product UI.
 - Every interactive control needs a visible `:focus-visible` state, a semantic label, and a disabled state when the operation is pending.

@@ -150,7 +150,27 @@ function mergeConversationSnapshot(
     }
     return true;
   });
-  const merged = { ...snapshot, messages: [...snapshot.messages, ...pending] };
+  const pendingReactions = new Map(
+    (existing?.messages ?? [])
+      .filter((message) => message.pendingReaction !== undefined)
+      .map((message) => [message.id, message]),
+  );
+  const merged = {
+    ...snapshot,
+    messages: [
+      ...snapshot.messages.map((message) => {
+        const pendingReaction = pendingReactions.get(message.id);
+        return pendingReaction
+          ? {
+              ...message,
+              reactions: pendingReaction.reactions,
+              pendingReaction: pendingReaction.pendingReaction,
+            }
+          : message;
+      }),
+      ...pending,
+    ],
+  };
   return sortConversations(
     existing
       ? current.map((item) => (item.id === snapshot.id ? merged : item))
@@ -892,7 +912,34 @@ export function InboxPage({
     }
     const currentReaction = message.reactions?.find((item) => item.mine)?.emoji;
     const nextReaction = currentReaction === reaction ? "" : reaction;
+    const currentReactions = message.reactions ?? [];
+    const optimisticReactions = [
+      ...currentReactions.filter((item) => !item.mine),
+      ...(nextReaction
+        ? [{ emoji: nextReaction, mine: true, pending: true }]
+        : currentReaction
+          ? [{ emoji: currentReaction, mine: true, pending: true }]
+          : []),
+    ];
     setReactionPendingId(message.id);
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === selected.id
+          ? {
+              ...conversation,
+              messages: conversation.messages.map((item) =>
+                item.id === message.id
+                  ? {
+                      ...item,
+                      reactions: optimisticReactions,
+                      pendingReaction: nextReaction,
+                    }
+                  : item,
+              ),
+            }
+          : conversation,
+      ),
+    );
     try {
       if (liveMode && workspaceId)
         await reactToLiveMessage({
@@ -910,14 +957,11 @@ export function InboxPage({
                   item.id === message.id
                     ? {
                         ...item,
-                        reactions: [
-                          ...(item.reactions ?? []).filter(
-                            (itemReaction) => !itemReaction.mine,
-                          ),
-                          ...(nextReaction
-                            ? [{ emoji: nextReaction, mine: true }]
-                            : []),
-                        ],
+                        reactions: optimisticReactions.map(
+                          ({ pending: _pending, ...itemReaction }) =>
+                            itemReaction,
+                        ),
+                        pendingReaction: undefined,
                       }
                     : item,
                 ),
@@ -931,6 +975,24 @@ export function InboxPage({
           : t("toasts.reactionRemoved"),
       );
     } catch (error) {
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === selected.id
+            ? {
+                ...conversation,
+                messages: conversation.messages.map((item) =>
+                  item.id === message.id
+                    ? {
+                        ...item,
+                        reactions: currentReactions,
+                        pendingReaction: undefined,
+                      }
+                    : item,
+                ),
+              }
+            : conversation,
+        ),
+      );
       onToast(localizedError(error, t("errors.reaction")));
     } finally {
       setReactionPendingId(undefined);
@@ -1814,8 +1876,30 @@ function MessageBubble({
   const attachmentUrl = message.attachment?.url;
   const failedOutbound =
     message.direction === "outbound" && message.status === "failed";
+  const pendingOutbound =
+    message.direction === "outbound" && message.status === "sending";
+  const persistedMine = message.reactions?.find((item) => item.mine);
+  const visibleReactions =
+    message.pendingReaction !== undefined
+      ? [
+          ...(message.reactions ?? []).filter((item) => !item.mine),
+          ...(message.pendingReaction
+            ? [
+                {
+                  emoji: message.pendingReaction,
+                  mine: true,
+                  pending: true,
+                },
+              ]
+            : persistedMine
+              ? [{ ...persistedMine, pending: true }]
+              : []),
+        ]
+      : (message.reactions ?? []);
   return (
-    <div className={`message-row ${message.direction}`}>
+    <div
+      className={`message-row ${message.direction}${pendingOutbound ? " optimistic-pending" : ""}`}
+    >
       <div className="message-meta">
         {message.direction === "outbound" && message.aiGenerated && (
           <span className="ai-tag">
@@ -1889,16 +1973,16 @@ function MessageBubble({
             </a>
           )}
         </div>
-        {message.reactions && message.reactions.length > 0 && (
+        {visibleReactions.length > 0 && (
           <div
             className="message-reactions"
             aria-label={t("ui.messageReactions")}
           >
-            {message.reactions.map((reaction, index) =>
+            {visibleReactions.map((reaction, index) =>
               reaction.mine ? (
                 <button
                   key={`${reaction.emoji}-${index}`}
-                  className="message-reaction-button"
+                  className={`message-reaction-button${reaction.pending ? " optimistic-pending" : ""}`}
                   type="button"
                   disabled={reactionPending}
                   title={t("ui.removeReaction")}

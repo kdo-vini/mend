@@ -63,7 +63,8 @@ export interface Message {
   };
   quotedMessageId?: string;
   deleted?: boolean;
-  reactions?: Array<{ emoji: string; mine: boolean }>;
+  reactions?: Array<{ emoji: string; mine: boolean; pending?: boolean }>;
+  pendingReaction?: string;
 }
 
 export interface AiDraftSource {

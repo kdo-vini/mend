@@ -41,11 +41,11 @@
   --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --dropdown-surface: oklch(0.985 0 0);
-  --dropdown-ink: oklch(0.18 0 0);
-  --dropdown-hover: oklch(0.93 0 0);
-  --dropdown-selected: oklch(0.88 0 0);
-  --dropdown-line: oklch(0.32 0 0 / 0.48);
+  --dropdown-surface: var(--surface-3);
+  --dropdown-ink: var(--ink);
+  --dropdown-hover: var(--surface-2);
+  --dropdown-selected: var(--accent-wash);
+  --dropdown-line: var(--line-strong);
   --background: var(--bg);
   --foreground: var(--ink);
   --card: var(--surface);
@@ -96,9 +96,9 @@
   --warning: oklch(0.55 0.14 75);
   --danger: oklch(0.55 0.18 25);
   --whatsapp: oklch(0.5 0.16 145);
-  --dropdown-surface: oklch(0.99 0 0);
-  --dropdown-ink: oklch(0.16 0 0);
-  --dropdown-hover: oklch(0.93 0 0);
-  --dropdown-selected: oklch(0.88 0 0);
-  --dropdown-line: oklch(0.34 0 0 / 0.48);
+  --dropdown-surface: var(--surface);
+  --dropdown-ink: var(--ink);
+  --dropdown-hover: var(--surface-2);
+  --dropdown-selected: var(--accent-wash);
+  --dropdown-line: var(--line-strong);
 }

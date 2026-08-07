@@ -158,7 +158,27 @@ function mergeConversationSnapshot(
     }
     return true;
   });
-  const merged = { ...snapshot, messages: [...snapshot.messages, ...pending] };
+  const pendingReactions = new Map(
+    (existing?.messages ?? [])
+      .filter((message) => message.pendingReaction !== undefined)
+      .map((message) => [message.id, message]),
+  );
+  const merged = {
+    ...snapshot,
+    messages: [
+      ...snapshot.messages.map((message) => {
+        const pendingReaction = pendingReactions.get(message.id);
+        return pendingReaction
+          ? {
+              ...message,
+              reactions: pendingReaction.reactions,
+              pendingReaction: pendingReaction.pendingReaction,
+            }
+          : message;
+      }),
+      ...pending,
+    ],
+  };
   return sortConversations(
     existing
       ? current.map((item) => (item.id === snapshot.id ? merged : item))

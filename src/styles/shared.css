@@ -35,6 +35,10 @@
   background: var(--surface-3);
   animation: skeleton-pulse 1.35s ease-in-out infinite;
 }
+.optimistic-pending {
+  opacity: 0.58;
+  transition: opacity var(--duration-normal) var(--ease);
+}
 .skeleton-preview {
   display: flex;
   align-items: center;
@@ -311,6 +315,12 @@
 
 .spin {
   animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .optimistic-pending {
+    transition: none;
+  }
 }
 
 @keyframes spin {
