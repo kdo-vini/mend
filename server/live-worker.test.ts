@@ -183,6 +183,7 @@ class FakeSupabaseHandoff {
   issue: Record<string, unknown> | null = null;
   policy: Record<string, unknown> | null = null;
   notifications: Record<string, unknown>[] = [];
+  messages: Record<string, unknown>[] = [];
   draftId = "draft-1";
 
   from(table: string) {
@@ -217,6 +218,18 @@ class FakeSupabaseHandoff {
         this.state = values;
         return Promise.resolve({ error: null });
       },
+      then: (
+        resolve: (result: {
+          data: Record<string, unknown>[];
+          error: null;
+        }) => unknown,
+      ) =>
+        Promise.resolve(
+          resolve({
+            data: table === "messages" ? this.messages : [],
+            error: null,
+          }),
+        ),
       single: async () => ({
         data: this.issue ?? { id: "issue-1", identifier: "TEC-1" },
         error: null,
@@ -674,9 +687,32 @@ describe("live Whatsmiau worker", () => {
 
   it("drafts an unanswered question without escalating it", async () => {
     const client = new FakeSupabaseHandoff();
+    client.messages = [
+      {
+        id: "message-later",
+        direction: "inbound",
+        text: "Esta mensagem chegou enquanto a IA processava.",
+        caption: null,
+      },
+      {
+        id: "message-unknown",
+        direction: "inbound",
+        text: "Como funciona a integração de estoque?",
+        caption: null,
+      },
+      {
+        id: "message-context",
+        direction: "outbound",
+        text: "Nosso estoque é sincronizado pelo ERP.",
+        caption: null,
+      },
+    ];
+    const draftReply = vi.fn(
+      async () => "I will check that and get back to you.",
+    );
     const provider: SupportAiProvider = {
       name: "openai",
-      draftReply: vi.fn(async () => "I will check that and get back to you."),
+      draftReply,
       triage: vi.fn(async () =>
         JSON.stringify({
           intent: "question",
@@ -727,6 +763,16 @@ describe("live Whatsmiau worker", () => {
     });
     expect(client.issue).toBeNull();
     expect(client.notifications).toEqual([]);
-    expect(provider.draftReply).toHaveBeenCalled();
+    expect(draftReply).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '"direction":"outbound","text":"Nosso estoque é sincronizado pelo ERP."',
+      ),
+      expect.any(String),
+      "en-US",
+    );
+    expect(draftReply.mock.calls[0]?.[0]).toContain(
+      '"reply_target":{"id":"message-unknown","direction":"inbound"',
+    );
+    expect(draftReply.mock.calls[0]?.[0]).not.toContain("message-later");
   });
 });

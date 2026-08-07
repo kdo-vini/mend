@@ -93,6 +93,7 @@ import {
   type SupportAiProvider,
 } from "./providers.js";
 import { normalizeLocale } from "./locale.js";
+import { conversationReplyInput } from "./automation/decision.js";
 import {
   CodexService,
   CodexServiceError,
@@ -1173,11 +1174,14 @@ export class SupabaseConversationAdapter implements ConversationPort {
   ) {
     const current = await this.get(context, conversationId);
     if (!current) return null;
-    const values = rows((current as Row).messages)
-      .map(
-        (item) => `${str(item.direction)}: ${str(item.text || item.caption)}`,
-      )
-      .join("\n");
+    const values = conversationReplyInput(
+      rows((current as Row).messages).map((item) => ({
+        id: str(item.id),
+        direction: str(item.direction),
+        text: str(item.text),
+        caption: str(item.caption),
+      })),
+    );
     const articles = await this.client
       .from("knowledge_articles")
       .select("id, title, body")

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aiStateInput,
+  conversationReplyInput,
   issueIdentifierNumber,
   messageText,
   normalizeAiPolicy,
@@ -44,6 +45,44 @@ describe("live worker automation decisions", () => {
     expect(triageConversationInput(message, [article])).toContain(
       "<published_knowledge_reference>",
     );
+  });
+
+  it("uses outbound messages as context and targets only the inbound contact message", () => {
+    const input = JSON.parse(
+      conversationReplyInput(
+        [
+          { id: "in-1", direction: "inbound", text: "Qual é o contexto?" },
+          {
+            id: "out-1",
+            direction: "outbound",
+            text: "Queremos reposicionar a empresa como software house.",
+          },
+          {
+            id: "in-2",
+            direction: "inbound",
+            text: "Podemos incluir naming no projeto.",
+          },
+        ],
+        "in-2",
+      ),
+    ) as {
+      conversation_messages: Array<{ direction: string; text: string }>;
+      reply_target: { id: string; direction: string; text: string };
+    };
+
+    expect(input.conversation_messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          direction: "outbound",
+          text: expect.stringContaining("software house"),
+        }),
+      ]),
+    );
+    expect(input.reply_target).toEqual({
+      id: "in-2",
+      direction: "inbound",
+      text: "Podemos incluir naming no projeto.",
+    });
   });
 
   it("selects relevant published knowledge by normalized terms", () => {

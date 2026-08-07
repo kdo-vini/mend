@@ -14,6 +14,12 @@ const kanbanMigrationPath = fileURLToPath(
     import.meta.url,
   ),
 );
+const aiTakeoverMigrationPath = fileURLToPath(
+  new URL(
+    "../supabase/migrations/20260807122927_expire_ai_context_after_human_reply.sql",
+    import.meta.url,
+  ),
+);
 
 describe("Supabase security migration contract", () => {
   it("keeps privileged implementations private and public RPCs invoker-only", async () => {
@@ -86,5 +92,16 @@ describe("Supabase security migration contract", () => {
     }
     expect(sql).toContain("workspace agents can update own personal tasks");
     expect(sql).toContain("workspace agents can update own personal events");
+  });
+
+  it("expires active drafts and stale AI copy after a human reply", async () => {
+    const sql = await readFile(aiTakeoverMigrationPath, "utf8");
+
+    expect(sql).toContain(
+      "create or replace function private.pause_conversation_for_human",
+    );
+    expect(sql).toContain("status in ('pending_review', 'auto_eligible')");
+    expect(sql).toContain("latest_intent = null");
+    expect(sql).toContain("current_summary = null");
   });
 });

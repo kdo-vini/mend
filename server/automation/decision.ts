@@ -17,6 +17,13 @@ export interface LiveWorkerKnowledgeArticle {
   body: string;
 }
 
+export interface ConversationReplyMessage {
+  id?: string;
+  direction?: string;
+  text?: string | null;
+  caption?: string | null;
+}
+
 export interface LiveWorkerTriageState {
   lastTriagedMessageId: string | null;
   automationState: "ai_active" | "human_paused";
@@ -67,6 +74,53 @@ export function triageConversationInput(
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+export function conversationReplyInput(
+  messages: readonly ConversationReplyMessage[],
+  replyTargetId?: string,
+): string {
+  const normalized = messages
+    .slice(-50)
+    .map((message) => ({
+      ...(message.id ? { id: message.id } : {}),
+      direction: message.direction === "outbound" ? "outbound" : "inbound",
+      text: String(message.text || message.caption || "")
+        .trim()
+        .slice(0, 12_000),
+    }))
+    .filter((message) => message.text);
+  const target = replyTargetId
+    ? normalized.find(
+        (message) =>
+          message.id === replyTargetId && message.direction === "inbound",
+      )
+    : [...normalized]
+        .reverse()
+        .find((message) => message.direction === "inbound");
+  if (!target) return "";
+
+  let remaining = 50_000;
+  const bounded: typeof normalized = [];
+  for (
+    let index = normalized.length - 1;
+    index >= 0 && remaining > 0;
+    index--
+  ) {
+    const message = normalized[index];
+    const text = message.text.slice(0, remaining);
+    bounded.unshift({ ...message, text });
+    remaining -= text.length;
+  }
+
+  return JSON.stringify({
+    role_legend: {
+      inbound: "message sent by the contact to this account",
+      outbound: "previous reply sent by this account or its operator",
+    },
+    conversation_messages: bounded,
+    reply_target: target,
+  });
 }
 
 export function normalizeAiPolicy(value: unknown): LiveWorkerAiPolicy {

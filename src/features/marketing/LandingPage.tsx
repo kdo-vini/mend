@@ -30,8 +30,12 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { BrandLockup } from "../../components/BrandLockup";
-import { applyInterfaceLanguage } from "../../i18n/preferences";
+import {
+  applyInterfaceLanguage,
+  saveInterfaceLanguage,
+} from "../../i18n/preferences";
 import { normalizeLocale } from "../../i18n/resources";
+import { supabase } from "../../lib/supabase";
 
 const capabilityIcons = [
   MessageCircle,
@@ -329,7 +333,13 @@ export function LandingPage() {
   }, []);
 
   const switchLanguage = () => {
-    void applyInterfaceLanguage(locale === "pt-BR" ? "en-US" : "pt-BR");
+    const nextLocale = locale === "pt-BR" ? "en-US" : "pt-BR";
+    void applyInterfaceLanguage(nextLocale);
+    if (supabase) {
+      void saveInterfaceLanguage(supabase, nextLocale).catch(() => {
+        void applyInterfaceLanguage(nextLocale);
+      });
+    }
   };
 
   return (

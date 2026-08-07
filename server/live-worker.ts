@@ -26,6 +26,7 @@ import { triageConversation, type TriageResult } from "./triage.js";
 import {
   aiStateInput,
   boundedText,
+  conversationReplyInput,
   issueIdentifierNumber,
   issuePriority,
   issueType,
@@ -1383,13 +1384,12 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       default_language?: unknown;
     };
     const phone = await this.customerPhone(input);
+    const history = await this.conversationHistory(input);
     const conversation = [
       "<customer_context>",
       `normalized_phone: ${phone}`,
       "</customer_context>",
-      "<customer_message>",
-      messageText(input.message),
-      "</customer_message>",
+      conversationReplyInput(history, input.persisted.id),
     ].join("\n");
     const contextResult =
       mcpConnections.length && this.provider.draftReplyWithContext
@@ -1422,6 +1422,46 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       mcpEvidence: contextResult.mcpEvidence,
       mcpCalls: contextResult.mcpCalls,
     };
+  }
+
+  private async conversationHistory(input: LiveWorkerAutomationInput): Promise<
+    Array<{
+      id: string;
+      direction: string;
+      text: string | null;
+      caption: string | null;
+    }>
+  > {
+    const result = await this.client
+      .from("messages")
+      .select("id, direction, text, caption, created_at")
+      .eq("workspace_id", input.binding.workspaceId)
+      .eq("conversation_id", input.persisted.conversationId)
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (result.error)
+      throw new Error(`supabase:messages:ai_context:${result.error.message}`);
+
+    const history = [...(result.data ?? [])].reverse();
+    const targetIndex = history.findIndex(
+      (message) => message.id === input.persisted.id,
+    );
+    if (targetIndex >= 0) {
+      const context = history.slice(0, targetIndex + 1);
+      const target = context[targetIndex];
+      if (!target.text?.trim() && !target.caption?.trim())
+        target.text = messageText(input.message);
+      return context;
+    }
+    return [
+      {
+        id: input.persisted.id,
+        direction: "inbound",
+        text: messageText(input.message),
+        caption: null,
+      },
+    ];
   }
 
   private async loadMcpConnections(
