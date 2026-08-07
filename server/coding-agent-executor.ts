@@ -18,7 +18,7 @@ import {
 
 export interface CodingAgentRepositoryConfig {
   agentProvider?: CodingAgentName;
-  executionPlane?: "local_cli" | "github_actions";
+  executionPlane?: "dokploy" | "github_actions";
 }
 
 export interface CodingAgentRepositoryPort {
@@ -28,10 +28,15 @@ export interface CodingAgentRepositoryPort {
   ): Promise<CodingAgentRepositoryConfig | null>;
 }
 
+export type AgentCredentialResolver = (
+  workspaceId: string,
+  provider: CodingAgentName,
+) => Promise<string | null>;
+
 function providerName(value: unknown): CodingAgentName {
   return codingAgentNames.includes(value as CodingAgentName)
     ? (value as CodingAgentName)
-    : "codex";
+    : "openai";
 }
 
 function codingPrompt(
@@ -82,6 +87,7 @@ function checkTools(
 export function createCodingAgentRunExecutor(
   repositories: CodingAgentRepositoryPort,
   cli: CodingAgentCli = createCodingAgentCli(),
+  resolveCredential?: AgentCredentialResolver,
 ): CodexRunExecutor {
   return async (
     input: RunCodexInput,
@@ -93,11 +99,16 @@ export function createCodingAgentRunExecutor(
     if (!config) throw new Error("Coding agent repository is unavailable");
     if (config.executionPlane === "github_actions")
       throw new Error(
-        "GitHub Actions execution requires the Mend workflow callback; choose local CLI until it is configured",
+        "GitHub Actions execution requires the Mend workflow callback; choose Dokploy until it is configured",
       );
 
     const provider = providerName(config.agentProvider);
-    const runId = randomUUID();
+    const apiKey = resolveCredential
+      ? await resolveCredential(input.workspaceId, provider)
+      : undefined;
+    if (resolveCredential && !apiKey)
+      throw new Error(`agent_credential_missing:${provider}`);
+    const runId = input.runId ?? randomUUID();
     const branchName = createBranchName(
       input.issueIdentifier,
       input.issueTitle,
@@ -165,6 +176,7 @@ export function createCodingAgentRunExecutor(
         checks: requestedChecks(input),
         timeoutMs: input.maxRuntimeMs,
         signal: input.signal,
+        ...(apiKey ? { apiKey } : {}),
       });
       if (input.mode !== "implement_fix" && result.patch.files.length)
         throw new Error("Read-only coding agent changed repository files");
@@ -188,6 +200,17 @@ export function createCodingAgentRunExecutor(
         files: result.patch.files,
         patch: result.patch.patch,
         diffTruncated: result.patch.truncated,
+        publishFiles: result.publishFiles?.map((file) => ({
+          path: file.path,
+          status: file.status,
+          ...(file.content !== undefined
+            ? {
+                content: Buffer.from(file.content).toString("base64"),
+                contentEncoding: "base64" as const,
+              }
+            : {}),
+          ...(file.mode ? { mode: file.mode } : {}),
+        })),
         checks,
         branchLocalOnly: true,
       };

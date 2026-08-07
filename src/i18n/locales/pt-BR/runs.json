@@ -72,7 +72,7 @@
     "health": "Health check",
     "customer": "Resposta ao cliente",
     "agentPending": "agente pendente",
-    "providerFallback": "codex",
+    "providerFallback": "openai",
     "fileChange": "alterado",
     "diffAriaLabel": "Diff de engenharia",
     "noCommandOutput": "Nenhuma saída do comando.",

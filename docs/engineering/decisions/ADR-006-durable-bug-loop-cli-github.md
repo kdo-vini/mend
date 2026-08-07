@@ -3,7 +3,7 @@
 - **Status:** accepted
 - **Data:** 2026-08-07
 - **Decisores:** equipe de suporte e plataforma
-- **Escopo:** triagem de bugs, coding runs, repositórios, worker e publicação
+- **Escopo:** triagem de bugs, Agent runs, repositórios, worker e publicação
 
 ## Contexto
 
@@ -13,14 +13,14 @@ conversa estava pausada e iniciava uma correção acoplada ao provider OpenAI se
 um veredito persistido. Isso deixava o processo sem retomada, sem separação entre
 investigação e alteração e sem uma autoridade clara para publicar código.
 
-O produto também precisa aceitar Codex, Claude, Gemini e Verboo sem transformar
+O produto também precisa aceitar ChatGPT, Claude, Gemini e Verboo sem transformar
 configuração do workspace em execução arbitrária de shell.
 
 ## Decisão
 
 O loop é persistido como um `bug_case` com eventos append-only e transições
 idempotentes. A mensagem original é a chave do sinal. Investigação e correção
-são `coding_runs` separados e o caso guarda os identificadores de ambos.
+são `agent_runs` separados e o caso guarda os identificadores de ambos.
 
 As etapas canônicas são:
 
@@ -32,7 +32,7 @@ As etapas canônicas são:
 6. retorno ao cliente e conclusão.
 
 Agentes de código implementam um contrato interno único. O provider é escolhido
-de um registro fechado (`codex`, `claude`, `gemini`, `verboo`); argumentos são
+de um registro fechado (`openai`, `anthropic`, `google`, `verboo`); argumentos são
 montados pelo adapter e nunca aceitos como template vindo do banco ou da UI.
 Entrada não é interpolada em shell. Saída, evidências, patch e checks são
 normalizados antes de persistir.
@@ -69,8 +69,8 @@ duplicados.
 
 ### Operação e migração
 
-- Repositórios existentes recebem Codex e execução local como defaults
-  compatíveis.
+- Repositórios existentes recebem o plano Dokploy e a seleção GitHub como
+  defaults compatíveis.
 - Sem CLI ou GitHub configurado, o caso para em `awaiting_human` com diagnóstico
   sanitizado; não faz fallback silencioso para outro provider.
 - A migration deve manter RLS, grants explícitos, índices de deduplicação e
@@ -84,14 +84,12 @@ duplicados.
   bug real.
 - **Dar token GitHub ao agente:** mistura raciocínio não confiável com autoridade
   de escrita externa.
-- **Guardar tudo em `coding_runs.result_json`:** esconde o caso antes do primeiro
+- **Guardar tudo em `agent_runs.result_json`:** esconde o caso antes do primeiro
   run e dificulta retomada e deduplicação.
 
 ## Evidências
 
 - `server/live-worker.ts`
-- `server/codex-service.ts`
-- `server/codex.ts`
 - `supabase/migrations/20260807135820_durable_bug_loop_and_repository_execution.sql`
 
 ## Revisão

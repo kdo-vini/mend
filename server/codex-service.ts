@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -25,6 +25,7 @@ import type { CodexDeploymentPort } from "./deployment.js";
 import { createDokployDeploymentFromEnv } from "./deployment.js";
 import { createCodingAgentRunExecutor } from "./coding-agent-executor.js";
 import type { CodingAgentName } from "./coding-agent-cli.js";
+import type { AgentCredentialResolver } from "./coding-agent-executor.js";
 import {
   collectGitHubPublishFiles,
   createGitHubControlPlaneFromEnv,
@@ -48,11 +49,10 @@ export interface RepositoryConfig {
   id: string;
   workspaceId: string;
   name: string;
-  localPath: string;
   defaultBranch: string;
   allowedCommands?: readonly string[];
   agentProvider?: CodingAgentName;
-  executionPlane?: "local_cli" | "github_actions";
+  executionPlane?: "dokploy" | "github_actions";
   githubOwner?: string;
   githubRepo?: string;
   githubInstallationId?: string;
@@ -146,6 +146,7 @@ export interface CodexServicePorts {
   git?: GitLocalPort;
   context?: CodexContextPort;
   execute?: CodexRunExecutor;
+  agentCredentialResolver?: AgentCredentialResolver;
   eventSink?: CodexEventSink;
   cancellation?: CodexCancellationRegistry;
   openAi?: OpenAiCodexOptions & {
@@ -159,6 +160,7 @@ export interface CodexServicePorts {
 }
 
 export interface StartCodexRunInput {
+  runId?: string;
   workspaceId: string;
   issueId: string;
   repositoryId: string;
@@ -211,7 +213,7 @@ export class CodexServiceError extends Error {
   }
 }
 
-function nonEmpty(value: string, label: string): string {
+function nonEmpty(value: string | undefined, label: string): string {
   if (typeof value !== "string" || !value.trim())
     throw new CodexServiceError(`${label} is required`);
   return value.trim();
@@ -344,22 +346,18 @@ async function resolveRepository(
   config: RepositoryConfig,
 ): Promise<ResolvedRepository> {
   const workspaceRoot = await realpath(
-    nonEmpty(rootValue, "CODEX_WORKSPACE_ROOT"),
+    nonEmpty(rootValue, "MEND_AGENT_WORKSPACE_ROOT"),
   );
   if (!(await stat(workspaceRoot)).isDirectory())
-    throw new CodexServiceError("CODEX_WORKSPACE_ROOT must be a directory");
-  const configuredPath = path.isAbsolute(config.localPath)
-    ? config.localPath
-    : path.resolve(
-        workspaceRoot,
-        nonEmpty(config.localPath, "repository.localPath"),
-      );
-  const root = await realpath(configuredPath);
+    throw new CodexServiceError(
+      "MEND_AGENT_WORKSPACE_ROOT must be a directory",
+    );
+  const root = workspaceRoot;
   if (!(await stat(root)).isDirectory())
     throw new CodexServiceError("Configured repository must be a directory");
   if (!isWithin(workspaceRoot, root))
     throw new CodexServiceError(
-      "Configured repository is outside CODEX_WORKSPACE_ROOT",
+      "Configured repository is outside the Agent workspace",
     );
   return {
     ...config,
@@ -367,7 +365,6 @@ async function resolveRepository(
     workspaceId: nonEmpty(config.workspaceId, "repository.workspaceId"),
     name: nonEmpty(config.name, "repository.name"),
     defaultBranch: nonEmpty(config.defaultBranch, "repository.defaultBranch"),
-    localPath: config.localPath,
     root,
     allowedCommandSet: normalizeAllowedCommands(config.allowedCommands),
   };
@@ -478,7 +475,12 @@ export class CodexService {
     this.git = ports.git ?? createLocalGit();
     this.contextPort = ports.context ?? new InMemoryCodexContextPort();
     this.execute =
-      ports.execute ?? createCodingAgentRunExecutor(ports.repositories);
+      ports.execute ??
+      createCodingAgentRunExecutor(
+        ports.repositories,
+        undefined,
+        ports.agentCredentialResolver,
+      );
     this.cancellation = ports.cancellation ?? new CodexCancellationRegistry();
     this.github =
       ports.github === undefined
@@ -499,48 +501,90 @@ export class CodexService {
       throw new CodexServiceError(`Repository not found: ${repositoryId}`);
     if (repositoryConfig.workspaceId !== workspaceId)
       throw new CodexServiceError("Repository belongs to another workspace");
-    const repository = await resolveRepository(
-      process.env.CODEX_WORKSPACE_ROOT ?? "",
-      repositoryConfig,
-    );
+    const executionId = input.runId ?? randomUUID();
+    let repository: ResolvedRepository;
+    let cleanupCheckout: (() => Promise<void>) | undefined;
+    try {
+      const githubRepository = this.githubRepository(repositoryConfig);
+      if (repositoryConfig.executionPlane === "dokploy") {
+        if (!githubRepository || !this.github?.checkoutRepositoryArchive)
+          throw new CodexServiceError(
+            "Dokploy Agent runs require a connected GitHub repository",
+          );
+        const agentRoot = await realpath(
+          nonEmpty(
+            process.env.MEND_AGENT_WORKSPACE_ROOT,
+            "MEND_AGENT_WORKSPACE_ROOT",
+          ),
+        );
+        const checkoutRoot = path.join(agentRoot, executionId);
+        await mkdir(checkoutRoot, { recursive: true, mode: 0o700 });
+        cleanupCheckout = async () => {
+          await rm(checkoutRoot, { recursive: true, force: true });
+        };
+        await this.github.checkoutRepositoryArchive(
+          githubRepository,
+          repositoryConfig.defaultBranch,
+          checkoutRoot,
+        );
+        repository = await resolveRepository(checkoutRoot, {
+          ...repositoryConfig,
+        });
+      } else {
+        repository = await resolveRepository(
+          process.env.MEND_AGENT_WORKSPACE_ROOT ?? "",
+          repositoryConfig,
+        );
+      }
+    } catch (error) {
+      await cleanupCheckout?.().catch(() => undefined);
+      throw error;
+    }
     let githubBaseSha: string | undefined;
     const githubRepository = this.githubRepository(repositoryConfig);
-    await this.withRepositoryLock(repository.root, async () => {
-      await this.ensureRepositoryBase(repository);
-      if (githubRepository && this.github?.getBranchSha) {
-        try {
-          const baseSha = await this.github!.getBranchSha(
-            githubRepository,
-            repository.defaultBranch,
-          );
+    let context: CodexContext;
+    let tools: readonly SafeTool[];
+    try {
+      await this.withRepositoryLock(repository.root, async () => {
+        await this.ensureRepositoryBase(repository);
+        if (githubRepository && this.github?.getBranchSha) {
           try {
-            const localState = await this.git.inspect(repository.root);
-            if (
-              localState.head &&
-              localState.head.toLowerCase() !== baseSha.toLowerCase()
-            ) {
-              throw new CodexServiceError(
-                "Local checkout is not at the connected GitHub base commit; update it before starting a run",
-              );
+            const baseSha = await this.github!.getBranchSha(
+              githubRepository,
+              repository.defaultBranch,
+            );
+            try {
+              const localState = await this.git.inspect(repository.root);
+              if (
+                localState.head &&
+                localState.head.toLowerCase() !== baseSha.toLowerCase()
+              ) {
+                throw new CodexServiceError(
+                  "Local checkout is not at the connected GitHub base commit; update it before starting a run",
+                );
+              }
+            } catch (error) {
+              if (error instanceof CodexServiceError) throw error;
+              if (!/not a git repository/i.test(String(error))) throw error;
             }
+            githubBaseSha = baseSha;
           } catch (error) {
             if (error instanceof CodexServiceError) throw error;
-            if (!/not a git repository/i.test(String(error))) throw error;
+            // A local investigation can still run when GitHub is temporarily
+            // unavailable. Publication will fail closed if no base can be proven.
           }
-          githubBaseSha = baseSha;
-        } catch (error) {
-          if (error instanceof CodexServiceError) throw error;
-          // A local investigation can still run when GitHub is temporarily
-          // unavailable. Publication will fail closed if no base can be proven.
         }
-      }
-    });
-    const context = await this.contextPort.mount(
-      mountCodexContext(input.context, repository),
-    );
-    if (context.issue.id !== issueId)
-      throw new CodexServiceError("Context issue does not match run issue");
-    const tools = validateTools(input.tools, repository.allowedCommandSet);
+      });
+      context = await this.contextPort.mount(
+        mountCodexContext(input.context, repository),
+      );
+      if (context.issue.id !== issueId)
+        throw new CodexServiceError("Context issue does not match run issue");
+      tools = validateTools(input.tools, repository.allowedCommandSet);
+    } catch (error) {
+      await cleanupCheckout?.().catch(() => undefined);
+      throw error;
+    }
     const controller = new AbortController();
     const created = deferred<CodexRunRecord>();
     let createdRun: CodexRunRecord | undefined;
@@ -575,6 +619,7 @@ export class CodexService {
     };
     const runnerInput: RunCodexInput = {
       workspaceId,
+      runId: executionId,
       issueId,
       repositoryId,
       issueIdentifier: nonEmpty(input.issueIdentifier, "issueIdentifier"),
@@ -611,6 +656,7 @@ export class CodexService {
         throw error;
       } finally {
         if (createdRun) this.active.delete(createdRun.id);
+        await cleanupCheckout?.().catch(() => undefined);
       }
     })();
 
@@ -693,47 +739,49 @@ export class CodexService {
         );
         if (!repositoryConfig)
           throw new CodexServiceError("Repository no longer exists");
-        const repository = await resolveRepository(
-          process.env.CODEX_WORKSPACE_ROOT ?? "",
-          repositoryConfig,
-        );
-        const context = asRecord(result.context);
-        const issue = asRecord(context.issue);
-        const commit = await this.withRepositoryLock(repository.root, () =>
-          this.commitLocalFix(
-            { run, diff },
-            repository,
-            String(issue.identifier ?? run.issueId),
-            String(issue.title ?? "Approved Codex fix"),
-          ),
-        );
-        result = {
-          ...result,
-          localCommit: {
-            status: "created",
-            branch: commit.branch,
-            sha: commit.sha,
-            paths: commit.paths,
-          } satisfies CodexLocalCommit,
-        };
-        const committed = await this.update(run.id, {
-          status: "approved",
-          branchName: commit.branch,
-          commitSha: commit.sha,
-          result: {
+        if (repositoryConfig.executionPlane !== "dokploy") {
+          const repository = await resolveRepository(
+            process.env.MEND_AGENT_WORKSPACE_ROOT ?? "",
+            repositoryConfig,
+          );
+          const context = asRecord(result.context);
+          const issue = asRecord(context.issue);
+          const commit = await this.withRepositoryLock(repository.root, () =>
+            this.commitLocalFix(
+              { run, diff },
+              repository,
+              String(issue.identifier ?? run.issueId),
+              String(issue.title ?? "Approved Agent fix"),
+            ),
+          );
+          result = {
             ...result,
-            decision: {
-              status: "approved",
-              decidedAt: new Date().toISOString(),
+            localCommit: {
+              status: "created",
+              branch: commit.branch,
+              sha: commit.sha,
+              paths: commit.paths,
+            } satisfies CodexLocalCommit,
+          };
+          const committed = await this.update(run.id, {
+            status: "approved",
+            branchName: commit.branch,
+            commitSha: commit.sha,
+            result: {
+              ...result,
+              decision: {
+                status: "approved",
+                decidedAt: new Date().toISOString(),
+              },
             },
-          },
-        });
-        await this.emitProgress(
-          run.id,
-          "Approved: local branch and commit created; publication remains explicit",
-          { phase: "local_commit", branch: commit.branch, sha: commit.sha },
-        );
-        return committed;
+          });
+          await this.emitProgress(
+            run.id,
+            "Approved: local branch and commit created; publication remains explicit",
+            { phase: "local_commit", branch: commit.branch, sha: commit.sha },
+          );
+          return committed;
+        }
       }
     }
     const approved = await this.update(run.id, {
@@ -775,30 +823,45 @@ export class CodexService {
     );
     if (!repositoryConfig)
       throw new CodexServiceError("Repository no longer exists");
-    const repository = await resolveRepository(
-      process.env.CODEX_WORKSPACE_ROOT ?? "",
-      repositoryConfig,
-    );
+    const repository =
+      repositoryConfig.executionPlane === "dokploy"
+        ? undefined
+        : await resolveRepository(
+            process.env.MEND_AGENT_WORKSPACE_ROOT ?? "",
+            repositoryConfig,
+          );
     const githubRepository = this.githubRepository(repositoryConfig);
     if (githubRepository && this.github) {
       const diff = this.persistedDiff(run);
       if (diff.truncated)
         throw new CodexServiceError("Refusing to publish a truncated diff");
-      const files = await this.withRepositoryLock(repository.root, async () => {
-        if (this.git.switchBranch) {
-          await this.git.switchBranch(repository.root, run.branchName!);
-        }
-        try {
-          return await collectGitHubPublishFiles(repository.root, diff.files);
-        } finally {
-          if (this.git.switchBranch) {
-            await this.git.switchBranch(
-              repository.root,
-              repository.defaultBranch,
-            );
-          }
-        }
-      });
+      const persistedFiles = asRecord(run.result).publishFiles;
+      if (!Array.isArray(persistedFiles) && !repository)
+        throw new CodexServiceError(
+          "The Agent result did not retain publishable files",
+        );
+      const files = Array.isArray(persistedFiles)
+        ? (persistedFiles as Awaited<
+            ReturnType<typeof collectGitHubPublishFiles>
+          >)
+        : await this.withRepositoryLock(repository!.root, async () => {
+            if (this.git.switchBranch) {
+              await this.git.switchBranch(repository!.root, run.branchName!);
+            }
+            try {
+              return await collectGitHubPublishFiles(
+                repository!.root,
+                diff.files,
+              );
+            } finally {
+              if (this.git.switchBranch) {
+                await this.git.switchBranch(
+                  repository!.root,
+                  repositoryConfig.defaultBranch,
+                );
+              }
+            }
+          });
       const context = asRecord(asRecord(run.result).context);
       const issue = asRecord(context.issue);
       const identifier = String(issue.identifier ?? run.issueId);
@@ -821,7 +884,7 @@ export class CodexService {
       const existingIntent = asRecord(runResult.publicationIntent);
       if (
         existingIntent.branch !== run.branchName ||
-        existingIntent.base !== repository.defaultBranch
+        existingIntent.base !== repositoryConfig.defaultBranch
       ) {
         const intentRun = await this.update(run.id, {
           result: {
@@ -829,7 +892,7 @@ export class CodexService {
             publicationIntent: {
               provider: "github_app",
               branch: run.branchName,
-              base: repository.defaultBranch,
+              base: repositoryConfig.defaultBranch,
               files: diff.files.map((file) => ({
                 path: file.relativePath,
                 status: file.status,
@@ -871,7 +934,7 @@ export class CodexService {
             );
           recoveredPullRequest = await this.github.findOpenPullRequest(
             githubRepository,
-            { head: run.branchName, base: repository.defaultBranch },
+            { head: run.branchName, base: repositoryConfig.defaultBranch },
           );
           publishedBranch = {
             branch: run.branchName,
@@ -880,7 +943,7 @@ export class CodexService {
           };
         } else {
           publishedBranch = await this.github.publishBranch(githubRepository, {
-            base: repository.defaultBranch,
+            base: repositoryConfig.defaultBranch,
             branch: run.branchName,
             message: `Fix ${identifier}: ${title}`,
             files,
@@ -889,7 +952,7 @@ export class CodexService {
         }
       } else {
         publishedBranch = await this.github.publishBranch(githubRepository, {
-          base: repository.defaultBranch,
+          base: repositoryConfig.defaultBranch,
           branch: run.branchName,
           message: `Fix ${identifier}: ${title}`,
           files,
@@ -938,7 +1001,7 @@ export class CodexService {
             "The patch passed the configured independent checks and still requires pull request review.",
           ].join("\n"),
           head: publishedBranch.branch,
-          base: repository.defaultBranch,
+          base: repositoryConfig.defaultBranch,
         }));
       const published = await this.update(run.id, {
         commitSha: publishedBranch.commitSha,
@@ -967,6 +1030,10 @@ export class CodexService {
     }
     if (!this.git.push)
       throw new CodexServiceError("Git publication is not configured");
+    if (!repository)
+      throw new CodexServiceError(
+        "GitHub publication is not configured for this Agent run",
+      );
     const remote = process.env.CODEX_GIT_REMOTE?.trim() || "origin";
     const pushed = await this.git.push(repository.root, remote, run.branchName);
     const published = await this.update(run.id, {

@@ -10,8 +10,8 @@ export type Workspace = Tables["workspaces"]["Row"];
 export type ConversationRecord = Tables["conversations"]["Row"];
 export type MessageRecord = Tables["messages"]["Row"];
 export type IssueRecord = Tables["issues"]["Row"];
-export type CodingRunRecord = Tables["coding_runs"]["Row"];
-export type CodingRunEventRecord = Tables["coding_run_events"]["Row"];
+export type CodingRunRecord = Tables["agent_runs"]["Row"];
+export type CodingRunEventRecord = Tables["agent_run_events"]["Row"];
 export type BugCaseRecord = Tables["bug_cases"]["Row"];
 export type BugCaseEventRecord = Tables["bug_case_events"]["Row"];
 export type KnowledgeArticleRecord = Tables["knowledge_articles"]["Row"];
@@ -20,12 +20,12 @@ export const workspaceRealtimeTables = [
   "conversations",
   "messages",
   "issues",
-  "coding_runs",
+  "agent_runs",
   "channel_connections",
   "conversation_ai_state",
   "ai_drafts",
   "issue_comments",
-  "coding_run_events",
+  "agent_run_events",
   "bug_cases",
   "bug_case_events",
   "knowledge_articles",
@@ -143,7 +143,7 @@ export function listCodingRuns(
   options: { issueId?: string; limit?: number } = {},
 ): Promise<CodingRunRecord[]> {
   let query = client
-    .from("coding_runs")
+    .from("agent_runs")
     .select("*")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
@@ -158,10 +158,10 @@ export function listCodingRunEvents(
 ): Promise<CodingRunEventRecord[]> {
   return unwrap(
     client
-      .from("coding_run_events")
+      .from("agent_run_events")
       .select("*")
       .eq("workspace_id", workspaceId)
-      .eq("coding_run_id", codingRunId)
+      .eq("agent_run_id", codingRunId)
       .order("created_at", { ascending: true }),
   );
 }

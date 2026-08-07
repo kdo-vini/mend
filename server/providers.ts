@@ -126,12 +126,12 @@ export class OpenAiSupportProvider implements SupportAiProvider {
 
   constructor(
     client?: OpenAiResponsesClient,
-    options: { model?: string } = {},
+    options: { model?: string; apiKey?: string } = {},
   ) {
     this.client =
       client ??
       (new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
+        apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
       }) as unknown as OpenAiResponsesClient);
     this.model = options.model ?? process.env.SUPPORT_AI_MODEL ?? "gpt-5-mini";
   }
@@ -328,7 +328,11 @@ export function createSupportAiProvider(
   options: {
     client?: OpenAiResponsesClient;
     model?: string;
+    apiKey?: string;
   } = {},
 ): SupportAiProvider {
-  return new OpenAiSupportProvider(options.client, { model: options.model });
+  return new OpenAiSupportProvider(options.client, {
+    model: options.model,
+    apiKey: options.apiKey,
+  });
 }

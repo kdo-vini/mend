@@ -27,6 +27,17 @@ import { createSupabaseApiAdapters } from "./supabase-api-adapters.js";
 import { createSupabaseLiveWorker, type LiveWorker } from "./live-worker.js";
 import { getVapidPublicKey } from "./push.js";
 import { readGoogleOAuthConfig } from "./google-calendar.js";
+import { CodexService } from "./codex-service.js";
+import { redactSecrets } from "./codex.js";
+import {
+  SupabaseAgentCredentialAdapter,
+  SupabaseCodexRunStore,
+  SupabaseRepositoryAdapter,
+} from "./supabase-api-adapters.js";
+import {
+  agentMaxRuntimeMs,
+  type AgentRunRequestedJobPayload,
+} from "./agent-runtime.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -141,13 +152,16 @@ app.get("/api/push/config", (_request, response) =>
 );
 
 app.get("/api/ready", (_request, response) => {
-  const codexRoot = process.env.CODEX_WORKSPACE_ROOT?.trim() ?? "";
+  const agentRoot = process.env.MEND_AGENT_WORKSPACE_ROOT?.trim() ?? "";
+  const processRole = process.env.MEND_PROCESS_ROLE?.trim() || "control";
   const checks = {
     supabase: hasServerSupabaseConfig(),
     whatsMiau: Boolean(process.env.WHATSMIAU_API_KEY),
     webhook: Boolean(process.env.WHATSMIAU_WEBHOOK_SECRET),
-    openai: Boolean(process.env.OPENAI_API_KEY),
-    codexWorkspace: Boolean(codexRoot && existsSync(codexRoot)),
+    agentWorkspace:
+      processRole === "runner"
+        ? Boolean(agentRoot && existsSync(agentRoot))
+        : true,
   };
   const ready = Object.values(checks).every(Boolean);
   return response.status(ready ? 200 : 503).json({ ready, checks });
@@ -451,9 +465,8 @@ app.get("/api/runtime", async (_request, response) =>
     service: "mend-api",
     supabase: hasServerSupabaseConfig(),
     whatsMiau: Boolean(process.env.WHATSMIAU_API_KEY),
-    openai: Boolean(process.env.OPENAI_API_KEY),
     googleOAuth: Boolean(readGoogleOAuthConfig()),
-    aiProvider: "openai",
+    agentProviders: ["openai", "anthropic", "google", "verboo"],
     jobs: (await messageJobs.list()).length,
   }),
 );
@@ -526,12 +539,72 @@ if (existsSync(frontendIndex)) {
 }
 
 let liveWorker: LiveWorker | undefined;
-if (workerSupabase && process.env.OPENAI_API_KEY) {
+const processRole = process.env.MEND_PROCESS_ROLE?.trim() || "control";
+if (workerSupabase && processRole === "runner") {
+  const agentCredentials = new SupabaseAgentCredentialAdapter(workerSupabase);
   liveWorker = createSupabaseLiveWorker({
     client: workerSupabase,
     jobStore: messageJobs,
     provider: createSupportAiProvider(),
     whatsappProvider: new WhatsmiauMessagingProvider(),
+    agentRunRunner: async (payload: AgentRunRequestedJobPayload) => {
+      const repositories = new SupabaseRepositoryAdapter(workerSupabase);
+      const store = new SupabaseCodexRunStore(workerSupabase);
+      const existing = await store.getRun(payload.runId);
+      if (
+        existing &&
+        ["completed", "approved", "rejected", "failed", "canceled"].includes(
+          existing.status,
+        )
+      )
+        return;
+      const service = new CodexService({
+        repositories,
+        runs: store,
+        agentCredentialResolver: async (workspaceId, provider) =>
+          (await agentCredentials.resolve(workspaceId, "agent", provider))
+            ?.apiKey ?? null,
+      });
+      try {
+        const handle = await service.start({
+          runId: payload.runId,
+          workspaceId: payload.workspaceId,
+          issueId: payload.issueId,
+          repositoryId: payload.repositoryId,
+          issueIdentifier: payload.issueIdentifier,
+          issueTitle: payload.issueTitle,
+          mode: payload.mode,
+          context: payload.context,
+          tools: payload.tools,
+          ...(payload.createdByUserId
+            ? { createdByUserId: payload.createdByUserId }
+            : {}),
+          maxRuntimeMs: payload.maxRuntimeMs ?? agentMaxRuntimeMs(),
+          ...(payload.commandTimeoutMs
+            ? { commandTimeoutMs: payload.commandTimeoutMs }
+            : {}),
+        });
+        await handle.completion;
+      } catch (error) {
+        const current = await store.getRun(payload.runId);
+        if (current && ["queued", "running"].includes(current.status)) {
+          await store.updateRun(payload.runId, {
+            status: "failed",
+            finishedAt: new Date().toISOString(),
+            result: {
+              ...(current.result && typeof current.result === "object"
+                ? current.result
+                : {}),
+              error: redactSecrets(
+                error instanceof Error ? error.message : String(error),
+              ).slice(0, 2_000),
+            },
+          });
+        }
+        throw error;
+      }
+    },
+    agentCredentials,
     pollIntervalMs: Number(process.env.MEND_WORKER_POLL_MS ?? 1_000),
     onUnmappedMessage: (input) =>
       logger.warn(

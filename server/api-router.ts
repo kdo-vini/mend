@@ -31,7 +31,7 @@ import { registerKanbanRoutes } from "./routes/kanban-routes.js";
 import { registerGoogleConnectionRoutes } from "./routes/google-connection-routes.js";
 import { registerMcpConnectionRoutes } from "./routes/mcp-connection-routes.js";
 import { registerGitHubConnectionRoutes } from "./routes/github-connection-routes.js";
-import { registerCodingAgentRoutes } from "./routes/coding-agent-routes.js";
+import { registerAgentCredentialRoutes } from "./routes/agent-credential-routes.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -447,7 +447,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerRepositoryRoutes(routeContext);
   registerGitHubConnectionRoutes(routeContext);
   registerCodingRunRoutes(routeContext);
-  registerCodingAgentRoutes(routeContext);
+  registerAgentCredentialRoutes(routeContext);
   registerGoogleConnectionRoutes(routeContext);
   registerMcpConnectionRoutes(routeContext);
 

@@ -33,6 +33,15 @@ import { EmptyState } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
 import type { AssigneeOption } from "../../../shared/ui/DataDisplay";
 
+function agentProviderLabel(provider: LiveRepository["agentProvider"]): string {
+  return {
+    openai: "ChatGPT",
+    anthropic: "Claude",
+    google: "Gemini",
+    verboo: "Verboo",
+  }[provider];
+}
+
 export function CommandPalette({
   conversations,
   issues,
@@ -76,7 +85,7 @@ export function CommandPalette({
       label: "View engineering runs",
       hint: "G then R",
       icon: TerminalSquare,
-      action: () => navigate("/codex-runs"),
+      action: () => navigate("/agent-runs"),
     },
     {
       label: "Open knowledge",
@@ -121,7 +130,7 @@ export function CommandPalette({
               icon: CircleDot,
               action: () => onOpenIssue(issue.identifier),
             },
-            ...(normalizedQuery.includes("codex") ||
+            ...(normalizedQuery.includes("agent") ||
             normalizedQuery.includes("run")
               ? [
                   {
@@ -567,7 +576,7 @@ export function EditIssueDialog({
   );
 }
 
-export function RunCodexDialog({
+export function RunAgentDialog({
   issue,
   workspaceId,
   liveMode,
@@ -610,13 +619,13 @@ export function RunCodexDialog({
         className="modal run-modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="run-codex-title"
+        aria-labelledby="run-agent-title"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="modal-header">
           <div>
-            <span className="page-kicker">Coding agent CLI</span>
-            <h2 id="run-codex-title">Run on {issue.identifier}</h2>
+            <span className="page-kicker">Agent runner</span>
+            <h2 id="run-agent-title">Run on {issue.identifier}</h2>
           </div>
           <button
             className="icon-button"
@@ -648,7 +657,7 @@ export function RunCodexDialog({
           <label>
             Repository
             <Select
-              ariaLabel="Engineering repository"
+              ariaLabel="Agent repository"
               value={repositoryId}
               options={[
                 ...(!liveMode
@@ -659,10 +668,10 @@ export function RunCodexDialog({
                   : []),
                 ...repositories.map((repository) => ({
                   value: repository.id,
-                  label: `${repository.name} · ${repository.agentProvider} · ${
-                    repository.executionPlane === "github_actions"
+                  label: `${repository.name} · ${agentProviderLabel(repository.agentProvider)} · ${
+                    repository.githubOwner && repository.githubRepo
                       ? `${repository.githubOwner}/${repository.githubRepo}`
-                      : repository.localPath
+                      : "GitHub repository"
                   }`,
                 })),
               ]}

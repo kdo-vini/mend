@@ -1,7 +1,7 @@
 {
   "brand": {
     "name": "Mend",
-    "codex": "OpenAI Codex",
+    "agent": "Mend Agent",
     "descriptor": "AI support for SaaS builders",
     "tagline": "Keep shipping. Mend the support loop.",
     "workspaceEyebrow": "Mend workspace"
@@ -29,7 +29,7 @@
     "loadingInbox": "Loading Inbox…",
     "loadingIssues": "Loading issues…",
     "loadingKanban": "Loading Kanban…",
-    "loadingCodexRuns": "Loading Codex runs…",
+    "loadingAgentRuns": "Loading Agent runs…",
     "loadingKnowledge": "Loading knowledge…",
     "loadingSettings": "Loading settings…",
     "loadingDescription": "Keeping the current workspace context ready."
@@ -58,18 +58,18 @@
     "notificationDismiss": "The notification could not be dismissed.",
     "notificationsDismiss": "The notifications could not be dismissed.",
     "nativeNotificationsEnable": "Native notifications could not be enabled.",
-    "codexRunQueue": "The Codex run could not be queued.",
-    "codexRunUpdate": "The Codex run could not be updated."
+    "agentRunQueue": "The Agent run could not be queued.",
+    "agentRunUpdate": "The Agent run could not be updated."
   },
   "navigation": {
     "inbox": "Inbox",
     "issues": "Issues",
-    "codexRuns": "Engineering runs",
+    "agentRuns": "Agent runs",
     "knowledge": "Knowledge",
     "settings": "Settings",
     "profile": "Profile",
     "kanban": "Kanban",
-    "codexRunsShort": "Runs",
+    "agentRunsShort": "Runs",
     "more": "More",
     "workspace": "Workspace",
     "session": "Session",
@@ -106,8 +106,8 @@
     "user": "User {{id}}",
     "internalIssueSummary": "Internal work item created from the workspace.",
     "issueImpactPending": "Impact to be assessed during triage.",
-    "codexRunPreparing": "Preparing an isolated workspace and assembling the issue context.",
-    "codexRunStartedDetail": "Run queued with a clean repository context"
+    "agentRunPreparing": "Preparing an ephemeral Agent workspace and assembling the issue context.",
+    "agentRunStartedDetail": "Agent run queued with a clean GitHub repository context"
   },
   "toasts": {
     "liveDataUnavailable": "Live data unavailable: {{message}}",
@@ -118,13 +118,13 @@
     "browserNotificationsBlocked": "Browser notifications are blocked",
     "nativeNotificationsUnsupported": "This browser does not support native notifications here",
     "nativeNotificationsNotConfigured": "Native notifications are not configured yet",
-    "codexRunQueued": "Codex run queued for {{identifier}}",
-    "codexRunStarted": "Codex run started for {{identifier}}",
-    "codexRunCanceled": "Codex run canceled",
-    "codexResultApproved": "Codex result approved and committed locally",
-    "codexBranchPublished": "Codex branch published",
-    "codexDeploymentStarted": "Codex deployment started",
-    "codexResultRejected": "Codex result rejected",
+    "agentRunQueued": "Agent run queued for {{identifier}}",
+    "agentRunStarted": "Agent run started for {{identifier}}",
+    "agentRunCanceled": "Agent run canceled",
+    "agentResultApproved": "Agent result approved",
+    "agentBranchPublished": "Agent branch published",
+    "agentDeploymentStarted": "Agent deployment started",
+    "agentResultRejected": "Agent result rejected",
     "demoNoSession": "Demo mode has no signed-in session",
     "workspaceSwitched": "Switched to {{name}}"
   },

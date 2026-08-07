@@ -43,7 +43,7 @@ type Workspace = Tables["workspaces"]["Row"];
 type Conversation = Tables["conversations"]["Row"];
 type Message = Tables["messages"]["Row"];
 type IssueRow = Tables["issues"]["Row"];
-type RunRow = Tables["coding_runs"]["Row"];
+type RunRow = Tables["agent_runs"]["Row"];
 type KnowledgeRow = Tables["knowledge_articles"]["Row"];
 type AiDraftRow = Tables["ai_drafts"]["Row"];
 type AiDraftKnowledgeRow = Tables["ai_draft_knowledge"]["Row"];
@@ -68,11 +68,10 @@ async function hydrateMessageMediaUrls(
 export interface LiveRepository {
   id: string;
   name: string;
-  localPath: string;
   defaultBranch: string;
   allowedCommands: string[];
   agentProvider: CodingAgentProvider;
-  executionPlane: "local_cli" | "github_actions";
+  executionPlane: "dokploy" | "github_actions";
   githubOwner?: string;
   githubRepo?: string;
   githubInstallationId?: string;
@@ -250,14 +249,14 @@ export async function loadLiveWorkspace(
     ),
     unwrap(
       db
-        .from("coding_runs")
+        .from("agent_runs")
         .select("*")
         .eq("workspace_id", workspace.id)
         .order("created_at", { ascending: false }),
     ),
     unwrap(
       db
-        .from("coding_run_events")
+        .from("agent_run_events")
         .select("*")
         .eq("workspace_id", workspace.id)
         .order("created_at", { ascending: true }),
@@ -376,14 +375,15 @@ export async function loadLiveWorkspace(
         issue.contact_id ? customerByContact.get(issue.contact_id) : undefined,
         {
           labels: labelsByIssue.get(issue.id) ?? [],
-          codexRuns: runCountByIssue.get(issue.id) ?? 0,
+          agentRuns: runCountByIssue.get(issue.id) ?? 0,
         },
       ),
     ),
     runs: [
       ...bugCases
         .filter(
-          (bugCase) => !bugCase.investigation_run_id && !bugCase.fix_run_id,
+          (bugCase) =>
+            !bugCase.investigation_agent_run_id && !bugCase.fix_agent_run_id,
         )
         .map((bugCase) =>
           toUiBugCase(
@@ -395,8 +395,8 @@ export async function loadLiveWorkspace(
       ...runs.map((run) => {
         const bugCase = bugCases.find(
           (item) =>
-            item.investigation_run_id === run.id ||
-            item.fix_run_id === run.id ||
+            item.investigation_agent_run_id === run.id ||
+            item.fix_agent_run_id === run.id ||
             item.issue_id === run.issue_id,
         );
         return toUiRun(
@@ -702,7 +702,7 @@ export interface LiveIssueListFilters {
   label?: string;
   contactId?: string;
   conversationId?: string;
-  hasCodex?: boolean;
+  hasAgent?: boolean;
   limit?: number;
   cursor?: string;
 }
@@ -1595,7 +1595,7 @@ export async function deleteLiveKnowledge(
   );
 }
 
-export async function startLiveCodexRun(
+export async function startLiveAgentRun(
   input: {
     workspaceId: string;
     issueId: string;
@@ -1608,7 +1608,7 @@ export async function startLiveCodexRun(
 ) {
   if (mendApiBaseUrl)
     return apiRequest<RunRow | { run: RunRow }>(
-      `/api/issues/${encodeURIComponent(input.issueIdentifier ?? input.issueId)}/coding-runs`,
+      `/api/issues/${encodeURIComponent(input.issueIdentifier ?? input.issueId)}/agent-runs`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -1621,7 +1621,7 @@ export async function startLiveCodexRun(
     ).then((result) => ("run" in result ? result.run : result));
   return unwrap(
     requireClient(client)
-      .from("coding_runs")
+      .from("agent_runs")
       .insert({
         workspace_id: input.workspaceId,
         issue_id: input.issueId,
@@ -1645,40 +1645,13 @@ export async function listLiveRepositories(
   return (result.data ?? []).map(repositoryToLive);
 }
 
-export interface LiveCodingAgentHealth {
-  provider: CodingAgentProvider;
-  available: boolean;
-  version?: string;
-  error?: string;
-  capabilities: {
-    structuredOutput: boolean;
-    promptViaStdin: boolean;
-    nativeSandbox: boolean;
-    readOnlyMode: boolean;
-    toolAllowlist: boolean;
-    ephemeralSession: boolean;
-  };
-}
-
-export async function listLiveCodingAgentHealth(
-  workspaceId: string,
-): Promise<LiveCodingAgentHealth[]> {
-  const result = await apiRequest<{ data: LiveCodingAgentHealth[] }>(
-    "/api/coding-agents/health",
-    {},
-    workspaceId,
-  );
-  return result.data ?? [];
-}
-
 export async function createLiveRepository(input: {
   workspaceId: string;
   name: string;
-  localPath?: string;
   defaultBranch?: string;
   allowedCommands?: string[];
   agentProvider?: CodingAgentProvider;
-  executionPlane?: "local_cli" | "github_actions";
+  executionPlane?: "dokploy" | "github_actions";
   githubOwner?: string;
   githubRepo?: string;
   githubInstallationId?: string;
@@ -1689,11 +1662,10 @@ export async function createLiveRepository(input: {
       method: "POST",
       body: JSON.stringify({
         name: input.name.trim(),
-        localPath: input.localPath?.trim() ?? "",
         defaultBranch: input.defaultBranch?.trim() || "main",
         allowedCommands: input.allowedCommands,
-        agentProvider: input.agentProvider ?? "codex",
-        executionPlane: input.executionPlane ?? "local_cli",
+        agentProvider: input.agentProvider ?? "openai",
+        executionPlane: input.executionPlane ?? "dokploy",
         githubOwner: input.githubOwner?.trim() || undefined,
         githubRepo: input.githubRepo?.trim() || undefined,
         githubInstallationId: input.githubInstallationId?.trim() || undefined,
@@ -1708,10 +1680,9 @@ export async function updateLiveRepository(input: {
   workspaceId: string;
   repositoryId: string;
   name: string;
-  localPath?: string;
   defaultBranch?: string;
   agentProvider?: CodingAgentProvider;
-  executionPlane?: "local_cli" | "github_actions";
+  executionPlane?: "dokploy" | "github_actions";
   githubOwner?: string;
   githubRepo?: string;
 }): Promise<LiveRepository> {
@@ -1721,10 +1692,9 @@ export async function updateLiveRepository(input: {
       method: "PATCH",
       body: JSON.stringify({
         name: input.name.trim(),
-        localPath: input.localPath?.trim(),
         defaultBranch: input.defaultBranch?.trim() || "main",
-        agentProvider: input.agentProvider ?? "codex",
-        executionPlane: input.executionPlane ?? "local_cli",
+        agentProvider: input.agentProvider ?? "openai",
+        executionPlane: input.executionPlane ?? "dokploy",
         githubOwner: input.githubOwner?.trim() || undefined,
         githubRepo: input.githubRepo?.trim() || undefined,
       }),
@@ -1740,6 +1710,55 @@ export async function removeLiveRepository(input: {
 }): Promise<void> {
   await apiRequest<void>(
     `/api/repositories/${encodeURIComponent(input.repositoryId)}`,
+    { method: "DELETE" },
+    input.workspaceId,
+  );
+}
+
+export type LiveAgentCredential = {
+  task: "support" | "agent";
+  provider: CodingAgentProvider;
+  configured: boolean;
+  updatedAt: string;
+};
+
+export async function listLiveAgentCredentials(
+  workspaceId: string,
+): Promise<LiveAgentCredential[]> {
+  return apiRequest<LiveAgentCredential[]>(
+    "/api/agent-credentials",
+    {},
+    workspaceId,
+  );
+}
+
+export async function saveLiveAgentCredential(input: {
+  workspaceId: string;
+  task: "support" | "agent";
+  provider: CodingAgentProvider;
+  apiKey: string;
+}): Promise<LiveAgentCredential> {
+  return apiRequest<LiveAgentCredential>(
+    "/api/agent-credentials",
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        task: input.task,
+        provider: input.provider,
+        apiKey: input.apiKey,
+      }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function removeLiveAgentCredential(input: {
+  workspaceId: string;
+  task: "support" | "agent";
+  provider: CodingAgentProvider;
+}): Promise<void> {
+  await apiRequest<void>(
+    `/api/agent-credentials/${input.task}/${input.provider}`,
     { method: "DELETE" },
     input.workspaceId,
   );
@@ -1806,7 +1825,7 @@ export async function disconnectLiveGitHub(workspaceId: string): Promise<void> {
   );
 }
 
-export async function updateLiveCodexRun(
+export async function updateLiveAgentRun(
   input: {
     workspaceId: string;
     runId: string;
@@ -1823,7 +1842,7 @@ export async function updateLiveCodexRun(
 ) {
   if (mendApiBaseUrl)
     return apiRequest(
-      `/api/coding-runs/${input.runId}/${input.action}`,
+      `/api/agent-runs/${input.runId}/${input.action}`,
       { method: "POST", body: JSON.stringify({}) },
       input.workspaceId,
     );
@@ -1833,7 +1852,7 @@ export async function updateLiveCodexRun(
     input.action === "deploy" ||
     input.action === "health"
   )
-    throw new Error("Codex release actions require the Mend server runtime");
+    throw new Error("Agent release actions require the Mend server runtime");
   const status =
     input.action === "cancel"
       ? "canceled"
@@ -1842,7 +1861,7 @@ export async function updateLiveCodexRun(
         : "rejected";
   return unwrap(
     requireClient(client)
-      .from("coding_runs")
+      .from("agent_runs")
       .update({ status })
       .eq("workspace_id", input.workspaceId)
       .eq("id", input.runId)
@@ -1868,16 +1887,14 @@ export interface WhatsAppInstance {
 type ApiRepository = {
   id: string;
   name: string;
-  localPath?: string;
-  local_path?: string;
   defaultBranch?: string;
   default_branch?: string;
   allowedCommands?: string[];
   allowed_commands?: string[];
   agentProvider?: CodingAgentProvider;
   agent_provider?: CodingAgentProvider;
-  executionPlane?: "local_cli" | "github_actions";
-  execution_plane?: "local_cli" | "github_actions";
+  executionPlane?: "dokploy" | "github_actions";
+  execution_plane?: "dokploy" | "github_actions";
   githubOwner?: string | null;
   github_owner?: string | null;
   githubRepo?: string | null;
@@ -1890,15 +1907,14 @@ function repositoryToLive(repository: ApiRepository): LiveRepository {
   return {
     id: repository.id,
     name: repository.name,
-    localPath: repository.localPath ?? repository.local_path ?? "",
     defaultBranch:
       repository.defaultBranch ?? repository.default_branch ?? "main",
     allowedCommands:
       repository.allowedCommands ?? repository.allowed_commands ?? [],
     agentProvider:
-      repository.agentProvider ?? repository.agent_provider ?? "codex",
+      repository.agentProvider ?? repository.agent_provider ?? "openai",
     executionPlane:
-      repository.executionPlane ?? repository.execution_plane ?? "local_cli",
+      repository.executionPlane ?? repository.execution_plane ?? "dokploy",
     githubOwner: repository.githubOwner ?? repository.github_owner ?? undefined,
     githubRepo: repository.githubRepo ?? repository.github_repo ?? undefined,
     githubInstallationId:

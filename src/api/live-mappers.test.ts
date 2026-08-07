@@ -26,13 +26,19 @@ const baseMessage: MessageRecord = {
   text: null,
   caption: "Screenshot",
   media_storage_path: null,
+  media_asset_id: null,
+  media_batch_id: null,
+  media_error_code: null,
+  media_status: "none",
   media_remote_url: "https://cdn.example.com/screenshot.png",
+  origin: "whatsapp",
   mime_type: "image/png",
   file_name: "screenshot.png",
   file_size: 1024,
   duration_seconds: null,
   quoted_message_id: "message-0",
   ai_generated: false,
+  read_at: null,
   sent_by_user_id: null,
   provider_status: "delivered",
   provider_timestamp: "2026-08-03T20:00:00.000Z",
@@ -82,9 +88,11 @@ describe("live conversation mapper", () => {
         last_message_at: null,
         last_inbound_at: null,
         last_outbound_at: null,
+        last_read_at: null,
         resolved_at: null,
         snoozed_until: null,
         created_at: "2026-08-03T00:00:00.000Z",
+        support_flow_state_json: {},
         updated_at: "2026-08-03T00:00:00.000Z",
       },
       undefined,
@@ -132,9 +140,11 @@ describe("live conversation mapper", () => {
       last_message_at: "2026-08-04T00:00:00.000Z",
       last_inbound_at: "2026-08-04T00:00:00.000Z",
       last_outbound_at: null,
+      last_read_at: null,
       resolved_at: null,
       snoozed_until: null,
       created_at: "2026-08-03T00:00:00.000Z",
+      support_flow_state_json: {},
       updated_at: "2026-08-04T00:00:00.000Z",
     } satisfies ConversationRecord;
 
@@ -204,9 +214,11 @@ describe("live conversation mapper", () => {
       last_message_at: "2026-08-05T20:30:04.000Z",
       last_inbound_at: "2026-08-05T20:30:04.000Z",
       last_outbound_at: null,
+      last_read_at: null,
       resolved_at: null,
       snoozed_until: null,
       created_at: "2026-08-05T20:28:02.000Z",
+      support_flow_state_json: {},
       updated_at: "2026-08-05T20:30:04.000Z",
     } satisfies ConversationRecord;
 
@@ -242,7 +254,7 @@ describe("live conversation mapper", () => {
   });
 });
 
-describe("live Codex run mapper", () => {
+describe("live Agent run mapper", () => {
   it("exposes persisted diff, files, checks and model summary for review", () => {
     const record = {
       id: "run-1",
@@ -299,8 +311,8 @@ describe("live Codex run mapper", () => {
       ],
       verdict: "pending",
       decision: "pending",
-      investigation_run_id: null,
-      fix_run_id: null,
+      investigation_agent_run_id: null,
+      fix_agent_run_id: null,
       pr_url: null,
       pr_number: null,
       merge_sha: null,
@@ -351,8 +363,8 @@ describe("live Codex run mapper", () => {
       evidence_json: [],
       verdict: "confirmed",
       decision: "notify",
-      investigation_run_id: "run-2",
-      fix_run_id: null,
+      investigation_agent_run_id: "run-2",
+      fix_agent_run_id: null,
       pr_url: null,
       pr_number: null,
       merge_sha: null,

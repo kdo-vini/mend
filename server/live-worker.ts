@@ -9,6 +9,7 @@ import {
 import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
 import {
   OpenAiAudioTranscriber,
+  createSupportAiProvider,
   type McpApprovalInput,
   type SupportAiDraftResult,
   type SupportAiProvider,
@@ -47,13 +48,18 @@ import {
   type NormalizedWhatsmiauMessage,
 } from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
+import type { AgentCredentialPort } from "./contracts/api-ports.js";
 import {
   flowFromChannelSettings,
   type SupportFlowNode,
 } from "../src/shared/support-flow.js";
 import type { SafeTool } from "./codex.js";
+import {
+  AGENT_RUN_REQUESTED_JOB_TYPE,
+  agentMaxRuntimeMs,
+  type AgentRunRequestedJobPayload,
+} from "./agent-runtime.js";
 import { CodexService } from "./codex-service.js";
-import { createCodingAgentCli } from "./coding-agent-cli.js";
 import {
   SupabaseCodexRunStore,
   SupabaseRepositoryAdapter,
@@ -79,7 +85,7 @@ type KnowledgeArticleRow =
 export const WHATSAPP_INGEST_JOB_TYPE = "whatsmiau.message.received";
 export const PROCESS_INBOUND_MESSAGE_JOB_TYPE = "mend.process_inbound_message";
 export const SEND_AI_REPLY_JOB_TYPE = "mend.send_ai_reply";
-export const CODING_RUN_CONTINUATION_JOB_TYPE = "mend.coding_run_continuation";
+export const CODING_RUN_CONTINUATION_JOB_TYPE = "mend.agent_run_continuation";
 
 export function repositorySafeTools(
   allowedCommands: readonly string[] = [],
@@ -148,6 +154,7 @@ type LiveWorkerJobPayload =
   | ProcessInboundMessageJobPayload
   | SendAiReplyJobPayload
   | CodingRunContinuationJobPayload
+  | AgentRunRequestedJobPayload
   | MediaProcessJobPayload;
 
 interface UncheckedSupabaseQuery
@@ -266,6 +273,7 @@ export interface LiveWorkerOptions {
   groupDirectory?: LiveWorkerGroupDirectory;
   jobStore: JobStore<WhatsmiauMessageJobPayload>;
   mediaPipeline?: SupabaseMediaPipeline;
+  agentRunRunner?: (payload: AgentRunRequestedJobPayload) => Promise<void>;
   knowledge?: LiveWorkerKnowledge;
   onDraftReady?: (draft: LiveWorkerDraft) => Promise<void> | void;
   onIssueReady?: (issue: LiveWorkerIssue) => Promise<void> | void;
@@ -439,6 +447,20 @@ export class LiveWorker {
       )
         throw new Error("invalid_coding_run_continuation_job");
       await this.options.automation.processCodingRunContinuation(payload);
+      return;
+    }
+    if (job.type === AGENT_RUN_REQUESTED_JOB_TYPE) {
+      if (!this.options.agentRunRunner)
+        throw new Error("agent_run_runner_not_configured");
+      const payload = job.payload as AgentRunRequestedJobPayload;
+      if (
+        payload.stage !== "agent_run_requested" ||
+        !payload.runId ||
+        !payload.workspaceId ||
+        !payload.repositoryId
+      )
+        throw new Error("invalid_agent_run_requested_job");
+      await this.options.agentRunRunner(payload);
       return;
     }
     if (job.type === MEDIA_PROCESS_JOB_TYPE) {
@@ -698,6 +720,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     whatsappProvider?: WhatsAppProvider,
     private readonly codexStarter?: LiveWorkerCodexStarter,
     continuationJobStore?: JobStore<LiveWorkerJobPayload>,
+    private readonly agentCredentials?: AgentCredentialPort,
   ) {
     this.inbox = inbox ?? new InboxService(new SupabaseInboxPort(client));
     this.bugLoop = new SupabaseBugLoopStore(client);
@@ -738,8 +761,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     }
     const modePolicy = await this.aiMode(input);
     if (modePolicy.mode === "off") return;
+    const provider = await this.providerFor(input.binding.workspaceId);
     const triage = await triageConversation(
-      this.provider,
+      provider,
       triageConversationInput(input.message, input.knowledge),
     );
     const beforeWrite = await this.currentState(input);
@@ -920,7 +944,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (
       route === "bug_triage" &&
       issue &&
-      modePolicy.policy.allowedIntegrations.includes("codex") &&
+      modePolicy.policy.allowedIntegrations.includes("agent") &&
       modePolicy.policy.allowedActions.includes("investigate") &&
       !triage.unsafe &&
       triage.confidence >= modePolicy.policy.safeAutoMinConfidence &&
@@ -1440,14 +1464,14 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     payload: CodingRunContinuationJobPayload,
   ): Promise<void> {
     const result = await this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .select("*")
       .eq("workspace_id", payload.workspaceId)
       .eq("id", payload.runId)
       .maybeSingle();
     if (result.error)
       throw new Error(
-        `supabase:coding_runs:continuation:${result.error.message}`,
+        `supabase:agent_runs:continuation:${result.error.message}`,
       );
     if (!result.data) throw new Error("coding_run_continuation_not_found");
     let persisted = run(row(result.data));
@@ -1465,7 +1489,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       Date.now() - lastUpdate > staleAfterMs
     ) {
       const recovered = await this.client
-        .from("coding_runs")
+        .from("agent_runs")
         .update({
           status: "failed",
           finished_at: new Date().toISOString(),
@@ -1486,7 +1510,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         .maybeSingle();
       if (recovered.error)
         throw new Error(
-          `supabase:coding_runs:stale_recovery:${recovered.error.message}`,
+          `supabase:agent_runs:stale_recovery:${recovered.error.message}`,
         );
       if (recovered.data) persisted = run(row(recovered.data));
     }
@@ -1513,10 +1537,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     await this.notifyWorkspace(
       input,
       payload.triage,
-      "ai.codex_ready",
+      "ai.agent_ready",
       `Fix ready for ${payload.issue.identifier}`,
       "Review the patch and independent checks before creating the commit and draft pull request.",
-      `ai-codex-fix-ready:${payload.runId}`,
+      `ai-agent-fix-ready:${payload.runId}`,
       payload.issue.id,
     );
   }
@@ -1559,10 +1583,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     await this.notifyWorkspace(
       input,
       payload.triage,
-      "ai.codex_ready",
+      "ai.agent_ready",
       `Investigation ready for ${payload.issue.identifier}`,
       "The evidence and verdict are ready for human review before a fix starts.",
-      `ai-codex-ready:${payload.runId}`,
+      `ai-agent-ready:${payload.runId}`,
       payload.issue.id,
     );
     if (shouldAutoFix)
@@ -1647,10 +1671,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       await this.notifyWorkspace(
         input,
         triage,
-        "ai.codex_started",
+        "ai.agent_started",
         `Coding agent started for ${issue.identifier}`,
         `The selected coding agent is investigating this bug. Run ${started.runId} will stop for approval before publication.`,
-        `ai-codex-started:${started.runId}`,
+        `ai-agent-started:${started.runId}`,
         issue.id,
       );
       if (bugCase) {
@@ -1715,10 +1739,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           await this.notifyWorkspace(
             input,
             triage,
-            "ai.codex_ready",
+            "ai.agent_ready",
             `Investigation ready for ${issue.identifier}`,
             "The evidence and verdict are ready for human review before a fix starts.",
-            `ai-codex-ready:${started.runId}`,
+            `ai-agent-ready:${started.runId}`,
             issue.id,
           );
           if (shouldAutoFix && bugCase)
@@ -1741,10 +1765,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           await this.notifyWorkspace(
             input,
             triage,
-            "ai.codex_failed",
+            "ai.agent_failed",
             `Investigation failed for ${issue.identifier}`,
             `The automatic investigation could not be completed: ${error instanceof Error ? error.message : String(error)}`,
-            `ai-codex-failed:${started.runId}`,
+            `ai-agent-failed:${started.runId}`,
             issue.id,
           );
         })
@@ -1753,10 +1777,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       await this.notifyWorkspace(
         input,
         triage,
-        "ai.codex_failed",
+        "ai.agent_failed",
         `Coding agent could not start for ${issue.identifier}`,
         `Configure a repository before automatic fixes: ${error instanceof Error ? error.message : String(error)}`,
-        `ai-codex-start-failed:${issue.id}:${input.persisted.id}`,
+        `ai-agent-start-failed:${issue.id}:${input.persisted.id}`,
         issue.id,
       );
     }
@@ -1794,10 +1818,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     await this.notifyWorkspace(
       input,
       triage,
-      "ai.codex_started",
+      "ai.agent_started",
       `Automatic fix started for ${issue.identifier}`,
       `Run ${started.runId} is implementing the fix. Publication still requires review.`,
-      `ai-codex-fix-started:${started.runId}`,
+      `ai-agent-fix-started:${started.runId}`,
       issue.id,
     );
     const continuation: CodingRunContinuationJobPayload = {
@@ -1833,10 +1857,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         await this.notifyWorkspace(
           input,
           triage,
-          "ai.codex_ready",
+          "ai.agent_ready",
           `Fix ready for ${issue.identifier}`,
           "Review the patch and independent checks before creating the commit and draft pull request.",
-          `ai-codex-fix-ready:${started.runId}`,
+          `ai-agent-fix-ready:${started.runId}`,
           issue.id,
         );
       })
@@ -1885,9 +1909,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       "</customer_context>",
       conversationReplyInput(history, input.persisted.id),
     ].join("\n");
+    const provider = await this.providerFor(input.binding.workspaceId);
     const contextResult =
-      mcpConnections.length && this.provider.draftReplyWithContext
-        ? await this.provider.draftReplyWithContext({
+      mcpConnections.length && provider.draftReplyWithContext
+        ? await provider.draftReplyWithContext({
             conversation,
             knowledgeContext: safeKnowledgeContext(knowledge),
             language: normalizeLocale(workspaceRow.default_language),
@@ -1896,7 +1921,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
               this.approveMcpWrite(input, mode, mcpConnections, approval),
           })
         : {
-            body: await this.provider.draftReply(
+            body: await provider.draftReply(
               conversation,
               safeKnowledgeContext(knowledge),
               normalizeLocale(workspaceRow.default_language),
@@ -1916,6 +1941,18 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       mcpEvidence: contextResult.mcpEvidence,
       mcpCalls: contextResult.mcpCalls,
     };
+  }
+
+  private async providerFor(workspaceId: string): Promise<SupportAiProvider> {
+    if (!this.agentCredentials) return this.provider;
+    const credential = await this.agentCredentials.resolve(
+      workspaceId,
+      "support",
+      "openai",
+    );
+    return credential
+      ? createSupportAiProvider({ apiKey: credential.apiKey })
+      : this.provider;
   }
 
   private async conversationHistory(input: LiveWorkerAutomationInput): Promise<
@@ -2240,12 +2277,17 @@ export interface CreateSupabaseLiveWorkerOptions {
   onIssueReady?: LiveWorkerOptions["onIssueReady"];
   onUnmappedMessage?: LiveWorkerOptions["onUnmappedMessage"];
   codexStarter?: LiveWorkerCodexStarter;
+  agentRunRunner?: LiveWorkerOptions["agentRunRunner"];
+  agentCredentials?: AgentCredentialPort;
   pollIntervalMs?: number;
   workerId?: string;
 }
 
 export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
-  constructor(private readonly client: LiveWorkerSupabaseClient) {}
+  constructor(
+    private readonly client: LiveWorkerSupabaseClient,
+    private readonly agentCredentials?: AgentCredentialPort,
+  ) {}
 
   private async findExistingRun(
     workspaceId: string,
@@ -2253,7 +2295,7 @@ export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
     mode: NonNullable<LiveWorkerCodexStarterInput["mode"]>,
   ) {
     return this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .select("id, status")
       .eq("workspace_id", workspaceId)
       .eq("issue_id", issueId)
@@ -2289,9 +2331,7 @@ export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
       mode,
     );
     if (existing.error)
-      throw new Error(
-        `supabase:coding_runs:existing:${existing.error.message}`,
-      );
+      throw new Error(`supabase:agent_runs:existing:${existing.error.message}`);
     const recoverExisting = async (candidate: typeof existing.data) => {
       if (!candidate) return undefined;
       const runId = String(candidate.id);
@@ -2335,19 +2375,30 @@ export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
     if (!repository) throw new Error("Repository is unavailable");
     if (repository.executionPlane === "github_actions")
       throw new Error(
-        "github_actions_execution_not_configured: use local_cli until the GitHub Actions runner is connected",
-      );
-    const provider = repository.agentProvider ?? "codex";
-    const health = await createCodingAgentCli().health(provider);
-    if (!health.available)
-      throw new Error(
-        `coding_agent_unavailable:${provider}:${health.error ?? "CLI preflight failed"}`,
+        "github_actions_execution_not_configured: use dokploy until the GitHub Actions runner is connected",
       );
     const commands = repositorySafeTools(repository.allowedCommands);
     const service = new CodexService({
       repositories,
       runs: store,
       openAi: { enabled: Boolean(process.env.OPENAI_API_KEY) },
+      ...(this.agentCredentials
+        ? {
+            agentCredentialResolver: async (
+              workspaceId: string,
+              requestedProvider: Parameters<
+                NonNullable<AgentCredentialPort["resolve"]>
+              >[2],
+            ) =>
+              (
+                await this.agentCredentials!.resolve(
+                  workspaceId,
+                  "agent",
+                  requestedProvider,
+                )
+              )?.apiKey ?? null,
+          }
+        : {}),
     });
     try {
       const handle = await service.start({
@@ -2357,6 +2408,7 @@ export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
         issueIdentifier: input.issueIdentifier,
         issueTitle: input.issueTitle,
         mode,
+        maxRuntimeMs: agentMaxRuntimeMs(),
         tools: commands,
         context: {
           issue: {
@@ -2378,7 +2430,7 @@ export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
       // workers. Recover the winner instead of surfacing a duplicate-run
       // error to the customer loop.
       if (
-        !/duplicate|unique|coding_runs_active_issue_mode_idx/i.test(
+        !/duplicate|unique|agent_runs_active_issue_mode_idx/i.test(
           String(error),
         )
       )
@@ -2390,7 +2442,7 @@ export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
       );
       if (retry.error)
         throw new Error(
-          `supabase:coding_runs:existing_retry:${retry.error.message}`,
+          `supabase:agent_runs:existing_retry:${retry.error.message}`,
         );
       const winner = await recoverExisting(retry.data);
       if (winner) return winner;
@@ -2420,8 +2472,10 @@ export function createSupabaseLiveWorker(
     options.provider,
     inboxService,
     options.whatsappProvider,
-    options.codexStarter ?? new SupabaseCodexStarter(options.client),
+    options.codexStarter ??
+      new SupabaseCodexStarter(options.client, options.agentCredentials),
     options.jobStore as unknown as JobStore<LiveWorkerJobPayload>,
+    options.agentCredentials,
   );
   return new LiveWorker({
     jobStore: options.jobStore,
@@ -2435,6 +2489,9 @@ export function createSupabaseLiveWorker(
     ...(options.onIssueReady ? { onIssueReady: options.onIssueReady } : {}),
     ...(options.onUnmappedMessage
       ? { onUnmappedMessage: options.onUnmappedMessage }
+      : {}),
+    ...(options.agentRunRunner
+      ? { agentRunRunner: options.agentRunRunner }
       : {}),
     ...(options.pollIntervalMs !== undefined
       ? { pollIntervalMs: options.pollIntervalMs }

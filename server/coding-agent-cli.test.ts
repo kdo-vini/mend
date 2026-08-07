@@ -33,7 +33,7 @@ const originalGitHubToken = process.env.GITHUB_TOKEN;
 const originalProviderKeys = {
   openai: process.env.OPENAI_API_KEY,
   anthropic: process.env.ANTHROPIC_API_KEY,
-  gemini: process.env.GEMINI_API_KEY,
+  google: process.env.GEMINI_API_KEY,
   verboo: process.env.VERBOO_API_KEY,
 };
 
@@ -49,7 +49,7 @@ afterEach(() => {
         ? "OPENAI_API_KEY"
         : key === "anthropic"
           ? "ANTHROPIC_API_KEY"
-          : key === "gemini"
+          : key === "google"
             ? "GEMINI_API_KEY"
             : "VERBOO_API_KEY";
     if (value === undefined) delete process.env[envKey];
@@ -89,9 +89,9 @@ describe("coding agent CLI boundary", () => {
       expect(
         getCodingAgentDefinition(provider).capabilities.structuredOutput,
       ).toBe(true);
-      if (provider === "codex") expect(invocation.args).toContain("read-only");
-      if (provider === "gemini") expect(invocation.args).toContain("plan");
-      if (provider === "claude" || provider === "verboo")
+      if (provider === "openai") expect(invocation.args).toContain("read-only");
+      if (provider === "google") expect(invocation.args).toContain("plan");
+      if (provider === "anthropic" || provider === "verboo")
         expect(invocation.args).toContain("--tools=Read,Glob,Grep");
     }
   });
@@ -143,12 +143,12 @@ describe("coding agent CLI boundary", () => {
         argsPrefix: [],
       }));
       const result = await cli.run({
-        provider: "claude",
+        provider: "anthropic",
         mode: "implement_fix",
         repoRoot: repo,
         prompt: "Investigate and fix the complaint.",
       });
-      expect(result.provider).toBe("claude");
+      expect(result.provider).toBe("anthropic");
       expect(result.version).toBe("claude 9.9.9");
       expect(result.report.verdict).toBe("confirmed");
       expect(result.patch.files).toEqual([

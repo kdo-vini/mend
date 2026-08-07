@@ -271,7 +271,7 @@ O MVP de automação estará pronto quando:
 - [x] Bug pode abrir triagem e notificar a empresa imediatamente, com deduplicação.
 - [x] Flags de auto-reply, auto-fix e auto-deploy são controladas pelo workspace; auto-fix/auto-deploy permanecem desligadas por padrão.
 
-Próximo bloco: coletar dados de reprodução de bugs, reconhecer usuário existente, iniciar investigação Codex com evidências, validar testes e somente então permitir deploy com gate, health check e rollback.
+Próximo bloco: coletar dados de reprodução de bugs, reconhecer usuário existente, iniciar investigação do Agent com evidências, validar testes e somente então permitir deploy com gate, health check e rollback.
 
 ## Notificações nativas e triggers
 

@@ -47,7 +47,7 @@ export type AiPolicyChannel = (typeof aiPolicyChannelValues)[number];
 export const aiPolicyIntegrationValues = [
   "knowledge",
   "google_calendar",
-  "codex",
+  "agent",
   "mcp",
 ] as const;
 export type AiPolicyIntegration = (typeof aiPolicyIntegrationValues)[number];
@@ -93,7 +93,7 @@ const mandatoryHumanApprovalActions: AiPolicyAction[] = [
 
 export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   allowedChannels: ["whatsapp", "web"],
-  allowedIntegrations: ["knowledge", "codex", "mcp"],
+  allowedIntegrations: ["knowledge", "agent", "mcp"],
   allowedActions: [
     "respond",
     "triage",

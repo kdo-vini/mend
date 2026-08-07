@@ -239,7 +239,10 @@ describe("GitHub App control plane", () => {
         {
           path: "src/fix.ts",
           status: "added",
-          content: "export const fixed = true;\n",
+          content: Buffer.from("export const fixed = true;\n").toString(
+            "base64",
+          ),
+          contentEncoding: "base64",
         },
         { path: "src/old.ts", status: "deleted" },
       ],

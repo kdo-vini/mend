@@ -30,8 +30,8 @@ function translatedNavLabel(
       return t("navigation.issues");
     case "Kanban":
       return t("navigation.kanban");
-    case "Engineering runs":
-      return t("navigation.codexRuns");
+    case "Agent runs":
+      return t("navigation.agentRuns");
     case "Knowledge":
       return t("navigation.knowledge");
     case "Settings":
@@ -446,7 +446,7 @@ export function MobileTopbar({
 export function MobileBottomNav() {
   const { t } = useTranslation("common");
   const primary = navItems.filter(({ to }) =>
-    ["/inbox", "/kanban", "/issues", "/codex-runs"].includes(to),
+    ["/inbox", "/kanban", "/issues", "/agent-runs"].includes(to),
   );
   return (
     <nav
@@ -463,8 +463,8 @@ export function MobileBottomNav() {
         >
           <Icon size={19} strokeWidth={1.8} />
           <span>
-            {label === "Engineering runs"
-              ? t("navigation.codexRunsShort")
+            {label === "Agent runs"
+              ? t("navigation.agentRunsShort")
               : translatedNavLabel(label, t)}
           </span>
         </NavLink>

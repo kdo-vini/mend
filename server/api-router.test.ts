@@ -338,23 +338,25 @@ const scoped = (agent = false) => ({
 });
 
 describe("Mend API router", () => {
-  it("returns actionable readiness details when Codex preflight cannot start", async () => {
+  it("returns actionable readiness details when the Agent runner cannot start", async () => {
     const dependencies = createFakeDependencies();
     dependencies.codingRuns.create = vi.fn(async () => {
-      throw new CodexServiceError("CODEX_WORKSPACE_ROOT must be a directory");
+      throw new CodexServiceError(
+        "MEND_AGENT_WORKSPACE_ROOT must be a directory",
+      );
     });
 
     const response = await request(makeApp(dependencies))
-      .post("/api/issues/TEC-1/coding-runs")
+      .post("/api/issues/TEC-1/agent-runs")
       .set(scoped(true))
       .send({ mode: "investigate", repositoryId });
 
     expect(response.status).toBe(503);
     expect(response.body).toEqual({
       error: {
-        code: "codex_unavailable",
+        code: "agent_unavailable",
         message:
-          "Codex run could not start: CODEX_WORKSPACE_ROOT must be a directory",
+          "Agent run could not start: MEND_AGENT_WORKSPACE_ROOT must be a directory",
         details: {
           action: "Check /api/ready and the workspace repository settings.",
         },
@@ -698,7 +700,7 @@ describe("Mend API router", () => {
       label: "checkout",
       contactId: userId,
       conversationId,
-      hasCodex: "true",
+      hasAgent: "true",
     });
     expect(response.status).toBe(200);
     expect(response.body.data.query).toMatchObject({
@@ -707,7 +709,7 @@ describe("Mend API router", () => {
       label: "checkout",
       contactId: userId,
       conversationId,
-      hasCodex: true,
+      hasAgent: true,
     });
 
     const history = await request(app)
@@ -824,43 +826,40 @@ describe("Mend API router", () => {
         await request(app)
           .post("/api/repositories")
           .set(headers)
-          .send({ name: "Mend", localPath: "C:\\work\\mend" })
+          .send({ name: "Mend", githubOwner: "kdo-vini", githubRepo: "mend" })
       ).status,
     ).toBe(201);
     expect(
       (
         await request(app)
-          .post("/api/issues/TEC-1/coding-runs")
+          .post("/api/issues/TEC-1/agent-runs")
           .set(headers)
           .send({ mode: "investigate" })
       ).status,
-    ).toBe(201);
+    ).toBe(202);
     expect(
-      (await request(app).post(`/api/coding-runs/${runId}/cancel`).set(headers))
+      (await request(app).post(`/api/agent-runs/${runId}/cancel`).set(headers))
         .status,
     ).toBe(200);
     expect(
-      (
-        await request(app)
-          .post(`/api/coding-runs/${runId}/approve`)
-          .set(headers)
-      ).status,
+      (await request(app).post(`/api/agent-runs/${runId}/approve`).set(headers))
+        .status,
     ).toBe(200);
     for (const action of ["publish", "merge", "deploy", "health"] as const) {
       expect(
         (
           await request(app)
-            .post(`/api/coding-runs/${runId}/${action}`)
+            .post(`/api/agent-runs/${runId}/${action}`)
             .set(headers)
         ).status,
       ).toBe(200);
     }
     expect(
-      (await request(app).post(`/api/coding-runs/${runId}/reject`).set(headers))
+      (await request(app).post(`/api/agent-runs/${runId}/reject`).set(headers))
         .status,
     ).toBe(200);
     expect(
-      (await request(app).get(`/api/coding-runs/${runId}/patch`).set(headers))
+      (await request(app).get(`/api/agent-runs/${runId}/patch`).set(headers))
         .status,
     ).toBe(200);
   });
@@ -881,11 +880,15 @@ describe("Mend API router", () => {
     const repository = await request(app)
       .post("/api/repositories")
       .set(headers)
-      .send({ name: "Mend", localPath: "C:\\work\\..\\secrets" });
+      .send({
+        name: "Mend",
+        githubOwner: "kdo-vini",
+        githubRepo: "../secrets",
+      });
     expect(repository.status).toBe(400);
 
     const run = await request(app)
-      .post("/api/issues/TEC-1/coding-runs")
+      .post("/api/issues/TEC-1/agent-runs")
       .set(headers)
       .send({ mode: "investigate", shell: "rm -rf /" });
     expect(run.status).toBe(400);

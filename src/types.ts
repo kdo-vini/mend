@@ -135,7 +135,7 @@ export interface Issue {
   impact: string;
   updatedAt: string;
   createdAt: string;
-  codexRuns: number;
+  agentRuns: number;
 }
 
 export interface CodingRun {
@@ -191,12 +191,7 @@ export interface CodingRun {
   events: RunEvent[];
 }
 
-export type CodingAgentProvider =
-  | "codex"
-  | "claude"
-  | "gemini"
-  | "verboo"
-  | "custom";
+export type CodingAgentProvider = "openai" | "anthropic" | "google" | "verboo";
 
 export type BugLoopStage =
   | "signal"

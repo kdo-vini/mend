@@ -34,15 +34,23 @@ npm run test:e2e
 4. Configure Auth redirect URLs for the production app and add the first workspace member.
 5. Run the security and performance advisors before enabling live traffic.
 
-Never put a service-role key, Whatsmiau API key, webhook secret, or OpenAI key in `VITE_*` variables.
+Never put a service-role key, Whatsmiau API key, webhook secret, or workspace
+LLM credential in `VITE_*` variables.
 
 ## Provider setup
 
 Set these server-side values in the deployment secret manager:
 
 - `WHATSMIAU_API_KEY`, `WHATSMIAU_WEBHOOK_SECRET`, and `WHATSMIAU_BASE_URL`.
-- `OPENAI_API_KEY` and `SUPPORT_AI_MODEL`.
-- `CODEX_WORKSPACE_ROOT`, `CODEX_MODEL`, and `CODEX_MAX_RUNTIME_SECONDS`.
+- `SUPPORT_AI_MODEL` and, only if the support fallback is intentionally used,
+  the server-side `OPENAI_API_KEY`.
+- `MEND_PROCESS_ROLE=control` on the public service and
+  `MEND_PROCESS_ROLE=runner` on the private Agent worker.
+- `MEND_AGENT_WORKSPACE_ROOT`, `MEND_AGENT_MAX_RUNTIME_SECONDS`,
+  `MEND_AGENT_MAX_CONCURRENCY`, and
+  `MEND_AGENT_CREDENTIAL_ENCRYPTION_KEY` on the private runner.
+- Configure each workspace's LLM provider credential from Settings. These
+  credentials are encrypted server-side and never returned to the browser.
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` for the trusted API/worker process. Keep the service key server-only.
 - `APP_BASE_URL` so channel creation can register the webhook callback.
 - `MEND_API_TOKEN` for protected operator-only provider administration routes.
@@ -88,5 +96,5 @@ Use Supabase's managed backups/PITR for the database and verify one restore dril
 - [ ] Whatsmiau webhook signature, idempotency and retry/dead-letter behavior verified.
 - [ ] OpenAI draft/triage tested with fixture conversations and unsafe-content block tested.
 - [ ] No live auto-send enabled until human review and rollback are proven.
-- [ ] Codex runner tested with a disposable repository; push/merge/deploy remain blocked.
+- [ ] Agent runner tested with a disposable GitHub checkout; push/merge/deploy remain approval-gated.
 - [ ] E2E, accessibility keyboard pass, observability alerts and backup restore drill complete.

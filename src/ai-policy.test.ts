@@ -60,7 +60,7 @@ describe("workspace AI policy", () => {
       notify_on_human_escalation: true,
       bug_auto_fix_enabled: false,
       safe_auto_intents: ["question", "how_to", "status", "social"],
-      allowed_integrations: ["knowledge", "codex", "mcp"],
+      allowed_integrations: ["knowledge", "agent", "mcp"],
     });
     expect(serialized).not.toHaveProperty("totalConversations");
   });

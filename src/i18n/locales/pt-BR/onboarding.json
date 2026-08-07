@@ -1,7 +1,7 @@
 {
   "kicker": "Primeiro support loop",
   "title": "Configure o Mend perto dos seus clientes",
-  "description": "Crie o espaço de trabalho onde sua conexão do WhatsApp, a base de conhecimento, os chamados e as execuções do Codex vão viver.",
+  "description": "Crie o espaço de trabalho onde sua conexão do WhatsApp, a base de conhecimento, os chamados e as execuções do Agent vão viver.",
   "workspaceName": "Nome do espaço de trabalho",
   "workspaceSlug": "Slug do espaço de trabalho",
   "issuePrefix": "Prefixo dos chamados",

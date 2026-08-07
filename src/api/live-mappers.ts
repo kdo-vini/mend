@@ -329,7 +329,7 @@ export function toUiAiDraft(
 export function toUiIssue(
   record: IssueRecord,
   customer?: string,
-  related: { labels?: string[]; codexRuns?: number } = {},
+  related: { labels?: string[]; agentRuns?: number } = {},
 ): Issue {
   return {
     id: record.id,
@@ -349,7 +349,7 @@ export function toUiIssue(
     impact: record.impact ?? "Impact to be assessed during triage.",
     updatedAt: displayTime(record.updated_at),
     createdAt: displayTime(record.created_at),
-    codexRuns: related.codexRuns ?? 0,
+    agentRuns: related.agentRuns ?? 0,
   };
 }
 
@@ -386,7 +386,7 @@ export function toUiRun(
   const providerValue = String(
     loop.provider ?? agent.provider ?? result.provider ?? "",
   ).toLowerCase();
-  const provider = ["codex", "claude", "gemini", "verboo", "custom"].includes(
+  const provider = ["openai", "anthropic", "google", "verboo"].includes(
     providerValue,
   )
     ? (providerValue as CodingAgentProvider)
@@ -559,7 +559,7 @@ export function toUiRun(
         .filter((event) => event.bug_case_id === persistedCase?.id)
         .map(toUiBugCaseEvent),
       ...events
-        .filter((event) => event.coding_run_id === record.id)
+        .filter((event) => event.agent_run_id === record.id)
         .map((event) => ({
           id: event.id,
           label: event.event_type,

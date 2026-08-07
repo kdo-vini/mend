@@ -3,9 +3,18 @@ import {
   DebouncedJobQueue,
   InMemoryJobStore,
   JobLeaseLostError,
+  jobLeaseMs,
 } from "./jobs.js";
 
 describe("job queue", () => {
+  it("keeps the lease longer than the configured Agent runtime", () => {
+    expect(
+      jobLeaseMs({
+        MEND_AGENT_MAX_RUNTIME_SECONDS: "1200",
+      } as NodeJS.ProcessEnv),
+    ).toBe(1_260_000);
+  });
+
   it("deduplicates queued work and moves failures to dead letters", async () => {
     const store = new InMemoryJobStore();
     const first = await store.enqueue({

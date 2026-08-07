@@ -302,7 +302,7 @@
       "respond": "Respond to customers",
       "triage": "Triage conversations",
       "create_issue": "Create issues",
-      "investigate": "Investigate with Codex",
+      "investigate": "Investigate with an Agent",
       "propose_fix": "Propose code fixes",
       "implement_fix": "Implement code fixes",
       "publish": "Publish changes",
@@ -316,7 +316,7 @@
     "integrations": {
       "knowledge": "Published knowledge",
       "google_calendar": "Google Calendar",
-      "codex": "Codex",
+      "agent": "Agent",
       "mcp": "MCP plugins"
     },
     "title": "AI behavior",
@@ -344,7 +344,7 @@
     "requireKnowledge": "Require published knowledge for AI answers",
     "notifyEscalation": "Notify the company on human escalation",
     "notifyBug": "Notify the company immediately on bug reports",
-    "startCodexForBugs": "Start Codex automatically for confirmed bugs",
+    "startAgentForBugs": "Start an Agent automatically for confirmed bugs",
     "allowDeploy": "Allow deployment actions after explicit approval",
     "allowAutoReplies": "Allow automatic customer replies",
     "safeAutoIntents": "Safe auto-reply eligible intents",
@@ -402,10 +402,9 @@
   },
   "repositories": {
     "title": "Repositories",
-    "description": "Register a local repository before starting a controlled Codex run.",
+    "description": "Attach the workspace to GitHub before starting a controlled Agent run.",
     "empty": "No repositories configured for this workspace.",
     "name": "Name",
-    "localPath": "Local path",
     "defaultBranch": "Default branch",
     "add": "Add repository"
   },

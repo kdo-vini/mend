@@ -1,10 +1,21 @@
 import crypto from "node:crypto";
-import { lstat, readFile, realpath } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { promisify } from "node:util";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { redactSecrets } from "./codex.js";
 
 const githubApiVersion = "2026-03-10";
 const maxApiErrorBytes = 4_000;
+const maxRepositoryArchiveBytes = 250_000_000;
+const execFileAsync = promisify(execFile);
 
 export interface GitHubRepositoryRef {
   owner: string;
@@ -96,6 +107,7 @@ export interface GitHubPublishFile {
   path: string;
   status: "added" | "modified" | "deleted";
   content?: string | Uint8Array;
+  contentEncoding?: "base64";
   mode?: "100644" | "100755";
 }
 
@@ -513,6 +525,77 @@ export class GitHubControlPlane {
       { contents: "read" },
     );
     return validateSha(value.object.sha);
+  }
+
+  async checkoutRepositoryArchive(
+    repository: GitHubRepositoryRef,
+    ref: string,
+    destination: string,
+  ): Promise<void> {
+    const repo = validateRepository(repository);
+    const access = await this.tokens.getToken({
+      installationId: repo.installationId,
+      repository: { owner: repo.owner, repo: repo.repo },
+      permissions: { contents: "read" },
+    });
+    const response = await this.fetcher(
+      `${this.apiUrl}${repoPath(repo)}/tarball/${encodeURIComponent(validateRef(ref))}`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${access.token}`,
+          "X-GitHub-Api-Version": this.apiVersion,
+        },
+        redirect: "follow",
+      },
+    );
+    if (!response.ok) {
+      const message = redactSecrets(
+        (await response.text()).slice(0, maxApiErrorBytes),
+        [access.token],
+      );
+      throw new GitHubControlPlaneError(
+        `GitHub archive download returned ${response.status}${message ? `: ${message}` : ""}`,
+        response.status,
+      );
+    }
+    const advertisedSize = Number.parseInt(
+      response.headers.get("content-length") ?? "",
+      10,
+    );
+    if (
+      Number.isFinite(advertisedSize) &&
+      advertisedSize > maxRepositoryArchiveBytes
+    )
+      throw new GitHubControlPlaneError(
+        "GitHub repository archive exceeds the runner size limit",
+        413,
+      );
+    await mkdir(destination, { recursive: true });
+    const archive = path.join(
+      path.dirname(destination),
+      `${path.basename(destination)}.tar.gz`,
+    );
+    try {
+      const archiveBytes = Buffer.from(await response.arrayBuffer());
+      if (archiveBytes.byteLength > maxRepositoryArchiveBytes)
+        throw new GitHubControlPlaneError(
+          "GitHub repository archive exceeds the runner size limit",
+          413,
+        );
+      await writeFile(archive, archiveBytes, {
+        mode: 0o600,
+      });
+      await execFileAsync("tar", [
+        "-xzf",
+        archive,
+        "-C",
+        destination,
+        "--strip-components=1",
+      ]);
+    } finally {
+      await rm(archive, { force: true }).catch(() => undefined);
+    }
   }
 
   /**
@@ -1147,10 +1230,19 @@ function normalizePublishFiles(files: readonly GitHubPublishFile[]): Array<{
     } else {
       if (file.content === undefined)
         throw new Error("Added and modified published files require content");
+      const content =
+        file.contentEncoding === "base64"
+          ? Buffer.from(
+              typeof file.content === "string"
+                ? file.content
+                : Buffer.from(file.content).toString("base64"),
+              "base64",
+            )
+          : file.content;
       const bytes =
-        typeof file.content === "string"
-          ? Buffer.byteLength(file.content, "utf8")
-          : file.content.byteLength;
+        typeof content === "string"
+          ? Buffer.byteLength(content, "utf8")
+          : content.byteLength;
       if (bytes > 5_000_000)
         throw new Error(`Published file is too large: ${filePath}`);
       totalBytes += bytes;
@@ -1160,7 +1252,19 @@ function normalizePublishFiles(files: readonly GitHubPublishFile[]): Array<{
     return {
       path: filePath,
       status: file.status,
-      content: file.content,
+      ...(file.status === "deleted" || file.content === undefined
+        ? {}
+        : {
+            content:
+              file.contentEncoding === "base64"
+                ? Buffer.from(
+                    typeof file.content === "string"
+                      ? file.content
+                      : Buffer.from(file.content).toString("base64"),
+                    "base64",
+                  )
+                : file.content,
+          }),
       mode: file.mode ?? "100644",
     };
   });

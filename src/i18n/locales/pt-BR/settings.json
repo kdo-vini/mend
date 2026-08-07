@@ -302,7 +302,7 @@
       "respond": "Responder clientes",
       "triage": "Fazer triagem de conversas",
       "create_issue": "Criar chamados",
-      "investigate": "Investigar com Codex",
+      "investigate": "Investigar com um Agent",
       "propose_fix": "Propor correções de código",
       "implement_fix": "Implementar correções de código",
       "publish": "Publicar alterações",
@@ -316,7 +316,7 @@
     "integrations": {
       "knowledge": "Base de conhecimento publicada",
       "google_calendar": "Google Calendar",
-      "codex": "Codex",
+      "agent": "Agent",
       "mcp": "Plugins MCP"
     },
     "title": "Comportamento da IA",
@@ -344,7 +344,7 @@
     "requireKnowledge": "Exigir conhecimento publicado para respostas da IA",
     "notifyEscalation": "Avisar a empresa quando houver escalação humana",
     "notifyBug": "Avisar a empresa imediatamente em relatos de bug",
-    "startCodexForBugs": "Iniciar Codex automaticamente para bugs confirmados",
+    "startAgentForBugs": "Iniciar um Agent automaticamente para bugs confirmados",
     "allowDeploy": "Permitir deploy após aprovação explícita",
     "allowAutoReplies": "Permitir respostas automáticas aos clientes",
     "safeAutoIntents": "Intenções elegíveis para resposta automática segura",
@@ -402,10 +402,9 @@
   },
   "repositories": {
     "title": "Repositórios",
-    "description": "Cadastre um repositório local antes de iniciar uma execução controlada do Codex.",
+    "description": "Conecte o GitHub e selecione um repositório antes de iniciar uma execução controlada do Agent.",
     "empty": "Nenhum repositório configurado para este espaço de trabalho.",
     "name": "Nome",
-    "localPath": "Caminho local",
     "defaultBranch": "Branch padrão",
     "add": "Adicionar repositório"
   },

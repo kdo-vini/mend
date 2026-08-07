@@ -21,7 +21,7 @@
     "secondaryCta": "See the product"
   },
   "preview": {
-    "ariaLabel": "Mend Inbox, issue, and Codex run product preview",
+    "ariaLabel": "Mend Inbox, issue, and Agent run product preview",
     "inbox": "Mend Inbox",
     "live": "Live workspace",
     "conversations": "Conversations",
@@ -64,7 +64,7 @@
       "contextMeta": "WhatsApp + history",
       "issue": "Issue created",
       "issueMeta": "MEND-184",
-      "run": "Codex run complete",
+      "run": "Agent run complete",
       "runMeta": "Checks passed",
       "review": "Awaiting review",
       "reviewMeta": "You decide what ships"
@@ -114,7 +114,7 @@
       },
       "run": {
         "title": "Run code changes behind a review gate",
-        "description": "Let Codex inspect, implement, and test in a constrained workspace while the founder keeps final control.",
+        "description": "Let an Agent inspect, implement, and test in a constrained workspace while the founder keeps final control.",
         "points": {
           "0": "Scoped local execution",
           "1": "Checks and diff evidence",
@@ -160,7 +160,7 @@
         "description": "Preserve customer evidence, ownership, and status from signal to fix."
       },
       "3": {
-        "title": "Controlled Codex runs",
+        "title": "Controlled Agent runs",
         "description": "Scope local engineering work, inspect checks, and approve the resulting diff."
       },
       "4": {
@@ -216,7 +216,7 @@
         "flow": {
           "signal": "A user reports an edge case",
           "context": "Mend structures the reproduction path",
-          "action": "Codex works inside a constrained run",
+          "action": "An Agent works inside a constrained run",
           "outcome": "You inspect the diff before anything ships"
         }
       }
@@ -254,7 +254,7 @@
         "features": {
           "0": "Up to 5 operators",
           "1": "Grounded AI drafts",
-          "2": "Controlled Codex runs",
+          "2": "Controlled Agent runs",
           "3": "Priority workspace support"
         },
         "cta": "Start Builder"
@@ -289,11 +289,10 @@
     },
     "connectors": {
       "label": "Bring the coding agent your team already trusts",
-      "codex": "Codex CLI",
-      "claude": "Claude Code",
-      "gemini": "Gemini CLI",
+      "openai": "ChatGPT",
+      "anthropic": "Claude Code",
+      "google": "Gemini CLI",
       "verboo": "Verboo CLI",
-      "custom": "Custom CLI adapter",
       "github": "GitHub is the control plane"
     },
     "loop": {
@@ -372,7 +371,7 @@
       "githubTitle": "Repository context",
       "githubDetail": "Issue, branch, installation scope",
       "runnerTitle": "Ephemeral runner",
-      "runnerDetail": "Codex, Claude, Gemini, or Verboo",
+      "runnerDetail": "ChatGPT, Claude, Gemini, or Verboo",
       "prTitle": "Draft pull request",
       "prDetail": "Patch, checks, and evidence",
       "items": {
@@ -388,7 +387,7 @@
       "builderDescription": "For small SaaS teams that want complaint-to-fix automation with visible control.",
       "features": {
         "0": "WhatsApp inbox and bug triage",
-        "1": "Codex, Claude, Gemini, or Verboo CLI",
+        "1": "ChatGPT, Claude, Gemini, or Verboo CLI",
         "2": "GitHub pull requests and checks",
         "3": "Human approval and release gates"
       }
@@ -413,7 +412,7 @@
           "0": "Inbox",
           "1": "Issues",
           "2": "Knowledge",
-          "3": "Codex runs"
+          "3": "Agent runs"
         }
       },
       "resources": {

@@ -44,8 +44,8 @@ import {
   mendApiBaseUrl,
   resolveLiveConversation,
   sendLiveMessage,
-  startLiveCodexRun,
-  updateLiveCodexRun,
+  startLiveAgentRun,
+  updateLiveAgentRun,
   updateLiveIssue,
   type WhatsAppInstance,
 } from "./api/live-actions";
@@ -60,7 +60,7 @@ import {
   CommandPalette as FeatureCommandPalette,
   CreateIssueDialog as FeatureCreateIssueDialog,
   EditIssueDialog as FeatureEditIssueDialog,
-  RunCodexDialog as FeatureRunCodexDialog,
+  RunAgentDialog as FeatureRunAgentDialog,
 } from "./features/issues/components/IssueDialogs";
 import {
   IssueDetailPage as FeatureIssueDetailPage,
@@ -582,7 +582,7 @@ function App() {
       impact: "Impact to be assessed during triage.",
       updatedAt: "Just now",
       createdAt: "Just now",
-      codexRuns: 0,
+      agentRuns: 0,
     };
     setIssues((current) => [issue, ...current]);
     if (conversation) {
@@ -831,7 +831,7 @@ function App() {
     const issue = issues.find((item) => item.id === issueId);
     if (!issue) return;
     if (!demoMode && workspaceId) {
-      void startLiveCodexRun({
+      void startLiveAgentRun({
         workspaceId,
         issueId,
         issueIdentifier: issue.identifier,
@@ -876,7 +876,7 @@ function App() {
     };
     setRuns((current) => [run, ...current]);
     updateIssue(issueId, {
-      codexRuns: issue.codexRuns + 1,
+      agentRuns: issue.agentRuns + 1,
       status: issue.status === "Triage" ? "In Progress" : issue.status,
     });
     setRunDialogIssueId(null);
@@ -939,7 +939,7 @@ function App() {
       const pendingKey = `${runId}:${action}`;
       if (pendingRunActions.current.has(pendingKey)) return;
       pendingRunActions.current.add(pendingKey);
-      void updateLiveCodexRun({ workspaceId, runId, action })
+      void updateLiveAgentRun({ workspaceId, runId, action })
         .then(() => {
           commitLocalAction();
           setLiveDataRetry((current) => current + 1);
@@ -1247,7 +1247,7 @@ function App() {
         />
       )}
       {runDialogIssueId && (
-        <FeatureRunCodexDialog
+        <FeatureRunAgentDialog
           issue={issues.find((item) => item.id === runDialogIssueId)}
           workspaceId={workspaceId}
           liveMode={!demoMode}

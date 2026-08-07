@@ -5,6 +5,9 @@ export {
   createLiveRepository,
   updateLiveRepository,
   removeLiveRepository,
+  listLiveAgentCredentials,
+  saveLiveAgentCredential,
+  removeLiveAgentCredential,
   createWhatsAppInstance,
   disconnectLiveChannel,
   disconnectWhatsAppInstance,
@@ -12,7 +15,6 @@ export {
   getWhatsAppQr,
   listLiveChannels,
   listLiveRepositories,
-  listLiveCodingAgentHealth,
   listWhatsAppInstances,
   refreshLiveChannel,
   loadLiveChannelFlow,
@@ -38,6 +40,7 @@ export type {
   LiveWorkspaceInvitation,
   LiveGitHubConnection,
   LiveGitHubRepository,
+  LiveAgentCredential,
 } from "../../api/live-actions";
 export {
   disconnectLiveGoogleConnection,

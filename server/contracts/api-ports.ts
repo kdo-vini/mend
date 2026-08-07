@@ -311,11 +311,10 @@ export interface RepositoryListQuery {
 
 export interface RepositoryInput {
   name: string;
-  localPath: string;
   defaultBranch: string;
   allowedCommands: string[];
-  agentProvider: "codex" | "claude" | "gemini" | "verboo" | "custom";
-  executionPlane: "local_cli" | "github_actions";
+  agentProvider: AgentProvider;
+  executionPlane: AgentExecutionPlane;
   githubOwner?: string;
   githubRepo?: string;
   githubInstallationId?: string;
@@ -332,6 +331,40 @@ export interface RepositoryPort {
     input: RepositoryPatchInput,
   ): Promise<unknown | null>;
   remove(context: RequestContext, repositoryId: string): Promise<boolean>;
+}
+
+export type AgentProvider = "openai" | "anthropic" | "google" | "verboo";
+export type AgentExecutionPlane = "dokploy" | "github_actions";
+export type AgentCredentialTask = "support" | "agent";
+
+export interface AgentCredentialRecord {
+  task: AgentCredentialTask;
+  provider: AgentProvider;
+  configured: boolean;
+  updatedAt: string;
+}
+
+export interface AgentCredentialPort {
+  list(context: RequestContext): Promise<AgentCredentialRecord[]>;
+  save(
+    context: RequestContext,
+    input: {
+      task: AgentCredentialTask;
+      provider: AgentProvider;
+      apiKey: string;
+      config?: Record<string, unknown>;
+    },
+  ): Promise<AgentCredentialRecord>;
+  remove(
+    context: RequestContext,
+    task: AgentCredentialTask,
+    provider: AgentProvider,
+  ): Promise<boolean>;
+  resolve(
+    workspaceId: string,
+    task: AgentCredentialTask,
+    provider: AgentProvider,
+  ): Promise<{ apiKey: string; config: Record<string, unknown> } | null>;
 }
 
 export interface CodingRunListQuery {
@@ -401,6 +434,7 @@ export interface ApiRouterDependencies {
   issues: IssuePort;
   knowledge: KnowledgePort;
   repositories: RepositoryPort;
+  agentCredentials: AgentCredentialPort;
   githubConnections: GitHubConnectionPort;
   codingRuns: CodingRunPort;
   googleConnections: GoogleConnectionPort;

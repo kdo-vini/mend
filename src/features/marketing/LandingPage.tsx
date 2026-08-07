@@ -46,13 +46,7 @@ const loopSteps = [
   { key: "customer", icon: CheckCircle2 },
 ] as const;
 
-const connectorNames = [
-  "codex",
-  "claude",
-  "gemini",
-  "verboo",
-  "custom",
-] as const;
+const connectorNames = ["openai", "anthropic", "google", "verboo"] as const;
 
 function LoopCasePreview() {
   const { t } = useTranslation("marketing");

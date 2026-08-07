@@ -41,6 +41,10 @@ import {
   type WorkspacePort,
   type WorkspaceRole,
   type MediaPort,
+  type AgentCredentialPort,
+  type AgentCredentialTask,
+  type AgentProvider,
+  type AgentCredentialRecord,
 } from "./contracts/api-ports.js";
 import {
   type KanbanIssuePort,
@@ -67,6 +71,10 @@ import { SupabaseMediaStorage, validateRemoteMediaUrl } from "./media.js";
 import { SupabaseMediaPipeline } from "./media-pipeline.js";
 import type { JobStore } from "./jobs.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
+import {
+  AGENT_RUN_REQUESTED_JOB_TYPE,
+  type AgentRunRequestedJobPayload,
+} from "./agent-runtime.js";
 import {
   WhatsmiauMessagingProvider,
   type MessagingInstance,
@@ -152,6 +160,10 @@ import {
   type McpConnectionRecord,
 } from "./mcp.js";
 import {
+  decryptConnectionSecret,
+  encryptConnectionSecret,
+} from "./connection-crypto.js";
+import {
   article,
   auditLog,
   channel,
@@ -221,6 +233,7 @@ export type SupabaseApiPortDependencies = {
   issues: IssuePort;
   knowledge: KnowledgePort;
   repositories: RepositoryPort;
+  agentCredentials: AgentCredentialPort;
   githubConnections: GitHubConnectionPort;
   codingRuns: CodingRunPort;
   googleConnections: GoogleConnectionPort;
@@ -788,6 +801,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
     private readonly ai: SupportAiProvider,
     mediaStorage?: SupabaseMediaStorage,
     private readonly mediaPipeline?: SupabaseMediaPipeline,
+    private readonly agentCredentials?: AgentCredentialPort,
   ) {
     this.inbox = new InboxService(
       new SupabaseInboxPort(client),
@@ -1212,7 +1226,18 @@ export class SupabaseConversationAdapter implements ConversationPort {
       default_language?: unknown;
     };
     const operationalLanguage = normalizeLocale(workspaceRow.default_language);
-    const draft = await this.ai.draftReply(
+    const provider = this.agentCredentials
+      ? createSupportAiProvider({
+          apiKey: (
+            await this.agentCredentials.resolve(
+              context.workspaceId,
+              "support",
+              "openai",
+            )
+          )?.apiKey,
+        })
+      : this.ai;
+    const draft = await provider.draftReply(
       `${values}${input.instruction ? `\nOperator instruction: ${input.instruction}` : ""}`,
       knowledge,
       operationalLanguage,
@@ -1220,7 +1245,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
     return {
       conversationId,
       draft,
-      provider: this.ai.name,
+      provider: provider.name,
       knowledgeArticleIds: rows(articles.data).map((item) => str(item.id)),
     };
   }
@@ -1313,7 +1338,7 @@ export class SupabaseIssueAdapter implements IssuePort {
     if (value.conversationId)
       request = request.eq("conversation_id", value.conversationId);
 
-    // Labels and Codex runs are normalized relations, not denormalized issue
+    // Labels and Agent runs are normalized relations, not denormalized issue
     // columns. Resolve their scoped issue ids before applying the main query.
     let relationIssueIds: string[] | undefined;
     if (value.label) {
@@ -1333,17 +1358,17 @@ export class SupabaseIssueAdapter implements IssuePort {
         .map((item) => str(item.issue_id))
         .filter(Boolean);
     }
-    if (value.hasCodex !== undefined) {
+    if (value.hasAgent !== undefined) {
       const runs = await this.client
-        .from("coding_runs")
+        .from("agent_runs")
         .select("issue_id")
         .eq("workspace_id", context.workspaceId);
       const runIds = new Set(
-        rows(checked("coding_runs.filter", runs))
+        rows(checked("agent_runs.filter", runs))
           .map((item) => str(item.issue_id))
           .filter(Boolean),
       );
-      if (value.hasCodex === true)
+      if (value.hasAgent === true)
         relationIssueIds = relationIssueIds
           ? relationIssueIds.filter((id) => runIds.has(id))
           : [...runIds];
@@ -1355,10 +1380,10 @@ export class SupabaseIssueAdapter implements IssuePort {
         const allIds = rows(checked("issues.filter_all", allIssues))
           .map((item) => str(item.id))
           .filter(Boolean);
-        const withoutCodex = allIds.filter((id) => !runIds.has(id));
+        const withoutAgent = allIds.filter((id) => !runIds.has(id));
         relationIssueIds = relationIssueIds
-          ? relationIssueIds.filter((id) => withoutCodex.includes(id))
-          : withoutCodex;
+          ? relationIssueIds.filter((id) => withoutAgent.includes(id))
+          : withoutAgent;
       }
     }
     if (relationIssueIds !== undefined) {
@@ -2552,13 +2577,132 @@ export class SupabaseGitHubConnectionAdapter implements GitHubConnectionPort {
   }
 }
 
+export class SupabaseAgentCredentialAdapter implements AgentCredentialPort {
+  constructor(private readonly privilegedClient: AnySupabaseClient) {}
+
+  private record(value: Record<string, unknown>): AgentCredentialRecord {
+    return {
+      task: String(value.task) as AgentCredentialTask,
+      provider: String(value.provider) as AgentProvider,
+      configured: true,
+      updatedAt: String(value.updated_at ?? ""),
+    };
+  }
+
+  async list(context: RequestContext): Promise<AgentCredentialRecord[]> {
+    const result = await this.privilegedClient
+      .from("workspace_agent_credentials")
+      .select("task, provider, updated_at")
+      .eq("workspace_id", context.workspaceId)
+      .order("task", { ascending: true });
+    return rows(checked("agent_credentials.list", result)).map((value) =>
+      this.record(row(value)),
+    );
+  }
+
+  async save(
+    context: RequestContext,
+    input: {
+      task: AgentCredentialTask;
+      provider: AgentProvider;
+      apiKey: string;
+      config?: Record<string, unknown>;
+    },
+  ): Promise<AgentCredentialRecord> {
+    const apiKey = input.apiKey.trim();
+    if (!apiKey) throw new Error("agent_credential_key_required");
+    const result = await this.privilegedClient
+      .from("workspace_agent_credentials")
+      .upsert(
+        {
+          workspace_id: context.workspaceId,
+          task: input.task,
+          provider: input.provider,
+          encrypted_api_key: encryptConnectionSecret(
+            apiKey,
+            connectionEncryptionKey(),
+          ),
+          config_json: input.config ?? {},
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "workspace_id,task,provider" },
+      )
+      .select("task, provider, updated_at")
+      .single();
+    return this.record(row(checked("agent_credentials.save", result)));
+  }
+
+  async remove(
+    context: RequestContext,
+    task: AgentCredentialTask,
+    provider: AgentProvider,
+  ): Promise<boolean> {
+    const result = await this.privilegedClient
+      .from("workspace_agent_credentials")
+      .delete()
+      .eq("workspace_id", context.workspaceId)
+      .eq("task", task)
+      .eq("provider", provider)
+      .select("id");
+    const data = checked("agent_credentials.remove", result);
+    return rows(data).length > 0;
+  }
+
+  async resolve(
+    workspaceId: string,
+    task: AgentCredentialTask,
+    provider: AgentProvider,
+  ): Promise<{ apiKey: string; config: Record<string, unknown> } | null> {
+    const result = await this.privilegedClient
+      .from("workspace_agent_credentials")
+      .select("encrypted_api_key, config_json")
+      .eq("workspace_id", workspaceId)
+      .eq("task", task)
+      .eq("provider", provider)
+      .maybeSingle();
+    const data = checked("agent_credentials.resolve", result);
+    if (!data) return null;
+    const value = row(data);
+    return {
+      apiKey: decryptConnectionSecret(
+        String(value.encrypted_api_key),
+        connectionEncryptionKey(),
+      ),
+      config: row(value.config_json),
+    };
+  }
+}
+
 export class SupabaseCodexRunStore implements CodexRunStore {
   constructor(private readonly client: AnySupabaseClient) {}
 
   async createRun(input: CreateCodexRunInput) {
+    if (input.id) {
+      const existing = await this.client
+        .from("agent_runs")
+        .select("*")
+        .eq("id", input.id)
+        .maybeSingle();
+      const existingData = checked("agent_runs.get_existing", existing);
+      if (existingData) {
+        const updated = await this.client
+          .from("agent_runs")
+          .update({
+            repository_id: input.repositoryId ?? null,
+            mode: input.mode,
+            branch_name: input.branchName ?? null,
+            created_by_user_id: input.createdByUserId ?? null,
+          })
+          .eq("id", input.id)
+          .select("*")
+          .single();
+        return run(row(checked("agent_runs.attach", updated)));
+      }
+    }
     const result = await this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .insert({
+        ...(input.id ? { id: input.id } : {}),
         workspace_id: input.workspaceId,
         issue_id: input.issueId,
         repository_id: input.repositoryId ?? null,
@@ -2571,30 +2715,30 @@ export class SupabaseCodexRunStore implements CodexRunStore {
       })
       .select("*")
       .single();
-    return run(row(checked("coding_runs.create", result)));
+    return run(row(checked("agent_runs.create", result)));
   }
   async getRun(id: string) {
     const result = await this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .select("*")
       .eq("id", id)
       .maybeSingle();
-    const data = checked("coding_runs.get", result);
+    const data = checked("agent_runs.get", result);
     return data ? run(row(data)) : null;
   }
   async getRunScoped(id: string, workspaceId: string) {
     const result = await this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .select("*")
       .eq("id", id)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
-    const data = checked("coding_runs.get_scoped", result);
+    const data = checked("agent_runs.get_scoped", result);
     return data ? run(row(data)) : null;
   }
   async updateRun(id: string, input: UpdateCodexRunInput) {
     const result = await this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .update({
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.progress !== undefined ? { progress: input.progress } : {}),
@@ -2616,7 +2760,7 @@ export class SupabaseCodexRunStore implements CodexRunStore {
       .eq("id", id)
       .select("*")
       .maybeSingle();
-    const data = checked("coding_runs.update", result);
+    const data = checked("agent_runs.update", result);
     return data ? run(row(data)) : undefined;
   }
   async appendEvent(
@@ -2624,19 +2768,19 @@ export class SupabaseCodexRunStore implements CodexRunStore {
     input: CodexRunEventInput,
   ): Promise<CodexRunEvent> {
     const current = await this.getRun(runId);
-    if (!current) throw new Error("coding_run_not_found");
+    if (!current) throw new Error("agent_run_not_found");
     const result = await this.client
-      .from("coding_run_events")
+      .from("agent_run_events")
       .insert({
         workspace_id: current.workspaceId,
-        coding_run_id: runId,
+        agent_run_id: runId,
         event_type: input.eventType,
         message: redactSecrets(input.message).slice(0, 2_000),
         metadata_json: input.metadata ?? {},
       })
       .select("*")
       .single();
-    const value = row(checked("coding_run_events.create", result));
+    const value = row(checked("agent_run_events.create", result));
     return {
       id: str(value.id),
       runId,
@@ -2658,6 +2802,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     private readonly store: SupabaseCodexRunStore,
     codexService?: CodexService,
     private readonly privilegedClient: AnySupabaseClient = client,
+    private readonly jobStore?: JobStore<WhatsmiauMessageJobPayload>,
   ) {
     this.bugLoop = new SupabaseBugLoopStore(privilegedClient as never);
     this.codex =
@@ -2671,7 +2816,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
 
   async list(context: RequestContext, query: CodingRunListQuery) {
     let request = this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .select("*")
       .eq("workspace_id", context.workspaceId);
     if (query.issueId) request = request.eq("issue_id", query.issueId);
@@ -2680,7 +2825,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     const result = await request
       .order("created_at", { ascending: false })
       .limit(query.limit);
-    return rows(checked("coding_runs.list", result)).map(run);
+    return rows(checked("agent_runs.list", result)).map(run);
   }
 
   async create(
@@ -2694,7 +2839,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       .eq("workspace_id", context.workspaceId)
       .eq("identifier", identifier)
       .maybeSingle();
-    const issueValue = checked("coding_runs.issue", issueResult);
+    const issueValue = checked("agent_runs.issue", issueResult);
     if (!issueValue) throw new Error("issue_not_found");
     const issue = row(issueValue);
     if (!input.repositoryId) throw new Error("repository_required");
@@ -2706,13 +2851,9 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     )
       throw new Error("repository_not_found");
     const policy = await this.workspacePolicy(context.workspaceId);
-    // `codex` is the backwards-compatible policy key for the coding-agent
-    // integration as a whole. The repository chooses the concrete CLI
-    // (Codex, Claude, Gemini, Verboo or Custom) below; do not gate those
-    // providers on a Codex-specific executable.
-    if (!policy.allowedIntegrations.includes("codex"))
+    if (!policy.allowedIntegrations.includes("agent"))
       throw new CodexServiceError(
-        "Coding-agent execution is disabled by the workspace AI integration policy",
+        "Agent execution is disabled by the workspace AI integration policy",
       );
     const action =
       input.mode === "investigate"
@@ -2722,10 +2863,10 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
           : "implement_fix";
     if (!policy.allowedActions.includes(action))
       throw new CodexServiceError(
-        `Codex action ${action} is disabled by the workspace AI policy`,
+        `Agent action ${action} is disabled by the workspace AI policy`,
       );
 
-    const codexContext = await this.loadCodexContext(
+    const agentContext = await this.loadCodexContext(
       context,
       issue,
       identifier,
@@ -2735,17 +2876,67 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       kind: "command",
       name: name as AllowedCommand,
     }));
-    const handle = await this.codex.start({
+    const runId = crypto.randomUUID();
+    const queued = await this.store.createRun({
+      id: runId,
+      workspaceId: context.workspaceId,
+      issueId: str(issue.id),
+      repositoryId: input.repositoryId,
+      mode: input.mode,
+      createdByUserId: context.userId,
+    });
+    const request = {
+      issueIdentifier: identifier,
+      branchBase: input.branchBase ?? "main",
+      commands: input.commands ?? [],
+      allowChanges: input.allowChanges ?? false,
+      ...(input.instructions
+        ? { instructions: redactSecrets(input.instructions).slice(0, 20_000) }
+        : {}),
+    };
+    const jobPayload: AgentRunRequestedJobPayload = {
+      stage: "agent_run_requested",
+      runId,
       workspaceId: context.workspaceId,
       issueId: str(issue.id),
       repositoryId: input.repositoryId,
       issueIdentifier: identifier,
       issueTitle: str(issue.title),
       mode: input.mode,
-      context: codexContext,
+      context: agentContext,
       tools,
       createdByUserId: context.userId,
+    };
+    const persisted = await this.store.updateRun(runId, {
+      result: { request },
     });
+    if (this.jobStore) {
+      await (
+        this.jobStore as unknown as JobStore<AgentRunRequestedJobPayload>
+      ).enqueue({
+        workspaceId: context.workspaceId,
+        type: AGENT_RUN_REQUESTED_JOB_TYPE,
+        payload: jobPayload,
+        dedupeKey: `mend:agent-run:${runId}`,
+        maxAttempts: 5,
+      });
+    } else {
+      void this.codex
+        .start({
+          runId,
+          workspaceId: context.workspaceId,
+          issueId: str(issue.id),
+          repositoryId: input.repositoryId,
+          issueIdentifier: identifier,
+          issueTitle: str(issue.title),
+          mode: input.mode,
+          context: agentContext,
+          tools,
+          createdByUserId: context.userId,
+        })
+        .then((handle) => handle.completion)
+        .catch(() => undefined);
+    }
 
     // The Runs retry action creates a fresh run. If the previous case was
     // failed, reopen its durable checkpoint as part of the same request so
@@ -2770,35 +2961,14 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
         status: "active",
         eventType: "coding_run.retry",
         message: `A new ${input.mode} run was started after the previous attempt failed.`,
-        idempotencyKey: `coding-run-retry:${handle.runId}`,
+        idempotencyKey: `agent-run-retry:${runId}`,
         ...(retryStage === "investigation"
-          ? { investigationRunId: handle.runId }
-          : { fixRunId: handle.runId }),
-        metadata: { runId: handle.runId, mode: input.mode },
+          ? { investigationRunId: runId }
+          : { fixRunId: runId }),
+        metadata: { runId, mode: input.mode },
       });
     }
-
-    // The request is useful operator metadata. Persist it after start so the
-    // runner remains the only component that creates the queued run and emits
-    // its lifecycle events.
-    const current = (await this.store.getRun(handle.runId)) ?? handle.run;
-    const request = {
-      issueIdentifier: identifier,
-      branchBase: input.branchBase ?? "main",
-      commands: input.commands ?? [],
-      allowChanges: input.allowChanges ?? false,
-      ...(input.instructions
-        ? { instructions: redactSecrets(input.instructions).slice(0, 20_000) }
-        : {}),
-    };
-    const persisted = await this.store.updateRun(handle.runId, {
-      result: { ...current.result, request },
-    });
-
-    // HTTP creation must not wait for a potentially long sandbox run. Attach a
-    // rejection handler because the service persists the failure asynchronously.
-    void handle.completion.catch(() => undefined);
-    return persisted ?? current;
+    return persisted ?? queued;
   }
 
   private async loadCodexContext(
@@ -2829,9 +2999,9 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       commentsPromise,
       messagesPromise,
     ]);
-    const commentRows = rows(checked("coding_runs.issue_comments", comments));
+    const commentRows = rows(checked("agent_runs.issue_comments", comments));
     const messageRows = messages
-      ? rows(checked("coding_runs.messages", messages))
+      ? rows(checked("agent_runs.messages", messages))
       : [];
     const contextMessages = [
       ...messageRows.map((value) => ({
@@ -2936,7 +3106,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       .select("ai_policy_json")
       .eq("id", context.workspaceId)
       .maybeSingle();
-    const workspaceData = checked("coding_runs.deploy_policy", workspace);
+    const workspaceData = checked("agent_runs.deploy_policy", workspace);
     const workspaceRow = workspaceData ? row(workspaceData) : null;
     if (
       !workspaceRow ||
@@ -2992,7 +3162,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       .select("ai_policy_json")
       .eq("id", workspaceId)
       .maybeSingle();
-    const data = checked("coding_runs.ai_policy", result);
+    const data = checked("agent_runs.ai_policy", result);
     return normalizeWorkspaceAiPolicy(row(data ?? {}).ai_policy_json);
   }
 
@@ -3021,7 +3191,9 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     },
   ): Promise<void> {
     const column =
-      runRecord.mode === "investigate" ? "investigation_run_id" : "fix_run_id";
+      runRecord.mode === "investigate"
+        ? "investigation_agent_run_id"
+        : "fix_agent_run_id";
     const result = await this.privilegedClient
       .from("bug_cases")
       .select("id")
@@ -4031,12 +4203,14 @@ export function createSupabaseApiAdapters(
     client,
     options.jobStore as unknown as import("./media-pipeline.js").MediaJobEnqueuer,
   );
+  const agentCredentials = new SupabaseAgentCredentialAdapter(privilegedClient);
   const conversations = new SupabaseConversationAdapter(
     client,
     provider,
     ai,
     mediaStorage,
     media,
+    agentCredentials,
   );
   const issues = new SupabaseIssueAdapter(
     client,
@@ -4059,6 +4233,7 @@ export function createSupabaseApiAdapters(
     store,
     options.codexService,
     privilegedClient,
+    options.jobStore,
   );
   const googleConnections = new SupabaseGoogleConnectionAdapter(
     client,
@@ -4076,6 +4251,7 @@ export function createSupabaseApiAdapters(
     issues,
     knowledge,
     repositories,
+    agentCredentials,
     githubConnections,
     codingRuns,
     googleConnections,

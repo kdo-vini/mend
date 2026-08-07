@@ -264,7 +264,7 @@ export const issueListApiQuerySchema = issueListQuerySchema
     label: z.string().trim().min(1).max(64).optional(),
     contactId: uuid.optional(),
     conversationId: uuid.optional(),
-    hasCodex: z
+    hasAgent: z
       .enum(["true", "false"])
       .transform((value) => value === "true")
       .optional(),
@@ -291,7 +291,6 @@ export const repositoryPath = z
   );
 const repositoryFields = {
   name: z.string().trim().min(1).max(160),
-  localPath: repositoryPath,
   defaultBranch: z.string().trim().min(1).max(160).default("main"),
   allowedCommands: z
     .array(z.enum(allowedCommands))
@@ -299,9 +298,9 @@ const repositoryFields = {
     .max(allowedCommands.length)
     .default([...allowedCommands]),
   agentProvider: z
-    .enum(["codex", "claude", "gemini", "verboo", "custom"])
-    .default("codex"),
-  executionPlane: z.literal("local_cli").default("local_cli"),
+    .enum(["openai", "anthropic", "google", "verboo"])
+    .default("openai"),
+  executionPlane: z.enum(["dokploy", "github_actions"]).default("dokploy"),
   githubOwner: z
     .string()
     .trim()
@@ -315,18 +314,17 @@ const repositoryFields = {
 };
 function repositoryExecutionFields(
   value: {
-    localPath?: string;
-    executionPlane?: "local_cli" | "github_actions";
+    executionPlane?: "dokploy" | "github_actions";
     githubOwner?: string;
     githubRepo?: string;
   },
   context: z.RefinementCtx,
 ) {
-  if (value.executionPlane === "local_cli" && !value.localPath?.trim())
+  if (value.executionPlane === "dokploy" && !value.githubRepo?.trim())
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ["localPath"],
-      message: "A local CLI repository requires localPath",
+      path: ["githubRepo"],
+      message: "A Dokploy repository requires a GitHub repository",
     });
   if (Boolean(value.githubOwner) !== Boolean(value.githubRepo))
     context.addIssue({

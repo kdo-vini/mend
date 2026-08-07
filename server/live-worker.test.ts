@@ -266,11 +266,12 @@ class FakeSupabaseHandoff {
         status: args?.p_status ?? this.bugCase?.status ?? "active",
         verdict: args?.p_verdict ?? this.bugCase?.verdict ?? "pending",
         decision: args?.p_decision ?? this.bugCase?.decision ?? "pending",
-        investigation_run_id:
-          args?.p_investigation_run_id ??
-          this.bugCase?.investigation_run_id ??
+        investigation_agent_run_id:
+          args?.p_investigation_agent_run_id ??
+          this.bugCase?.investigation_agent_run_id ??
           null,
-        fix_run_id: args?.p_fix_run_id ?? this.bugCase?.fix_run_id ?? null,
+        fix_agent_run_id:
+          args?.p_fix_agent_run_id ?? this.bugCase?.fix_agent_run_id ?? null,
       };
       return Promise.resolve({ data: this.bugCase, error: null });
     }
@@ -739,7 +740,7 @@ describe("live Whatsmiau worker", () => {
     });
     await vi.waitFor(() =>
       expect(client.notifications.map((item) => item.kind)).toEqual(
-        expect.arrayContaining(["ai.codex_started", "ai.codex_ready"]),
+        expect.arrayContaining(["ai.agent_started", "ai.agent_ready"]),
       ),
     );
     expect(starter.start).toHaveBeenCalledWith(
@@ -790,7 +791,7 @@ describe("live Whatsmiau worker", () => {
         completion: Promise.resolve({
           run: {
             result: {
-              provider: "claude",
+              provider: "anthropic",
               agent: {
                 report: {
                   verdict: "confirmed",
@@ -847,7 +848,7 @@ describe("live Whatsmiau worker", () => {
         status: "awaiting_human",
         verdict: "confirmed",
         decision: "autofix",
-        fix_run_id: "run-fix",
+        fix_agent_run_id: "run-fix",
       }),
     );
   });

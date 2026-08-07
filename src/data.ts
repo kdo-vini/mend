@@ -256,7 +256,7 @@ export const seedIssues: Issue[] = [
       "A operação não consegue encerrar o caixa e há risco de atraso no fechamento da loja.",
     updatedAt: "há 3 min",
     createdAt: "Hoje, 13:58",
-    codexRuns: 1,
+    agentRuns: 1,
   },
   {
     id: "issue-23",
@@ -274,7 +274,7 @@ export const seedIssues: Issue[] = [
     impact: "Pedidos pagos ficam retidos no fluxo até uma intervenção manual.",
     updatedAt: "há 18 min",
     createdAt: "Hoje, 13:42",
-    codexRuns: 0,
+    agentRuns: 0,
   },
   {
     id: "issue-22",
@@ -293,7 +293,7 @@ export const seedIssues: Issue[] = [
       "O time comercial precisa cruzar dados manualmente para acompanhar a performance.",
     updatedAt: "há 42 min",
     createdAt: "Hoje, 13:29",
-    codexRuns: 0,
+    agentRuns: 0,
   },
   {
     id: "issue-21",
@@ -309,7 +309,7 @@ export const seedIssues: Issue[] = [
     impact: "Reduzir risco de exposição entre espaços de trabalho.",
     updatedAt: "Ontem",
     createdAt: "02 de ago., 09:20",
-    codexRuns: 0,
+    agentRuns: 0,
   },
   {
     id: "issue-19",
@@ -328,7 +328,7 @@ export const seedIssues: Issue[] = [
     impact: "Usuários não conseguiam completar o primeiro acesso.",
     updatedAt: "há 2 h",
     createdAt: "02 de ago., 11:45",
-    codexRuns: 1,
+    agentRuns: 1,
   },
   {
     id: "issue-18",
@@ -344,7 +344,7 @@ export const seedIssues: Issue[] = [
     impact: "Melhorar entendimento do cliente durante a confirmação.",
     updatedAt: "01 de ago.",
     createdAt: "01 de ago., 15:42",
-    codexRuns: 0,
+    agentRuns: 0,
   },
 ];
 
@@ -363,7 +363,7 @@ export const seedRuns: CodingRun[] = [
     caseId: "case-204",
     caseStatus: "active",
     stage: "investigation",
-    provider: "gemini",
+    provider: "google",
     suspicionScore: 0.78,
     verdict: "pending",
     decision: "pending",
@@ -425,7 +425,7 @@ export const seedRuns: CodingRun[] = [
     caseId: "case-201",
     caseStatus: "awaiting_human",
     stage: "pull_request",
-    provider: "claude",
+    provider: "anthropic",
     suspicionScore: 0.93,
     verdict: "confirmed",
     decision: "autofix",

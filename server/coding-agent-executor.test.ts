@@ -27,7 +27,7 @@ describe("coding agent run executor", () => {
   it("selects the repository CLI and persists a normalized verdict", async () => {
     const store = new InMemoryCodexRunStore();
     const run = vi.fn(async () => ({
-      provider: "claude" as const,
+      provider: "anthropic" as const,
       version: "2.1.220",
       report: {
         verdict: "confirmed" as const,
@@ -55,8 +55,8 @@ describe("coding agent run executor", () => {
     const execute = createCodingAgentRunExecutor(
       {
         getRepository: async () => ({
-          agentProvider: "claude",
-          executionPlane: "local_cli",
+          agentProvider: "anthropic",
+          executionPlane: "dokploy",
         }),
       },
       { run } as unknown as CodingAgentCli,
@@ -66,14 +66,14 @@ describe("coding agent run executor", () => {
 
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({
-        provider: "claude",
+        provider: "anthropic",
         mode: "investigate",
         checks: ["test"],
       }),
     );
     expect(result.run.status).toBe("completed");
     expect(result.run.result).toMatchObject({
-      provider: "claude",
+      provider: "anthropic",
       agent: { report: { verdict: "confirmed" } },
       checks: [{ name: "test", exitCode: 0 }],
     });
@@ -87,13 +87,13 @@ describe("coding agent run executor", () => {
     const execute = createCodingAgentRunExecutor(
       {
         getRepository: async () => ({
-          agentProvider: "gemini",
-          executionPlane: "local_cli",
+          agentProvider: "google",
+          executionPlane: "dokploy",
         }),
       },
       {
         run: vi.fn(async () => ({
-          provider: "gemini" as const,
+          provider: "google" as const,
           version: "0.49.0",
           report: {
             verdict: "confirmed" as const,

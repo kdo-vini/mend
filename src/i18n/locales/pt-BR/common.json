@@ -1,7 +1,7 @@
 {
   "brand": {
     "name": "Mend",
-    "codex": "OpenAI Codex",
+    "agent": "Mend Agent",
     "descriptor": "Suporte com IA para quem constrói SaaS",
     "tagline": "Keep shipping. Mend the support loop.",
     "workspaceEyebrow": "Espaço de trabalho Mend"
@@ -29,7 +29,7 @@
     "loadingInbox": "Carregando caixa de entrada…",
     "loadingIssues": "Carregando chamados…",
     "loadingKanban": "Carregando Kanban…",
-    "loadingCodexRuns": "Carregando execuções do Codex…",
+    "loadingAgentRuns": "Carregando execuções do Agent…",
     "loadingKnowledge": "Carregando base de conhecimento…",
     "loadingSettings": "Carregando configurações…",
     "loadingDescription": "Mantendo o contexto do espaço de trabalho pronto."
@@ -58,18 +58,18 @@
     "notificationDismiss": "Não foi possível dispensar a notificação.",
     "notificationsDismiss": "Não foi possível dispensar as notificações.",
     "nativeNotificationsEnable": "Não foi possível ativar as notificações nativas.",
-    "codexRunQueue": "Não foi possível enfileirar a execução do Codex.",
-    "codexRunUpdate": "Não foi possível atualizar a execução do Codex."
+    "agentRunQueue": "Não foi possível enfileirar a execução do Agent.",
+    "agentRunUpdate": "Não foi possível atualizar a execução do Agent."
   },
   "navigation": {
     "inbox": "Caixa de entrada",
     "issues": "Chamados",
-    "codexRuns": "Execuções do Codex",
+    "agentRuns": "Execuções do Agent",
     "knowledge": "Base de conhecimento",
     "settings": "Configurações",
     "profile": "Perfil",
     "kanban": "Kanban",
-    "codexRunsShort": "Execuções",
+    "agentRunsShort": "Execuções",
     "more": "Mais",
     "workspace": "Espaço de trabalho",
     "session": "Sessão",
@@ -106,8 +106,8 @@
     "user": "Usuário {{id}}",
     "internalIssueSummary": "Item interno criado a partir do espaço de trabalho.",
     "issueImpactPending": "Impacto a ser avaliado durante a triagem.",
-    "codexRunPreparing": "Preparando um espaço isolado e reunindo o contexto do chamado.",
-    "codexRunStartedDetail": "Execução enfileirada com um contexto limpo do repositório."
+    "agentRunPreparing": "Preparando um espaço isolado e reunindo o contexto do chamado.",
+    "agentRunStartedDetail": "Execução enfileirada com um contexto limpo do repositório."
   },
   "toasts": {
     "liveDataUnavailable": "Dados ao vivo indisponíveis: {{message}}",
@@ -118,13 +118,13 @@
     "browserNotificationsBlocked": "As notificações do navegador estão bloqueadas",
     "nativeNotificationsUnsupported": "Este navegador não oferece notificações nativas aqui",
     "nativeNotificationsNotConfigured": "As notificações nativas ainda não estão configuradas",
-    "codexRunQueued": "Execução do Codex enfileirada para {{identifier}}",
-    "codexRunStarted": "Execução do Codex iniciada para {{identifier}}",
-    "codexRunCanceled": "Execução do Codex cancelada",
-    "codexResultApproved": "Resultado do Codex aprovado e commit local criado",
-    "codexBranchPublished": "Branch do Codex publicada",
-    "codexDeploymentStarted": "Deploy do Codex iniciado",
-    "codexResultRejected": "Resultado do Codex rejeitado",
+    "agentRunQueued": "Execução do Agent enfileirada para {{identifier}}",
+    "agentRunStarted": "Execução do Agent iniciada para {{identifier}}",
+    "agentRunCanceled": "Execução do Agent cancelada",
+    "agentResultApproved": "Resultado do Agent aprovado e commit local criado",
+    "agentBranchPublished": "Branch do Agent publicada",
+    "agentDeploymentStarted": "Deploy do Agent iniciado",
+    "agentResultRejected": "Resultado do Agent rejeitado",
     "demoNoSession": "O modo de demonstração não tem uma sessão conectada",
     "workspaceSwitched": "Trocado para {{name}}"
   },

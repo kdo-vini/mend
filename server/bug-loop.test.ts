@@ -12,7 +12,7 @@ describe("durable bug loop", () => {
     expect(
       bugInvestigationOutcome({
         agent: {
-          provider: "claude",
+          provider: "anthropic",
           report: {
             verdict: "reproduced",
             summary: "Checkout fails when the cart has a coupon.",
@@ -26,7 +26,7 @@ describe("durable bug loop", () => {
       }),
     ).toEqual({
       verdict: "confirmed",
-      provider: "claude",
+      provider: "anthropic",
       summary: "Checkout fails when the cart has a coupon.",
       evidenceCount: 2,
       evidence: [
@@ -47,7 +47,7 @@ describe("durable bug loop", () => {
       bugInvestigationOutcome({
         run: {
           result: {
-            provider: "gemini",
+            provider: "google",
             agent: {
               report: {
                 verdict: "confirmed",
@@ -60,7 +60,7 @@ describe("durable bug loop", () => {
       }),
     ).toEqual({
       verdict: "confirmed",
-      provider: "gemini",
+      provider: "google",
       summary: "The regression test reproduces the complaint.",
       evidenceCount: 1,
       evidence: [{ kind: "test", label: "regression test" }],

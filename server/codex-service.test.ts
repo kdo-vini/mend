@@ -34,13 +34,13 @@ async function withWorkspaceRoot<T>(
   root: string,
   callback: () => Promise<T>,
 ): Promise<T> {
-  const previous = process.env.CODEX_WORKSPACE_ROOT;
-  process.env.CODEX_WORKSPACE_ROOT = root;
+  const previous = process.env.MEND_AGENT_WORKSPACE_ROOT;
+  process.env.MEND_AGENT_WORKSPACE_ROOT = root;
   try {
     return await callback();
   } finally {
-    if (previous === undefined) delete process.env.CODEX_WORKSPACE_ROOT;
-    else process.env.CODEX_WORKSPACE_ROOT = previous;
+    if (previous === undefined) delete process.env.MEND_AGENT_WORKSPACE_ROOT;
+    else process.env.MEND_AGENT_WORKSPACE_ROOT = previous;
   }
 }
 
@@ -121,14 +121,11 @@ class FakeGit implements GitLocalPort {
   }
 }
 
-function repository(root: string, localPath = "repo"): RepositoryConfig {
+function repository(_root: string): RepositoryConfig {
   return {
     id: "repo-1",
     workspaceId: "workspace-1",
     name: "Mend repository",
-    localPath: path.isAbsolute(localPath)
-      ? localPath
-      : path.join(root, localPath),
     defaultBranch: "main",
     allowedCommands: ["lint", "test"],
   };
@@ -197,7 +194,7 @@ describe("Codex application service", () => {
   it("mounts a minimal redacted context, persists command results and retrieves the patch", async () => {
     const root = await tempDirectory();
     try {
-      await mkdir(path.join(root, "repo"));
+      await mkdir(root, { recursive: true });
       const store = new FakeRunStore();
       const contextPort = new InMemoryCodexContextPort();
       const executor: CodexRunExecutor = async (input) =>
@@ -248,14 +245,13 @@ describe("Codex application service", () => {
     }
   });
 
-  it("rejects a repository outside CODEX_WORKSPACE_ROOT and commands outside repository policy", async () => {
+  it("rejects execution when commands fall outside repository policy", async () => {
     const root = await tempDirectory();
-    const outside = await tempDirectory();
     try {
-      await mkdir(path.join(root, "repo"));
+      await mkdir(root, { recursive: true });
       const store = new FakeRunStore();
       const service = new CodexService({
-        repositories: new FakeRepositoryPort(repository(outside, outside)),
+        repositories: new FakeRepositoryPort(repository(root)),
         runs: store,
         execute: async () => {
           throw new Error("must not execute");
@@ -263,7 +259,7 @@ describe("Codex application service", () => {
       });
       await expect(
         withWorkspaceRoot(root, () => service.start(startInput())),
-      ).rejects.toThrow("outside CODEX_WORKSPACE_ROOT");
+      ).rejects.toThrow("must not execute");
 
       const policyService = new CodexService({
         repositories: new FakeRepositoryPort(repository(root)),
@@ -282,19 +278,18 @@ describe("Codex application service", () => {
       ).rejects.toThrow("not enabled");
     } finally {
       await rm(root, { recursive: true, force: true });
-      await rm(outside, { recursive: true, force: true });
     }
   });
 
   it("refuses to run against a dirty shared checkout", async () => {
     const root = await tempDirectory();
     try {
-      await mkdir(path.join(root, "repo"));
+      await mkdir(root, { recursive: true });
       const store = new FakeRunStore();
       const service = new CodexService({
         repositories: new FakeRepositoryPort(repository(root)),
         runs: store,
-        git: new FakeGit(path.join(root, "repo"), false),
+        git: new FakeGit(root, false),
         execute: async () => {
           throw new Error("must not execute");
         },
@@ -310,7 +305,7 @@ describe("Codex application service", () => {
   it("fails closed when GitHub coordinates are only partially configured", async () => {
     const root = await tempDirectory();
     try {
-      await mkdir(path.join(root, "repo"));
+      await mkdir(root, { recursive: true });
       const service = new CodexService({
         repositories: new FakeRepositoryPort({
           ...repository(root),
@@ -332,9 +327,9 @@ describe("Codex application service", () => {
   it("withholds the local branch and commit until implement_fix is approved", async () => {
     const root = await tempDirectory();
     try {
-      await mkdir(path.join(root, "repo"));
+      await mkdir(root, { recursive: true });
       const store = new FakeRunStore();
-      const git = new FakeGit(path.join(root, "repo"));
+      const git = new FakeGit(root);
       const executor: CodexRunExecutor = async (input) =>
         resultFor(input, {
           files: [
@@ -389,9 +384,9 @@ describe("Codex application service", () => {
   it("withholds the local commit when an approved check fails", async () => {
     const root = await tempDirectory();
     try {
-      await mkdir(path.join(root, "repo"));
+      await mkdir(root, { recursive: true });
       const store = new FakeRunStore();
-      const git = new FakeGit(path.join(root, "repo"));
+      const git = new FakeGit(root);
       const executor: CodexRunExecutor = async (input) =>
         resultFor(
           input,
@@ -433,8 +428,8 @@ describe("Codex application service", () => {
   it("publishes a reviewed patch with the GitHub App and requires merge before deploy", async () => {
     const root = await tempDirectory();
     try {
-      const repositoryRoot = path.join(root, "repo");
-      await mkdir(repositoryRoot);
+      const repositoryRoot = root;
+      await mkdir(repositoryRoot, { recursive: true });
       await writeFile(path.join(repositoryRoot, "README.md"), "after\n");
       const store = new FakeRunStore();
       const git = new FakeGit(repositoryRoot);
@@ -555,7 +550,7 @@ describe("Codex application service", () => {
     const root = await tempDirectory();
     const previousOrigins = process.env.MEND_HEALTHCHECK_ALLOWED_ORIGINS;
     try {
-      await mkdir(path.join(root, "repo"));
+      await mkdir(root, { recursive: true });
       process.env.MEND_HEALTHCHECK_ALLOWED_ORIGINS = "https://app.example.com";
       const store = new FakeRunStore();
       const run = await store.createRun({
@@ -600,7 +595,7 @@ describe("Codex application service", () => {
   it("supports cancellation and approval/rejection decisions", async () => {
     const root = await tempDirectory();
     try {
-      await mkdir(path.join(root, "repo"));
+      await mkdir(root, { recursive: true });
       const store = new FakeRunStore();
       const executor: CodexRunExecutor = async (input) => {
         const run = await input.store.createRun({

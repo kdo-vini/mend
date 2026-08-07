@@ -15,7 +15,7 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
     requireFound,
   } = context;
   router.get(
-    "/api/coding-runs",
+    "/api/agent-runs",
     asyncRoute(async (request, response) => {
       send(response, 200, {
         data: await dependencies.codingRuns.list(
@@ -26,12 +26,12 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
     }),
   );
   router.post(
-    "/api/issues/:identifier/coding-runs",
+    "/api/issues/:identifier/agent-runs",
     asyncRoute(async (request, response) => {
       try {
         send(
           response,
-          201,
+          202,
           await dependencies.codingRuns.create(
             await scoped(request, response, "agent"),
             pathIssue(request),
@@ -42,8 +42,8 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
         if (error instanceof CodexServiceError)
           throw new context.ApiHttpError(
             503,
-            "codex_unavailable",
-            `Codex run could not start: ${error.message}`,
+            "agent_unavailable",
+            `Agent run could not start: ${error.message}`,
             {
               action: "Check /api/ready and the workspace repository settings.",
             },
@@ -53,7 +53,7 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
     }),
   );
   router.get(
-    "/api/coding-runs/:id",
+    "/api/agent-runs/:id",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -63,13 +63,13 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response),
             pathId(request),
           ),
-          "coding_run",
+          "agent_run",
         ),
       );
     }),
   );
   router.post(
-    "/api/coding-runs/:id/cancel",
+    "/api/agent-runs/:id/cancel",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -79,13 +79,13 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response, "agent"),
             pathId(request),
           ),
-          "coding_run",
+          "agent_run",
         ),
       );
     }),
   );
   router.post(
-    "/api/coding-runs/:id/approve",
+    "/api/agent-runs/:id/approve",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -95,13 +95,13 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response, "agent"),
             pathId(request),
           ),
-          "coding_run",
+          "agent_run",
         ),
       );
     }),
   );
   router.post(
-    "/api/coding-runs/:id/reject",
+    "/api/agent-runs/:id/reject",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -111,13 +111,13 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response, "agent"),
             pathId(request),
           ),
-          "coding_run",
+          "agent_run",
         ),
       );
     }),
   );
   router.post(
-    "/api/coding-runs/:id/publish",
+    "/api/agent-runs/:id/publish",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -127,13 +127,13 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response, "agent"),
             pathId(request),
           ),
-          "coding_run",
+          "agent_run",
         ),
       );
     }),
   );
   router.post(
-    "/api/coding-runs/:id/deploy",
+    "/api/agent-runs/:id/deploy",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -143,13 +143,13 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response, "agent"),
             pathId(request),
           ),
-          "coding_run",
+          "agent_run",
         ),
       );
     }),
   );
   router.post(
-    "/api/coding-runs/:id/merge",
+    "/api/agent-runs/:id/merge",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -159,13 +159,13 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response, "agent"),
             pathId(request),
           ),
-          "coding_run",
+          "agent_run",
         ),
       );
     }),
   );
   router.post(
-    "/api/coding-runs/:id/health",
+    "/api/agent-runs/:id/health",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -175,13 +175,13 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response, "agent"),
             pathId(request),
           ),
-          "coding_run",
+          "agent_run",
         ),
       );
     }),
   );
   router.get(
-    "/api/coding-runs/:id/patch",
+    "/api/agent-runs/:id/patch",
     asyncRoute(async (request, response) => {
       send(
         response,
@@ -191,7 +191,7 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
             await scoped(request, response),
             pathId(request),
           ),
-          "coding_run_patch",
+          "agent_run_patch",
         ),
       );
     }),

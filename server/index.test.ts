@@ -29,8 +29,7 @@ describe("API boundary", () => {
         supabase: expect.any(Boolean),
         whatsMiau: expect.any(Boolean),
         webhook: expect.any(Boolean),
-        openai: expect.any(Boolean),
-        codexWorkspace: expect.any(Boolean),
+        agentWorkspace: expect.any(Boolean),
       },
     });
     expect(JSON.stringify(response.body)).not.toContain("test-secret");

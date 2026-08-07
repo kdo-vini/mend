@@ -57,6 +57,18 @@ export function redactJobError(error: unknown): string {
 export const jobBackoffMs = (attempt: number) =>
   Math.min(60_000, 1_000 * 2 ** Math.max(0, attempt - 1));
 
+/** Keep a durable Agent job leased for the full configured execution window. */
+export function jobLeaseMs(env: NodeJS.ProcessEnv = process.env): number {
+  const configuredSeconds = Number.parseInt(
+    env.MEND_AGENT_MAX_RUNTIME_SECONDS ?? "1200",
+    10,
+  );
+  const runtimeMs = Number.isFinite(configuredSeconds)
+    ? Math.min(60 * 60_000, Math.max(60_000, configuredSeconds * 1_000))
+    : 1_200_000;
+  return runtimeMs + 60_000;
+}
+
 export class JobLeaseLostError extends Error {
   constructor(jobId: string) {
     super(`job_lease_lost:${jobId}`);
@@ -70,7 +82,7 @@ export class InMemoryJobStore<TPayload = Record<string, unknown>>
 {
   private readonly jobs = new Map<string, JobRecord<TPayload>>();
 
-  constructor(private readonly leaseMs = 5 * 60_000) {}
+  constructor(private readonly leaseMs = jobLeaseMs()) {}
 
   private sameDedupeScope(
     left: JobRecord<TPayload>,

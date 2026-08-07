@@ -144,7 +144,7 @@ export function IssuesPage({
     "All",
   );
   const [labelFilter, setLabelFilter] = useState("All");
-  const [codexFilter, setCodexFilter] = useState<
+  const [agentFilter, setAgentFilter] = useState<
     "All" | "With runs" | "Without runs"
   >("All");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -162,10 +162,10 @@ export function IssuesPage({
       (assigneeFilter === "All" || issue.assignee === assigneeFilter) &&
       (sourceFilter === "All" || issue.source === sourceFilter) &&
       (labelFilter === "All" || issue.labels.includes(labelFilter)) &&
-      (codexFilter === "All" ||
-        (codexFilter === "With runs"
-          ? issue.codexRuns > 0
-          : issue.codexRuns === 0)),
+      (agentFilter === "All" ||
+        (agentFilter === "With runs"
+          ? issue.agentRuns > 0
+          : issue.agentRuns === 0)),
   );
   const clearFilters = () => {
     setSearch("");
@@ -175,7 +175,7 @@ export function IssuesPage({
     setAssigneeFilter("All");
     setSourceFilter("All");
     setLabelFilter("All");
-    setCodexFilter("All");
+    setAgentFilter("All");
   };
   const openOnKeyboard = (
     event: KeyboardEvent<HTMLTableRowElement>,
@@ -289,8 +289,8 @@ export function IssuesPage({
         />
         <FilterSelect
           label={t("ui.filterRuns")}
-          value={codexFilter}
-          onChange={(value) => setCodexFilter(value as typeof codexFilter)}
+          value={agentFilter}
+          onChange={(value) => setAgentFilter(value as typeof agentFilter)}
           options={[
             { value: "All", label: t("ui.all") },
             { value: "With runs", label: t("ui.withRuns") },
@@ -348,9 +348,9 @@ export function IssuesPage({
                     <div className="issue-title-cell">
                       <span className="issue-id">{issue.identifier}</span>
                       <strong>{issue.title}</strong>
-                      {issue.codexRuns > 0 && (
-                        <span className="codex-mini">
-                          <TerminalSquare size={11} /> {issue.codexRuns}
+                      {issue.agentRuns > 0 && (
+                        <span className="agent-mini">
+                          <TerminalSquare size={11} /> {issue.agentRuns}
                         </span>
                       )}
                     </div>

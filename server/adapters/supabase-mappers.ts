@@ -282,7 +282,6 @@ export function repository(
     id: str(rowValue.id),
     workspaceId: str(rowValue.workspace_id),
     name: str(rowValue.name),
-    localPath: str(rowValue.local_path),
     defaultBranch: str(rowValue.default_branch, "main"),
     allowedCommands: Array.isArray(rowValue.allowed_commands)
       ? rowValue.allowed_commands.filter(
@@ -291,11 +290,11 @@ export function repository(
       : [],
     agentProvider: str(
       rowValue.agent_provider,
-      "codex",
+      "openai",
     ) as RepositoryConfig["agentProvider"],
     executionPlane: str(
       rowValue.execution_plane,
-      "local_cli",
+      "dokploy",
     ) as RepositoryConfig["executionPlane"],
     ...(rowValue.github_owner
       ? { githubOwner: String(rowValue.github_owner) }
@@ -400,7 +399,6 @@ export function repositoryDbPayload(
   const input = value as unknown as Row;
   return {
     ...(input.name !== undefined ? { name: input.name } : {}),
-    ...(input.localPath !== undefined ? { local_path: input.localPath } : {}),
     ...(input.defaultBranch !== undefined
       ? { default_branch: input.defaultBranch }
       : {}),

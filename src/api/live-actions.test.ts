@@ -19,10 +19,10 @@ import {
   startLiveGitHubSetup,
   startLiveGitHubWorkspaceSetup,
   updateLiveRepository,
-  updateLiveCodexRun,
+  updateLiveAgentRun,
 } from "./live-actions";
 
-describe("live Codex run actions", () => {
+describe("live Agent run actions", () => {
   it.each([
     "cancel",
     "approve",
@@ -31,17 +31,17 @@ describe("live Codex run actions", () => {
     "merge",
     "deploy",
     "health",
-  ] as const)("uses the backend coding-runs route for %s", async (action) => {
+  ] as const)("uses the backend agent-runs route for %s", async (action) => {
     apiRequest.mockClear();
 
-    await updateLiveCodexRun({
+    await updateLiveAgentRun({
       workspaceId: "workspace-1",
       runId: "run-1",
       action,
     });
 
     expect(apiRequest).toHaveBeenCalledWith(
-      `/api/coding-runs/run-1/${action}`,
+      `/api/agent-runs/run-1/${action}`,
       { method: "POST", body: JSON.stringify({}) },
       "workspace-1",
     );
@@ -49,13 +49,13 @@ describe("live Codex run actions", () => {
 });
 
 describe("repository execution settings", () => {
-  it("sends the selected CLI agent, local execution and GitHub target", async () => {
+  it("sends the selected Agent provider and GitHub target", async () => {
     apiRequest.mockResolvedValueOnce({
       id: "repo-1",
       name: "Support app",
       defaultBranch: "main",
       agentProvider: "verboo",
-      executionPlane: "local_cli",
+      executionPlane: "dokploy",
       githubOwner: "mend",
       githubRepo: "support",
     });
@@ -63,10 +63,9 @@ describe("repository execution settings", () => {
     await createLiveRepository({
       workspaceId: "workspace-1",
       name: "Support app",
-      localPath: "C:\\work\\support",
       defaultBranch: "main",
       agentProvider: "verboo",
-      executionPlane: "local_cli",
+      executionPlane: "dokploy",
       githubOwner: "mend",
       githubRepo: "support",
     });
@@ -77,10 +76,9 @@ describe("repository execution settings", () => {
         method: "POST",
         body: JSON.stringify({
           name: "Support app",
-          localPath: "C:\\work\\support",
           defaultBranch: "main",
           agentProvider: "verboo",
-          executionPlane: "local_cli",
+          executionPlane: "dokploy",
           githubOwner: "mend",
           githubRepo: "support",
         }),
@@ -112,16 +110,14 @@ describe("repository execution settings", () => {
     apiRequest.mockResolvedValueOnce({
       id: "repo-1",
       name: "Updated app",
-      localPath: "C:\\work\\updated",
       defaultBranch: "main",
-      agentProvider: "codex",
-      executionPlane: "local_cli",
+      agentProvider: "openai",
+      executionPlane: "dokploy",
     });
     await updateLiveRepository({
       workspaceId: "workspace-1",
       repositoryId: "repo-1",
       name: "Updated app",
-      localPath: "C:\\work\\updated",
     });
     expect(apiRequest).toHaveBeenCalledWith(
       "/api/repositories/repo-1",

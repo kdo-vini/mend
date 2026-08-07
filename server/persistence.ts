@@ -8,6 +8,7 @@ import type {
 import type { CodexRunEvent, CodexRunEventInput } from "./codex-events.js";
 import {
   JobLeaseLostError,
+  jobLeaseMs,
   redactJobError,
   type EnqueueJobInput,
   type JobRecord,
@@ -97,7 +98,7 @@ export class SupabaseJobStore<TPayload = Record<string, unknown>>
     ) => Promise<{ data: unknown; error: { message: string } | null }>;
     const result = await rpc.call(this.client, "claim_next_job", {
       worker_id: workerId,
-      lease_seconds: 300,
+      lease_seconds: Math.ceil(jobLeaseMs() / 1_000),
     });
     if (result.error) throw new Error(result.error.message);
     const rows = Array.isArray(result.data) ? result.data : [];
@@ -186,7 +187,7 @@ export class SupabaseJobStore<TPayload = Record<string, unknown>>
   }
 }
 
-function toRun(row: Tables["coding_runs"]["Row"]): CodexRunRecord {
+function toRun(row: Tables["agent_runs"]["Row"]): CodexRunRecord {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -214,8 +215,30 @@ export class SupabaseCodexRunStore implements CodexRunStore {
   constructor(private readonly client: MendServerSupabaseClient) {}
 
   async createRun(input: CreateCodexRunInput): Promise<CodexRunRecord> {
+    if (input.id) {
+      const existing = await this.client
+        .from("agent_runs")
+        .select("*")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (existing.error) throw new Error(existing.error.message);
+      if (existing.data) {
+        const updated = await this.client
+          .from("agent_runs")
+          .update({
+            repository_id: input.repositoryId ?? null,
+            mode: input.mode,
+            branch_name: input.branchName ?? null,
+            created_by_user_id: input.createdByUserId ?? null,
+          })
+          .eq("id", input.id)
+          .select("*")
+          .single();
+        return toRun(requireData(updated.data, updated.error));
+      }
+    }
     const { data, error } = await this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .insert({
         ...(input.id ? { id: input.id } : {}),
         workspace_id: input.workspaceId,
@@ -236,7 +259,7 @@ export class SupabaseCodexRunStore implements CodexRunStore {
     id: string,
     patch: UpdateCodexRunInput,
   ): Promise<CodexRunRecord> {
-    const updates: Tables["coding_runs"]["Update"] = {
+    const updates: Tables["agent_runs"]["Update"] = {
       ...(patch.status ? { status: patch.status } : {}),
       ...(patch.progress !== undefined ? { progress: patch.progress } : {}),
       ...(patch.branchName !== undefined
@@ -252,7 +275,7 @@ export class SupabaseCodexRunStore implements CodexRunStore {
         : {}),
     };
     const { data, error } = await this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .update(updates)
       .eq("id", id)
       .select("*")
@@ -265,17 +288,17 @@ export class SupabaseCodexRunStore implements CodexRunStore {
     input: CodexRunEventInput,
   ): Promise<CodexRunEvent> {
     const run = await this.client
-      .from("coding_runs")
+      .from("agent_runs")
       .select("workspace_id")
       .eq("id", runId)
       .single();
     if (run.error || !run.data)
       throw new Error(run.error?.message ?? `run_not_found:${runId}`);
     const { data, error } = await this.client
-      .from("coding_run_events")
+      .from("agent_run_events")
       .insert({
         workspace_id: run.data.workspace_id,
-        coding_run_id: runId,
+        agent_run_id: runId,
         event_type: input.eventType,
         message: input.message,
         metadata_json: (input.metadata ?? {}) as unknown as Json,
@@ -285,7 +308,7 @@ export class SupabaseCodexRunStore implements CodexRunStore {
     const row = requireData(data, error);
     return {
       id: row.id,
-      runId: row.coding_run_id,
+      runId: row.agent_run_id,
       eventType: row.event_type as CodexRunEvent["eventType"],
       message: row.message,
       metadata: (row.metadata_json ?? {}) as Record<string, unknown>,

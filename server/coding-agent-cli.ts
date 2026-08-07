@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
   mkdtemp,
+  lstat,
   readFile,
   realpath,
   rm,
@@ -30,11 +31,10 @@ const defaultTimeoutMs = 20 * 60_000;
 const allowedChecks = new Set<AllowedCommand>(["lint", "test", "build"]);
 
 export const codingAgentNames = [
-  "codex",
-  "claude",
-  "gemini",
+  "openai",
+  "anthropic",
+  "google",
   "verboo",
-  "custom",
 ] as const;
 export type CodingAgentName = (typeof codingAgentNames)[number];
 export type CodingAgentMode = "investigate" | "propose_fix" | "implement_fix";
@@ -82,6 +82,12 @@ export interface CodingAgentRunResult {
   patch: WorkspaceDiff;
   checks: CodingAgentCheckResult[];
   metadata: Record<string, string | number | boolean>;
+  publishFiles?: Array<{
+    path: string;
+    status: "added" | "modified" | "deleted";
+    content?: Uint8Array;
+    mode?: "100644" | "100755";
+  }>;
 }
 
 export interface RunCodingAgentInput {
@@ -93,6 +99,8 @@ export interface RunCodingAgentInput {
   checks?: readonly AllowedCommand[];
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Injected only into the child process for this run; never persisted. */
+  apiKey?: string;
 }
 
 export interface CodingAgentHealth {
@@ -138,7 +146,7 @@ export type CodingAgentExecutableResolver = (
 ) => Promise<CodingAgentExecutable>;
 
 const capabilities: Record<CodingAgentName, CodingAgentCapabilities> = {
-  codex: {
+  openai: {
     structuredOutput: true,
     promptViaStdin: true,
     nativeSandbox: true,
@@ -146,7 +154,7 @@ const capabilities: Record<CodingAgentName, CodingAgentCapabilities> = {
     toolAllowlist: false,
     ephemeralSession: true,
   },
-  claude: {
+  anthropic: {
     structuredOutput: true,
     promptViaStdin: true,
     nativeSandbox: false,
@@ -154,7 +162,7 @@ const capabilities: Record<CodingAgentName, CodingAgentCapabilities> = {
     toolAllowlist: true,
     ephemeralSession: true,
   },
-  gemini: {
+  google: {
     structuredOutput: true,
     promptViaStdin: true,
     nativeSandbox: true,
@@ -170,41 +178,28 @@ const capabilities: Record<CodingAgentName, CodingAgentCapabilities> = {
     toolAllowlist: true,
     ephemeralSession: true,
   },
-  custom: {
-    structuredOutput: true,
-    promptViaStdin: true,
-    nativeSandbox: false,
-    readOnlyMode: true,
-    toolAllowlist: true,
-    ephemeralSession: true,
-  },
 };
 
 const definitions: Record<CodingAgentName, CodingAgentDefinition> = {
-  codex: {
-    name: "codex",
-    label: "OpenAI Codex CLI",
-    capabilities: capabilities.codex,
+  openai: {
+    name: "openai",
+    label: "ChatGPT",
+    capabilities: capabilities.openai,
   },
-  claude: {
-    name: "claude",
+  anthropic: {
+    name: "anthropic",
     label: "Claude Code",
-    capabilities: capabilities.claude,
+    capabilities: capabilities.anthropic,
   },
-  gemini: {
-    name: "gemini",
+  google: {
+    name: "google",
     label: "Gemini CLI",
-    capabilities: capabilities.gemini,
+    capabilities: capabilities.google,
   },
   verboo: {
     name: "verboo",
     label: "Verboo Code",
     capabilities: capabilities.verboo,
-  },
-  custom: {
-    name: "custom",
-    label: "Custom CLI adapter",
-    capabilities: capabilities.custom,
   },
 };
 
@@ -324,6 +319,7 @@ function validatePrompt(prompt: string): string {
 function codingAgentEnvironment(
   provider: CodingAgentName,
   homeDirectory = os.tmpdir(),
+  apiKey?: string,
 ): NodeJS.ProcessEnv {
   const safeKeys = new Set([
     "PATH",
@@ -339,11 +335,10 @@ function codingAgentEnvironment(
     "PROGRAMDATA",
   ]);
   const providerKeys: Record<CodingAgentName, readonly string[]> = {
-    codex: ["OPENAI_API_KEY"],
-    claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"],
-    gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI"],
+    openai: ["OPENAI_API_KEY"],
+    anthropic: ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"],
+    google: ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI"],
     verboo: ["VERBOO_API_KEY"],
-    custom: ["MEND_CUSTOM_API_KEY"],
   };
   providerKeys[provider].forEach((key) => safeKeys.add(key));
   const env: NodeJS.ProcessEnv = {};
@@ -358,10 +353,21 @@ function codingAgentEnvironment(
   env.USERPROFILE = homeDirectory;
   env.APPDATA = path.join(homeDirectory, "AppData", "Roaming");
   env.LOCALAPPDATA = path.join(homeDirectory, "AppData", "Local");
-  env.CODEX_HOME = path.join(homeDirectory, ".codex");
+  env.MEND_AGENT_HOME = path.join(homeDirectory, ".mend-agent");
   env.CLAUDE_CONFIG_DIR = path.join(homeDirectory, ".claude");
   env.GEMINI_CLI_HOME = path.join(homeDirectory, ".gemini");
   env.MEND_CODING_AGENT = provider;
+  if (apiKey) {
+    const key =
+      provider === "openai"
+        ? "OPENAI_API_KEY"
+        : provider === "anthropic"
+          ? "ANTHROPIC_API_KEY"
+          : provider === "google"
+            ? "GEMINI_API_KEY"
+            : "VERBOO_API_KEY";
+    env[key] = apiKey;
+  }
   return env;
 }
 
@@ -376,7 +382,7 @@ export function buildCodingAgentInvocation(
   executable: CodingAgentExecutable,
   input: Pick<
     RunCodingAgentInput,
-    "mode" | "model" | "timeoutMs" | "signal"
+    "mode" | "model" | "timeoutMs" | "signal" | "apiKey"
   > & {
     workspace: string;
     prompt: string;
@@ -385,7 +391,7 @@ export function buildCodingAgentInvocation(
 ): CodingAgentInvocation {
   const model = boundedModel(input.model);
   const args: string[] = [];
-  if (provider === "codex") {
+  if (provider === "openai") {
     args.push(
       "--ask-for-approval",
       "never",
@@ -406,7 +412,7 @@ export function buildCodingAgentInvocation(
     );
     if (model) args.push("--model", model);
     args.push("-");
-  } else if (provider === "gemini") {
+  } else if (provider === "google") {
     args.push(
       "--prompt",
       "",
@@ -418,10 +424,6 @@ export function buildCodingAgentInvocation(
       input.mode === "implement_fix" ? "auto_edit" : "plan",
     );
     if (model) args.push("--model", model);
-  } else if (provider === "custom") {
-    // Custom adapters intentionally receive no provider-specific flags. The
-    // administrator-owned executable reads the prompt from stdin, uses cwd as
-    // the workspace, and returns the shared Mend JSON report contract.
   } else {
     args.push(
       "--print",
@@ -441,7 +443,7 @@ export function buildCodingAgentInvocation(
     ...executable,
     args: [...executable.argsPrefix, ...args],
     cwd: input.workspace,
-    env: codingAgentEnvironment(provider, input.workspace),
+    env: codingAgentEnvironment(provider, input.workspace, input.apiKey),
     stdin: validatePrompt(input.prompt),
     timeoutMs: input.timeoutMs ?? defaultTimeoutMs,
     signal: input.signal,
@@ -570,15 +572,14 @@ function windowsEntryCandidates(provider: CodingAgentName): string[] {
     ? path.join(process.env.APPDATA, "npm", "node_modules")
     : "";
   const candidates: Record<CodingAgentName, string[]> = {
-    codex: [path.join(npmRoot, "@openai", "codex", "bin", "codex.js")],
-    claude: [
+    openai: [path.join(npmRoot, "@openai", "codex", "bin", "codex.js")],
+    anthropic: [
       path.join(npmRoot, "@anthropic-ai", "claude-code", "bin", "claude.exe"),
     ],
-    gemini: [
+    google: [
       path.join(npmRoot, "@google", "gemini-cli", "bundle", "gemini.js"),
     ],
     verboo: [path.join(npmRoot, "@verboo", "code", "bin", "verboo")],
-    custom: [],
   };
   return candidates[provider].filter(Boolean);
 }
@@ -587,8 +588,15 @@ export const resolveCodingAgentExecutable: CodingAgentExecutableResolver =
   async (provider) => {
     const configured = configuredExecutable(provider);
     if (configured) return executableFromPath(configured);
-    if (process.platform !== "win32")
-      return { command: provider, argsPrefix: [] };
+    if (process.platform !== "win32") {
+      const commands: Record<CodingAgentName, string> = {
+        openai: "codex",
+        anthropic: "claude",
+        google: "gemini",
+        verboo: "verboo",
+      };
+      return { command: commands[provider], argsPrefix: [] };
+    }
     const candidate = windowsEntryCandidates(provider).find(existsSync);
     if (!candidate)
       throw new Error(`${definitions[provider].label} is not installed`);
@@ -669,7 +677,7 @@ async function readAgentOutput(
   processResult: CliProcessResult,
   paths: AgentPaths,
 ): Promise<string> {
-  if (provider === "codex") {
+  if (provider === "openai") {
     try {
       return await readFile(paths.result, "utf8");
     } catch {
@@ -693,15 +701,14 @@ export class CodingAgentCli {
   private async version(
     provider: CodingAgentName,
     executable: CodingAgentExecutable,
+    apiKey?: string,
   ): Promise<string> {
-    if (provider === "custom")
-      return process.env.MEND_CUSTOM_CLI_VERSION?.trim() || "custom";
     const cwd = await realpath(os.tmpdir());
     const result = await this.runner({
       ...executable,
       args: [...executable.argsPrefix, "--version"],
       cwd,
-      env: codingAgentEnvironment(provider),
+      env: codingAgentEnvironment(provider, os.tmpdir(), apiKey),
       stdin: "",
       timeoutMs: 10_000,
     });
@@ -749,7 +756,7 @@ export class CodingAgentCli {
     const executable = await this.resolveExecutable(input.provider);
     let version: string;
     try {
-      version = await this.version(input.provider, executable);
+      version = await this.version(input.provider, executable, input.apiKey);
     } catch (error) {
       throw new CodingAgentCliError(
         redactSecrets(error instanceof Error ? error.message : String(error)),
@@ -806,6 +813,36 @@ export class CodingAgentCli {
         });
       }
       const patch = await getWorkspaceDiff(repoRoot, workspace, before);
+      const publishFiles = await Promise.all(
+        patch.files.map(async (file) => {
+          if (file.status === "deleted")
+            return { path: file.relativePath, status: file.status };
+          const absolute = path.resolve(workspace, file.relativePath);
+          const relative = path.relative(workspace, absolute);
+          if (
+            relative === ".." ||
+            relative.startsWith(`..${path.sep}`) ||
+            path.isAbsolute(relative)
+          )
+            throw new Error("Agent changed a path outside its workspace");
+          const fileStat = await lstat(absolute);
+          if (!fileStat.isFile() || fileStat.isSymbolicLink())
+            throw new Error(
+              `Agent changed a non-regular file: ${file.relativePath}`,
+            );
+          if (fileStat.size > 5_000_000)
+            throw new Error(
+              `Agent changed a file larger than 5 MB: ${file.relativePath}`,
+            );
+          return {
+            path: file.relativePath,
+            status: file.status,
+            content: await readFile(absolute),
+            mode:
+              fileStat.mode & 0o111 ? ("100755" as const) : ("100644" as const),
+          };
+        }),
+      );
       return {
         provider: input.provider,
         version,
@@ -813,6 +850,7 @@ export class CodingAgentCli {
         patch,
         checks: checkResults,
         metadata: outputMetadata(processResult.stdout),
+        publishFiles,
       };
     } finally {
       await Promise.all([

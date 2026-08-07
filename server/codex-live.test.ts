@@ -95,6 +95,10 @@ describe("live Codex route adapter", () => {
   it("starts Codex with the configured repository and issue context instead of leaving a queued row", async () => {
     let current = runRecord();
     const store = {
+      createRun: vi.fn(async (input: Record<string, unknown>) => {
+        current = { ...current, ...input } as CodexRunRecord;
+        return current;
+      }),
       getRun: vi.fn(async () => current),
       updateRun: vi.fn(async (_id: string, patch: Record<string, unknown>) => {
         current = {
@@ -122,7 +126,6 @@ describe("live Codex route adapter", () => {
         id: repositoryId,
         workspaceId,
         name: "Techne",
-        localPath: "repo",
         defaultBranch: "main",
         allowedCommands: ["test"],
       })),
@@ -181,12 +184,12 @@ describe("live Codex route adapter", () => {
       ]),
     );
     expect(result).toMatchObject({
-      id: "run-1",
+      id: expect.any(String),
       status: "queued",
       result: { request: { issueIdentifier: "TEC-42", commands: ["test"] } },
     });
     expect(store.updateRun).toHaveBeenCalledWith(
-      "run-1",
+      expect.any(String),
       expect.objectContaining({
         result: expect.objectContaining({ request: expect.any(Object) }),
       }),

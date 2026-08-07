@@ -1,18 +1,51 @@
 # Deploy Mend with Dokploy
 
-Mend is one Docker service: the Node process serves the built React app, the
-authenticated API and the durable worker on port `8787`.
+V1 uses two Dokploy services from the same repository and Dockerfile:
 
-## Build
+- `mend-control-plane`: public API, React app, GitHub webhooks and publication
+  actions. It serves `app.techneia.com.br` on port `8787`.
+- `mend-agent-runner`: private worker, no public domain. It consumes durable
+  `mend.agent_run_requested` jobs and runs one Agent at a time.
 
-In Dokploy, select:
+The runner is the only service that receives workspace LLM credentials and
+installs the four pinned provider CLIs. The control plane never needs an Agent
+CLI or a workspace API key.
 
-- Build Type: `Dockerfile`
-- Docker File: `Dockerfile` (or leave the default blank)
-- Docker Context Path: `.`
-- Docker Build Stage: `production` (blank also selects the final stage)
+## Dokploy setup
 
-Add these public Docker build arguments:
+Create one Dokploy project named `mend`. Create both applications from the
+same GitHub repository and branch:
+
+| Service              | Role                         | Domain                | Port   | Process role |
+| -------------------- | ---------------------------- | --------------------- | ------ | ------------ |
+| `mend-control-plane` | API + frontend + webhooks    | `app.techneia.com.br` | `8787` | `control`    |
+| `mend-agent-runner`  | durable private Agent worker | none                  | `8787` | `runner`     |
+
+For both services use Dockerfile build settings. Select `production` for the
+control plane and `runner` for the Agent worker:
+
+```text
+Build Type: Dockerfile
+Dockerfile: Dockerfile
+Context: .
+Stage: production (control) / runner (worker)
+Branch: main
+```
+
+Only the control plane needs the public domain and health check:
+
+```text
+GET /api/ready
+```
+
+The runner should use the same internal port but remain private on the
+Dokploy network. Mount a writable temporary volume at `/workspace/runs` on the
+runner. The image runs as the non-root `node` user.
+
+## Build arguments
+
+Set these on both services. Leave `VITE_MEND_API_URL` empty so the browser uses
+the public origin:
 
 ```text
 VITE_SUPABASE_URL=https://uwhugsimhtjtrnuotuki.supabase.co
@@ -20,85 +53,99 @@ VITE_SUPABASE_PUBLISHABLE_KEY=<Supabase publishable key>
 VITE_MEND_API_URL=
 ```
 
-Leave `VITE_MEND_API_URL` empty so the browser uses the same public origin as
-the Mend container. Never pass service-role, Whatsmiau or OpenAI keys as build
-arguments or as `VITE_*` values.
+Never pass service-role, Whatsmiau, GitHub private keys or BYOK values as
+Docker build arguments or `VITE_*` variables.
 
-## Runtime
-
-Expose container port `8787`, attach the public domain with HTTPS, and configure
-the health check as `GET /api/ready`.
-
-Set these runtime environment variables in Dokploy:
+## Control-plane environment
 
 ```text
-PORT=8787
 NODE_ENV=production
+PORT=8787
+MEND_PROCESS_ROLE=control
 SUPABASE_URL=https://uwhugsimhtjtrnuotuki.supabase.co
 SUPABASE_PUBLISHABLE_KEY=<Supabase publishable key>
-SUPABASE_SERVICE_ROLE_KEY=<Supabase secret/service-role key>
+SUPABASE_SERVICE_ROLE_KEY=<Supabase service-role key>
 WHATSMIAU_API_KEY=<Whatsmiau API key>
-WHATSMIAU_WEBHOOK_SECRET=<same secret configured on the Edge Function>
+WHATSMIAU_WEBHOOK_SECRET=<webhook secret>
 WHATSMIAU_WEBHOOK_URL=https://uwhugsimhtjtrnuotuki.supabase.co/functions/v1/whats-mend-webhook
-# Public app URL used by workspace invitation and recovery links.
-APP_BASE_URL=https://<mend-domain>
+APP_BASE_URL=https://app.techneia.com.br
 GOOGLE_CLIENT_ID=<Google OAuth client id>
 GOOGLE_CLIENT_SECRET=<Google OAuth client secret>
-GOOGLE_OAUTH_REDIRECT_URI=https://<mend-domain>/api/google/connections/oauth/callback
-GOOGLE_TOKEN_ENCRYPTION_KEY=<32-byte server secret>
-OPENAI_API_KEY=<OpenAI project key>
-SUPPORT_AI_MODEL=gpt-5-mini
-CODEX_MODEL=gpt-5.6-luna
-CODEX_REASONING_EFFORT=xhigh
-CODEX_FALLBACK_MODEL=gpt-5
-CODEX_MODEL_FALLBACK=1
-CODEX_FALLBACK_REASONING_EFFORT=high
-CODEX_MAX_TURNS=24
-CODEX_MAX_RUNTIME_SECONDS=1200
-CODEX_WORKSPACE_ROOT=/workspace/repos
-CODEX_GIT_REMOTE=origin
-DOKPLOY_API_URL=https://<dokploy-host>/api
-DOKPLOY_API_KEY=<Dokploy API key>
-DOKPLOY_APPLICATION_ID=<Dokploy application id>
+GOOGLE_OAUTH_REDIRECT_URI=https://app.techneia.com.br/api/google/connections/oauth/callback
+GOOGLE_TOKEN_ENCRYPTION_KEY=<server secret>
+MEND_GITHUB_APP_ID=<GitHub App id>
+MEND_GITHUB_APP_SLUG=<GitHub App slug>
+MEND_GITHUB_APP_PRIVATE_KEY_BASE64=<GitHub App private key>
+MEND_GITHUB_SETUP_STATE_SECRET=<setup state secret>
+MEND_GITHUB_WEBHOOK_SECRET=<GitHub webhook secret>
+MEND_GITHUB_API_URL=https://api.github.com
+MEND_AGENT_CREDENTIAL_ENCRYPTION_KEY=<same server secret used by the runner>
+MEND_AGENT_MAX_RUNTIME_SECONDS=1200
+MEND_AGENT_MAX_CONCURRENCY=1
+MEND_GITHUB_ACTIONS_ENABLED=0
 MEND_WORKER_POLL_MS=2000
 MEND_DEV_MODE=0
 ```
 
-Do not set `VITE_MEND_LOCAL_OPERATOR_MODE`, `VITE_MEND_DEMO_MODE` or
-`MEND_DEV_MODE=1` in production.
+## Runner environment
 
-## Repository volume for Codex
+Use the same Supabase, Whatsmiau and GitHub App values as the control plane,
+then add the runner-only settings:
 
-Mount a persistent host directory at `/workspace/repos`. Every repository path
-configured in Mend must resolve inside that directory. The container runs as
-the non-root `node` user, so the mounted directory must be writable by UID/GID
-`1000:1000`.
+```text
+NODE_ENV=production
+PORT=8787
+MEND_PROCESS_ROLE=runner
+MEND_AGENT_WORKSPACE_ROOT=/workspace/runs
+MEND_AGENT_CREDENTIAL_ENCRYPTION_KEY=<same server secret used by the control plane>
+MEND_AGENT_MAX_RUNTIME_SECONDS=1200
+MEND_AGENT_MAX_CONCURRENCY=1
+MEND_GITHUB_ACTIONS_ENABLED=0
+MEND_WORKER_POLL_MS=1000
+```
 
-The container includes Git and npm. The release flow is intentionally gated:
+Do not configure `OPENAI_API_KEY` as a global production dependency. Workspace
+credentials are stored encrypted in Supabase and are decrypted only in the
+runner process immediately before the child Agent starts. They are not logged,
+returned to the browser, or persisted in run events.
 
-1. Codex investigates and produces a diff plus checks.
-2. A human approves the result, which creates a local branch and commit.
-3. A separate “Publish branch” action pushes that branch to the configured Git
-   remote (`origin` by default).
-4. A separate “Deploy approved branch” action calls Dokploy only when the
-   workspace AI policy allows deployments and all three Dokploy variables are
-   configured.
+## Runtime flow
 
-Mend never pushes, merges or deploys as a side effect of triage or Codex
-completion. Keep the Dokploy API key as a runtime secret; it is never stored
-in Supabase or exposed to the browser.
+1. The control plane creates an `agent_run` with status `queued` and persists a
+   durable job.
+2. The private runner claims the job and downloads the selected GitHub branch
+   into `/workspace/runs/<run-id>`.
+3. The Agent investigates or patches the isolated checkout and runs the
+   configured independent checks.
+4. The runner persists the structured result, removes the checkout, and marks
+   the run complete.
+5. A human approval enables GitHub App branch publication and draft PR creation.
 
-## Supabase and Whatsmiau
+The GitHub App remains the control plane for base SHA, branch, checks and PR.
+GitHub Actions is represented in the executor contract but is disabled in V1.
 
-Before routing production traffic:
+## Supabase
 
-1. Apply migrations with `supabase db push --linked`.
-2. Deploy `whats-mend-webhook` with JWT verification disabled.
-3. Set the Edge Function secret `WHATSMIAU_WEBHOOK_SECRET`.
-4. Refresh the Whatsmiau connection in Mend so its webhook points to the Edge
-   Function and sends `messages.upsert`, `messages.update`, `messages.delete`,
-   `messages.set`, `connection.update` and `contacts.upsert`.
-5. Send a new inbound WhatsApp message and confirm it appears once in Inbox.
+Apply migrations before routing production traffic:
 
-`/api/health` is the liveness probe. `/api/ready` returns `503` until all core
-server providers and the Codex workspace mount are present.
+```text
+supabase db push --linked
+supabase gen types typescript --linked
+```
+
+The migration creates the service-role-only `workspace_agent_credentials`
+table, renames run tables to `agent_runs`/`agent_run_events`, removes
+repository local paths, and updates the durable bug-loop RPC.
+
+## Verification
+
+After deploy, verify:
+
+```text
+https://app.techneia.com.br/api/health
+https://app.techneia.com.br/api/ready
+```
+
+Then connect GitHub to a workspace, save an Agent provider credential, start a
+run from an issue, and confirm the run returns `queued` while the runner
+continues with the computer offline.

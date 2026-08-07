@@ -14,7 +14,7 @@ This is a faithful visual and behavioral adaptation, not a loose moodboard exerc
 - Descriptor: AI support for SaaS builders
 - Audience: solo founders, small SaaS teams, and vibe coders handling customer support through WhatsApp
 - Tagline: Keep shipping. Mend the support loop.
-- Core loop: WhatsApp conversation → contextual reply → native issue → controlled Codex run → reviewed fix
+- Core loop: WhatsApp conversation → contextual reply → native issue → controlled Agent run → reviewed fix
 - Voice: founder-first, precise, technical, direct; never enterprise theater
 - Runtime languages: PT-BR and EN-US
 
@@ -50,7 +50,7 @@ This is a faithful visual and behavioral adaptation, not a loose moodboard exerc
 - Use one orchestrated first-load sequence for hero/nav/product preview.
 - Use section-specific reveals, not the same fade-up repeated everywhere.
 - Cursor-reactive cards must track pointer position with a focused blue glow, subtle 3D tilt, and active border.
-- Animated card diagrams should communicate product state: incoming WhatsApp signal, AI draft, issue creation, Codex execution, review, and shipped fix.
+- Animated card diagrams should communicate product state: incoming WhatsApp signal, AI draft, issue creation, Agent execution, review, and shipped fix.
 - Pricing toggle, carousel, menu, buttons, and nav all need proper transition states.
 - Mobile must avoid desktop tilt and prioritize transform/opacity/clip-path effects that stay smooth.
 - Respect `prefers-reduced-motion` with a polished static fallback.

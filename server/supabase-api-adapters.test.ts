@@ -536,7 +536,7 @@ describe("Supabase API adapters", () => {
       ],
       labels: [{ id: "label-1", workspace_id: workspaceId, name: "checkout" }],
       issue_labels: [{ issue_id: "issue-1", label_id: "label-1" }],
-      coding_runs: [{ issue_id: "issue-1", workspace_id: workspaceId }],
+      agent_runs: [{ issue_id: "issue-1", workspace_id: workspaceId }],
     });
     const dependencies = adapters(client);
     const result = await dependencies.issues.list(
@@ -548,7 +548,7 @@ describe("Supabase API adapters", () => {
         label: "checkout",
         contactId: "contact-1",
         conversationId,
-        hasCodex: true,
+        hasAgent: true,
       } as never,
     );
     expect(result).toEqual([

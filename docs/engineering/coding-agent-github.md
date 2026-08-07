@@ -11,20 +11,16 @@ environment allowlist is defense in depth, not a substitute for isolation.
 ## Internal CLI registry
 
 `server/coding-agent-cli.ts` exposes a provider-neutral registry. Workspace
-configuration selects Codex, Claude, Gemini, Verboo, or the `custom` adapter
-plus an optional model name. The custom adapter points to an administrator-
-configured absolute executable (`MEND_CUSTOM_CLI_PATH`) that reads the prompt
-from stdin, uses its working directory as the disposable workspace, accepts no
-provider-specific flags, and returns the same JSON report contract; it never
-stores or accepts an arbitrary command template.
+configuration selects ChatGPT, Claude, Gemini, or Verboo plus an optional model
+name. The execution plane is selected separately and is `dokploy` in V1;
+`github_actions` is reserved for the later workflow adapter.
 
-| Adapter | Non-interactive output                   | Read-only policy               | Fix policy                       | Session                               |
-| ------- | ---------------------------------------- | ------------------------------ | -------------------------------- | ------------------------------------- |
-| Codex   | JSONL plus schema-validated last message | native `read-only` sandbox     | native `workspace-write` sandbox | ephemeral                             |
-| Claude  | JSON with `structured_output`            | plan mode, Read/Glob/Grep only | edits allowed, no Bash tool      | not persisted                         |
-| Gemini  | JSON envelope                            | sandbox plus plan approval     | sandbox plus auto-edit approval  | CLI does not expose a no-persist flag |
-| Verboo  | JSON with `structured_output`            | plan mode, Read/Glob/Grep only | edits allowed, no Bash tool      | not persisted                         |
-| Custom  | JSON report contract over stdin          | wrapper-enforced               | wrapper-enforced                 | wrapper-enforced                      |
+| Adapter | Non-interactive output                   | Read-only policy               | Fix policy                      | Session                               |
+| ------- | ---------------------------------------- | ------------------------------ | ------------------------------- | ------------------------------------- |
+| ChatGPT | JSONL plus schema-validated last message | native read-only mode          | native workspace-write mode     | ephemeral                             |
+| Claude  | JSON with `structured_output`            | plan mode, Read/Glob/Grep only | edits allowed, no Bash tool     | not persisted                         |
+| Gemini  | JSON envelope                            | sandbox plus plan approval     | sandbox plus auto-edit approval | CLI does not expose a no-persist flag |
+| Verboo  | JSON with `structured_output`            | plan mode, Read/Glob/Grep only | edits allowed, no Bash tool     | not persisted                         |
 
 Prompts go through stdin and never become command-line arguments. The child process uses `shell: false`, has a bounded output buffer, a timeout and cancellation, and receives only OS/runtime variables plus the selected inference provider's authentication. GitHub tokens, Supabase secrets and application credentials are omitted. On Windows the registry resolves the known native executable or JavaScript entrypoint instead of invoking `.cmd`, `.bat`, or PowerShell shims.
 
@@ -55,10 +51,11 @@ crash. The run also persists the GitHub base SHA observed at investigation
 start, so GitHub rejects publication when the default branch changed meanwhile.
 
 The child process receives a per-run home/config directory inside the disposable
-workspace, so provider login files are not read from the host account. Supply
-the selected provider's API key through the runner environment (or add an
-explicit provider-secret adapter); never place GitHub, Supabase, or application
-control-plane credentials in that environment.
+workspace, so provider login files are not read from the host account. The
+runner resolves the selected workspace/provider credential immediately before
+the run, injects it only into the child process, and removes the workspace
+afterward. Never place GitHub, Supabase, or application control-plane
+credentials in that environment.
 
 ## GitHub App setup
 
@@ -121,4 +118,4 @@ The control plane mints a one-hour installation token only when an operation sta
 
 The remaining primitives cover workflow dispatch with an opaque run id, check creation/update, pull request update, commit status, guarded merge with an expected head SHA, deployment/status, and an HTTPS health probe restricted to server-configured origins. `MEND_DEPLOYMENT_HEALTH_URL` selects the credential-free endpoint and `MEND_HEALTHCHECK_ALLOWED_ORIGINS` is a comma-separated SSRF allowlist. Product policy and human approval remain above these primitives.
 
-Current platform references: [GitHub App installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app), [GitHub REST API versions](https://docs.github.com/en/rest/about-the-rest-api/api-versions), [Codex CLI reference](https://developers.openai.com/codex/cli/reference), [Claude Code CLI reference](https://docs.anthropic.com/en/docs/claude-code/cli-usage), and [Gemini CLI reference](https://geminicli.com/docs/cli/cli-reference/).
+Current platform references: [GitHub App installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app), [GitHub REST API versions](https://docs.github.com/en/rest/about-the-rest-api/api-versions), [Claude Code CLI reference](https://docs.anthropic.com/en/docs/claude-code/cli-usage), and [Gemini CLI reference](https://geminicli.com/docs/cli/cli-reference/).

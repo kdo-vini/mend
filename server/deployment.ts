@@ -38,7 +38,7 @@ export class DokployDeployment implements CodexDeploymentPort {
       },
       body: JSON.stringify({
         applicationId: this.applicationId,
-        title: `Mend Codex ${input.runId}`,
+        title: `Mend Agent ${input.runId}`,
         description: `Approved ${input.branch}${input.commitSha ? ` at ${input.commitSha}` : ""}`,
         branch: input.branch,
         ...(input.commitSha ? { commitSha: input.commitSha } : {}),

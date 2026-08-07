@@ -128,7 +128,7 @@ export class InMemoryCodexRunStore implements CodexRunStore {
     patch: UpdateCodexRunInput,
   ): Promise<CodexRunRecord> {
     const current = this.runs.get(id);
-    if (!current) throw new Error(`Unknown Codex run: ${id}`);
+    if (!current) throw new Error(`Unknown Agent run: ${id}`);
     const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
     this.runs.set(id, next);
     return next;
@@ -235,7 +235,7 @@ async function resolveWorkspaceFile(
   )
     throw new Error("Workspace file path traversal is not allowed");
   if (sensitiveRelativePath(normalized))
-    throw new Error("Sensitive workspace paths are not available to Codex");
+    throw new Error("Sensitive workspace paths are not available to the Agent");
   const root = await realpath(workspace);
   const target = resolveInside(root, normalized);
   const parent = await realpath(path.dirname(target));
@@ -250,7 +250,7 @@ async function resolveWorkspaceFile(
     const targetStats = await lstat(target);
     if (targetStats.isSymbolicLink())
       throw new Error(
-        "Symbolic-link workspace files are not available to Codex",
+        "Symbolic-link workspace files are not available to the Agent",
       );
     if (!targetStats.isFile()) throw new Error("Workspace path is not a file");
   } catch (error) {
@@ -268,7 +268,7 @@ export async function readWorkspaceFile(
   if (content.length > maxWorkspaceFileBytes)
     throw new Error(`Workspace file exceeds ${maxWorkspaceFileBytes} bytes`);
   if (content.includes(0))
-    throw new Error("Binary workspace files are not readable by Codex");
+    throw new Error("Binary workspace files are not readable by the Agent");
   return redactSecrets(content.toString("utf8"));
 }
 
@@ -285,7 +285,7 @@ export async function writeWorkspaceFile(
   if (Buffer.byteLength(content, "utf8") > maxWorkspaceFileBytes)
     throw new Error(`Workspace file exceeds ${maxWorkspaceFileBytes} bytes`);
   if (content.includes("\0"))
-    throw new Error("Binary workspace files are not writable by Codex");
+    throw new Error("Binary workspace files are not writable by the Agent");
   const target = await resolveWorkspaceFile(workspace, relativePath);
   await writeFile(target, content, "utf8");
 }
@@ -813,7 +813,7 @@ export async function executeSafeTool(
   input: Omit<SafeToolLoopInput, "tools">,
 ): Promise<SafeToolResult> {
   if (!tool || typeof tool !== "object" || !("kind" in tool))
-    throw new Error("Invalid Codex tool request");
+    throw new Error("Invalid Agent tool request");
   if (tool.kind === "command") {
     if (!isAllowedCommand(tool.name))
       throw new Error(`Command is not allowed: ${String(tool.name)}`);
@@ -875,11 +875,11 @@ export async function runSafeToolLoop(
 ): Promise<SafeToolResult[]> {
   const maxSteps = Math.min(Math.max(input.maxSteps ?? 8, 1), 32);
   if (input.tools.length > maxSteps)
-    throw new Error(`Codex tool loop exceeds ${maxSteps} steps`);
+    throw new Error(`Agent tool loop exceeds ${maxSteps} steps`);
   const results: SafeToolResult[] = [];
   for (const tool of input.tools) {
     if (input.signal?.aborted)
-      throw new CodexAbortError("Codex tool loop canceled");
+      throw new CodexAbortError("Agent tool loop canceled");
     results.push(await executeSafeTool(tool, input));
   }
   return results;
@@ -890,7 +890,7 @@ export class CodexCancellationRegistry {
 
   register(runId: string, controller = new AbortController()): AbortController {
     if (this.controllers.has(runId))
-      throw new Error(`Codex run is already active: ${runId}`);
+      throw new Error(`Agent run is already active: ${runId}`);
     this.controllers.set(runId, controller);
     return controller;
   }
@@ -945,6 +945,7 @@ async function emitRunEvent(
 }
 
 export interface RunCodexInput {
+  runId?: string;
   workspaceId: string;
   issueId: string;
   repositoryId?: string;
@@ -979,7 +980,7 @@ export interface RunCodexResult {
 export async function runCodexRun(
   input: RunCodexInput,
 ): Promise<RunCodexResult> {
-  const runId = randomUUID();
+  const runId = input.runId ?? randomUUID();
   const branchName = createBranchName(
     input.issueIdentifier,
     input.issueTitle,
@@ -1043,11 +1044,11 @@ export async function runCodexRun(
         },
       });
     }
-    await event("run_started", "Isolated Codex run started", {
+    await event("run_started", "Isolated Agent run started", {
       mode: input.mode,
     });
     if (combined.signal.aborted)
-      throw new CodexAbortError("Codex run canceled");
+      throw new CodexAbortError("Agent run canceled");
     before = await snapshotWorkspace(input.repoRoot);
     isolatedWorkspace = await createIsolatedWorkspace(input.repoRoot, run.id);
     await event(
@@ -1072,7 +1073,7 @@ export async function runCodexRun(
       source: "preflight" | "model",
     ): Promise<SafeToolResult> => {
       if (combined.signal.aborted)
-        throw new CodexAbortError("Codex run canceled");
+        throw new CodexAbortError("Agent run canceled");
       const toolName = tool.kind === "command" ? tool.name : tool.kind;
       if (source === "preflight")
         await event("tool_started", `Preflight tool ${index + 1} started`, {

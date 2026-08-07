@@ -33,7 +33,7 @@ Antes de escrever código novo:
 | `useConfirmation` / `ConfirmDialog`                   | `src/shared/ui/`                                                | Confirmações destrutivas ou que autorizam escrita externa. Não usar `window.confirm`.                                                                                                                                                           |
 | `MembersPanel` / workspace invitation API             | `src/features/settings/components/` + `src/api/live-actions.ts` | Gestão de membros e convites sempre passa pela API workspace-scoped. A UI usa apenas os DTOs sanitizados; envio, recuperação, expiração, aceite e auditoria ficam no adapter/RPC protegido.                                                     |
 | `SupabaseBugLoopStore`                                | `server/bug-loop.ts`                                            | Criar, deduplicar e avançar casos de bug duráveis. Worker e rotas não devem escrever `bug_cases` ou `bug_case_events` diretamente.                                                                                                              |
-| `CodingAgentCli`                                      | `server/coding-agent-cli.ts`                                    | Executar Codex, Claude, Gemini ou Verboo pelo registro fechado de adapters. Não aceitar executável, argv ou template de comando da UI ou do banco.                                                                                              |
+| `CodingAgentCli`                                      | `server/coding-agent-cli.ts`                                    | Executar ChatGPT, Claude, Gemini ou Verboo pelo registro fechado de adapters. Não aceitar executável, argv ou template de comando da UI ou do banco.                                                                                            |
 | `GitHubControlPlane` / `GitHubAppTokenProvider`       | `server/github-control-plane.ts`                                | Toda escrita GitHub usa token curto e escopado da instalação. Tokens não entram no ambiente do agente e chamadas REST não devem ser duplicadas fora deste limite.                                                                               |
 | `SupabaseGitHubConnectionAdapter`                     | `server/supabase-api-adapters.ts`                               | A instalação GitHub pertence ao workspace; o adapter valida o state one-shot, lista repositórios da instalação e só expõe owner/repositórios sanitizados ao navegador.                                                                          |
 
@@ -94,7 +94,7 @@ deve conhecer o formato `mcp`, `mcp_call` ou `mcp_approval_request`.
 
 `bug_cases` é o checkpoint do produto e `bug_case_events` é o histórico
 append-only. O sinal usa a mensagem inbound como chave; investigação e correção
-são `coding_runs` separados. Retomadas devem usar chaves idempotentes e nunca
+são `agent_runs` separados. Retomadas devem usar chaves idempotentes e nunca
 repetir publicação, merge, deploy ou resposta externa por inferência de estado.
 
 O provider de suporte continua atrás de `SupportAiProvider`. Agentes de código

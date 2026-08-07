@@ -241,6 +241,7 @@ export function connectionEncryptionKey(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const key =
+    env.MEND_AGENT_CREDENTIAL_ENCRYPTION_KEY?.trim() ||
     env.CONNECTION_ENCRYPTION_KEY?.trim() ||
     env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim();
   if (!key)

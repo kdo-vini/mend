@@ -40,7 +40,6 @@ import {
   loadLiveChannelFlow,
   listLiveChannels,
   listLiveRepositories,
-  listLiveCodingAgentHealth,
   listLiveGoogleConnections,
   saveLiveGoogleCalendarSelection,
   getLiveGitHubConnection,
@@ -49,6 +48,10 @@ import {
   disconnectLiveGitHub,
   updateLiveRepository,
   removeLiveRepository,
+  listLiveAgentCredentials,
+  saveLiveAgentCredential,
+  removeLiveAgentCredential,
+  type LiveAgentCredential,
   startLiveGoogleOAuth,
   disconnectLiveGoogleConnection,
   createLiveMcpConnection,
@@ -134,9 +137,18 @@ const aiPolicyChannelLabels: Record<AiPolicyChannel, string> = {
 const aiPolicyIntegrationLabels: Record<AiPolicyIntegration, string> = {
   knowledge: "Published knowledge",
   google_calendar: "Google Calendar",
-  codex: "Coding agent CLI",
+  agent: "Agent execution",
   mcp: "MCP plugins",
 };
+
+function agentProviderLabel(provider: CodingAgentProvider): string {
+  return {
+    openai: "ChatGPT",
+    anthropic: "Claude",
+    google: "Gemini",
+    verboo: "Verboo",
+  }[provider];
+}
 
 export function SettingsPage({
   workspaceId,
@@ -196,17 +208,13 @@ export function SettingsPage({
     Array<{
       id: string;
       name: string;
-      localPath: string;
       defaultBranch: string;
       agentProvider: CodingAgentProvider;
-      executionPlane: "local_cli" | "github_actions";
+      executionPlane: "dokploy" | "github_actions";
       githubOwner?: string;
       githubRepo?: string;
       githubInstallationId?: string;
     }>
-  >([]);
-  const [codingAgentHealth, setCodingAgentHealth] = useState<
-    Awaited<ReturnType<typeof listLiveCodingAgentHealth>>
   >([]);
   const [repositoriesLoading, setRepositoriesLoading] = useState(false);
   const [repositoriesError, setRepositoriesError] = useState<string | null>(
@@ -222,15 +230,24 @@ export function SettingsPage({
   const [githubAction, setGithubAction] = useState<
     "connect" | "disconnect" | null
   >(null);
+  const [agentCredentials, setAgentCredentials] = useState<
+    LiveAgentCredential[]
+  >([]);
+  const [credentialTask, setCredentialTask] = useState<"support" | "agent">(
+    "agent",
+  );
+  const [credentialProvider, setCredentialProvider] =
+    useState<CodingAgentProvider>("openai");
+  const [credentialKey, setCredentialKey] = useState("");
+  const [credentialSaving, setCredentialSaving] = useState(false);
   const [editingRepositoryId, setEditingRepositoryId] = useState<string | null>(
     null,
   );
   const [repositoryName, setRepositoryName] = useState("");
-  const [repositoryPath, setRepositoryPath] = useState("");
   const [repositoryBranch, setRepositoryBranch] = useState("main");
   const [repositoryAgent, setRepositoryAgent] =
-    useState<CodingAgentProvider>("codex");
-  const repositoryPlane = "local_cli" as const;
+    useState<CodingAgentProvider>("openai");
+  const repositoryPlane = "dokploy" as const;
   const [githubOwner, setGithubOwner] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
   const [flow, setFlow] = useState<SupportFlow | null>(null);
@@ -415,13 +432,11 @@ export function SettingsPage({
     setRepositoriesLoading(true);
     setRepositoriesError(null);
     try {
-      const [rows, health, connection] = await Promise.all([
+      const [rows, connection] = await Promise.all([
         listLiveRepositories(workspaceId),
-        listLiveCodingAgentHealth(workspaceId),
         getLiveGitHubConnection(workspaceId),
       ]);
       setRepositories(rows);
-      setCodingAgentHealth(health);
       setGithubConnection(connection);
       setGithubRepositoriesLoading(connection.connected);
       if (connection.connected)
@@ -443,6 +458,71 @@ export function SettingsPage({
     if (!workspaceId || activeTab !== "repositories") return;
     void loadRepositories();
   }, [activeTab, loadRepositories, workspaceId]);
+
+  useEffect(() => {
+    if (activeTab !== "repositories" || !workspaceId) return;
+    void listLiveAgentCredentials(workspaceId)
+      .then(setAgentCredentials)
+      .catch(() => setAgentCredentials([]));
+  }, [activeTab, workspaceId]);
+
+  const saveCredential = async () => {
+    if (!workspaceId || !credentialKey.trim()) return;
+    setCredentialSaving(true);
+    try {
+      const saved = await saveLiveAgentCredential({
+        workspaceId,
+        task: credentialTask,
+        provider: credentialProvider,
+        apiKey: credentialKey,
+      });
+      setAgentCredentials((current) => [
+        ...current.filter(
+          (item) =>
+            item.task !== saved.task || item.provider !== saved.provider,
+        ),
+        saved,
+      ]);
+      setCredentialKey("");
+      onToast("Credential saved securely");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Credential could not be saved.",
+      );
+    } finally {
+      setCredentialSaving(false);
+    }
+  };
+
+  const removeCredential = async (credential: LiveAgentCredential) => {
+    if (!workspaceId) return;
+    setCredentialSaving(true);
+    try {
+      await removeLiveAgentCredential({
+        workspaceId,
+        task: credential.task,
+        provider: credential.provider,
+      });
+      setAgentCredentials((current) =>
+        current.filter(
+          (item) =>
+            item.task !== credential.task ||
+            item.provider !== credential.provider,
+        ),
+      );
+      onToast("Credential removed");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Credential could not be removed.",
+      );
+    } finally {
+      setCredentialSaving(false);
+    }
+  };
 
   const connect = async () => {
     if (!selected) return;
@@ -553,9 +633,8 @@ export function SettingsPage({
   const resetRepositoryForm = () => {
     setEditingRepositoryId(null);
     setRepositoryName("");
-    setRepositoryPath("");
     setRepositoryBranch("main");
-    setRepositoryAgent("codex");
+    setRepositoryAgent("openai");
     setGithubOwner(githubConnection.owner ?? "");
     setGithubRepo("");
   };
@@ -563,7 +642,6 @@ export function SettingsPage({
   const editRepository = (repository: (typeof repositories)[number]) => {
     setEditingRepositoryId(repository.id);
     setRepositoryName(repository.name);
-    setRepositoryPath(repository.localPath);
     setRepositoryBranch(repository.defaultBranch);
     setRepositoryAgent(repository.agentProvider);
     setGithubOwner(githubConnection.owner ?? repository.githubOwner ?? "");
@@ -576,8 +654,7 @@ export function SettingsPage({
   };
 
   const saveRepository = async () => {
-    const localReady = repositoryPath.trim();
-    if (!workspaceId || !repositoryName.trim() || !localReady) return;
+    if (!workspaceId || !repositoryName.trim() || !githubRepo.trim()) return;
     setChannelAction(true);
     try {
       const githubFields =
@@ -592,7 +669,6 @@ export function SettingsPage({
             workspaceId,
             repositoryId: editingRepositoryId,
             name: repositoryName,
-            localPath: repositoryPath,
             defaultBranch: repositoryBranch,
             agentProvider: repositoryAgent,
             executionPlane: repositoryPlane,
@@ -601,7 +677,6 @@ export function SettingsPage({
         : await createLiveRepository({
             workspaceId,
             name: repositoryName,
-            localPath: repositoryPath,
             defaultBranch: repositoryBranch,
             agentProvider: repositoryAgent,
             executionPlane: repositoryPlane,
@@ -2621,8 +2696,103 @@ export function SettingsPage({
                     )}
                   </div>
                 </div>
+                <div className="settings-section settings-section-inset">
+                  <div className="settings-section-header">
+                    <div>
+                      <h3>LLM provider credentials</h3>
+                      <p>
+                        Keys are encrypted server-side and injected only into
+                        the selected Agent process. They are never returned to
+                        this page.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="settings-form-grid">
+                    <label>
+                      Task
+                      <Select
+                        value={credentialTask}
+                        options={[
+                          { value: "agent", label: "Agent runs" },
+                          { value: "support", label: "Support AI" },
+                        ]}
+                        onChange={(value) =>
+                          setCredentialTask(value as "support" | "agent")
+                        }
+                      />
+                    </label>
+                    <label>
+                      Provider
+                      <Select
+                        value={credentialProvider}
+                        options={[
+                          { value: "openai", label: "ChatGPT" },
+                          { value: "anthropic", label: "Claude" },
+                          { value: "google", label: "Gemini" },
+                          { value: "verboo", label: "Verboo" },
+                        ]}
+                        onChange={(value) =>
+                          setCredentialProvider(value as CodingAgentProvider)
+                        }
+                      />
+                    </label>
+                    <label className="settings-form-wide">
+                      API key
+                      <input
+                        type="password"
+                        value={credentialKey}
+                        autoComplete="new-password"
+                        placeholder="Paste a provider key"
+                        onChange={(event) =>
+                          setCredentialKey(event.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    disabled={credentialSaving || !credentialKey.trim()}
+                    onClick={() => void saveCredential()}
+                  >
+                    <Save size={14} />
+                    {credentialSaving
+                      ? "Saving securely..."
+                      : "Save credential"}
+                  </button>
+                  {agentCredentials.length > 0 && (
+                    <div className="credential-list">
+                      {agentCredentials.map((credential) => (
+                        <div
+                          className="credential-row"
+                          key={`${credential.task}:${credential.provider}`}
+                        >
+                          <span>
+                            {credential.task === "agent" ? "Agent" : "Support"}{" "}
+                            ·{" "}
+                            {credential.provider === "openai"
+                              ? "ChatGPT"
+                              : credential.provider === "anthropic"
+                                ? "Claude"
+                                : credential.provider === "google"
+                                  ? "Gemini"
+                                  : "Verboo"}
+                          </span>
+                          <button
+                            className="text-button danger"
+                            type="button"
+                            disabled={credentialSaving}
+                            onClick={() => void removeCredential(credential)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {repositoriesLoading ? (
-                  <LoadingState label="Loading repositories and CLI health..." />
+                  <LoadingState label="Loading repositories..." />
                 ) : repositoriesError ? (
                   <div className="inline-empty" role="alert">
                     <Info size={16} />
@@ -2645,10 +2815,10 @@ export function SettingsPage({
                             <strong>{repository.name}</strong>
                           </div>
                           <p>
-                            {repository.agentProvider} CLI ·{" "}
+                            {agentProviderLabel(repository.agentProvider)} ·{" "}
                             {repository.executionPlane === "github_actions"
                               ? "GitHub Actions"
-                              : "Local runner"}{" "}
+                              : "Dokploy runner"}{" "}
                             · {repository.defaultBranch}
                           </p>
                           {repository.githubOwner && repository.githubRepo && (
@@ -2671,7 +2841,7 @@ export function SettingsPage({
                             </span>
                           ) : (
                             <span className="repository-status">
-                              Local only
+                              GitHub not selected
                             </span>
                           )}
                           <ActionMenu label={repository.name}>
@@ -2703,19 +2873,6 @@ export function SettingsPage({
                       </div>
                     )}
                   </>
-                )}
-                {codingAgentHealth.length > 0 && (
-                  <div className="settings-agent-health" aria-live="polite">
-                    {codingAgentHealth.map((agent) => (
-                      <span key={agent.provider}>
-                        <span
-                          className={`status-dot ${agent.available ? "is-online" : "is-offline"}`}
-                        />
-                        {agent.provider} CLI ·{" "}
-                        {agent.available ? "installed" : "unavailable"}
-                      </span>
-                    ))}
-                  </div>
                 )}
                 <div className="repository-editor" id="repository-editor">
                   <div className="repository-editor-header">
@@ -2753,15 +2910,14 @@ export function SettingsPage({
                       />
                     </label>
                     <label>
-                      Coding agent
+                      Agent / LLM provider
                       <Select
                         value={repositoryAgent}
                         options={[
-                          { value: "codex", label: "Codex CLI" },
-                          { value: "claude", label: "Claude Code" },
-                          { value: "gemini", label: "Gemini CLI" },
-                          { value: "verboo", label: "Verboo CLI" },
-                          { value: "custom", label: "Custom CLI adapter" },
+                          { value: "openai", label: "ChatGPT" },
+                          { value: "anthropic", label: "Claude" },
+                          { value: "google", label: "Gemini" },
+                          { value: "verboo", label: "Verboo" },
                         ]}
                         onChange={(value) =>
                           setRepositoryAgent(value as CodingAgentProvider)
@@ -2771,11 +2927,11 @@ export function SettingsPage({
                     <label>
                       Execution plane
                       <input
-                        value="Isolated CLI + GitHub control plane"
+                        value="Dokploy runner + GitHub control plane"
                         disabled
                       />
                       <small className="settings-field-help">
-                        The CLI investigates in a disposable workspace; GitHub
+                        The Agent runs in a private ephemeral workspace; GitHub
                         owns branches, pull requests, checks, and release gates.
                       </small>
                     </label>
@@ -2787,16 +2943,6 @@ export function SettingsPage({
                           setRepositoryBranch(event.target.value)
                         }
                         placeholder="main"
-                      />
-                    </label>
-                    <label>
-                      Local path
-                      <input
-                        value={repositoryPath}
-                        onChange={(event) =>
-                          setRepositoryPath(event.target.value)
-                        }
-                        placeholder="C:\workspace\support-app"
                       />
                     </label>
                     <label>
@@ -2865,7 +3011,7 @@ export function SettingsPage({
                         channelAction ||
                         !workspaceId ||
                         !repositoryName.trim() ||
-                        !repositoryPath.trim()
+                        !githubRepo.trim()
                       }
                       onClick={() => void saveRepository()}
                     >

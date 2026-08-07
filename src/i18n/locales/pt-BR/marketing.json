@@ -21,7 +21,7 @@
     "secondaryCta": "Ver o produto"
   },
   "preview": {
-    "ariaLabel": "Preview do Inbox, issue e run do Codex no Mend",
+    "ariaLabel": "Preview do Inbox, issue e run do Agent no Mend",
     "inbox": "Mend Inbox",
     "live": "Workspace ao vivo",
     "conversations": "Conversas",
@@ -64,7 +64,7 @@
       "contextMeta": "WhatsApp + histórico",
       "issue": "Issue criada",
       "issueMeta": "MEND-184",
-      "run": "Run do Codex concluída",
+      "run": "Run do Agent concluída",
       "runMeta": "Checks aprovados",
       "review": "Aguardando revisão",
       "reviewMeta": "Você decide o que vai ao ar"
@@ -114,7 +114,7 @@
       },
       "run": {
         "title": "Rode mudanças de código atrás de uma revisão",
-        "description": "Deixe o Codex inspecionar, implementar e testar em um workspace restrito enquanto o founder mantém o controle final.",
+        "description": "Deixe um Agent inspecionar, implementar e testar em um workspace restrito enquanto o founder mantém o controle final.",
         "points": {
           "0": "Execução local com escopo",
           "1": "Checks e evidência do diff",
@@ -160,7 +160,7 @@
         "description": "Preserve evidência do cliente, responsabilidade e estado do sinal ao fix."
       },
       "3": {
-        "title": "Runs controladas do Codex",
+        "title": "Runs controladas do Agent",
         "description": "Defina o escopo do trabalho local, inspecione checks e aprove o diff resultante."
       },
       "4": {
@@ -216,7 +216,7 @@
         "flow": {
           "signal": "Um usuário relata um caso de borda",
           "context": "O Mend estrutura o caminho de reprodução",
-          "action": "O Codex trabalha em uma run restrita",
+          "action": "Um Agent trabalha em uma run restrita",
           "outcome": "Você inspeciona o diff antes de entregar"
         }
       }
@@ -254,7 +254,7 @@
         "features": {
           "0": "Até 5 operadores",
           "1": "Rascunhos de IA com grounding",
-          "2": "Runs controladas do Codex",
+          "2": "Runs controladas do Agent",
           "3": "Suporte prioritário do workspace"
         },
         "cta": "Começar no Builder"
@@ -289,11 +289,10 @@
     },
     "connectors": {
       "label": "Use o agente de código em que seu time já confia",
-      "codex": "Codex CLI",
-      "claude": "Claude Code",
-      "gemini": "Gemini CLI",
+      "openai": "ChatGPT",
+      "anthropic": "Claude Code",
+      "google": "Gemini CLI",
       "verboo": "Verboo CLI",
-      "custom": "Adaptador CLI customizado",
       "github": "GitHub é o plano de controle"
     },
     "loop": {
@@ -372,7 +371,7 @@
       "githubTitle": "Contexto do repositório",
       "githubDetail": "Issue, branch e escopo da instalação",
       "runnerTitle": "Runner efêmero",
-      "runnerDetail": "Codex, Claude, Gemini ou Verboo",
+      "runnerDetail": "ChatGPT, Claude, Gemini ou Verboo",
       "prTitle": "Pull request em rascunho",
       "prDetail": "Patch, checks e evidência",
       "items": {
@@ -388,7 +387,7 @@
       "builderDescription": "Para times SaaS pequenos que querem automação da reclamação ao fix com controle visível.",
       "features": {
         "0": "Inbox do WhatsApp e triagem de bugs",
-        "1": "Codex, Claude, Gemini ou Verboo CLI",
+        "1": "ChatGPT, Claude, Gemini ou Verboo CLI",
         "2": "Pull requests e checks no GitHub",
         "3": "Aprovação humana e limites de release"
       }
@@ -413,7 +412,7 @@
           "0": "Inbox",
           "1": "Issues",
           "2": "Conhecimento",
-          "3": "Runs do Codex"
+          "3": "Runs do Agent"
         }
       },
       "resources": {
