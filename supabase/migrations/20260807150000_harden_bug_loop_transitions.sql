@@ -73,6 +73,11 @@ begin
     if coalesce(p_decision, current_case.decision) not in ('notify', 'dismiss') then
       raise exception 'bug_case_invalid_transition:%->%', current_case.stage, p_stage;
     end if;
+  elsif current_case.stage = 'failed' and p_stage in ('investigation', 'fix') then
+    -- An explicit operator retry may reopen a failed case with a new run.
+    -- The retry event carries the new run id and is still protected by its
+    -- idempotency key, so an HTTP retry cannot dispatch the same recovery twice.
+    null;
   elsif p_stage = 'deploy' and current_case.stage = 'pull_request' then
     -- Local-CLI publication has no GitHub merge checkpoint.
     null;
@@ -105,7 +110,10 @@ begin
       deployment_url = coalesce(nullif(p_deployment_url, ''), deployment_url),
       health_status = coalesce(p_health_status, health_status),
       customer_response_status = coalesce(p_customer_response_status, customer_response_status),
-      last_error = coalesce(nullif(left(p_last_error, 2000), ''), last_error),
+      last_error = case
+        when current_case.stage = 'failed' and p_stage in ('investigation', 'fix') then null
+        else coalesce(nullif(left(p_last_error, 2000), ''), last_error)
+      end,
       completed_at = case when coalesce(p_status, status) = 'completed' then coalesce(completed_at, now()) else completed_at end,
       updated_at = now()
   where id = p_bug_case_id and workspace_id = p_workspace_id

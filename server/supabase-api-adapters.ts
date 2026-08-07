@@ -2538,6 +2538,37 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       createdByUserId: context.userId,
     });
 
+    // The Runs retry action creates a fresh run. If the previous case was
+    // failed, reopen its durable checkpoint as part of the same request so
+    // the new execution is visible in the complaint-to-fix state machine.
+    const failedCase = await this.privilegedClient
+      .from("bug_cases")
+      .select("id, stage")
+      .eq("workspace_id", context.workspaceId)
+      .eq("issue_id", str(issue.id))
+      .eq("stage", "failed")
+      .maybeSingle();
+    const failedCaseData = checked("bug_cases.retry", failedCase);
+    const failedCaseRow = failedCaseData ? row(failedCaseData) : undefined;
+    if (failedCaseRow && str(failedCaseRow.id)) {
+      const bugCaseId = str(failedCaseRow.id);
+      const retryStage: BugLoopStage =
+        input.mode === "investigate" ? "investigation" : "fix";
+      await this.bugLoop.advance({
+        workspaceId: context.workspaceId,
+        bugCaseId,
+        stage: retryStage,
+        status: "active",
+        eventType: "coding_run.retry",
+        message: `A new ${input.mode} run was started after the previous attempt failed.`,
+        idempotencyKey: `coding-run-retry:${handle.runId}`,
+        ...(retryStage === "investigation"
+          ? { investigationRunId: handle.runId }
+          : { fixRunId: handle.runId }),
+        metadata: { runId: handle.runId, mode: input.mode },
+      });
+    }
+
     // The request is useful operator metadata. Persist it after start so the
     // runner remains the only component that creates the queued run and emits
     // its lifecycle events.

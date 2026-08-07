@@ -1,5 +1,5 @@
 begin;
-select plan(8);
+select plan(10);
 
 set local request.jwt.claims = '{"role":"service_role"}';
 
@@ -160,6 +160,36 @@ select is(
   (select jsonb_typeof(evidence_json) from public.bug_cases where id = '88888888-8888-8888-8888-888888888888'),
   'array',
   'bug evidence uses the canonical list shape'
+);
+
+select public.advance_bug_case(
+  p_workspace_id => '11111111-1111-1111-1111-111111111111',
+  p_bug_case_id => '88888888-8888-8888-8888-888888888888',
+  p_stage => 'failed',
+  p_event_type => 'investigation.failed',
+  p_message => 'Investigation failed',
+  p_idempotency_key => 'failed-for-retry',
+  p_status => 'failed',
+  p_last_error => 'runner stopped'
+);
+select public.advance_bug_case(
+  p_workspace_id => '11111111-1111-1111-1111-111111111111',
+  p_bug_case_id => '88888888-8888-8888-8888-888888888888',
+  p_stage => 'investigation',
+  p_event_type => 'coding_run.retry',
+  p_message => 'A new investigation was started',
+  p_idempotency_key => 'retry-investigation',
+  p_status => 'active'
+);
+select is(
+  (select stage from public.bug_cases where id = '88888888-8888-8888-8888-888888888888'),
+  'investigation',
+  'an explicit retry reopens a failed case'
+);
+select is(
+  (select last_error from public.bug_cases where id = '88888888-8888-8888-8888-888888888888'),
+  null,
+  'an explicit retry clears the previous failure'
 );
 
 insert into public.repositories (
