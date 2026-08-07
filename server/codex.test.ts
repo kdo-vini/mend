@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -46,6 +53,13 @@ describe("Codex runner security boundary", () => {
       const isolated = await createIsolatedWorkspace(root, "RUN-1");
       try {
         expect(await listFiles(isolated)).toEqual(["src/main.ts"]);
+        await writeFile(
+          path.join(isolated, "node_modules", "ignored.js"),
+          "changed in disposable copy",
+        );
+        expect(
+          await readFile(path.join(root, "node_modules", "ignored.js"), "utf8"),
+        ).toBe("ignored");
         await expect(listFiles(isolated, "..")).rejects.toThrow("outside");
       } finally {
         await removeIsolatedWorkspace(isolated);

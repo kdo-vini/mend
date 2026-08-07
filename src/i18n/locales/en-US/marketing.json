@@ -16,7 +16,7 @@
     "releaseLabel": "New",
     "releaseText": "The support-to-code loop is live",
     "title": "Keep shipping. Mend the support loop.",
-    "description": "Mend turns WhatsApp support into clear replies, traceable issues, and reviewable engineering work—so customer context reaches the fix without slowing the people building it.",
+    "description": "Mend turns WhatsApp support into clear replies, traceable issues, and reviewable engineering work. Customer context reaches the fix without slowing the people building it.",
     "primaryCta": "Connect WhatsApp",
     "secondaryCta": "See the product"
   },
@@ -122,7 +122,7 @@
     },
     "items": {
       "0": {
-        "quote": "A customer message should arrive with enough context to become the next safe product decision—not another tab I need to remember.",
+        "quote": "A customer message should arrive with enough context to become the next safe product decision, not another tab I need to remember.",
         "role": "Solo founder scenario",
         "outcome": "Support stays moving while product work continues"
       },
@@ -277,6 +277,131 @@
     "description": "Bring one real WhatsApp conversation. Leave with the reply, issue, and next engineering action connected.",
     "primary": "Connect WhatsApp",
     "secondary": "See how it works"
+  },
+  "loopLanding": {
+    "hero": {
+      "eyebrow": "Complaint to fix, one controlled loop",
+      "title": "From complaint to pull request.",
+      "description": "Mend proves and fixes bugs with any CLI agent while GitHub, checks, and approval stay under your control.",
+      "secondaryCta": "See the loop",
+      "imageAlt": "A customer message connected to evidence, investigation, and a reviewed code change",
+      "caption": "A customer signal becomes evidence, a reviewed change, and a clear reply."
+    },
+    "connectors": {
+      "label": "Bring the coding agent your team already trusts",
+      "codex": "Codex CLI",
+      "claude": "Claude Code",
+      "gemini": "Gemini CLI",
+      "verboo": "Verboo CLI",
+      "custom": "Custom CLI adapter",
+      "github": "GitHub is the control plane"
+    },
+    "loop": {
+      "title": "One case from complaint to customer",
+      "description": "Every decision keeps the original message, evidence, code work, release state, and customer outcome attached.",
+      "progressLabel": "Durable bug loop progress"
+    },
+    "steps": {
+      "signal": { "title": "Signal" },
+      "suspicion": { "title": "Triage" },
+      "evidence": { "title": "Evidence" },
+      "investigation": { "title": "Investigate" },
+      "verdict": { "title": "Verdict" },
+      "decision": { "title": "Decide" },
+      "fix": { "title": "Fix" },
+      "checks": { "title": "Checks" },
+      "pullRequest": { "title": "Pull request" },
+      "approval": { "title": "Approve" },
+      "release": { "title": "Release" },
+      "health": { "title": "Health" },
+      "customer": { "title": "Customer" }
+    },
+    "casePreview": {
+      "case": "Bug case MEND-184",
+      "title": "Checkout fails after a plan change",
+      "state": "Fix in progress",
+      "evidence": "Evidence accepted",
+      "verdict": "Verdict",
+      "confirmed": "Real bug",
+      "verdictDetail": "The failure reproduces on the affected release and maps to one guarded code path.",
+      "agent": "Coding agent",
+      "next": "Next action",
+      "fixRun": "Implement and check",
+      "items": {
+        "trace": {
+          "title": "Error trace",
+          "detail": "Matches the reported checkout path"
+        },
+        "release": {
+          "title": "Affected release",
+          "detail": "Regression starts after the plan change"
+        },
+        "reproduction": {
+          "title": "Reproduction",
+          "detail": "Confirmed in an isolated workspace"
+        }
+      }
+    },
+    "evidence": {
+      "title": "Automation starts after proof.",
+      "description": "Mend separates suspicion from fact before any agent receives permission to change code.",
+      "ruleTitle": "Human gates stay explicit",
+      "ruleDetail": "Notify, autofix, publish, and deploy are separate policy decisions.",
+      "items": {
+        "suspicion": {
+          "title": "Triage the signal",
+          "detail": "Classify intent, impact, recurrence, and confidence without treating the complaint as ground truth."
+        },
+        "proof": {
+          "title": "Collect durable evidence",
+          "detail": "Attach traces, release context, conversation history, and reproduction results to one case."
+        },
+        "verdict": {
+          "title": "Record a verdict",
+          "detail": "Confirm the bug, mark a duplicate, or explain why it was not reproduced."
+        },
+        "action": {
+          "title": "Choose the safe next action",
+          "detail": "Notify a person or open a separate fix run under workspace policy."
+        }
+      }
+    },
+    "execution": {
+      "title": "GitHub coordinates. The CLI does the work.",
+      "description": "Run in an ephemeral workspace, return a patch, and let Mend open the review surface.",
+      "githubTitle": "Repository context",
+      "githubDetail": "Issue, branch, installation scope",
+      "runnerTitle": "Ephemeral runner",
+      "runnerDetail": "Codex, Claude, Gemini, or Verboo",
+      "prTitle": "Draft pull request",
+      "prDetail": "Patch, checks, and evidence",
+      "items": {
+        "token": "Short-lived, scoped GitHub credentials",
+        "workspace": "Clean workspace for every investigation and fix",
+        "checks": "Independent checks before review",
+        "approval": "Approval before merge, deploy, or customer reply"
+      }
+    },
+    "pricing": {
+      "title": "Start with one durable loop.",
+      "description": "Connect support, a repository, and the CLI agent your team already uses.",
+      "builderDescription": "For small SaaS teams that want complaint-to-fix automation with visible control.",
+      "features": {
+        "0": "WhatsApp inbox and bug triage",
+        "1": "Codex, Claude, Gemini, or Verboo CLI",
+        "2": "GitHub pull requests and checks",
+        "3": "Human approval and release gates"
+      }
+    },
+    "finalCta": {
+      "title": "Let the next real complaint prove the loop.",
+      "description": "Connect one support channel and one repository. Mend keeps every step visible."
+    },
+    "footer": {
+      "label": "Product links",
+      "description": "Mend connects customer complaints, evidence, coding agents, GitHub, and the reply that closes the loop.",
+      "copyright": "© {{year}} Mend. Built for accountable automation."
+    }
   },
   "footer": {
     "description": "Mend helps SaaS builders turn WhatsApp support into clear replies, traceable issues, and reviewed product work.",

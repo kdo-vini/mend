@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Check } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorState, LoadingState } from "./shared/ui/ResourceState";
 import { useConfirmation } from "./shared/ui/useConfirmation";
@@ -205,6 +205,7 @@ function App() {
   });
   const [commandOpen, setCommandOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const pendingRunActions = useRef(new Set<string>());
   const [selectedConversationId, setSelectedConversationId] = useState(
     demoMode ? (seedConversations[0]?.id ?? "") : "",
   );
@@ -820,13 +821,13 @@ function App() {
         .then(() => {
           setRunDialogIssueId(null);
           setLiveDataRetry((current) => current + 1);
-          setToast(`Codex run queued for ${issue.identifier}`);
+          setToast(`Engineering run queued for ${issue.identifier}`);
         })
         .catch((error) =>
           setToast(
             error instanceof Error
               ? error.message
-              : "Codex run could not be queued.",
+              : "Engineering run could not be queued.",
           ),
         );
       return;
@@ -859,24 +860,20 @@ function App() {
       status: issue.status === "Triage" ? "In Progress" : issue.status,
     });
     setRunDialogIssueId(null);
-    setToast(`Codex run started for ${issue.identifier}`);
+    setToast(`Engineering run started for ${issue.identifier}`);
   };
 
   const updateRun = (
     runId: string,
-    action: "cancel" | "approve" | "reject" | "publish" | "deploy",
+    action:
+      | "cancel"
+      | "approve"
+      | "reject"
+      | "publish"
+      | "merge"
+      | "deploy"
+      | "health",
   ) => {
-    if (!demoMode && workspaceId) {
-      void updateLiveCodexRun({ workspaceId, runId, action })
-        .then(() => setLiveDataRetry((current) => current + 1))
-        .catch((error) =>
-          setToast(
-            error instanceof Error
-              ? error.message
-              : "Codex run could not be updated.",
-          ),
-        );
-    }
     const nextStatus: CodingRun["status"] =
       action === "cancel"
         ? "Canceled"
@@ -884,31 +881,60 @@ function App() {
           ? "Approved"
           : action === "publish"
             ? "Approved"
-            : action === "deploy"
+            : action === "merge"
               ? "Approved"
-              : "Rejected";
-    setRuns((current) =>
-      current.map((run) =>
-        run.id === runId
-          ? {
-              ...run,
-              status: nextStatus,
-              progress: action === "approve" ? 100 : run.progress,
-            }
-          : run,
-      ),
-    );
-    setToast(
+              : action === "deploy" || action === "health"
+                ? "Approved"
+                : "Rejected";
+    const successMessage =
       action === "cancel"
-        ? "Codex run canceled"
+        ? "Engineering run canceled"
         : action === "approve"
-          ? "Codex result approved and committed locally"
+          ? "Engineering result approved and committed locally"
           : action === "publish"
-            ? "Codex branch published"
-            : action === "deploy"
-              ? "Codex deployment started"
-              : "Codex result rejected",
-    );
+            ? "Engineering branch published"
+            : action === "merge"
+              ? "Engineering pull request merged"
+              : action === "deploy"
+                ? "Engineering deployment started"
+                : action === "health"
+                  ? "Deployment health checked"
+                  : "Engineering result rejected";
+    const commitLocalAction = () => {
+      setRuns((current) =>
+        current.map((run) =>
+          run.id === runId
+            ? {
+                ...run,
+                status: nextStatus,
+                progress: action === "approve" ? 100 : run.progress,
+              }
+            : run,
+        ),
+      );
+      setToast(successMessage);
+    };
+    if (!demoMode) {
+      if (!workspaceId) return;
+      const pendingKey = `${runId}:${action}`;
+      if (pendingRunActions.current.has(pendingKey)) return;
+      pendingRunActions.current.add(pendingKey);
+      void updateLiveCodexRun({ workspaceId, runId, action })
+        .then(() => {
+          commitLocalAction();
+          setLiveDataRetry((current) => current + 1);
+        })
+        .catch((error) =>
+          setToast(
+            error instanceof Error
+              ? error.message
+              : "Engineering run could not be updated.",
+          ),
+        )
+        .finally(() => pendingRunActions.current.delete(pendingKey));
+      return;
+    }
+    commitLocalAction();
   };
 
   return (
@@ -1059,7 +1085,7 @@ function App() {
                 />
               }
               runs={
-                <FeatureBoundary label="Loading Codex runs…">
+                <FeatureBoundary label="Loading engineering runs…">
                   <FeatureRunsPage
                     runs={runs}
                     onOpenIssue={setInspectorIssueId}

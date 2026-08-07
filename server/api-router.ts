@@ -30,6 +30,8 @@ import { registerMediaRoutes } from "./routes/media-routes.js";
 import { registerKanbanRoutes } from "./routes/kanban-routes.js";
 import { registerGoogleConnectionRoutes } from "./routes/google-connection-routes.js";
 import { registerMcpConnectionRoutes } from "./routes/mcp-connection-routes.js";
+import { registerGitHubConnectionRoutes } from "./routes/github-connection-routes.js";
+import { registerCodingAgentRoutes } from "./routes/coding-agent-routes.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -387,6 +389,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
       // Google cannot send the Mend bearer token back to this endpoint.
       if (
         request.path === "/api/google/connections/oauth/callback" ||
+        request.path === "/api/github/setup/callback" ||
         request.path === "/api/mcp/connections/oauth/callback" ||
         request.path === "/api/mcp/oauth/client-metadata.json"
       ) {
@@ -424,7 +427,9 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerKanbanRoutes(routeContext);
   registerKnowledgeRoutes(routeContext);
   registerRepositoryRoutes(routeContext);
+  registerGitHubConnectionRoutes(routeContext);
   registerCodingRunRoutes(routeContext);
+  registerCodingAgentRoutes(routeContext);
   registerGoogleConnectionRoutes(routeContext);
   registerMcpConnectionRoutes(routeContext);
 

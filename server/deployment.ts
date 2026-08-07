@@ -5,6 +5,8 @@ export interface CodexDeploymentInput {
   runId: string;
   branch: string;
   commitSha?: string;
+  /** Stable key providers can use to de-duplicate retries after a crash. */
+  idempotencyKey?: string;
 }
 
 export interface CodexDeploymentResult {
@@ -30,11 +32,16 @@ export class DokployDeployment implements CodexDeploymentPort {
       headers: {
         "content-type": "application/json",
         "x-api-key": this.apiKey,
+        ...(input.idempotencyKey
+          ? { "idempotency-key": input.idempotencyKey }
+          : {}),
       },
       body: JSON.stringify({
         applicationId: this.applicationId,
         title: `Mend Codex ${input.runId}`,
         description: `Approved ${input.branch}${input.commitSha ? ` at ${input.commitSha}` : ""}`,
+        branch: input.branch,
+        ...(input.commitSha ? { commitSha: input.commitSha } : {}),
       }),
     });
     const body = (await response.json().catch(() => ({}))) as Record<

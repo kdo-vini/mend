@@ -1,6 +1,11 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, lstatSync } from "node:fs";
+import {
+  createReadStream,
+  lstatSync,
+  readlinkSync,
+  realpathSync,
+} from "node:fs";
 import {
   cp,
   lstat,
@@ -146,19 +151,52 @@ export class InMemoryCodexRunStore implements CodexRunStore {
   }
 }
 
-export function createBranchName(identifier: string, title: string): string {
+export function createBranchName(
+  identifier: string,
+  title: string,
+  runId?: string,
+): string {
   const slug =
     title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "")
       .slice(0, 48) || "work";
-  return `ops/${identifier.toLowerCase()}-${slug}`;
+  const suffix = runId
+    ?.trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 24);
+  return `ops/${identifier.toLowerCase()}-${slug}${suffix ? `-${suffix}` : ""}`;
 }
 
 function isIgnoredPath(source: string): boolean {
   const name = path.basename(source);
   return ignoredNames.has(name) || name.startsWith(".env") || name === ".npmrc";
+}
+
+function isSafeDependencySymlink(
+  sourcePath: string,
+  dependencyRoot: string,
+): boolean {
+  try {
+    // Relative links remain relative after the dependency tree is copied.
+    // Absolute links would point back into the source checkout, so they are
+    // intentionally omitted rather than turning the sandbox into a write
+    // tunnel.
+    if (path.isAbsolute(readlinkSync(sourcePath))) return false;
+    const target = realpathSync(sourcePath);
+    const relative = path.relative(dependencyRoot, target);
+    return (
+      relative === "" ||
+      (!relative.startsWith(`..${path.sep}`) &&
+        relative !== ".." &&
+        !path.isAbsolute(relative))
+    );
+  } catch {
+    return false;
+  }
 }
 
 function resolveInside(root: string, candidate = ""): string {
@@ -275,6 +313,29 @@ export async function createIsolatedWorkspace(
         }
       },
     });
+    // Keep repository dependencies available to checks, but copy them into
+    // the disposable workspace. A junction would let an edit-capable agent
+    // mutate the source repository through node_modules.
+    const sourceDependencies = path.join(source, "node_modules");
+    const dependencyStats = await lstat(sourceDependencies).catch(() => null);
+    if (dependencyStats?.isDirectory()) {
+      await cp(sourceDependencies, path.join(target, "node_modules"), {
+        recursive: true,
+        filter: (sourcePath) => {
+          const name = path.basename(sourcePath);
+          if (name.startsWith(".env") || name === ".npmrc") return false;
+          try {
+            const sourceStat = lstatSync(sourcePath);
+            return (
+              !sourceStat.isSymbolicLink() ||
+              isSafeDependencySymlink(sourcePath, sourceDependencies)
+            );
+          } catch {
+            return false;
+          }
+        },
+      });
+    }
   } catch (error) {
     await rm(root, { recursive: true, force: true });
     throw error;
@@ -904,6 +965,8 @@ export interface RunCodexInput {
   openAiClient?: OpenAiCodexClient;
   openAiOptions?: OpenAiCodexOptions;
   openAiEnabled?: boolean;
+  /** The remote base commit observed before the run started. */
+  githubBaseSha?: string;
 }
 
 export interface RunCodexResult {
@@ -916,8 +979,14 @@ export interface RunCodexResult {
 export async function runCodexRun(
   input: RunCodexInput,
 ): Promise<RunCodexResult> {
-  const branchName = createBranchName(input.issueIdentifier, input.issueTitle);
+  const runId = randomUUID();
+  const branchName = createBranchName(
+    input.issueIdentifier,
+    input.issueTitle,
+    runId,
+  );
   const run = await input.store.createRun({
+    id: runId,
     workspaceId: input.workspaceId,
     issueId: input.issueId,
     repositoryId: input.repositoryId,
@@ -966,6 +1035,14 @@ export async function runCodexRun(
     );
     const startedAt = new Date().toISOString();
     await updateRun({ status: "running", progress: 1, startedAt });
+    if (input.githubBaseSha) {
+      await updateRun({
+        result: {
+          ...currentRun.result,
+          githubBaseSha: input.githubBaseSha,
+        },
+      });
+    }
     await event("run_started", "Isolated Codex run started", {
       mode: input.mode,
     });
@@ -1089,6 +1166,7 @@ export async function runCodexRun(
       await updateRun({
         progress: 94,
         result: {
+          ...currentRun.result,
           agent: { ...agent, finalText: redactSecrets(agent.finalText) },
           tools: tools.map((tool) => tool.kind),
         },
@@ -1111,6 +1189,7 @@ export async function runCodexRun(
       progress: 100,
       finishedAt: new Date().toISOString(),
       result: {
+        ...currentRun.result,
         files: diff.files,
         patch: diff.patch,
         checks,
@@ -1145,7 +1224,11 @@ export async function runCodexRun(
     await updateRun({
       status,
       finishedAt: new Date().toISOString(),
-      result: { error: redactSecrets(message), timedOut: timeoutTriggered },
+      result: {
+        ...currentRun.result,
+        error: redactSecrets(message),
+        timedOut: timeoutTriggered,
+      },
     });
     await event(
       canceled ? "run_canceled" : "run_failed",

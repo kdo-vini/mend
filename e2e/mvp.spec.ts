@@ -129,8 +129,10 @@ test("operator can use the command palette and navigate to runs", async ({
   await expect(
     page.getByPlaceholder("Search actions or jump to…"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "View Codex runs" }).click();
-  await expect(page.getByRole("heading", { name: "Codex runs" })).toBeVisible();
+  await page.getByRole("button", { name: "View engineering runs" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Engineering runs" }),
+  ).toBeVisible();
 });
 
 test("operator can assign and resolve a conversation", async ({
@@ -201,18 +203,22 @@ test("operator can update an issue and return to its conversation", async ({
   ).toBeVisible();
 });
 
-test("operator can review checks and approve a Codex diff", async ({
+test("operator can review checks and approve an engineering diff", async ({
   page,
 }) => {
   await page.goto("/codex-runs?demo=1");
   await page.getByRole("button", { name: /TEC-19/ }).click();
 
-  await expect(page.getByLabel("Codex diff")).toContainText("parseInviteToken");
+  await expect(page.getByLabel("Engineering diff")).toContainText(
+    "parseInviteToken",
+  );
   await page.getByText("test", { exact: true }).click();
   await expect(page.getByText("12 tests passed")).toBeVisible();
 
   await page.getByRole("button", { name: "Approve local commit" }).click();
-  await expect(page.getByRole("status")).toContainText("Codex result approved");
+  await expect(page.getByRole("status")).toContainText(
+    "Engineering result approved",
+  );
   await expect(
     page.getByText("Approved", { exact: true }).first(),
   ).toBeVisible();

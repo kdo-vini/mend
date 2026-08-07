@@ -68,6 +68,8 @@ export interface WhatsAppProvider {
 export interface SendTextRequest {
   text: string;
   aiGenerated?: boolean;
+  /** Forward a stable retry key to providers that implement deduplication. */
+  idempotencyKey?: string;
   onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
 }
 
@@ -166,6 +168,7 @@ export class WhatsAppService {
       instanceName: conversation.providerInstanceName,
       number: conversation.phoneNumber,
       text,
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     });
     const id = providerMessageId(response);
     await input.onProviderMessageId?.(id);

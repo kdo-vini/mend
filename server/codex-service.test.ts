@@ -22,6 +22,7 @@ import {
   type GitLocalPort,
   type GitRepositoryState,
 } from "./git-local.js";
+import type { GitHubControlPlane } from "./github-control-plane.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -66,7 +67,10 @@ class FakeRunStore extends InMemoryCodexRunStore {
 class FakeGit implements GitLocalPort {
   readonly calls: string[] = [];
 
-  constructor(private readonly root: string) {}
+  constructor(
+    private readonly root: string,
+    private readonly clean = true,
+  ) {}
 
   async inspect(repositoryRoot: string): Promise<GitRepositoryState> {
     this.calls.push(`inspect:${repositoryRoot}`);
@@ -74,7 +78,7 @@ class FakeGit implements GitLocalPort {
       root: repositoryRoot,
       branch: "main",
       head: "base-sha",
-      clean: true,
+      clean: this.clean,
       status: "",
     };
   }
@@ -282,6 +286,49 @@ describe("Codex application service", () => {
     }
   });
 
+  it("refuses to run against a dirty shared checkout", async () => {
+    const root = await tempDirectory();
+    try {
+      await mkdir(path.join(root, "repo"));
+      const store = new FakeRunStore();
+      const service = new CodexService({
+        repositories: new FakeRepositoryPort(repository(root)),
+        runs: store,
+        git: new FakeGit(path.join(root, "repo"), false),
+        execute: async () => {
+          throw new Error("must not execute");
+        },
+      });
+      await expect(
+        withWorkspaceRoot(root, () => service.start(startInput())),
+      ).rejects.toThrow("uncommitted changes");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed when GitHub coordinates are only partially configured", async () => {
+    const root = await tempDirectory();
+    try {
+      await mkdir(path.join(root, "repo"));
+      const service = new CodexService({
+        repositories: new FakeRepositoryPort({
+          ...repository(root),
+          githubOwner: "mend-org",
+        }),
+        runs: new FakeRunStore(),
+        execute: async () => {
+          throw new Error("must not execute");
+        },
+      });
+      await expect(
+        withWorkspaceRoot(root, () => service.start(startInput())),
+      ).rejects.toThrow("GitHub repository configuration is incomplete");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("withholds the local branch and commit until implement_fix is approved", async () => {
     const root = await tempDirectory();
     try {
@@ -379,6 +426,173 @@ describe("Codex application service", () => {
       });
       expect(git.calls.some((call) => call.startsWith("commit:"))).toBe(false);
     } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("publishes a reviewed patch with the GitHub App and requires merge before deploy", async () => {
+    const root = await tempDirectory();
+    try {
+      const repositoryRoot = path.join(root, "repo");
+      await mkdir(repositoryRoot);
+      await writeFile(path.join(repositoryRoot, "README.md"), "after\n");
+      const store = new FakeRunStore();
+      const git = new FakeGit(repositoryRoot);
+      const calls: string[] = [];
+      const deploymentInputs: Array<{
+        branch: string;
+        commitSha?: string;
+      }> = [];
+      const github = {
+        async publishBranch() {
+          calls.push("publish");
+          return {
+            branch: "ops/TEC-2-fix",
+            commitSha: "github-commit-sha",
+            baseSha: "github-base-sha",
+          };
+        },
+        async createCheckRun() {
+          calls.push("check");
+          return {
+            id: 1,
+            url: "https://github.test/check/1",
+            status: "completed",
+          };
+        },
+        async createDraftPullRequest() {
+          calls.push("pull-request");
+          return {
+            number: 7,
+            url: "https://github.test/pull/7",
+            head: "ops/TEC-2-fix",
+            base: "main",
+            draft: true,
+          };
+        },
+        async markPullRequestReadyForReview() {
+          calls.push("ready-for-review");
+          return {
+            number: 7,
+            url: "https://github.test/pull/7",
+            head: "ops/TEC-2-fix",
+            base: "main",
+            draft: false,
+          };
+        },
+        async mergePullRequest() {
+          calls.push("merge");
+          return { merged: true, sha: "merge-sha", message: "merged" };
+        },
+      } as unknown as GitHubControlPlane;
+      const githubRepository = {
+        ...repository(root),
+        githubOwner: "mend-org",
+        githubRepo: "product",
+        githubInstallationId: "42",
+      };
+      const service = new CodexService({
+        repositories: new FakeRepositoryPort(githubRepository),
+        runs: store,
+        git,
+        github,
+        deployment: {
+          async deploy(input) {
+            calls.push("deploy");
+            deploymentInputs.push(input);
+            return { provider: "dokploy", url: "https://app.example.com" };
+          },
+        },
+        execute: async (input) =>
+          resultFor(input, {
+            files: [
+              {
+                relativePath: "README.md",
+                status: "modified",
+                oldSize: 7,
+                newSize: 6,
+              },
+            ],
+            patch: "safe patch",
+            truncated: false,
+          }),
+      });
+      const handle = await withWorkspaceRoot(root, () =>
+        service.start(startInput("implement_fix")),
+      );
+      await handle.completion;
+      await withWorkspaceRoot(root, () => service.approve(handle.runId));
+      const published = await withWorkspaceRoot(root, () =>
+        service.publish(handle.runId),
+      );
+      expect(published.result).toMatchObject({
+        publication: { provider: "github_app", commitSha: "github-commit-sha" },
+        pullRequest: { number: 7, draft: true },
+      });
+      await expect(service.deploy(handle.runId)).rejects.toThrow(
+        "Merge the approved GitHub pull request",
+      );
+      const merged = await service.merge(handle.runId);
+      expect(merged.result).toMatchObject({ mergeSha: "merge-sha" });
+      await service.deploy(handle.runId);
+      expect(calls).toEqual([
+        "publish",
+        "check",
+        "pull-request",
+        "ready-for-review",
+        "merge",
+        "deploy",
+      ]);
+      expect(deploymentInputs).toEqual([
+        expect.objectContaining({ branch: "main", commitSha: "merge-sha" }),
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("records an allowlisted post-deploy health check", async () => {
+    const root = await tempDirectory();
+    const previousOrigins = process.env.MEND_HEALTHCHECK_ALLOWED_ORIGINS;
+    try {
+      await mkdir(path.join(root, "repo"));
+      process.env.MEND_HEALTHCHECK_ALLOWED_ORIGINS = "https://app.example.com";
+      const store = new FakeRunStore();
+      const run = await store.createRun({
+        workspaceId: "workspace-1",
+        issueId: "issue-1",
+        repositoryId: "repo-1",
+        mode: "implement_fix",
+      });
+      await store.updateRun(run.id, {
+        status: "approved",
+        result: {
+          publication: { status: "published" },
+          deployment: {
+            status: "deployed",
+            url: "https://app.example.com/health",
+          },
+        },
+      });
+      const service = new CodexService({
+        repositories: new FakeRepositoryPort(repository(root)),
+        runs: store,
+        github: null,
+        healthProbe: async () => ({
+          healthy: true,
+          status: 200,
+          durationMs: 12,
+        }),
+      });
+      const checked = await service.verifyHealth(run.id);
+      expect(checked.result).toMatchObject({
+        healthStatus: "healthy",
+        deployment: { health: { healthy: true, status: 200 } },
+      });
+    } finally {
+      if (previousOrigins === undefined)
+        delete process.env.MEND_HEALTHCHECK_ALLOWED_ORIGINS;
+      else process.env.MEND_HEALTHCHECK_ALLOWED_ORIGINS = previousOrigins;
       await rm(root, { recursive: true, force: true });
     }
   });

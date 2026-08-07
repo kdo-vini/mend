@@ -254,6 +254,42 @@ function adapters(
 }
 
 describe("Supabase API adapters", () => {
+  it("does not resolve an auto-fix case before a healthy deployment", async () => {
+    const client = new FakeClient({
+      issues: [
+        {
+          id: "issue-health-gate",
+          workspace_id: workspaceId,
+          identifier: "MEND-HEALTH",
+          conversation_id: null,
+          customer_notified_at: null,
+          status: "in_progress",
+        },
+      ],
+      bug_cases: [
+        {
+          id: "bug-case-health-gate",
+          workspace_id: workspaceId,
+          issue_id: "issue-health-gate",
+          stage: "health_check",
+          decision: "autofix",
+          health_status: "unhealthy",
+          customer_response_status: "pending",
+        },
+      ],
+    });
+    const dependencies = adapters(client);
+
+    await expect(
+      dependencies.issues.resolveAndNotify(
+        { userId, workspaceId, role: "agent" },
+        "MEND-HEALTH",
+        { notifyCustomer: true, message: "The fix is live." },
+      ),
+    ).rejects.toThrow("bug_loop_health_required:health_check:unhealthy");
+    expect(client.rows.get("issues")?.[0]?.status).toBe("in_progress");
+  });
+
   it("does not delete inbound messages for everyone", async () => {
     const deleteMessageForEveryone = vi.fn(async () => undefined);
     const provider = {

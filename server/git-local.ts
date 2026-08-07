@@ -47,6 +47,11 @@ export interface GitPushResult {
 
 export interface GitLocalPort {
   inspect(repositoryRoot: string): Promise<GitRepositoryState>;
+  /** Switch a clean checkout back to the configured base branch. */
+  switchBranch?(
+    repositoryRoot: string,
+    branchName: string,
+  ): Promise<GitRepositoryState>;
   createBranch(
     repositoryRoot: string,
     branchName: string,
@@ -283,6 +288,21 @@ export class LocalGit implements GitLocalPort {
       branch,
       base,
     ]);
+    return this.inspect(state.root);
+  }
+
+  async switchBranch(
+    repositoryRoot: string,
+    branchName: string,
+  ): Promise<GitRepositoryState> {
+    const branch = validRef(branchName, "branch name");
+    const state = await this.inspect(repositoryRoot);
+    if (!state.clean)
+      throw new GitLocalError(
+        "Repository must be clean before switching a Codex checkout",
+      );
+    if (state.branch === branch) return state;
+    await runGit(state.root, ["switch", "--no-guess", branch]);
     return this.inspect(state.root);
   }
 

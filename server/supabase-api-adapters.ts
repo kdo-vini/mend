@@ -21,6 +21,7 @@ import {
   type SendMessageInput,
   type AiDraftInput,
   type CodingRunPort,
+  type GitHubConnectionPort,
   type CodingRunCreateInput,
   type CodingRunListQuery,
   type MembershipAdapter,
@@ -110,6 +111,15 @@ import {
 import type { CodexRunEvent, CodexRunEventInput } from "./codex-events.js";
 import type { AllowedCommand } from "../src/core.js";
 import { normalizeWorkspaceAiPolicy } from "../src/ai-policy.js";
+import { SupabaseBugLoopStore, type BugLoopStage } from "./bug-loop.js";
+import {
+  createGitHubControlPlaneFromEnv,
+  createGitHubSetupState,
+  githubInstallationUrl,
+  hashGitHubSetupState,
+  validateGitHubSetupCallback,
+  GitHubControlPlaneError,
+} from "./github-control-plane.js";
 import {
   createGoogleOAuthState,
   decryptGoogleToken,
@@ -211,6 +221,7 @@ export type SupabaseApiPortDependencies = {
   issues: IssuePort;
   knowledge: KnowledgePort;
   repositories: RepositoryPort;
+  githubConnections: GitHubConnectionPort;
   codingRuns: CodingRunPort;
   googleConnections: GoogleConnectionPort;
   mcpConnections: McpConnectionPort;
@@ -1218,6 +1229,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
 export class SupabaseIssueAdapter implements IssuePort {
   private readonly inbox: InboxService;
   private readonly whatsapp: WhatsAppService;
+  private readonly bugLoop: SupabaseBugLoopStore;
 
   constructor(
     private readonly client: AnySupabaseClient,
@@ -1230,6 +1242,7 @@ export class SupabaseIssueAdapter implements IssuePort {
       mediaStorage ? { mediaStorage } : {},
     );
     this.whatsapp = new WhatsAppService(this.inbox, provider, mediaStorage);
+    this.bugLoop = new SupabaseBugLoopStore(privilegedClient as never);
   }
 
   private async getRow(context: IssueRequestContext, identifier: string) {
@@ -1550,8 +1563,49 @@ export class SupabaseIssueAdapter implements IssuePort {
   ) {
     const current = await this.getRow(context, identifier);
     if (!current) return null;
-    let notifiedAt: string | undefined;
-    if (input.notifyCustomer && input.message && current.conversation_id) {
+    // A confirmed bug that went through the fix/deploy path must not be
+    // reported as resolved until the release has a successful health
+    // checkpoint.  This guard runs before WhatsApp side effects, so a retry
+    // cannot accidentally tell a customer that an unhealthy deployment is
+    // fixed.  Non-bug/notify cases intentionally remain resolvable without a
+    // deployment health check.
+    const bugCase = await this.privilegedClient
+      .from("bug_cases")
+      .select("id, stage, decision, health_status, customer_response_status")
+      .eq("workspace_id", context.workspaceId)
+      .eq("issue_id", current.id)
+      .maybeSingle();
+    const bugCaseData = checked("bug_cases.resolve_gate", bugCase);
+    const bugCaseState = bugCaseData ? row(bugCaseData) : undefined;
+    const bugCaseStage = bugCaseState ? str(bugCaseState.stage) : "";
+    if (
+      bugCaseData &&
+      ["autofix", "manual_fix"].includes(str(bugCaseState?.decision)) &&
+      str(bugCaseState?.customer_response_status) !== "sent" &&
+      str(bugCaseState?.health_status) !== "healthy"
+    ) {
+      throw new Error(
+        `bug_loop_health_required:${bugCaseStage}:${str(bugCaseState?.health_status)}`,
+      );
+    }
+    if (
+      bugCaseData &&
+      !["decision", "customer_response", "completed"].includes(bugCaseStage)
+    ) {
+      throw new Error(
+        `bug_loop_not_ready_for_customer_response:${bugCaseStage}`,
+      );
+    }
+    let notifiedAt: string | undefined =
+      typeof current.customer_notified_at === "string"
+        ? current.customer_notified_at
+        : undefined;
+    if (
+      input.notifyCustomer &&
+      input.message &&
+      current.conversation_id &&
+      !notifiedAt
+    ) {
       await this.whatsapp.sendText(
         {
           workspaceId: context.workspaceId,
@@ -1559,7 +1613,10 @@ export class SupabaseIssueAdapter implements IssuePort {
           actorType: "user",
         },
         str(current.conversation_id),
-        { text: input.message },
+        {
+          text: input.message,
+          idempotencyKey: `mend:customer-response:${current.id}`,
+        },
       );
       notifiedAt = new Date().toISOString();
     }
@@ -1578,17 +1635,47 @@ export class SupabaseIssueAdapter implements IssuePort {
     checked("issues.resolve", result);
     checked(
       "timeline_events.issue_resolved",
-      await this.client.from("timeline_events").insert({
-        workspace_id: context.workspaceId,
-        entity_type: "issue",
-        entity_id: current.id,
-        event_type: "issue.resolved",
-        actor_type: "user",
-        actor_user_id: context.userId,
-        metadata_json: { customerNotified: Boolean(notifiedAt) },
-        dedupe_key: `issue:${current.id}:resolved:${context.userId}`,
-      }),
+      await this.client.from("timeline_events").upsert(
+        {
+          workspace_id: context.workspaceId,
+          entity_type: "issue",
+          entity_id: current.id,
+          event_type: "issue.resolved",
+          actor_type: "user",
+          actor_user_id: context.userId,
+          metadata_json: { customerNotified: Boolean(notifiedAt) },
+          dedupe_key: `issue:${current.id}:resolved:${context.userId}`,
+        },
+        { onConflict: "workspace_id,dedupe_key", ignoreDuplicates: true },
+      ),
     );
+    if (bugCaseData && bugCaseStage !== "completed") {
+      const bugCaseId = str(bugCaseState?.id);
+      const customerResponseStatus = notifiedAt ? "sent" : "skipped";
+      await this.bugLoop.advance({
+        workspaceId: context.workspaceId,
+        bugCaseId,
+        stage: "customer_response",
+        eventType: "customer.response_completed",
+        message: notifiedAt
+          ? "The customer was notified after the fix was released."
+          : "The issue was resolved without sending a customer message.",
+        idempotencyKey: `customer-response:${current.id}`,
+        customerResponseStatus,
+        metadata: { issueId: str(current.id), notifiedAt: notifiedAt ?? null },
+      });
+      await this.bugLoop.advance({
+        workspaceId: context.workspaceId,
+        bugCaseId,
+        stage: "completed",
+        status: "completed",
+        eventType: "bug_loop.completed",
+        message: "The complaint-to-resolution loop is complete.",
+        idempotencyKey: `completed:${current.id}`,
+        customerResponseStatus,
+        metadata: { issueId: str(current.id) },
+      });
+    }
     return result.data
       ? issue(await this.details(context, row(result.data)))
       : null;
@@ -2108,6 +2195,154 @@ export class SupabaseRepositoryAdapter
   }
 }
 
+export class SupabaseGitHubConnectionAdapter implements GitHubConnectionPort {
+  constructor(
+    private readonly client: AnySupabaseClient,
+    private readonly privilegedClient: AnySupabaseClient,
+  ) {}
+
+  async startSetup(context: RequestContext, repositoryId: string) {
+    const slug = process.env.MEND_GITHUB_APP_SLUG?.trim();
+    const secret = process.env.MEND_GITHUB_SETUP_STATE_SECRET?.trim();
+    if (!slug || !secret)
+      throw new GitHubControlPlaneError(
+        "GitHub App setup is not configured on the server",
+        503,
+        "github_setup_not_configured",
+      );
+    const repositoryResult = await this.client
+      .from("repositories")
+      .select("id")
+      .eq("id", repositoryId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const repositoryData = checked(
+      "repositories.github_setup",
+      repositoryResult,
+    );
+    if (!repositoryData)
+      throw new GitHubControlPlaneError(
+        "Repository was not found",
+        404,
+        "repository_not_found",
+      );
+    const setup = createGitHubSetupState(
+      {
+        workspaceId: context.workspaceId,
+        userId: context.userId,
+        repositoryId,
+      },
+      secret,
+    );
+    checked(
+      "github_setup_states.create",
+      await this.privilegedClient.from("github_setup_states").insert({
+        state_hash: hashGitHubSetupState(setup.state),
+        workspace_id: context.workspaceId,
+        user_id: context.userId,
+        repository_id: repositoryId,
+        expires_at: setup.expiresAt,
+      }),
+    );
+    return { installationUrl: githubInstallationUrl(slug, setup.state) };
+  }
+
+  async completeSetup(query: Record<string, unknown>) {
+    const secret = process.env.MEND_GITHUB_SETUP_STATE_SECRET?.trim();
+    if (!secret)
+      throw new GitHubControlPlaneError(
+        "GitHub App setup is not configured on the server",
+        503,
+        "github_setup_not_configured",
+      );
+    const callback = validateGitHubSetupCallback(query, secret);
+    if (!callback.repositoryId)
+      throw new GitHubControlPlaneError(
+        "GitHub setup state has no repository",
+        400,
+        "github_repository_missing",
+      );
+    const state = String(query.state ?? "");
+    const controlPlane = createGitHubControlPlaneFromEnv();
+    if (!controlPlane)
+      throw new GitHubControlPlaneError(
+        "GitHub App authentication is not configured on the server",
+        503,
+        "github_app_not_configured",
+      );
+    const repositoryResult = await this.privilegedClient
+      .from("repositories")
+      .select("*")
+      .eq("id", callback.repositoryId)
+      .eq("workspace_id", callback.workspaceId)
+      .maybeSingle();
+    const repositoryData = checked(
+      "repositories.github_callback",
+      repositoryResult,
+    );
+    if (!repositoryData)
+      throw new GitHubControlPlaneError(
+        "Repository was not found",
+        404,
+        "repository_not_found",
+      );
+    const configured = repository(row(repositoryData));
+    const available = await controlPlane.listInstallationRepositories(
+      callback.installationId,
+    );
+    const selected =
+      configured.githubOwner && configured.githubRepo
+        ? available.find(
+            (item) =>
+              item.owner.toLowerCase() ===
+                configured.githubOwner?.toLowerCase() &&
+              item.repo.toLowerCase() === configured.githubRepo?.toLowerCase(),
+          )
+        : available.length === 1
+          ? available[0]
+          : undefined;
+    if (!selected)
+      throw new GitHubControlPlaneError(
+        "The configured repository is not available to this GitHub App installation",
+        400,
+        "github_repository_not_available",
+      );
+    // Consume only after the installation and repository have been verified.
+    // A transient GitHub outage must not burn the one-time setup state and
+    // force an administrator to restart the connection flow.
+    const consumed = await this.privilegedClient
+      .from("github_setup_states")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("state_hash", hashGitHubSetupState(state))
+      .eq("workspace_id", callback.workspaceId)
+      .eq("user_id", callback.userId)
+      .eq("repository_id", callback.repositoryId)
+      .is("consumed_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .select("state_hash")
+      .maybeSingle();
+    if (!checked("github_setup_states.consume", consumed))
+      throw new GitHubControlPlaneError(
+        "GitHub setup state was already used or expired",
+        400,
+        "github_state_replayed",
+      );
+    const updated = await this.privilegedClient
+      .from("repositories")
+      .update({
+        github_owner: selected.owner,
+        github_repo: selected.repo,
+        github_installation_id: String(callback.installationId),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", callback.repositoryId)
+      .eq("workspace_id", callback.workspaceId)
+      .select("*")
+      .single();
+    return repository(row(checked("repositories.github_connected", updated)));
+  }
+}
+
 export class SupabaseCodexRunStore implements CodexRunStore {
   constructor(private readonly client: AnySupabaseClient) {}
 
@@ -2206,13 +2441,16 @@ export class SupabaseCodexRunStore implements CodexRunStore {
 
 export class SupabaseCodingRunAdapter implements CodingRunPort {
   private readonly codex: CodexService;
+  private readonly bugLoop: SupabaseBugLoopStore;
 
   constructor(
     private readonly client: AnySupabaseClient,
     private readonly repositories: RepositoryConfigPort,
     private readonly store: SupabaseCodexRunStore,
     codexService?: CodexService,
+    private readonly privilegedClient: AnySupabaseClient = client,
   ) {
+    this.bugLoop = new SupabaseBugLoopStore(privilegedClient as never);
     this.codex =
       codexService ??
       new CodexService({
@@ -2259,9 +2497,13 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     )
       throw new Error("repository_not_found");
     const policy = await this.workspacePolicy(context.workspaceId);
+    // `codex` is the backwards-compatible policy key for the coding-agent
+    // integration as a whole. The repository chooses the concrete CLI
+    // (Codex, Claude, Gemini, Verboo or Custom) below; do not gate those
+    // providers on a Codex-specific executable.
     if (!policy.allowedIntegrations.includes("codex"))
       throw new CodexServiceError(
-        "Codex is disabled by the workspace AI integration policy",
+        "Coding-agent execution is disabled by the workspace AI integration policy",
       );
     const action =
       input.mode === "investigate"
@@ -2295,6 +2537,37 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       tools,
       createdByUserId: context.userId,
     });
+
+    // The Runs retry action creates a fresh run. If the previous case was
+    // failed, reopen its durable checkpoint as part of the same request so
+    // the new execution is visible in the complaint-to-fix state machine.
+    const failedCase = await this.privilegedClient
+      .from("bug_cases")
+      .select("id, stage")
+      .eq("workspace_id", context.workspaceId)
+      .eq("issue_id", str(issue.id))
+      .eq("stage", "failed")
+      .maybeSingle();
+    const failedCaseData = checked("bug_cases.retry", failedCase);
+    const failedCaseRow = failedCaseData ? row(failedCaseData) : undefined;
+    if (failedCaseRow && str(failedCaseRow.id)) {
+      const bugCaseId = str(failedCaseRow.id);
+      const retryStage: BugLoopStage =
+        input.mode === "investigate" ? "investigation" : "fix";
+      await this.bugLoop.advance({
+        workspaceId: context.workspaceId,
+        bugCaseId,
+        stage: retryStage,
+        status: "active",
+        eventType: "coding_run.retry",
+        message: `A new ${input.mode} run was started after the previous attempt failed.`,
+        idempotencyKey: `coding-run-retry:${handle.runId}`,
+        ...(retryStage === "investigation"
+          ? { investigationRunId: handle.runId }
+          : { fixRunId: handle.runId }),
+        metadata: { runId: handle.runId, mode: input.mode },
+      });
+    }
 
     // The request is useful operator metadata. Persist it after start so the
     // runner remains the only component that creates the queued run and emits
@@ -2419,15 +2692,32 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
   async approve(context: RequestContext, id: string) {
     const run = await this.scoped(context, id);
     if (!run) return null;
-    if (run.mode === "implement_fix") {
-      await this.requirePolicyAction(context.workspaceId, "implement_fix");
-    }
-    return this.codex.approve(id);
+    if (run.mode !== "implement_fix")
+      throw new CodexServiceError(
+        "Only implement_fix runs can be approved; resolve or notify the customer from the bug case",
+      );
+    await this.requirePolicyAction(context.workspaceId, "implement_fix");
+    const updated = await this.codex.approve(id);
+    await this.advanceCaseForRun(context.workspaceId, updated, "approval", {
+      eventType: "fix.approved",
+      message: "A human approved the verified fix.",
+    });
+    return updated;
   }
   async publish(context: RequestContext, id: string) {
     if (!(await this.scoped(context, id))) return null;
     await this.requirePolicyAction(context.workspaceId, "publish");
-    return this.codex.publish(id);
+    const updated = await this.codex.publish(id);
+    const pullRequest = row(row(updated.result).pullRequest);
+    await this.advanceCaseForRun(context.workspaceId, updated, "pull_request", {
+      eventType: "pull_request.created",
+      message: "A draft pull request was created through the GitHub App.",
+      ...(pullRequest.url ? { prUrl: str(pullRequest.url) } : {}),
+      ...(Number.isSafeInteger(Number(pullRequest.number))
+        ? { prNumber: Number(pullRequest.number) }
+        : {}),
+    });
+    return updated;
   }
   async deploy(context: RequestContext, id: string) {
     if (!(await this.scoped(context, id))) return null;
@@ -2445,7 +2735,42 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
         .bugAutoDeployEnabled
     )
       throw new Error("deployment_not_enabled_in_ai_policy");
-    return this.codex.deploy(id);
+    const updated = await this.codex.deploy(id);
+    const deployment = row(row(updated.result).deployment);
+    await this.advanceCaseForRun(context.workspaceId, updated, "deploy", {
+      eventType: "deployment.started",
+      message: "The approved fix was sent to the deployment provider.",
+      ...(deployment.url ? { deploymentUrl: str(deployment.url) } : {}),
+    });
+    return updated;
+  }
+  async merge(context: RequestContext, id: string) {
+    if (!(await this.scoped(context, id))) return null;
+    await this.requirePolicyAction(context.workspaceId, "publish");
+    const updated = await this.codex.merge(id);
+    const merge = row(row(updated.result).merge);
+    await this.advanceCaseForRun(context.workspaceId, updated, "merge", {
+      eventType: "pull_request.merged",
+      message: "The approved pull request was merged through the GitHub App.",
+      mergeSha: str(merge.sha),
+    });
+    return updated;
+  }
+  async health(context: RequestContext, id: string) {
+    if (!(await this.scoped(context, id))) return null;
+    const updated = await this.codex.verifyHealth(id);
+    const result = row(updated.result);
+    const healthStatus =
+      result.healthStatus === "healthy" ? "healthy" : "unhealthy";
+    await this.advanceCaseForRun(context.workspaceId, updated, "health_check", {
+      eventType: `deployment.health_${healthStatus}`,
+      message:
+        healthStatus === "healthy"
+          ? "The deployed fix passed its health check."
+          : "The deployed fix failed its health check and needs attention.",
+      healthStatus,
+    });
+    return updated;
   }
   async reject(context: RequestContext, id: string) {
     if (!(await this.scoped(context, id))) return null;
@@ -2471,6 +2796,48 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       throw new CodexServiceError(
         `AI action ${action} is disabled by the workspace AI policy`,
       );
+  }
+  private async advanceCaseForRun(
+    workspaceId: string,
+    runRecord: import("./codex.js").CodexRunRecord,
+    stage: BugLoopStage,
+    details: {
+      eventType: string;
+      message: string;
+      prUrl?: string;
+      prNumber?: number;
+      deploymentUrl?: string;
+      mergeSha?: string;
+      healthStatus?: "healthy" | "unhealthy";
+    },
+  ): Promise<void> {
+    const column =
+      runRecord.mode === "investigate" ? "investigation_run_id" : "fix_run_id";
+    const result = await this.privilegedClient
+      .from("bug_cases")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq(column, runRecord.id)
+      .maybeSingle();
+    const data = checked("bug_cases.run", result);
+    if (!data) return;
+    const bugCaseId = str(row(data).id);
+    await this.bugLoop.advance({
+      workspaceId,
+      bugCaseId,
+      stage,
+      eventType: details.eventType,
+      message: details.message,
+      idempotencyKey: `${details.eventType}:${runRecord.id}`,
+      metadata: { runId: runRecord.id },
+      ...(details.prUrl ? { prUrl: details.prUrl } : {}),
+      ...(details.prNumber ? { prNumber: details.prNumber } : {}),
+      ...(details.deploymentUrl
+        ? { deploymentUrl: details.deploymentUrl }
+        : {}),
+      ...(details.mergeSha ? { mergeSha: details.mergeSha } : {}),
+      ...(details.healthStatus ? { healthStatus: details.healthStatus } : {}),
+    });
   }
   async patch(context: RequestContext, id: string) {
     if (!(await this.scoped(context, id))) return null;
@@ -3472,12 +3839,17 @@ export function createSupabaseApiAdapters(
   const personalPlanning = new SupabasePersonalPlanningAdapter(client);
   const knowledge = new SupabaseKnowledgeAdapter(client);
   const repositories = new SupabaseRepositoryAdapter(client);
+  const githubConnections = new SupabaseGitHubConnectionAdapter(
+    client,
+    privilegedClient,
+  );
   const store = new SupabaseCodexRunStore(client);
   const codingRuns = new SupabaseCodingRunAdapter(
     client,
     repositories,
     store,
     options.codexService,
+    privilegedClient,
   );
   const googleConnections = new SupabaseGoogleConnectionAdapter(
     client,
@@ -3495,6 +3867,7 @@ export function createSupabaseApiAdapters(
     issues,
     knowledge,
     repositories,
+    githubConnections,
     codingRuns,
     googleConnections,
     mcpConnections,

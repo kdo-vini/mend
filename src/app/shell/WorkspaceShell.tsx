@@ -30,7 +30,7 @@ function translatedNavLabel(
       return t("navigation.issues");
     case "Kanban":
       return t("navigation.kanban");
-    case "Codex runs":
+    case "Engineering runs":
       return t("navigation.codexRuns");
     case "Knowledge":
       return t("navigation.knowledge");
@@ -463,7 +463,7 @@ export function MobileBottomNav() {
         >
           <Icon size={19} strokeWidth={1.8} />
           <span>
-            {label === "Codex runs"
+            {label === "Engineering runs"
               ? t("navigation.codexRunsShort")
               : translatedNavLabel(label, t)}
           </span>

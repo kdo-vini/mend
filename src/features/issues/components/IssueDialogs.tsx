@@ -27,7 +27,7 @@ import type {
   IssueType,
   Priority,
 } from "../../../types";
-import { listLiveRepositories } from "../api";
+import { listLiveRepositories, type LiveRepository } from "../api";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
@@ -73,7 +73,7 @@ export function CommandPalette({
     },
     { label: "Create new issue", hint: "C", icon: Plus, action: onNewIssue },
     {
-      label: "View Codex runs",
+      label: "View engineering runs",
       hint: "G then R",
       icon: TerminalSquare,
       action: () => navigate("/codex-runs"),
@@ -125,7 +125,7 @@ export function CommandPalette({
             normalizedQuery.includes("run")
               ? [
                   {
-                    label: `Run Codex for ${issue.identifier}`,
+                    label: `Run coding agent for ${issue.identifier}`,
                     hint: "Start",
                     icon: TerminalSquare,
                     action: () => onStartRun(issue.id),
@@ -586,9 +586,7 @@ export function RunCodexDialog({
 }) {
   const [mode, setMode] = useState<CodingRun["mode"]>("Propose fix");
   const [repositoryId, setRepositoryId] = useState("");
-  const [repositories, setRepositories] = useState<
-    Array<{ id: string; name: string; localPath: string }>
-  >([]);
+  const [repositories, setRepositories] = useState<LiveRepository[]>([]);
   const [instructions, setInstructions] = useState("");
   const [loadingRepositories, setLoadingRepositories] = useState(liveMode);
   useEffect(() => {
@@ -617,14 +615,14 @@ export function RunCodexDialog({
       >
         <div className="modal-header">
           <div>
-            <span className="page-kicker">OpenAI Codex</span>
+            <span className="page-kicker">Coding agent CLI</span>
             <h2 id="run-codex-title">Run on {issue.identifier}</h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close Codex run dialog"
+            aria-label="Close engineering run dialog"
           >
             <X size={17} />
           </button>
@@ -650,7 +648,7 @@ export function RunCodexDialog({
           <label>
             Repository
             <Select
-              ariaLabel="Codex repository"
+              ariaLabel="Engineering repository"
               value={repositoryId}
               options={[
                 ...(!liveMode
@@ -661,7 +659,11 @@ export function RunCodexDialog({
                   : []),
                 ...repositories.map((repository) => ({
                   value: repository.id,
-                  label: `${repository.name} · ${repository.localPath}`,
+                  label: `${repository.name} · ${repository.agentProvider} · ${
+                    repository.executionPlane === "github_actions"
+                      ? `${repository.githubOwner}/${repository.githubRepo}`
+                      : repository.localPath
+                  }`,
                 })),
               ]}
               disabled={!liveMode || loadingRepositories}
@@ -672,7 +674,8 @@ export function RunCodexDialog({
             <div className="inline-empty">
               <GitBranch size={15} />
               <span>
-                Configure a local repository in Settings before starting Codex.
+                Configure a repository and CLI agent in Settings before starting
+                a run.
               </span>
             </div>
           )}

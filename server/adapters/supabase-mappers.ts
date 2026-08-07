@@ -280,6 +280,23 @@ export function repository(
           (value): value is string => typeof value === "string",
         )
       : [],
+    agentProvider: str(
+      rowValue.agent_provider,
+      "codex",
+    ) as RepositoryConfig["agentProvider"],
+    executionPlane: str(
+      rowValue.execution_plane,
+      "local_cli",
+    ) as RepositoryConfig["executionPlane"],
+    ...(rowValue.github_owner
+      ? { githubOwner: String(rowValue.github_owner) }
+      : {}),
+    ...(rowValue.github_repo
+      ? { githubRepo: String(rowValue.github_repo) }
+      : {}),
+    ...(rowValue.github_installation_id
+      ? { githubInstallationId: String(rowValue.github_installation_id) }
+      : {}),
   };
 }
 
@@ -380,6 +397,21 @@ export function repositoryDbPayload(
       : {}),
     ...(input.allowedCommands !== undefined
       ? { allowed_commands: input.allowedCommands }
+      : {}),
+    ...(input.agentProvider !== undefined
+      ? { agent_provider: input.agentProvider }
+      : {}),
+    ...(input.executionPlane !== undefined
+      ? { execution_plane: input.executionPlane }
+      : {}),
+    ...(input.githubOwner !== undefined
+      ? { github_owner: input.githubOwner || null }
+      : {}),
+    ...(input.githubRepo !== undefined
+      ? { github_repo: input.githubRepo || null }
+      : {}),
+    ...(input.githubInstallationId !== undefined
+      ? { github_installation_id: input.githubInstallationId || null }
       : {}),
   };
 }

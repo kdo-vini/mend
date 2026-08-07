@@ -16,7 +16,7 @@
     "releaseLabel": "Novo",
     "releaseText": "O loop de suporte ao código está no ar",
     "title": "O suporte virou gargalo. Transforme conversa em entrega.",
-    "description": "O Mend transforma suporte via WhatsApp em respostas claras, issues rastreáveis e trabalho de engenharia revisável — para o contexto do cliente chegar ao fix sem frear quem constrói o produto.",
+    "description": "O Mend transforma suporte via WhatsApp em respostas claras, issues rastreáveis e trabalho de engenharia revisável. Assim, o contexto chega ao fix sem frear quem constrói o produto.",
     "primaryCta": "Conectar WhatsApp",
     "secondaryCta": "Ver o produto"
   },
@@ -122,7 +122,7 @@
     },
     "items": {
       "0": {
-        "quote": "Uma mensagem do cliente deveria chegar com contexto suficiente para virar a próxima decisão segura de produto — não outra aba que eu preciso lembrar.",
+        "quote": "Uma mensagem do cliente deveria chegar com contexto suficiente para virar a próxima decisão segura de produto, não outra aba que eu preciso lembrar.",
         "role": "Cenário de solo founder",
         "outcome": "O suporte avança enquanto o produto continua"
       },
@@ -277,6 +277,131 @@
     "description": "Traga uma conversa real do WhatsApp. Saia com resposta, issue e próxima ação de engenharia conectadas.",
     "primary": "Conectar WhatsApp",
     "secondary": "Ver como funciona"
+  },
+  "loopLanding": {
+    "hero": {
+      "eyebrow": "Da reclamação ao fix, um loop controlado",
+      "title": "Da reclamação ao pull request.",
+      "description": "O Mend prova e corrige bugs com qualquer agente CLI, mantendo GitHub, checks e aprovação sob seu controle.",
+      "secondaryCta": "Ver o loop",
+      "imageAlt": "Uma mensagem de cliente conectada a evidências, investigação e uma mudança de código revisada",
+      "caption": "Um sinal do cliente vira evidência, mudança revisada e resposta clara."
+    },
+    "connectors": {
+      "label": "Use o agente de código em que seu time já confia",
+      "codex": "Codex CLI",
+      "claude": "Claude Code",
+      "gemini": "Gemini CLI",
+      "verboo": "Verboo CLI",
+      "custom": "Adaptador CLI customizado",
+      "github": "GitHub é o plano de controle"
+    },
+    "loop": {
+      "progressLabel": "Progresso do loop de bug duravel",
+      "title": "Um caso da reclamação ao cliente",
+      "description": "Cada decisão mantém mensagem original, evidência, trabalho de código, release e resultado para o cliente no mesmo registro."
+    },
+    "steps": {
+      "signal": { "title": "Sinal" },
+      "suspicion": { "title": "Triagem" },
+      "evidence": { "title": "Evidência" },
+      "investigation": { "title": "Investigar" },
+      "verdict": { "title": "Veredito" },
+      "decision": { "title": "Decidir" },
+      "fix": { "title": "Corrigir" },
+      "checks": { "title": "Checks" },
+      "pullRequest": { "title": "Pull request" },
+      "approval": { "title": "Aprovar" },
+      "release": { "title": "Release" },
+      "health": { "title": "Health" },
+      "customer": { "title": "Cliente" }
+    },
+    "casePreview": {
+      "case": "Caso de bug MEND-184",
+      "title": "Checkout falha após mudança de plano",
+      "state": "Correção em andamento",
+      "evidence": "Evidências aceitas",
+      "verdict": "Veredito",
+      "confirmed": "Bug real",
+      "verdictDetail": "A falha reproduz na versão afetada e aponta para um único caminho protegido do código.",
+      "agent": "Agente de código",
+      "next": "Próxima ação",
+      "fixRun": "Implementar e checar",
+      "items": {
+        "trace": {
+          "title": "Trace de erro",
+          "detail": "Coincide com o checkout relatado"
+        },
+        "release": {
+          "title": "Versão afetada",
+          "detail": "Regressão começa na mudança de plano"
+        },
+        "reproduction": {
+          "title": "Reprodução",
+          "detail": "Confirmada em workspace isolado"
+        }
+      }
+    },
+    "evidence": {
+      "title": "A automação começa depois da prova.",
+      "description": "O Mend separa suspeita de fato antes que qualquer agente receba permissão para mudar código.",
+      "ruleTitle": "Limites humanos continuam explícitos",
+      "ruleDetail": "Notificar, corrigir, publicar e implantar são decisões separadas da política.",
+      "items": {
+        "suspicion": {
+          "title": "Faça a triagem do sinal",
+          "detail": "Classifique intenção, impacto, recorrência e confiança sem tratar a reclamação como verdade."
+        },
+        "proof": {
+          "title": "Colete evidência durável",
+          "detail": "Anexe traces, contexto da versão, histórico e reprodução ao mesmo caso."
+        },
+        "verdict": {
+          "title": "Registre um veredito",
+          "detail": "Confirme o bug, marque duplicidade ou explique por que não foi reproduzido."
+        },
+        "action": {
+          "title": "Escolha a próxima ação segura",
+          "detail": "Notifique uma pessoa ou abra uma correção separada conforme a política."
+        }
+      }
+    },
+    "execution": {
+      "title": "GitHub coordena. A CLI faz o trabalho.",
+      "description": "Execute em workspace efêmero, devolva um patch e deixe o Mend abrir a superfície de revisão.",
+      "githubTitle": "Contexto do repositório",
+      "githubDetail": "Issue, branch e escopo da instalação",
+      "runnerTitle": "Runner efêmero",
+      "runnerDetail": "Codex, Claude, Gemini ou Verboo",
+      "prTitle": "Pull request em rascunho",
+      "prDetail": "Patch, checks e evidência",
+      "items": {
+        "token": "Credenciais GitHub curtas e limitadas",
+        "workspace": "Workspace limpo para cada investigação e correção",
+        "checks": "Checks independentes antes da revisão",
+        "approval": "Aprovação antes de merge, deploy ou resposta"
+      }
+    },
+    "pricing": {
+      "title": "Comece com um loop durável.",
+      "description": "Conecte suporte, um repositório e o agente CLI que seu time já usa.",
+      "builderDescription": "Para times SaaS pequenos que querem automação da reclamação ao fix com controle visível.",
+      "features": {
+        "0": "Inbox do WhatsApp e triagem de bugs",
+        "1": "Codex, Claude, Gemini ou Verboo CLI",
+        "2": "Pull requests e checks no GitHub",
+        "3": "Aprovação humana e limites de release"
+      }
+    },
+    "finalCta": {
+      "title": "Deixe a próxima reclamação real provar o loop.",
+      "description": "Conecte um canal de suporte e um repositório. O Mend mantém cada etapa visível."
+    },
+    "footer": {
+      "label": "Links do produto",
+      "description": "O Mend conecta reclamações, evidências, agentes de código, GitHub e a resposta que fecha o loop.",
+      "copyright": "© {{year}} Mend. Feito para automação responsável."
+    }
   },
   "footer": {
     "description": "O Mend ajuda builders de SaaS a transformar suporte via WhatsApp em respostas claras, issues rastreáveis e trabalho de produto revisado.",
