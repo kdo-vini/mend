@@ -228,7 +228,7 @@ test("operator can update an issue and return to its conversation", async ({
 test("operator can review checks and approve an engineering diff", async ({
   page,
 }) => {
-  await page.goto("/codex-runs?demo=1");
+  await page.goto("/agent-runs?demo=1");
   await page.getByRole("button", { name: /TEC-19/ }).click();
 
   await expect(page.getByLabel("Engineering diff")).toContainText(
