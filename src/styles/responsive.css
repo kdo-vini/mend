@@ -224,6 +224,19 @@
   .settings-form-grid {
     grid-template-columns: 1fr;
   }
+  .github-space-header,
+  .repository-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .github-space-header .button,
+  .repository-row-trailing,
+  .repository-form-actions {
+    width: 100%;
+  }
+  .repository-row-trailing {
+    justify-content: space-between;
+  }
   .connection-card,
   .qr-row {
     align-items: flex-start;

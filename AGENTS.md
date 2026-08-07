@@ -1,5 +1,16 @@
 # Repository Guidelines
 
+## Product direction (mandatory)
+
+For every task in this repository—planning, implementation, review, design,
+operations, or documentation—read and follow
+[MEND_PRODUCT_STRATEGY_V1.md](docs/product/MEND_PRODUCT_STRATEGY_V1.md) first.
+It is the canonical product direction for Mend: use it to guide priorities,
+scope, architecture, UX, messaging, and trade-offs. Its positioning,
+principles, closed decisions, and explicit out-of-scope list are binding unless
+the user explicitly overrides them. If a request conflicts with the strategy,
+surface the conflict before making the change; do not silently expand scope.
+
 ## Project Structure & Module Organization
 
 This repository is a TypeScript React/Vite SaaS with an Express backend.

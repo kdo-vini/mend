@@ -259,6 +259,17 @@ function createFakeDependencies(
       remove: vi.fn(async () => true),
     },
     githubConnections: {
+      getWorkspaceConnection: vi.fn(async () => ({
+        connected: true,
+        owner: "kdo-vini",
+      })),
+      listWorkspaceRepositories: vi.fn(async () => [
+        { owner: "kdo-vini", repo: "mend", defaultBranch: "main" },
+      ]),
+      startWorkspaceSetup: vi.fn(async () => ({
+        installationUrl: "https://github.com/apps/mend/installations/new",
+      })),
+      disconnectWorkspace: vi.fn(async () => true),
       startSetup: vi.fn(async () => ({
         installationUrl: "https://github.com/apps/mend/installations/new",
       })),
@@ -902,6 +913,44 @@ describe("Mend API router", () => {
     expect(
       callbackDependencies.githubConnections.completeSetup,
     ).toHaveBeenCalledOnce();
+  });
+
+  it("exposes workspace GitHub connection and repository selection routes", async () => {
+    const dependencies = createFakeDependencies();
+    const app = makeApp(dependencies);
+    const headers = scoped();
+
+    const connection = await request(app)
+      .get("/api/github/connection")
+      .set(headers);
+    expect(connection.status).toBe(200);
+    expect(connection.body).toEqual({
+      connected: true,
+      owner: "kdo-vini",
+    });
+
+    const available = await request(app)
+      .get("/api/github/repositories")
+      .set(headers);
+    expect(available.status).toBe(200);
+    expect(available.body.data).toEqual([
+      { owner: "kdo-vini", repo: "mend", defaultBranch: "main" },
+    ]);
+
+    const started = await request(app)
+      .post("/api/github/setup")
+      .set(headers)
+      .send({});
+    expect(started.status).toBe(200);
+    expect(
+      dependencies.githubConnections.startWorkspaceSetup,
+    ).toHaveBeenCalledOnce();
+
+    const disconnected = await request(app)
+      .delete("/api/github/connection")
+      .set(headers);
+    expect(disconnected.status).toBe(200);
+    expect(disconnected.body).toEqual({ disconnected: true });
   });
 
   it("scopes personal planning routes and validates move statuses", async () => {

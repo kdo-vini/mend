@@ -200,6 +200,7 @@ export function InboxPage({
     text: string;
     requestId: number;
     conversationId: string;
+    mediaInput?: ComposerMediaInput;
   }>();
   const [aiDetailsOpen, setAiDetailsOpen] = useState(
     shouldShowConversationAiDetails,
@@ -216,6 +217,9 @@ export function InboxPage({
   const dismissedAiCards = dismissedAiCardsByScope[aiCardStorageKey] ?? {};
   const [messageActionId, setMessageActionId] = useState<string>();
   const [reactionPendingId, setReactionPendingId] = useState<string>();
+  const failedMediaRetryInputsRef = useRef(
+    new Map<string, ComposerMediaInput>(),
+  );
   const [conversationDeleting, setConversationDeleting] = useState(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -402,10 +406,14 @@ export function InboxPage({
       }).catch((error) => onToast(localizedError(error, t("errors.markRead"))));
   };
 
-  const sendMessage = async (text: string): Promise<boolean> => {
+  const sendMessage = async (
+    text: string,
+    idempotencyKey?: string,
+  ): Promise<boolean> => {
     if (!text.trim()) return false;
     const conversationId = selected.id;
     const clientId =
+      idempotencyKey ??
       globalThis.crypto?.randomUUID?.() ??
       `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const optimistic: Message = {
@@ -530,6 +538,9 @@ export function InboxPage({
         } satisfies Message,
       };
     });
+    pending.forEach((item) =>
+      failedMediaRetryInputsRef.current.set(item.optimistic.id, item.input),
+    );
     setConversations((current) =>
       sortConversations(
         current.map((item) =>
@@ -592,6 +603,9 @@ export function InboxPage({
       const snapshot = await loadLiveConversationSnapshot(
         workspaceId,
         conversationId,
+      );
+      pending.forEach((item) =>
+        failedMediaRetryInputsRef.current.delete(item.optimistic.id),
       );
       if (snapshot)
         setConversations((current) =>
@@ -801,6 +815,69 @@ export function InboxPage({
     } finally {
       setMessageActionId(undefined);
     }
+  };
+
+  const removeFailedMessage = (messageId: string) => {
+    failedMediaRetryInputsRef.current.delete(messageId);
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === selected.id
+          ? {
+              ...conversation,
+              messages: conversation.messages.filter(
+                (message) => message.id !== messageId,
+              ),
+            }
+          : conversation,
+      ),
+    );
+  };
+
+  const editFailedMessage = (message: Message) => {
+    const mediaInput =
+      message.type === "text"
+        ? undefined
+        : failedMediaRetryInputsRef.current.get(message.id);
+    if (message.type !== "text" && !mediaInput) {
+      onToast(t("errors.editMessage"));
+      return;
+    }
+    removeFailedMessage(message.id);
+    setDraftInsertRequest({
+      text: message.text,
+      requestId: Date.now(),
+      conversationId: selected.id,
+      mediaInput,
+    });
+  };
+
+  const retryFailedMessage = async (message: Message) => {
+    if (messageActionId) return;
+    const mediaInput =
+      message.type === "text"
+        ? undefined
+        : failedMediaRetryInputsRef.current.get(message.id);
+    if (message.type !== "text" && !mediaInput) {
+      onToast(t("errors.retryMessage"));
+      return;
+    }
+    setMessageActionId(message.id);
+    removeFailedMessage(message.id);
+    try {
+      if (message.type === "text")
+        await sendMessage(message.text, message.clientId);
+      else if (mediaInput)
+        await sendMediaBatch([
+          { ...mediaInput, caption: message.text || mediaInput.caption },
+        ]);
+    } finally {
+      setMessageActionId(undefined);
+    }
+  };
+
+  const cancelFailedMessage = (message: Message) => {
+    removeFailedMessage(message.id);
+    onToast(t("toasts.messageCanceled"));
   };
 
   const reactToMessage = async (message: Message, reaction: string) => {
@@ -1122,6 +1199,9 @@ export function InboxPage({
                     actionPending={messageActionId === message.id}
                     reactionPending={reactionPendingId === message.id}
                     onDelete={() => void deleteMessage(message)}
+                    onEditFailed={() => editFailedMessage(message)}
+                    onCancelFailed={() => cancelFailedMessage(message)}
+                    onRetryFailed={() => void retryFailedMessage(message)}
                     onCopy={async () => {
                       if (!message.text) return;
                       try {
@@ -1713,6 +1793,9 @@ function MessageBubble({
   actionPending,
   reactionPending,
   onDelete,
+  onEditFailed,
+  onCancelFailed,
+  onRetryFailed,
   onCopy,
   onReact,
 }: {
@@ -1721,11 +1804,16 @@ function MessageBubble({
   actionPending: boolean;
   reactionPending: boolean;
   onDelete: () => void;
+  onEditFailed: () => void;
+  onCancelFailed: () => void;
+  onRetryFailed: () => void;
   onCopy: () => void;
   onReact: (reaction: string) => void;
 }) {
   const { t } = useTranslation("inbox");
   const attachmentUrl = message.attachment?.url;
+  const failedOutbound =
+    message.direction === "outbound" && message.status === "failed";
   return (
     <div className={`message-row ${message.direction}`}>
       <div className="message-meta">
@@ -1828,37 +1916,71 @@ function MessageBubble({
           </div>
         )}
         <ActionMenu label={`${senderName || message.sender} message`}>
-          {!message.deleted && message.text && (
-            <button type="button" role="menuitem" onClick={onCopy}>
-              <Copy size={14} /> {t("ui.copyMessage")}
-            </button>
-          )}
-          {!message.deleted && message.direction === "outbound" && (
-            <button
-              className="danger"
-              type="button"
-              role="menuitem"
-              disabled={actionPending}
-              onClick={onDelete}
-            >
-              <Trash2 size={14} />
-              {actionPending ? t("ui.deleting") : t("ui.deleteForEveryone")}
-            </button>
-          )}
-          {!message.deleted && (
+          {failedOutbound && (
             <>
-              <hr />
-              {(["👍", "✅", "👀", "❤️", "❗"] as const).map((reaction) => (
+              <button
+                type="button"
+                role="menuitem"
+                disabled={actionPending}
+                onClick={onEditFailed}
+              >
+                <PenLine size={14} /> {t("ui.editMessage")}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={actionPending}
+                onClick={onCancelFailed}
+              >
+                <X size={14} /> {t("ui.cancelMessage")}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={actionPending}
+                onClick={onRetryFailed}
+              >
+                <Send size={14} />
+                {actionPending ? t("ui.retrying") : t("ui.retryMessage")}
+              </button>
+            </>
+          )}
+          {!failedOutbound && (
+            <>
+              {!message.deleted && message.text && (
+                <button type="button" role="menuitem" onClick={onCopy}>
+                  <Copy size={14} /> {t("ui.copyMessage")}
+                </button>
+              )}
+              {!message.deleted && message.direction === "outbound" && (
                 <button
-                  key={reaction}
+                  className="danger"
                   type="button"
                   role="menuitem"
-                  disabled={reactionPending}
-                  onClick={() => onReact(reaction)}
+                  disabled={actionPending}
+                  onClick={onDelete}
                 >
-                  {reaction} {reactionPending ? t("ui.sending") : t("ui.react")}
+                  <Trash2 size={14} />
+                  {actionPending ? t("ui.deleting") : t("ui.deleteForEveryone")}
                 </button>
-              ))}
+              )}
+              {!message.deleted && (
+                <>
+                  <hr />
+                  {(["👍", "✅", "👀", "❤️", "❗"] as const).map((reaction) => (
+                    <button
+                      key={reaction}
+                      type="button"
+                      role="menuitem"
+                      disabled={reactionPending}
+                      onClick={() => onReact(reaction)}
+                    >
+                      {reaction}{" "}
+                      {reactionPending ? t("ui.sending") : t("ui.react")}
+                    </button>
+                  ))}
+                </>
+              )}
             </>
           )}
         </ActionMenu>
@@ -1899,7 +2021,11 @@ function MediaComposer({
     input: ComposerMediaInput[],
   ) => boolean | Promise<boolean>;
   onUseDraft: () => string | Promise<string>;
-  prefillDraft?: { text: string; requestId: number };
+  prefillDraft?: {
+    text: string;
+    requestId: number;
+    mediaInput?: ComposerMediaInput;
+  };
   aiMode: AiMode;
   liveMode: boolean;
   automationState: AutomationState;
@@ -1907,7 +2033,10 @@ function MediaComposer({
   const { t } = useTranslation("inbox");
   type PendingFile = {
     id: string;
-    file: File;
+    file?: File;
+    mediaUrl?: string;
+    fileName: string;
+    mimeType?: string;
     type: ComposerMediaInput["messageType"];
     previewUrl: string;
     progress: number;
@@ -1929,6 +2058,24 @@ function MediaComposer({
   useEffect(() => {
     if (!prefillDraft) return;
     setText(prefillDraft.text);
+    if (prefillDraft.mediaInput) {
+      const input = prefillDraft.mediaInput;
+      setPendingFiles((current) => [
+        ...current,
+        {
+          id:
+            globalThis.crypto?.randomUUID?.() ??
+            `${Date.now()}-${Math.random()}`,
+          file: input.file,
+          mediaUrl: input.mediaUrl,
+          fileName: input.fileName ?? input.file?.name ?? input.messageType,
+          mimeType: input.mimeType ?? input.file?.type,
+          type: input.messageType,
+          previewUrl: input.file ? URL.createObjectURL(input.file) : "",
+          progress: 0,
+        },
+      ]);
+    }
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [prefillDraft]);
 
@@ -1969,6 +2116,8 @@ function MediaComposer({
     const additions = files.slice(0, room).map((file) => ({
       id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
       file,
+      fileName: file.name,
+      mimeType: file.type,
       type: typeForFile(file),
       previewUrl: URL.createObjectURL(file),
       progress: 0,
@@ -1980,7 +2129,7 @@ function MediaComposer({
   const removeFile = (id: string) => {
     setPendingFiles((current) => {
       const item = current.find((entry) => entry.id === id);
-      if (item) URL.revokeObjectURL(item.previewUrl);
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
       return current.filter((entry) => entry.id !== id);
     });
   };
@@ -2049,8 +2198,11 @@ function MediaComposer({
     if (!onSendMediaBatch || sending || !pendingFiles.length) return;
     const inputs: ComposerMediaInput[] = pendingFiles.map((item) => ({
       file: item.file,
+      mediaUrl: item.mediaUrl,
       messageType: item.type,
-      fileName: item.file.name,
+      fileName: item.fileName,
+      mimeType: item.mimeType,
+      caption: text.trim() || undefined,
       onProgress: (percent) =>
         setPendingFiles((current) =>
           current.map((entry) =>
@@ -2061,7 +2213,9 @@ function MediaComposer({
     setSending(true);
     try {
       if (await onSendMediaBatch(inputs)) {
-        pendingFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+        pendingFiles.forEach((item) => {
+          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        });
         setPendingFiles([]);
       }
     } finally {
@@ -2165,11 +2319,11 @@ function MediaComposer({
           <div className="attachment-preview-grid">
             {pendingFiles.map((item) => (
               <div className="attachment-preview-card" key={item.id}>
-                {item.type === "image" ? (
-                  <img src={item.previewUrl} alt={item.file.name} />
-                ) : item.type === "video" ? (
+                {item.file && item.type === "image" ? (
+                  <img src={item.previewUrl} alt={item.fileName} />
+                ) : item.file && item.type === "video" ? (
                   <video muted preload="metadata" src={item.previewUrl} />
-                ) : item.type === "audio" ? (
+                ) : item.file && item.type === "audio" ? (
                   <audio controls preload="metadata" src={item.previewUrl} />
                 ) : (
                   <FileText size={24} />
@@ -2177,15 +2331,17 @@ function MediaComposer({
                 <button
                   className="icon-button subtle attachment-remove"
                   type="button"
-                  aria-label={t("ui.removeFile", { name: item.file.name })}
+                  aria-label={t("ui.removeFile", { name: item.fileName })}
                   disabled={sending}
                   onClick={() => removeFile(item.id)}
                 >
                   <X size={13} />
                 </button>
-                <strong title={item.file.name}>{item.file.name}</strong>
+                <strong title={item.fileName}>{item.fileName}</strong>
                 <small>
-                  {(item.file.size / 1024 / 1024).toFixed(1)}{" "}
+                  {item.file
+                    ? (item.file.size / 1024 / 1024).toFixed(1)
+                    : (item.mimeType ?? t("ui.media"))}{" "}
                   {t("ui.megabytes")} · {item.progress}%
                 </small>
               </div>

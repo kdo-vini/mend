@@ -82,6 +82,10 @@
     "removeReaction": "Remover reação",
     "removeReactionWithEmoji": "Remover reação {{emoji}}",
     "copyMessage": "Copiar mensagem",
+    "editMessage": "Editar",
+    "cancelMessage": "Cancelar",
+    "retryMessage": "Tentar novamente",
+    "retrying": "Tentando novamente…",
     "deleting": "Excluindo…",
     "deleteForEveryone": "Excluir para todos",
     "sending": "Enviando…",
@@ -123,6 +127,7 @@
     "assigned": "Atribuído a {{assignee}}",
     "contactSaved": "Nome do contato salvo",
     "messageCopied": "Mensagem copiada",
+    "messageCanceled": "Mensagem cancelada",
     "draftFallback": "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um próximo passo."
   },
   "errors": {
@@ -140,6 +145,8 @@
     "assignment": "Não foi possível salvar a atribuição.",
     "contactName": "Não foi possível salvar o nome do contato.",
     "copyMessage": "Não foi possível copiar a mensagem.",
+    "editMessage": "Não foi possível editar esta mensagem com falha.",
+    "retryMessage": "Não foi possível tentar esta mensagem novamente.",
     "draftUnavailable": "O rascunho de IA não está disponível."
   },
   "confirmations": {

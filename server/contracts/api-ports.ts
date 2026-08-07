@@ -383,6 +383,12 @@ export interface GitHubConnectionPort {
     context: RequestContext,
     repositoryId: string,
   ): Promise<{ installationUrl: string }>;
+  startWorkspaceSetup(
+    context: RequestContext,
+  ): Promise<{ installationUrl: string }>;
+  getWorkspaceConnection(context: RequestContext): Promise<unknown>;
+  listWorkspaceRepositories(context: RequestContext): Promise<unknown>;
+  disconnectWorkspace(context: RequestContext): Promise<boolean>;
   completeSetup(query: Record<string, unknown>): Promise<unknown>;
 }
 

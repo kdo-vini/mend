@@ -8,6 +8,7 @@ import {
   Info,
   Link2,
   MessageCircle,
+  PenLine,
   Plus,
   QrCode,
   RefreshCw,
@@ -19,7 +20,13 @@ import {
 } from "lucide-react";
 import type { AiMode, CodingAgentProvider } from "../../../types";
 import { currentInterfaceLanguage } from "../../../i18n/preferences";
-import type { GoogleConnection, McpConnection, WhatsAppInstance } from "../api";
+import type {
+  GoogleConnection,
+  LiveGitHubConnection,
+  LiveGitHubRepository,
+  McpConnection,
+  WhatsAppInstance,
+} from "../api";
 import {
   connectLiveChannel,
   connectWhatsAppInstance,
@@ -36,7 +43,12 @@ import {
   listLiveCodingAgentHealth,
   listLiveGoogleConnections,
   saveLiveGoogleCalendarSelection,
-  startLiveGitHubSetup,
+  getLiveGitHubConnection,
+  listLiveGitHubRepositories,
+  startLiveGitHubWorkspaceSetup,
+  disconnectLiveGitHub,
+  updateLiveRepository,
+  removeLiveRepository,
   startLiveGoogleOAuth,
   disconnectLiveGoogleConnection,
   createLiveMcpConnection,
@@ -78,6 +90,7 @@ import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { Select } from "../../../shared/ui/Select";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
+import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { MembersPanel } from "../components/MembersPanel";
 
 const triageIntentLabels: Record<TriageIntent, string> = {
@@ -149,6 +162,7 @@ export function SettingsPage({
     if (typeof window !== "undefined") {
       const tab = new URLSearchParams(window.location.search).get("tab");
       if (tab === "connections") return "connections";
+      if (tab === "repositories") return "repositories";
     }
     return "whatsapp";
   });
@@ -196,6 +210,19 @@ export function SettingsPage({
   >([]);
   const [repositoriesLoading, setRepositoriesLoading] = useState(false);
   const [repositoriesError, setRepositoriesError] = useState<string | null>(
+    null,
+  );
+  const [githubConnection, setGithubConnection] =
+    useState<LiveGitHubConnection>({ connected: false });
+  const [githubRepositories, setGithubRepositories] = useState<
+    LiveGitHubRepository[]
+  >([]);
+  const [githubRepositoriesLoading, setGithubRepositoriesLoading] =
+    useState(false);
+  const [githubAction, setGithubAction] = useState<
+    "connect" | "disconnect" | null
+  >(null);
+  const [editingRepositoryId, setEditingRepositoryId] = useState<string | null>(
     null,
   );
   const [repositoryName, setRepositoryName] = useState("");
@@ -388,12 +415,18 @@ export function SettingsPage({
     setRepositoriesLoading(true);
     setRepositoriesError(null);
     try {
-      const [rows, health] = await Promise.all([
+      const [rows, health, connection] = await Promise.all([
         listLiveRepositories(workspaceId),
         listLiveCodingAgentHealth(workspaceId),
+        getLiveGitHubConnection(workspaceId),
       ]);
       setRepositories(rows);
       setCodingAgentHealth(health);
+      setGithubConnection(connection);
+      setGithubRepositoriesLoading(connection.connected);
+      if (connection.connected)
+        setGithubRepositories(await listLiveGitHubRepositories(workspaceId));
+      else setGithubRepositories([]);
     } catch (reason) {
       setRepositoriesError(
         reason instanceof Error
@@ -401,6 +434,7 @@ export function SettingsPage({
           : "Repositories could not be loaded.",
       );
     } finally {
+      setGithubRepositoriesLoading(false);
       setRepositoriesLoading(false);
     }
   }, [workspaceId]);
@@ -516,32 +550,74 @@ export function SettingsPage({
     }
   };
 
-  const createRepository = async () => {
+  const resetRepositoryForm = () => {
+    setEditingRepositoryId(null);
+    setRepositoryName("");
+    setRepositoryPath("");
+    setRepositoryBranch("main");
+    setRepositoryAgent("codex");
+    setGithubOwner(githubConnection.owner ?? "");
+    setGithubRepo("");
+  };
+
+  const editRepository = (repository: (typeof repositories)[number]) => {
+    setEditingRepositoryId(repository.id);
+    setRepositoryName(repository.name);
+    setRepositoryPath(repository.localPath);
+    setRepositoryBranch(repository.defaultBranch);
+    setRepositoryAgent(repository.agentProvider);
+    setGithubOwner(githubConnection.owner ?? repository.githubOwner ?? "");
+    setGithubRepo(repository.githubRepo ?? "");
+    window.setTimeout(() => {
+      document
+        .getElementById("repository-editor")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+  };
+
+  const saveRepository = async () => {
     const localReady = repositoryPath.trim();
-    const githubValues = [githubOwner, githubRepo].filter((value) =>
-      value.trim(),
-    );
-    const githubReady = githubValues.length === 0 || githubValues.length === 2;
-    if (!workspaceId || !repositoryName.trim() || !localReady || !githubReady)
-      return;
+    if (!workspaceId || !repositoryName.trim() || !localReady) return;
     setChannelAction(true);
     try {
-      const repository = await createLiveRepository({
-        workspaceId,
-        name: repositoryName,
-        localPath: repositoryPath,
-        defaultBranch: repositoryBranch,
-        agentProvider: repositoryAgent,
-        executionPlane: repositoryPlane,
-        githubOwner,
-        githubRepo,
-      });
-      setRepositories((current) => [repository, ...current]);
-      setRepositoryName("");
-      setRepositoryPath("");
-      setGithubOwner("");
-      setGithubRepo("");
-      onToast("Repository configured");
+      const githubFields =
+        githubConnection.connected && githubRepo
+          ? {
+              githubOwner: githubConnection.owner ?? githubOwner,
+              githubRepo,
+            }
+          : {};
+      const repository = editingRepositoryId
+        ? await updateLiveRepository({
+            workspaceId,
+            repositoryId: editingRepositoryId,
+            name: repositoryName,
+            localPath: repositoryPath,
+            defaultBranch: repositoryBranch,
+            agentProvider: repositoryAgent,
+            executionPlane: repositoryPlane,
+            ...githubFields,
+          })
+        : await createLiveRepository({
+            workspaceId,
+            name: repositoryName,
+            localPath: repositoryPath,
+            defaultBranch: repositoryBranch,
+            agentProvider: repositoryAgent,
+            executionPlane: repositoryPlane,
+            ...githubFields,
+          });
+      setRepositories((current) =>
+        editingRepositoryId
+          ? current.map((item) =>
+              item.id === repository.id ? repository : item,
+            )
+          : [repository, ...current],
+      );
+      resetRepositoryForm();
+      onToast(
+        editingRepositoryId ? "Repository updated" : "Repository configured",
+      );
     } catch (reason) {
       onToast(
         reason instanceof Error
@@ -553,14 +629,48 @@ export function SettingsPage({
     }
   };
 
-  const connectRepositoryGitHub = async (repositoryId: string) => {
-    if (!workspaceId) return;
+  const removeRepository = async (
+    repository: (typeof repositories)[number],
+  ) => {
+    if (
+      !workspaceId ||
+      !(await onConfirm({
+        title: `Remove ${repository.name}?`,
+        description:
+          "This removes the repository configuration from the workspace. It does not delete anything on disk or GitHub.",
+        confirmLabel: "Remove repository",
+        destructive: true,
+      }))
+    )
+      return;
     setChannelAction(true);
     try {
-      const { installationUrl } = await startLiveGitHubSetup({
+      await removeLiveRepository({
         workspaceId,
-        repositoryId,
+        repositoryId: repository.id,
       });
+      setRepositories((current) =>
+        current.filter((item) => item.id !== repository.id),
+      );
+      if (editingRepositoryId === repository.id) resetRepositoryForm();
+      onToast("Repository removed");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Repository could not be removed.",
+      );
+    } finally {
+      setChannelAction(false);
+    }
+  };
+
+  const connectWorkspaceGitHub = async () => {
+    if (!workspaceId) return;
+    setGithubAction("connect");
+    try {
+      const { installationUrl } =
+        await startLiveGitHubWorkspaceSetup(workspaceId);
       window.location.assign(installationUrl);
     } catch (reason) {
       onToast(
@@ -568,7 +678,35 @@ export function SettingsPage({
           ? reason.message
           : "GitHub App setup could not start.",
       );
-      setChannelAction(false);
+      setGithubAction(null);
+    }
+  };
+
+  const disconnectWorkspaceGitHub = async () => {
+    if (
+      !workspaceId ||
+      !(await onConfirm({
+        title: "Disconnect GitHub from this workspace?",
+        description:
+          "Repository configurations stay in Mend, but GitHub publishing and repository selection will be disconnected until you connect an installation again.",
+        confirmLabel: "Disconnect GitHub",
+        destructive: true,
+      }))
+    )
+      return;
+    setGithubAction("disconnect");
+    try {
+      await disconnectLiveGitHub(workspaceId);
+      await loadRepositories();
+      onToast("GitHub disconnected");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "GitHub could not be disconnected.",
+      );
+    } finally {
+      setGithubAction(null);
     }
   };
 
@@ -2398,8 +2536,8 @@ export function SettingsPage({
                   <div>
                     <h2>Repositories</h2>
                     <p>
-                      Choose a CLI agent for isolated execution. Optionally use
-                      a GitHub App to publish reviewed pull requests.
+                      Attach the workspace to GitHub once, then choose which
+                      repositories Mend can work with.
                     </p>
                   </div>
                   <button
@@ -2411,6 +2549,77 @@ export function SettingsPage({
                     <RefreshCw size={14} />
                     {repositoriesLoading ? "Refreshing..." : "Refresh"}
                   </button>
+                </div>
+                <div
+                  className={`github-space-card ${githubConnection.connected ? "is-connected" : ""}`}
+                >
+                  <div className="github-space-signal" aria-hidden="true" />
+                  <div className="github-space-content">
+                    <div className="github-space-header">
+                      <div className="github-space-identity">
+                        <span className="github-space-mark">
+                          <Github size={18} />
+                        </span>
+                        <div>
+                          <span className="github-space-eyebrow">
+                            Workspace GitHub space
+                          </span>
+                          <h3>
+                            {githubConnection.connected
+                              ? githubConnection.owner
+                              : "Connect a GitHub account"}
+                          </h3>
+                          <p>
+                            {githubConnection.connected
+                              ? "This account is the source for repository selection and publishing access."
+                              : "Give this workspace a GitHub installation to enable repository selection and publishing."}
+                          </p>
+                        </div>
+                      </div>
+                      {githubConnection.connected ? (
+                        <button
+                          className="button button-ghost button-small"
+                          type="button"
+                          disabled={githubAction !== null}
+                          onClick={() => void disconnectWorkspaceGitHub()}
+                        >
+                          <Link2 size={13} />
+                          {githubAction === "disconnect"
+                            ? "Disconnecting..."
+                            : "Disconnect"}
+                        </button>
+                      ) : (
+                        <button
+                          className="button button-primary button-small"
+                          type="button"
+                          disabled={githubAction !== null || !workspaceId}
+                          onClick={() => void connectWorkspaceGitHub()}
+                        >
+                          <Github size={13} />
+                          {githubAction === "connect"
+                            ? "Opening GitHub..."
+                            : "Connect GitHub"}
+                        </button>
+                      )}
+                    </div>
+                    {githubConnection.connected ? (
+                      <div className="github-space-stats">
+                        <span>
+                          <strong>{githubRepositories.length}</strong>{" "}
+                          repositories available
+                        </span>
+                        <span>Owner is read-only after connection</span>
+                      </div>
+                    ) : (
+                      <div className="github-space-empty">
+                        <Info size={14} />
+                        <span>
+                          The GitHub owner is filled by the connected account;
+                          it cannot be edited here.
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {repositoriesLoading ? (
                   <LoadingState label="Loading repositories and CLI health..." />
@@ -2429,9 +2638,12 @@ export function SettingsPage({
                 ) : (
                   <>
                     {repositories.map((repository) => (
-                      <div className="policy-row" key={repository.id}>
-                        <div>
-                          <strong>{repository.name}</strong>
+                      <div className="repository-row" key={repository.id}>
+                        <div className="repository-row-main">
+                          <div className="repository-row-heading">
+                            <GitBranch size={15} />
+                            <strong>{repository.name}</strong>
+                          </div>
                           <p>
                             {repository.agentProvider} CLI ·{" "}
                             {repository.executionPlane === "github_actions"
@@ -2440,32 +2652,46 @@ export function SettingsPage({
                             · {repository.defaultBranch}
                           </p>
                           {repository.githubOwner && repository.githubRepo && (
-                            <p>
-                              {repository.githubOwner}/{repository.githubRepo}
-                              {repository.githubInstallationId
-                                ? ` · installation ${repository.githubInstallationId}`
-                                : " · GitHub App not installed"}
+                            <p className="repository-row-github">
+                              <Github size={12} /> {repository.githubOwner}/
+                              {repository.githubRepo}
                             </p>
                           )}
                         </div>
-                        {repository.githubInstallationId ? (
-                          <span className="connection-pill">
-                            <Github size={13} /> GitHub connected
-                          </span>
-                        ) : repository.githubOwner && repository.githubRepo ? (
-                          <button
-                            className="button button-secondary"
-                            type="button"
-                            disabled={channelAction}
-                            onClick={() =>
-                              void connectRepositoryGitHub(repository.id)
-                            }
-                          >
-                            <Github size={13} /> Connect GitHub App
-                          </button>
-                        ) : (
-                          <GitBranch size={15} />
-                        )}
+                        <div className="repository-row-trailing">
+                          {repository.githubInstallationId &&
+                          githubConnection.connected ? (
+                            <span className="connection-pill">
+                              <Github size={13} /> Connected
+                            </span>
+                          ) : repository.githubOwner &&
+                            repository.githubRepo ? (
+                            <span className="repository-status muted">
+                              GitHub needs connection
+                            </span>
+                          ) : (
+                            <span className="repository-status">
+                              Local only
+                            </span>
+                          )}
+                          <ActionMenu label={repository.name}>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => editRepository(repository)}
+                            >
+                              <PenLine size={14} /> Edit
+                            </button>
+                            <button
+                              className="danger"
+                              type="button"
+                              role="menuitem"
+                              onClick={() => void removeRepository(repository)}
+                            >
+                              <Trash2 size={14} /> Remove
+                            </button>
+                          </ActionMenu>
+                        </div>
                       </div>
                     ))}
                     {!repositories.length && (
@@ -2491,100 +2717,167 @@ export function SettingsPage({
                     ))}
                   </div>
                 )}
-                <div className="settings-form-grid">
-                  <label>
-                    Name
-                    <input
-                      value={repositoryName}
-                      onChange={(event) =>
-                        setRepositoryName(event.target.value)
-                      }
-                      placeholder="Support app"
-                    />
-                  </label>
-                  <label>
-                    Coding agent
-                    <Select
-                      value={repositoryAgent}
-                      options={[
-                        { value: "codex", label: "Codex CLI" },
-                        { value: "claude", label: "Claude Code" },
-                        { value: "gemini", label: "Gemini CLI" },
-                        { value: "verboo", label: "Verboo CLI" },
-                        { value: "custom", label: "Custom CLI adapter" },
-                      ]}
-                      onChange={(value) =>
-                        setRepositoryAgent(value as CodingAgentProvider)
-                      }
-                    />
-                  </label>
-                  <label>
-                    Execution plane
-                    <input
-                      value="Isolated CLI + GitHub control plane"
-                      disabled
-                    />
-                    <small className="settings-field-help">
-                      The CLI investigates in a disposable workspace; GitHub
-                      owns branches, pull requests, checks, and release gates.
-                    </small>
-                  </label>
-                  <label>
-                    Default branch
-                    <input
-                      value={repositoryBranch}
-                      onChange={(event) =>
-                        setRepositoryBranch(event.target.value)
-                      }
-                      placeholder="main"
-                    />
-                  </label>
-                  <label>
-                    Local path
-                    <input
-                      value={repositoryPath}
-                      onChange={(event) =>
-                        setRepositoryPath(event.target.value)
-                      }
-                      placeholder="C:\workspace\support-app"
-                    />
-                  </label>
-                  <>
+                <div className="repository-editor" id="repository-editor">
+                  <div className="repository-editor-header">
+                    <div>
+                      <span className="github-space-eyebrow">
+                        {editingRepositoryId
+                          ? "Repository settings"
+                          : "New repository"}
+                      </span>
+                      <h3>
+                        {editingRepositoryId
+                          ? "Edit repository"
+                          : "Add a repository"}
+                      </h3>
+                    </div>
+                    {editingRepositoryId && (
+                      <button
+                        className="button button-ghost button-small"
+                        type="button"
+                        onClick={resetRepositoryForm}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                  <div className="settings-form-grid">
+                    <label>
+                      Name
+                      <input
+                        value={repositoryName}
+                        onChange={(event) =>
+                          setRepositoryName(event.target.value)
+                        }
+                        placeholder="Support app"
+                      />
+                    </label>
+                    <label>
+                      Coding agent
+                      <Select
+                        value={repositoryAgent}
+                        options={[
+                          { value: "codex", label: "Codex CLI" },
+                          { value: "claude", label: "Claude Code" },
+                          { value: "gemini", label: "Gemini CLI" },
+                          { value: "verboo", label: "Verboo CLI" },
+                          { value: "custom", label: "Custom CLI adapter" },
+                        ]}
+                        onChange={(value) =>
+                          setRepositoryAgent(value as CodingAgentProvider)
+                        }
+                      />
+                    </label>
+                    <label>
+                      Execution plane
+                      <input
+                        value="Isolated CLI + GitHub control plane"
+                        disabled
+                      />
+                      <small className="settings-field-help">
+                        The CLI investigates in a disposable workspace; GitHub
+                        owns branches, pull requests, checks, and release gates.
+                      </small>
+                    </label>
+                    <label>
+                      Default branch
+                      <input
+                        value={repositoryBranch}
+                        onChange={(event) =>
+                          setRepositoryBranch(event.target.value)
+                        }
+                        placeholder="main"
+                      />
+                    </label>
+                    <label>
+                      Local path
+                      <input
+                        value={repositoryPath}
+                        onChange={(event) =>
+                          setRepositoryPath(event.target.value)
+                        }
+                        placeholder="C:\workspace\support-app"
+                      />
+                    </label>
                     <label>
                       GitHub owner
                       <input
-                        value={githubOwner}
-                        onChange={(event) => setGithubOwner(event.target.value)}
-                        placeholder="your-org"
+                        value={githubConnection.owner ?? githubOwner}
+                        readOnly
+                        placeholder="Connect GitHub first"
                       />
+                      <small className="settings-field-help">
+                        Filled by the workspace GitHub connection.
+                      </small>
                     </label>
                     <label>
                       GitHub repository
-                      <input
-                        value={githubRepo}
-                        onChange={(event) => setGithubRepo(event.target.value)}
-                        placeholder="support-app"
+                      <Select
+                        value={
+                          githubRepo
+                            ? `${githubOwner || githubConnection.owner}/${githubRepo}`
+                            : ""
+                        }
+                        options={[
+                          {
+                            value: "",
+                            label: githubRepositoriesLoading
+                              ? "Loading repositories..."
+                              : githubConnection.connected
+                                ? "No GitHub repository"
+                                : "Connect GitHub first",
+                            disabled: true,
+                          },
+                          ...githubRepositories.map((option) => ({
+                            value: `${option.owner}/${option.repo}`,
+                            label: `${option.owner}/${option.repo}`,
+                          })),
+                        ]}
+                        disabled={
+                          !githubConnection.connected ||
+                          githubRepositoriesLoading
+                        }
+                        onChange={(value) => {
+                          const option = githubRepositories.find(
+                            (item) => `${item.owner}/${item.repo}` === value,
+                          );
+                          setGithubOwner(
+                            option?.owner ?? githubConnection.owner ?? "",
+                          );
+                          setGithubRepo(option?.repo ?? "");
+                          if (option) {
+                            setRepositoryBranch(option.defaultBranch);
+                            if (!repositoryName.trim())
+                              setRepositoryName(option.repo);
+                          }
+                        }}
                       />
+                      <small className="settings-field-help">
+                        Select from repositories available to this GitHub App.
+                      </small>
                     </label>
-                  </>
+                  </div>
+                  <div className="repository-form-actions">
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      disabled={
+                        channelAction ||
+                        !workspaceId ||
+                        !repositoryName.trim() ||
+                        !repositoryPath.trim()
+                      }
+                      onClick={() => void saveRepository()}
+                    >
+                      {editingRepositoryId ? (
+                        <Save size={14} />
+                      ) : (
+                        <Plus size={14} />
+                      )}
+                      {editingRepositoryId ? "Save changes" : "Add repository"}
+                    </button>
+                  </div>
                 </div>
-                <button
-                  className="button button-primary"
-                  type="button"
-                  disabled={
-                    channelAction ||
-                    !workspaceId ||
-                    !repositoryName.trim() ||
-                    !repositoryPath.trim() ||
-                    ([githubOwner, githubRepo].filter((value) => value.trim())
-                      .length !== 0 &&
-                      [githubOwner, githubRepo].filter((value) => value.trim())
-                        .length !== 2)
-                  }
-                  onClick={() => void createRepository()}
-                >
-                  <Plus size={14} /> Add repository
-                </button>
               </section>
             </div>
           )}

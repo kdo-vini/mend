@@ -1953,6 +1953,9 @@ export type Database = {
           ai_policy_json: Json
           created_at: string
           default_language: string
+          github_connected_at: string | null
+          github_installation_id: string | null
+          github_owner: string | null
           id: string
           issue_prefix: string
           name: string
@@ -1965,6 +1968,9 @@ export type Database = {
           ai_policy_json?: Json
           created_at?: string
           default_language?: string
+          github_connected_at?: string | null
+          github_installation_id?: string | null
+          github_owner?: string | null
           id?: string
           issue_prefix?: string
           name: string
@@ -1977,6 +1983,9 @@ export type Database = {
           ai_policy_json?: Json
           created_at?: string
           default_language?: string
+          github_connected_at?: string | null
+          github_installation_id?: string | null
+          github_owner?: string | null
           id?: string
           issue_prefix?: string
           name?: string

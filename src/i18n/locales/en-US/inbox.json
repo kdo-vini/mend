@@ -82,6 +82,10 @@
     "removeReaction": "Remove reaction",
     "removeReactionWithEmoji": "Remove reaction {{emoji}}",
     "copyMessage": "Copy message",
+    "editMessage": "Edit",
+    "cancelMessage": "Cancel",
+    "retryMessage": "Retry",
+    "retrying": "Retrying…",
     "deleting": "Deleting…",
     "deleteForEveryone": "Delete for everyone",
     "sending": "Sending…",
@@ -123,6 +127,7 @@
     "assigned": "Assigned to {{assignee}}",
     "contactSaved": "Contact name saved",
     "messageCopied": "Message copied",
+    "messageCanceled": "Message canceled",
     "draftFallback": "I understand the impact. I’ll investigate this now and update you as soon as I have a next step."
   },
   "errors": {
@@ -140,6 +145,8 @@
     "assignment": "Assignment could not be saved.",
     "contactName": "Contact name could not be saved.",
     "copyMessage": "Message could not be copied.",
+    "editMessage": "This failed message cannot be edited.",
+    "retryMessage": "This failed message cannot be retried.",
     "draftUnavailable": "AI draft unavailable."
   },
   "confirmations": {

@@ -54,6 +54,15 @@ export function workspace(rowValue: Row): Row {
     issuePrefix: str(rowValue.issue_prefix, "MEND"),
     timezone: str(rowValue.timezone, "UTC"),
     defaultLanguage: normalizeLocale(rowValue.default_language),
+    ...(rowValue.github_installation_id
+      ? { githubInstallationId: String(rowValue.github_installation_id) }
+      : {}),
+    ...(rowValue.github_owner
+      ? { githubOwner: String(rowValue.github_owner) }
+      : {}),
+    ...(rowValue.github_connected_at
+      ? { githubConnectedAt: String(rowValue.github_connected_at) }
+      : {}),
     createdAt: nullable(rowValue.created_at),
     updatedAt: nullable(rowValue.updated_at),
   };

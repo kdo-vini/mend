@@ -3,6 +3,8 @@ export {
   connectWhatsAppInstance,
   createLiveChannel,
   createLiveRepository,
+  updateLiveRepository,
+  removeLiveRepository,
   createWhatsAppInstance,
   disconnectLiveChannel,
   disconnectWhatsAppInstance,
@@ -16,6 +18,10 @@ export {
   loadLiveChannelFlow,
   saveLiveChannelFlow,
   startLiveGitHubSetup,
+  getLiveGitHubConnection,
+  listLiveGitHubRepositories,
+  startLiveGitHubWorkspaceSetup,
+  disconnectLiveGitHub,
   listLiveWorkspaceMembers,
   updateLiveWorkspaceMemberRole,
   removeLiveWorkspaceMember,
@@ -30,6 +36,8 @@ export type {
   WhatsAppInstance,
   LiveWorkspaceMember,
   LiveWorkspaceInvitation,
+  LiveGitHubConnection,
+  LiveGitHubRepository,
 } from "../../api/live-actions";
 export {
   disconnectLiveGoogleConnection,

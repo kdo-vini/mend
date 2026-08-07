@@ -288,6 +288,24 @@ function mediaApiError(error: unknown): ApiHttpError | null {
   return null;
 }
 
+function githubApiError(error: unknown): ApiHttpError | null {
+  if (!(error instanceof Error)) return null;
+  const reason = error.message;
+  if (reason === "github_workspace_not_connected")
+    return new ApiHttpError(
+      409,
+      "github_workspace_not_connected",
+      "Connect GitHub to this workspace before attaching a repository.",
+    );
+  if (reason === "github_owner_mismatch")
+    return new ApiHttpError(
+      400,
+      "github_owner_mismatch",
+      "The repository owner must belong to the connected GitHub account.",
+    );
+  return null;
+}
+
 export interface ApiRouteModuleContext {
   router: Router;
   dependencies: ApiRouterDependencies;
@@ -464,6 +482,11 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
       if (mediaError)
         return send(response, mediaError.status, {
           error: { code: mediaError.code, message: mediaError.message },
+        });
+      const githubError = githubApiError(error);
+      if (githubError)
+        return send(response, githubError.status, {
+          error: { code: githubError.code, message: githubError.message },
         });
       const workspaceError = workspaceApiError(error);
       if (workspaceError)

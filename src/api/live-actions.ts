@@ -78,6 +78,18 @@ export interface LiveRepository {
   githubInstallationId?: string;
 }
 
+export interface LiveGitHubConnection {
+  connected: boolean;
+  owner?: string;
+  connectedAt?: string;
+}
+
+export interface LiveGitHubRepository {
+  owner: string;
+  repo: string;
+  defaultBranch: string;
+}
+
 function mapLatestAiDrafts(
   drafts: AiDraftRow[],
   links: AiDraftKnowledgeRow[],
@@ -1692,6 +1704,47 @@ export async function createLiveRepository(input: {
   return repositoryToLive(result);
 }
 
+export async function updateLiveRepository(input: {
+  workspaceId: string;
+  repositoryId: string;
+  name: string;
+  localPath?: string;
+  defaultBranch?: string;
+  agentProvider?: CodingAgentProvider;
+  executionPlane?: "local_cli" | "github_actions";
+  githubOwner?: string;
+  githubRepo?: string;
+}): Promise<LiveRepository> {
+  const result = await apiRequest<ApiRepository>(
+    `/api/repositories/${encodeURIComponent(input.repositoryId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: input.name.trim(),
+        localPath: input.localPath?.trim(),
+        defaultBranch: input.defaultBranch?.trim() || "main",
+        agentProvider: input.agentProvider ?? "codex",
+        executionPlane: input.executionPlane ?? "local_cli",
+        githubOwner: input.githubOwner?.trim() || undefined,
+        githubRepo: input.githubRepo?.trim() || undefined,
+      }),
+    },
+    input.workspaceId,
+  );
+  return repositoryToLive(result);
+}
+
+export async function removeLiveRepository(input: {
+  workspaceId: string;
+  repositoryId: string;
+}): Promise<void> {
+  await apiRequest<void>(
+    `/api/repositories/${encodeURIComponent(input.repositoryId)}`,
+    { method: "DELETE" },
+    input.workspaceId,
+  );
+}
+
 export async function startLiveGitHubSetup(input: {
   workspaceId: string;
   repositoryId: string;
@@ -1700,6 +1753,56 @@ export async function startLiveGitHubSetup(input: {
     `/api/repositories/${input.repositoryId}/github/setup`,
     { method: "POST", body: JSON.stringify({}) },
     input.workspaceId,
+  );
+}
+
+export async function getLiveGitHubConnection(
+  workspaceId: string,
+): Promise<LiveGitHubConnection> {
+  const result = await apiRequest<{
+    connected?: boolean;
+    owner?: string;
+    connectedAt?: string;
+  }>("/api/github/connection", {}, workspaceId);
+  return {
+    connected: Boolean(result.connected),
+    ...(result.owner ? { owner: result.owner } : {}),
+    ...(result.connectedAt ? { connectedAt: result.connectedAt } : {}),
+  };
+}
+
+export async function listLiveGitHubRepositories(
+  workspaceId: string,
+): Promise<LiveGitHubRepository[]> {
+  const result = await apiRequest<{
+    data?: Array<{
+      owner: string;
+      repo: string;
+      defaultBranch?: string;
+    }>;
+  }>("/api/github/repositories", {}, workspaceId);
+  return (result.data ?? []).map((repository) => ({
+    owner: repository.owner,
+    repo: repository.repo,
+    defaultBranch: repository.defaultBranch ?? "main",
+  }));
+}
+
+export async function startLiveGitHubWorkspaceSetup(
+  workspaceId: string,
+): Promise<{ installationUrl: string }> {
+  return apiRequest<{ installationUrl: string }>(
+    "/api/github/setup",
+    { method: "POST", body: JSON.stringify({}) },
+    workspaceId,
+  );
+}
+
+export async function disconnectLiveGitHub(workspaceId: string): Promise<void> {
+  await apiRequest<{ disconnected: boolean }>(
+    "/api/github/connection",
+    { method: "DELETE" },
+    workspaceId,
   );
 }
 
