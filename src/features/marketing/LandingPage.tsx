@@ -17,6 +17,7 @@ import {
   MessageCircle,
   SearchCheck,
   ShieldCheck,
+  Sparkles,
   TerminalSquare,
   X,
 } from "lucide-react";
@@ -117,6 +118,111 @@ function LoopCasePreview() {
   );
 }
 
+function ProductPreview() {
+  const { t } = useTranslation("marketing");
+  return (
+    <div
+      className="marketing-product-shell"
+      aria-label={t("preview.ariaLabel")}
+    >
+      <div className="marketing-product-topbar">
+        <span className="marketing-product-title">
+          <span className="marketing-product-mark" /> {t("preview.inbox")}
+        </span>
+        <span className="marketing-live-state">
+          <i /> {t("preview.live")}
+        </span>
+      </div>
+      <div className="marketing-product-body">
+        <aside className="marketing-conversation-rail">
+          <div className="marketing-rail-label">
+            {t("preview.conversations")}
+          </div>
+          <div className="marketing-search-line">{t("preview.search")}</div>
+          {["one", "two", "three"].map((key, index) => (
+            <div
+              className={`marketing-thread ${index === 0 ? "is-active" : ""}`}
+              key={key}
+            >
+              <span className="marketing-avatar">
+                {t(`preview.threads.${key}.initial`)}
+              </span>
+              <span>
+                <strong>{t(`preview.threads.${key}.customer`)}</strong>
+                <small>{t(`preview.threads.${key}.subject`)}</small>
+              </span>
+            </div>
+          ))}
+        </aside>
+        <div className="marketing-conversation-view">
+          <div className="marketing-conversation-head">
+            <span>
+              <strong>{t("preview.threads.one.customer")}</strong>
+              <small>
+                {t("preview.channel")} · {t("preview.needsAttention")}
+              </small>
+            </span>
+            <span className="marketing-ai-pill">
+              <Sparkles size={11} /> {t("preview.aiDrafts")}
+            </span>
+          </div>
+          <div className="marketing-message-stack">
+            <p className="marketing-message is-customer">
+              {t("preview.customerMessage")}
+            </p>
+            <p className="marketing-message is-agent">
+              {t("preview.agentMessage")}
+            </p>
+            <div className="marketing-linked-issue">
+              <span className="marketing-issue-icon">
+                <CircleDot size={14} />
+              </span>
+              <span>
+                <strong>{t("preview.issueTitle")}</strong>
+                <small>
+                  {t("preview.issueId")} · {t("preview.issueStatus")}
+                </small>
+              </span>
+              <ArrowRight size={14} />
+            </div>
+          </div>
+          <div className="marketing-composer">
+            <span>{t("preview.composer")}</span>
+            <span className="marketing-send-dot" />
+          </div>
+        </div>
+        <aside className="marketing-run-panel">
+          <div className="marketing-run-heading">
+            <span>{t("preview.runTitle")}</span>
+            <small>{t("preview.runStatus")}</small>
+          </div>
+          <div className="marketing-run-timeline">
+            {(["context", "issue", "run", "review"] as const).map(
+              (step, index) => (
+                <div
+                  className={index < 3 ? "is-complete" : "is-current"}
+                  key={step}
+                >
+                  <i>{index < 3 ? <Check size={10} /> : <span />}</i>
+                  <span>
+                    <strong>{t(`preview.steps.${step}`)}</strong>
+                    <small>{t(`preview.steps.${step}Meta`)}</small>
+                  </span>
+                </div>
+              ),
+            )}
+          </div>
+          <div className="marketing-diff-mini">
+            <span>{t("preview.additions")}</span>
+            <span>{t("preview.deletions")}</span>
+            <small>{t("preview.filesChanged")}</small>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 export function LandingPage() {
   const { t, i18n } = useTranslation(["marketing", "common"]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -205,31 +311,24 @@ export function LandingPage() {
       </header>
 
       <section className="marketing-hero" id="top">
-        <div className="marketing-hero-copy">
-          <span className="marketing-eyebrow">
-            {t("loopLanding.hero.eyebrow")}
-          </span>
-          <h1>{t("loopLanding.hero.title")}</h1>
-          <p>{t("loopLanding.hero.description")}</p>
-          <div className="marketing-hero-actions">
-            <a className="button button-primary" href="/?auth=1">
-              {t("navigation.getStarted")} <ArrowRight size={15} />
-            </a>
-            <a className="button button-ghost" href="#features">
-              {t("loopLanding.hero.secondaryCta")}
-            </a>
-          </div>
+        <div className="marketing-hero-aura" aria-hidden="true" />
+        <div className="marketing-release-pill">
+          <span>{t("hero.releaseLabel")}</span>
+          {t("hero.releaseText")} <ArrowRight size={12} />
         </div>
-        <figure className="marketing-hero-visual">
-          <img
-            src="/images/complaint-to-fix-control-room.webp"
-            alt={t("loopLanding.hero.imageAlt")}
-            width="1536"
-            height="1024"
-            fetchPriority="high"
-          />
-          <figcaption>{t("loopLanding.hero.caption")}</figcaption>
-        </figure>
+        <h1>{t("hero.title")}</h1>
+        <p>{t("loopLanding.hero.description")}</p>
+        <div className="marketing-hero-actions">
+          <a className="button button-primary" href="/?auth=1">
+            {t("navigation.getStarted")} <ArrowRight size={15} />
+          </a>
+          <a className="button button-ghost" href="#features">
+            {t("loopLanding.hero.secondaryCta")}
+          </a>
+        </div>
+        <div className="marketing-hero-proof">
+          <ProductPreview />
+        </div>
       </section>
 
       <section

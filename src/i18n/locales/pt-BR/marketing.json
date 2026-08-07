@@ -15,7 +15,7 @@
   "hero": {
     "releaseLabel": "Novo",
     "releaseText": "O loop de suporte ao código está no ar",
-    "title": "O suporte virou gargalo. Transforme conversa em entrega.",
+    "title": "Fique perto do cliente sem sair do produto.",
     "description": "O Mend transforma suporte via WhatsApp em respostas claras, issues rastreáveis e trabalho de engenharia revisável. Assim, o contexto chega ao fix sem frear quem constrói o produto.",
     "primaryCta": "Conectar WhatsApp",
     "secondaryCta": "Ver o produto"
@@ -285,9 +285,7 @@
       "eyebrow": "Da reclamação ao fix, um loop controlado",
       "title": "Da reclamação ao pull request.",
       "description": "O Mend prova e corrige bugs com qualquer agente CLI, mantendo GitHub, checks e aprovação sob seu controle.",
-      "secondaryCta": "Ver o loop",
-      "imageAlt": "Uma mensagem de cliente conectada a evidências, investigação e uma mudança de código revisada",
-      "caption": "Um sinal do cliente vira evidência, mudança revisada e resposta clara."
+      "secondaryCta": "Ver o loop"
     },
     "connectors": {
       "label": "Use o agente de código em que seu time já confia",

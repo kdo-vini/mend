@@ -19,6 +19,18 @@ async function chooseOption(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
+test("explicit auth link renders the sign-in form while the session probe runs", async ({
+  page,
+}) => {
+  await page.goto("/?auth=1");
+
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Mend" }),
+  ).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible();
+  await expect(page.getByText("Loading secure workspace")).not.toBeVisible();
+});
+
 test("uses the explicit Portuguese interface choice after reload", async ({
   page,
 }, testInfo) => {

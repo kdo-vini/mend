@@ -1007,3 +1007,571 @@
     transition-duration: 1ms !important;
   }
 }
+
+/* The landing hero is a product preview, not a stock-photo billboard. */
+.marketing-hero {
+  position: relative;
+  display: flex;
+  min-height: 1220px;
+  flex-direction: column;
+  align-items: center;
+  padding: 152px var(--space-4) 92px;
+  text-align: center;
+}
+
+.marketing-hero-aura {
+  position: absolute;
+  top: 130px;
+  left: 50%;
+  width: min(760px, 80vw);
+  height: 260px;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  filter: blur(90px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: marketingAura 7s ease-in-out infinite alternate;
+}
+
+.marketing-release-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2) 6px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  animation: marketingHeroIn 700ms var(--ease-out-expo) both;
+}
+
+.marketing-release-pill span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font:
+    600 9px/1 "DM Mono",
+    monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.marketing-hero h1 {
+  position: relative;
+  max-width: 920px;
+  margin: var(--space-6) 0 var(--space-4);
+  font-size: clamp(52px, 6.2vw, 94px);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+  text-wrap: balance;
+  animation: marketingHeroIn 760ms 90ms var(--ease-out-expo) both;
+}
+
+.marketing-hero > p {
+  position: relative;
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(15px, 1.4vw, 18px);
+  line-height: 1.65;
+  text-wrap: pretty;
+  animation: marketingHeroIn 760ms 170ms var(--ease-out-expo) both;
+}
+
+.marketing-hero-actions {
+  position: relative;
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  animation: marketingHeroIn 760ms 250ms var(--ease-out-expo) both;
+}
+
+.marketing-hero-actions .button {
+  min-height: 43px;
+  padding-inline: var(--space-5);
+}
+
+.marketing-hero-proof {
+  position: relative;
+  width: min(1180px, 100%);
+  margin-top: 76px;
+  animation: marketingProductIn 1000ms 320ms var(--ease-out-expo) both;
+}
+
+.marketing-product-shell {
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  text-align: left;
+}
+
+.marketing-product-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.marketing-product-title,
+.marketing-live-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.marketing-product-mark {
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-3);
+  transform: rotate(45deg);
+}
+
+.marketing-live-state {
+  color: var(--muted-2);
+  font:
+    10px/1 "DM Mono",
+    monospace;
+  font-weight: 400;
+}
+
+.marketing-live-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--signal) 12%, transparent);
+  animation: marketingSignal 2.2s ease-in-out infinite;
+}
+
+.marketing-product-body {
+  display: grid;
+  grid-template-columns: 0.72fr 1.5fr 0.8fr;
+  min-height: 500px;
+}
+
+.marketing-conversation-rail,
+.marketing-run-panel {
+  padding: var(--space-4) var(--space-3);
+  background: var(--sidebar);
+}
+
+.marketing-conversation-rail {
+  border-right: 1px solid var(--line);
+}
+
+.marketing-run-panel {
+  border-left: 1px solid var(--line);
+}
+
+.marketing-rail-label {
+  margin-bottom: var(--space-3);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.marketing-search-line {
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--muted-2);
+  font-size: 9px;
+}
+
+.marketing-thread {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 6px 0;
+  padding: 10px 8px;
+  border-radius: var(--radius-control);
+}
+
+.marketing-thread.is-active {
+  background: var(--surface-2);
+}
+
+.marketing-thread > span:last-child,
+.marketing-conversation-head > span:first-child,
+.marketing-run-heading,
+.marketing-linked-issue > span:nth-child(2),
+.marketing-run-timeline > div > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marketing-avatar {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--ink-soft);
+  font-size: 9px;
+}
+
+.marketing-thread strong,
+.marketing-thread small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketing-thread strong,
+.marketing-conversation-head strong,
+.marketing-linked-issue strong,
+.marketing-run-heading > span,
+.marketing-run-timeline strong {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.marketing-thread small,
+.marketing-conversation-head small,
+.marketing-run-heading small,
+.marketing-linked-issue small,
+.marketing-run-timeline small {
+  color: var(--muted-2);
+  font-size: 8px;
+}
+
+.marketing-conversation-view {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: var(--space-5);
+}
+
+.marketing-conversation-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.marketing-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in oklch, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  color: var(--accent-soft);
+  font:
+    9px/1 "DM Mono",
+    monospace;
+  white-space: nowrap;
+}
+
+.marketing-message-stack {
+  display: flex;
+  min-height: 350px;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-6) 0;
+}
+
+.marketing-message {
+  max-width: 78%;
+  margin: 0;
+  padding: 11px 12px;
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.marketing-message.is-customer {
+  background: var(--surface-3);
+}
+
+.marketing-message.is-agent {
+  align-self: flex-end;
+  background: var(--accent-wash);
+}
+
+.marketing-linked-issue {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  animation: marketingIssue 4s 1.5s ease-in-out infinite;
+}
+
+.marketing-linked-issue > span:nth-child(2) {
+  flex: 1;
+}
+
+.marketing-linked-issue strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketing-linked-issue small {
+  font:
+    9px/1 "DM Mono",
+    monospace;
+}
+
+.marketing-issue-icon {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: var(--radius-control);
+  background: var(--accent-wash);
+  color: var(--accent-soft);
+}
+
+.marketing-composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--muted-2);
+  font-size: 9px;
+}
+
+.marketing-send-dot {
+  width: 21px;
+  height: 21px;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+}
+
+.marketing-run-heading {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.marketing-run-heading > span {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.marketing-run-timeline {
+  padding: var(--space-5) 0;
+}
+
+.marketing-run-timeline > div {
+  position: relative;
+  display: flex;
+  gap: 9px;
+  min-height: 58px;
+}
+
+.marketing-run-timeline > div:not(:last-child)::before {
+  position: absolute;
+  top: 18px;
+  left: 9px;
+  width: 1px;
+  height: 39px;
+  background: var(--line-strong);
+  content: "";
+}
+
+.marketing-run-timeline i {
+  z-index: 1;
+  display: grid;
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--sidebar);
+  color: var(--muted-2);
+  font-style: normal;
+}
+
+.marketing-run-timeline .is-complete i {
+  border-color: var(--accent);
+  color: var(--accent-soft);
+}
+
+.marketing-run-timeline .is-current i span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--signal);
+  animation: marketingSignal 1.8s ease-in-out infinite;
+}
+
+.marketing-diff-mini {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  font:
+    9px/1 "DM Mono",
+    monospace;
+}
+
+.marketing-diff-mini span:first-child {
+  color: var(--success);
+}
+
+.marketing-diff-mini span:nth-child(2) {
+  color: var(--danger);
+}
+
+.marketing-diff-mini small {
+  margin-left: auto;
+  color: var(--muted-2);
+}
+
+@keyframes marketingAura {
+  from {
+    opacity: 0.7;
+    transform: translateX(-50%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.04);
+  }
+}
+
+@keyframes marketingProductIn {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes marketingSignal {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes marketingIssue {
+  0%,
+  100% {
+    border-color: var(--line-strong);
+  }
+  50% {
+    border-color: color-mix(in oklch, var(--accent) 45%, var(--line));
+  }
+}
+
+@media (max-width: 1050px) {
+  .marketing-product-body {
+    grid-template-columns: 0.75fr 1.55fr;
+  }
+
+  .marketing-run-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .marketing-hero {
+    min-height: 1090px;
+    padding: 119px var(--space-4) 69px;
+  }
+
+  .marketing-release-pill {
+    max-width: 100%;
+    font-size: 9px;
+  }
+
+  .marketing-hero h1 {
+    max-width: 11ch;
+    margin-top: var(--space-5);
+    font-size: clamp(45px, 14.2vw, 66px);
+  }
+
+  .marketing-hero > p {
+    font-size: 14px;
+  }
+
+  .marketing-hero-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .marketing-hero-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .marketing-hero-proof {
+    margin-top: 53px;
+  }
+
+  .marketing-product-body {
+    display: block;
+    min-height: 445px;
+  }
+
+  .marketing-conversation-rail {
+    display: none;
+  }
+
+  .marketing-conversation-view {
+    min-height: 445px;
+    padding: var(--space-4);
+  }
+
+  .marketing-message-stack {
+    min-height: 315px;
+  }
+
+  .marketing-message {
+    max-width: 88%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-page .marketing-hero-aura,
+  .marketing-page .marketing-release-pill,
+  .marketing-page .marketing-hero h1,
+  .marketing-page .marketing-hero > p,
+  .marketing-page .marketing-hero-actions,
+  .marketing-page .marketing-hero-proof,
+  .marketing-page .marketing-live-state i,
+  .marketing-page .marketing-linked-issue,
+  .marketing-page .marketing-run-timeline .is-current i span {
+    animation: none;
+  }
+}

@@ -15,7 +15,7 @@
   "hero": {
     "releaseLabel": "New",
     "releaseText": "The support-to-code loop is live",
-    "title": "Keep shipping. Mend the support loop.",
+    "title": "Stay close to the customer without leaving the product.",
     "description": "Mend turns WhatsApp support into clear replies, traceable issues, and reviewable engineering work. Customer context reaches the fix without slowing the people building it.",
     "primaryCta": "Connect WhatsApp",
     "secondaryCta": "See the product"
@@ -285,9 +285,7 @@
       "eyebrow": "Complaint to fix, one controlled loop",
       "title": "From complaint to pull request.",
       "description": "Mend proves and fixes bugs with any CLI agent while GitHub, checks, and approval stay under your control.",
-      "secondaryCta": "See the loop",
-      "imageAlt": "A customer message connected to evidence, investigation, and a reviewed code change",
-      "caption": "A customer signal becomes evidence, a reviewed change, and a clear reply."
+      "secondaryCta": "See the loop"
     },
     "connectors": {
       "label": "Bring the coding agent your team already trusts",

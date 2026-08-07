@@ -59,6 +59,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     typeof window !== "undefined" &&
     window.location.pathname === "/" &&
     new URLSearchParams(window.location.search).get("auth") !== "1";
+  const authRequested =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("auth") === "1";
 
   useEffect(() => {
     const syncStoredLanguage = () =>
@@ -112,7 +115,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (publicLanding) return <LandingPage />;
   if (!isSupabaseConfigured || localOperatorMode || explicitDemoMode)
     return children;
-  if (loading)
+  // The explicit auth route must show the sign-in form even if Supabase's
+  // session probe is slow or unavailable. The probe still runs in the
+  // background and will swap in the workspace when it finds a session.
+  if (loading && !authRequested)
     return (
       <AuthShell title={t("loadingTitle")} message={t("checkingSession")} />
     );
