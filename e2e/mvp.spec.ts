@@ -1,5 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("mend.interface-language", "en-US");
+  });
+});
+
 async function openCommandPalette(page: Page, projectName: string) {
   await page
     .getByRole("button", {
@@ -40,7 +46,11 @@ test("operator can open the shared and personal Kanban views", async ({
       "true",
     );
     await expect(
-      page.getByRole("button", { name: /Review onboarding checklist/ }).first(),
+      page
+        .getByRole("button", {
+          name: /Review onboarding checklist|Revisar lista de onboarding/,
+        })
+        .first(),
     ).toBeVisible();
     await expect(
       page.locator(".mobile-bottom-nav").getByRole("link", { name: "Kanban" }),
