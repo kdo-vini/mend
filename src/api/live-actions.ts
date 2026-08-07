@@ -4,6 +4,7 @@ import type { Database } from "../lib/database.types";
 import { supabase, type MendSupabaseClient } from "../lib/supabase";
 import type {
   CodingRun,
+  CodingAgentProvider,
   Conversation as UiConversation,
   Issue,
   IssueType,
@@ -16,6 +17,7 @@ import {
   toUiIssue,
   toUiKnowledge,
   toUiRun,
+  toUiBugCase,
   type WorkspaceData,
 } from "./live-mappers";
 import {
@@ -69,6 +71,11 @@ export interface LiveRepository {
   localPath: string;
   defaultBranch: string;
   allowedCommands: string[];
+  agentProvider: CodingAgentProvider;
+  executionPlane: "local_cli" | "github_actions";
+  githubOwner?: string;
+  githubRepo?: string;
+  githubInstallationId?: string;
 }
 
 function mapLatestAiDrafts(
@@ -197,6 +204,8 @@ export async function loadLiveWorkspace(
     knowledge,
     aiStates,
     aiDrafts,
+    bugCases,
+    bugCaseEvents,
   ] = await Promise.all([
     unwrap(db.from("contacts").select("*").eq("workspace_id", workspace.id)),
     unwrap(
@@ -261,6 +270,20 @@ export async function loadLiveWorkspace(
         .eq("workspace_id", workspace.id)
         .in("status", ["pending_review", "auto_eligible"])
         .order("created_at", { ascending: false }),
+    ),
+    unwrap(
+      db
+        .from("bug_cases")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .order("updated_at", { ascending: false }),
+    ),
+    unwrap(
+      db
+        .from("bug_case_events")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .order("created_at", { ascending: true }),
     ),
   ]);
   const aiDraftLinks = aiDrafts.length
@@ -345,13 +368,34 @@ export async function loadLiveWorkspace(
         },
       ),
     ),
-    runs: runs.map((run) =>
-      toUiRun(
-        run,
-        events,
-        issues.find((issue) => issue.id === run.issue_id)?.identifier,
-      ),
-    ),
+    runs: [
+      ...bugCases
+        .filter(
+          (bugCase) => !bugCase.investigation_run_id && !bugCase.fix_run_id,
+        )
+        .map((bugCase) =>
+          toUiBugCase(
+            bugCase,
+            bugCaseEvents,
+            issues.find((issue) => issue.id === bugCase.issue_id)?.identifier,
+          ),
+        ),
+      ...runs.map((run) => {
+        const bugCase = bugCases.find(
+          (item) =>
+            item.investigation_run_id === run.id ||
+            item.fix_run_id === run.id ||
+            item.issue_id === run.issue_id,
+        );
+        return toUiRun(
+          run,
+          events,
+          issues.find((issue) => issue.id === run.issue_id)?.identifier,
+          bugCase,
+          bugCaseEvents,
+        );
+      }),
+    ],
     knowledge: knowledge.map(toUiKnowledge),
   };
 }
@@ -1589,12 +1633,43 @@ export async function listLiveRepositories(
   return (result.data ?? []).map(repositoryToLive);
 }
 
+export interface LiveCodingAgentHealth {
+  provider: CodingAgentProvider;
+  available: boolean;
+  version?: string;
+  error?: string;
+  capabilities: {
+    structuredOutput: boolean;
+    promptViaStdin: boolean;
+    nativeSandbox: boolean;
+    readOnlyMode: boolean;
+    toolAllowlist: boolean;
+    ephemeralSession: boolean;
+  };
+}
+
+export async function listLiveCodingAgentHealth(
+  workspaceId: string,
+): Promise<LiveCodingAgentHealth[]> {
+  const result = await apiRequest<{ data: LiveCodingAgentHealth[] }>(
+    "/api/coding-agents/health",
+    {},
+    workspaceId,
+  );
+  return result.data ?? [];
+}
+
 export async function createLiveRepository(input: {
   workspaceId: string;
   name: string;
-  localPath: string;
+  localPath?: string;
   defaultBranch?: string;
   allowedCommands?: string[];
+  agentProvider?: CodingAgentProvider;
+  executionPlane?: "local_cli" | "github_actions";
+  githubOwner?: string;
+  githubRepo?: string;
+  githubInstallationId?: string;
 }): Promise<LiveRepository> {
   const result = await apiRequest<ApiRepository>(
     "/api/repositories",
@@ -1602,9 +1677,14 @@ export async function createLiveRepository(input: {
       method: "POST",
       body: JSON.stringify({
         name: input.name.trim(),
-        localPath: input.localPath.trim(),
+        localPath: input.localPath?.trim() ?? "",
         defaultBranch: input.defaultBranch?.trim() || "main",
         allowedCommands: input.allowedCommands,
+        agentProvider: input.agentProvider ?? "codex",
+        executionPlane: input.executionPlane ?? "local_cli",
+        githubOwner: input.githubOwner?.trim() || undefined,
+        githubRepo: input.githubRepo?.trim() || undefined,
+        githubInstallationId: input.githubInstallationId?.trim() || undefined,
       }),
     },
     input.workspaceId,
@@ -1612,11 +1692,29 @@ export async function createLiveRepository(input: {
   return repositoryToLive(result);
 }
 
+export async function startLiveGitHubSetup(input: {
+  workspaceId: string;
+  repositoryId: string;
+}): Promise<{ installationUrl: string }> {
+  return apiRequest<{ installationUrl: string }>(
+    `/api/repositories/${input.repositoryId}/github/setup`,
+    { method: "POST", body: JSON.stringify({}) },
+    input.workspaceId,
+  );
+}
+
 export async function updateLiveCodexRun(
   input: {
     workspaceId: string;
     runId: string;
-    action: "cancel" | "approve" | "reject" | "publish" | "deploy";
+    action:
+      | "cancel"
+      | "approve"
+      | "reject"
+      | "publish"
+      | "merge"
+      | "deploy"
+      | "health";
   },
   client: MendSupabaseClient | null = supabase,
 ) {
@@ -1626,7 +1724,12 @@ export async function updateLiveCodexRun(
       { method: "POST", body: JSON.stringify({}) },
       input.workspaceId,
     );
-  if (input.action === "publish" || input.action === "deploy")
+  if (
+    input.action === "publish" ||
+    input.action === "merge" ||
+    input.action === "deploy" ||
+    input.action === "health"
+  )
     throw new Error("Codex release actions require the Mend server runtime");
   const status =
     input.action === "cancel"
@@ -1668,6 +1771,16 @@ type ApiRepository = {
   default_branch?: string;
   allowedCommands?: string[];
   allowed_commands?: string[];
+  agentProvider?: CodingAgentProvider;
+  agent_provider?: CodingAgentProvider;
+  executionPlane?: "local_cli" | "github_actions";
+  execution_plane?: "local_cli" | "github_actions";
+  githubOwner?: string | null;
+  github_owner?: string | null;
+  githubRepo?: string | null;
+  github_repo?: string | null;
+  githubInstallationId?: string | null;
+  github_installation_id?: string | null;
 };
 
 function repositoryToLive(repository: ApiRepository): LiveRepository {
@@ -1679,6 +1792,16 @@ function repositoryToLive(repository: ApiRepository): LiveRepository {
       repository.defaultBranch ?? repository.default_branch ?? "main",
     allowedCommands:
       repository.allowedCommands ?? repository.allowed_commands ?? [],
+    agentProvider:
+      repository.agentProvider ?? repository.agent_provider ?? "codex",
+    executionPlane:
+      repository.executionPlane ?? repository.execution_plane ?? "local_cli",
+    githubOwner: repository.githubOwner ?? repository.github_owner ?? undefined,
+    githubRepo: repository.githubRepo ?? repository.github_repo ?? undefined,
+    githubInstallationId:
+      repository.githubInstallationId ??
+      repository.github_installation_id ??
+      undefined,
   };
 }
 

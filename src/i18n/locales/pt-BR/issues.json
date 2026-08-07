@@ -12,7 +12,7 @@
     "filterAssignee": "Filtrar issues por responsável",
     "filterSource": "Filtrar issues por origem",
     "filterLabel": "Filtrar issues por label",
-    "filterRuns": "Filtrar issues por execuções do Codex",
+    "filterRuns": "Filtrar issues por execuções de engenharia",
     "all": "Todos",
     "allStatuses": "Todos os status",
     "allAssignees": "Todos os responsáveis",

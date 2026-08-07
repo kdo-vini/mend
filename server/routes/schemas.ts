@@ -280,7 +280,6 @@ export const repositoryListQuerySchema = z
 export const repositoryPath = z
   .string()
   .trim()
-  .min(1)
   .max(500)
   .refine(
     (value) => !value.includes("\0"),
@@ -290,19 +289,61 @@ export const repositoryPath = z
     (value) => !/(^|[\\/])\.\.([\\/]|$)/.test(value),
     "Path traversal is not allowed",
   );
+const repositoryFields = {
+  name: z.string().trim().min(1).max(160),
+  localPath: repositoryPath,
+  defaultBranch: z.string().trim().min(1).max(160).default("main"),
+  allowedCommands: z
+    .array(z.enum(allowedCommands))
+    .min(1)
+    .max(allowedCommands.length)
+    .default([...allowedCommands]),
+  agentProvider: z
+    .enum(["codex", "claude", "gemini", "verboo", "custom"])
+    .default("codex"),
+  executionPlane: z.literal("local_cli").default("local_cli"),
+  githubOwner: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_.-]{1,100}$/)
+    .optional(),
+  githubRepo: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_.-]{1,100}$/)
+    .optional(),
+};
+function repositoryExecutionFields(
+  value: {
+    localPath?: string;
+    executionPlane?: "local_cli" | "github_actions";
+    githubOwner?: string;
+    githubRepo?: string;
+  },
+  context: z.RefinementCtx,
+) {
+  if (value.executionPlane === "local_cli" && !value.localPath?.trim())
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["localPath"],
+      message: "A local CLI repository requires localPath",
+    });
+  if (Boolean(value.githubOwner) !== Boolean(value.githubRepo))
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["githubRepo"],
+      message: "GitHub owner and repository must be configured together",
+    });
+}
 export const repositoryInputSchema = z
-  .object({
-    name: z.string().trim().min(1).max(160),
-    localPath: repositoryPath,
-    defaultBranch: z.string().trim().min(1).max(160).default("main"),
-    allowedCommands: z
-      .array(z.enum(allowedCommands))
-      .min(1)
-      .max(allowedCommands.length)
-      .default([...allowedCommands]),
-  })
-  .strict();
-export const repositoryPatchSchema = repositoryInputSchema.partial().strict();
+  .object(repositoryFields)
+  .strict()
+  .superRefine(repositoryExecutionFields);
+export const repositoryPatchSchema = z
+  .object(repositoryFields)
+  .partial()
+  .strict()
+  .superRefine(repositoryExecutionFields);
 
 export const codingRunListQuerySchema = z
   .object({
@@ -339,6 +380,16 @@ export const codingRunCreateSchema = z
 export const googleOAuthCallbackSchema = z
   .object({
     code: z.string().trim().min(1).max(4_000),
+    state: z.string().trim().min(1).max(4_000),
+  })
+  .strip();
+export const githubSetupCallbackSchema = z
+  .object({
+    installation_id: z
+      .string()
+      .trim()
+      .regex(/^\d{1,20}$/),
+    setup_action: z.enum(["install", "update"]),
     state: z.string().trim().min(1).max(4_000),
   })
   .strip();

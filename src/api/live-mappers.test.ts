@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { toUiConversation, toUiMessage, toUiRun } from "./live-mappers";
+import {
+  toUiBugCase,
+  toUiConversation,
+  toUiMessage,
+  toUiRun,
+} from "./live-mappers";
 import type {
+  BugCaseEventRecord,
+  BugCaseRecord,
   CodingRunRecord,
   ConversationRecord,
   MessageRecord,
@@ -251,7 +258,12 @@ describe("live Codex run mapper", () => {
         files: [{ relativePath: "src/fix.ts", status: "modified" }],
         patch: "diff --git a/src/fix.ts b/src/fix.ts",
         checks: [{ name: "test", exitCode: 0, output: "passed" }],
-        agent: { finalText: "Fixed safely." },
+        agent: {
+          finalText: "Fixed safely.",
+          report: {
+            summary: "The regression reproduces in the checkout path.",
+          },
+        },
       },
       started_at: "2026-08-03T20:00:00.000Z",
       finished_at: "2026-08-03T20:01:05.000Z",
@@ -262,11 +274,127 @@ describe("live Codex run mapper", () => {
 
     expect(toUiRun(record, [], "MEND-1")).toMatchObject({
       issueIdentifier: "MEND-1",
-      summary: "Fixed safely.",
+      summary: "The regression reproduces in the checkout path.",
       files: ["src/fix.ts"],
       diff: "diff --git a/src/fix.ts b/src/fix.ts",
       checks: [{ name: "test", exitCode: 0, output: "passed" }],
       duration: "01:05",
+    });
+  });
+
+  it("keeps a bug case visible before its first coding run", () => {
+    const record = {
+      id: "case-1",
+      workspace_id: "workspace-1",
+      issue_id: "issue-1",
+      conversation_id: "conversation-1",
+      signal_message_id: "message-1",
+      duplicate_of_issue_id: null,
+      fingerprint: "checkout-plan-change",
+      stage: "evidence",
+      status: "active",
+      suspicion_score: 0.82,
+      evidence_json: [
+        { kind: "trace", label: "Checkout error", detail: "POST /pay" },
+      ],
+      verdict: "pending",
+      decision: "pending",
+      investigation_run_id: null,
+      fix_run_id: null,
+      pr_url: null,
+      pr_number: null,
+      merge_sha: null,
+      deployment_url: null,
+      health_status: "pending",
+      customer_response_status: "pending",
+      last_error: null,
+      started_at: "2026-08-07T14:00:00.000Z",
+      completed_at: null,
+      created_at: "2026-08-07T14:00:00.000Z",
+      updated_at: "2026-08-07T14:01:00.000Z",
+    } satisfies BugCaseRecord;
+    const event = {
+      id: "case-event-1",
+      workspace_id: "workspace-1",
+      bug_case_id: "case-1",
+      stage: "evidence",
+      event_type: "evidence.collected",
+      message: "Trace attached",
+      metadata_json: {},
+      idempotency_key: "case-1:evidence",
+      created_at: "2026-08-07T14:01:00.000Z",
+    } satisfies BugCaseEventRecord;
+
+    expect(toUiBugCase(record, [event], "MEND-184")).toMatchObject({
+      id: "case:case-1",
+      issueIdentifier: "MEND-184",
+      caseOnly: true,
+      stage: "evidence",
+      suspicionScore: 0.82,
+      evidence: [{ kind: "trace", label: "Checkout error" }],
+      events: [{ label: "evidence.collected", detail: "Trace attached" }],
+    });
+  });
+
+  it("surfaces durable investigation proof stored on the case event", () => {
+    const record = {
+      id: "case-2",
+      workspace_id: "workspace-1",
+      issue_id: "issue-2",
+      conversation_id: null,
+      signal_message_id: null,
+      duplicate_of_issue_id: null,
+      fingerprint: "proof",
+      stage: "verdict",
+      status: "awaiting_human",
+      suspicion_score: 0.9,
+      evidence_json: [],
+      verdict: "confirmed",
+      decision: "notify",
+      investigation_run_id: "run-2",
+      fix_run_id: null,
+      pr_url: null,
+      pr_number: null,
+      merge_sha: null,
+      deployment_url: null,
+      health_status: "pending",
+      customer_response_status: "pending",
+      last_error: null,
+      started_at: "2026-08-07T14:00:00.000Z",
+      completed_at: null,
+      created_at: "2026-08-07T14:00:00.000Z",
+      updated_at: "2026-08-07T14:01:00.000Z",
+    } satisfies BugCaseRecord;
+    const event = {
+      id: "case-event-2",
+      workspace_id: "workspace-1",
+      bug_case_id: "case-2",
+      stage: "verdict",
+      event_type: "investigation.completed",
+      message: "Investigation finished",
+      metadata_json: {
+        summary: "The regression reproduces in checkout.",
+        evidence: [
+          {
+            kind: "test",
+            label: "Checkout regression",
+            detail: "Fails on coupon path",
+          },
+        ],
+      },
+      idempotency_key: "case-2:investigation",
+      created_at: "2026-08-07T14:01:00.000Z",
+    } satisfies BugCaseEventRecord;
+
+    expect(toUiBugCase(record, [event], "MEND-185")).toMatchObject({
+      summary: "The regression reproduces in checkout.",
+      evidence: [
+        {
+          kind: "test",
+          label: "Checkout regression",
+          detail: "Fails on coupon path",
+        },
+      ],
     });
   });
 });

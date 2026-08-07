@@ -22,7 +22,7 @@ describe("workspace AI policy", () => {
     expect(policy.routes.social).toBe("safe_auto_reply");
     expect(policy.allowedActions).toContain("investigate");
     expect(policy.humanApprovalActions).toEqual(
-      expect.arrayContaining(["implement_fix", "publish", "deploy", "delete"]),
+      expect.arrayContaining(["publish", "deploy", "delete"]),
     );
   });
 

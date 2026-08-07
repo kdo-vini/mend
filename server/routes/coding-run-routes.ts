@@ -148,6 +148,38 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
       );
     }),
   );
+  router.post(
+    "/api/coding-runs/:id/merge",
+    asyncRoute(async (request, response) => {
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.codingRuns.merge(
+            await scoped(request, response, "agent"),
+            pathId(request),
+          ),
+          "coding_run",
+        ),
+      );
+    }),
+  );
+  router.post(
+    "/api/coding-runs/:id/health",
+    asyncRoute(async (request, response) => {
+      send(
+        response,
+        200,
+        requireFound(
+          await dependencies.codingRuns.health(
+            await scoped(request, response, "agent"),
+            pathId(request),
+          ),
+          "coding_run",
+        ),
+      );
+    }),
+  );
   router.get(
     "/api/coding-runs/:id/patch",
     asyncRoute(async (request, response) => {

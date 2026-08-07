@@ -12,6 +12,8 @@ export type MessageRecord = Tables["messages"]["Row"];
 export type IssueRecord = Tables["issues"]["Row"];
 export type CodingRunRecord = Tables["coding_runs"]["Row"];
 export type CodingRunEventRecord = Tables["coding_run_events"]["Row"];
+export type BugCaseRecord = Tables["bug_cases"]["Row"];
+export type BugCaseEventRecord = Tables["bug_case_events"]["Row"];
 export type KnowledgeArticleRecord = Tables["knowledge_articles"]["Row"];
 
 export const workspaceRealtimeTables = [
@@ -24,6 +26,8 @@ export const workspaceRealtimeTables = [
   "ai_drafts",
   "issue_comments",
   "coding_run_events",
+  "bug_cases",
+  "bug_case_events",
   "knowledge_articles",
   "repositories",
   "evidence",
@@ -158,6 +162,32 @@ export function listCodingRunEvents(
       .select("*")
       .eq("workspace_id", workspaceId)
       .eq("coding_run_id", codingRunId)
+      .order("created_at", { ascending: true }),
+  );
+}
+
+export function listBugCases(
+  client: MendSupabaseClient,
+  workspaceId: string,
+): Promise<BugCaseRecord[]> {
+  return unwrap(
+    client
+      .from("bug_cases")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("updated_at", { ascending: false }),
+  );
+}
+
+export function listBugCaseEvents(
+  client: MendSupabaseClient,
+  workspaceId: string,
+): Promise<BugCaseEventRecord[]> {
+  return unwrap(
+    client
+      .from("bug_case_events")
+      .select("*")
+      .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: true }),
   );
 }

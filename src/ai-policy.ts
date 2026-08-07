@@ -86,7 +86,6 @@ export const DEFAULT_AI_ROUTE_MAP: AiRouteMap = {
 };
 
 const mandatoryHumanApprovalActions: AiPolicyAction[] = [
-  "implement_fix",
   "publish",
   "deploy",
   "delete",
@@ -102,7 +101,7 @@ export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
     "investigate",
     "propose_fix",
   ],
-  humanApprovalActions: ["implement_fix", "publish", "deploy", "delete"],
+  humanApprovalActions: ["publish", "deploy", "delete"],
   draftEnabled: true,
   safeAutoEnabled: true,
   safeAutoMinConfidence: 0.85,

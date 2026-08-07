@@ -12,7 +12,7 @@
     "filterAssignee": "Filter issues by assignee",
     "filterSource": "Filter issues by source",
     "filterLabel": "Filter issues by label",
-    "filterRuns": "Filter issues by Codex runs",
+    "filterRuns": "Filter issues by engineering runs",
     "all": "All",
     "allStatuses": "All statuses",
     "allAssignees": "All assignees",

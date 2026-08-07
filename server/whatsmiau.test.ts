@@ -398,4 +398,32 @@ describe("Whatsmiau normalization", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("forwards a stable idempotency key for retry-safe text delivery", async () => {
+    const originalFetch = globalThis.fetch;
+    let headers: Headers | undefined;
+    try {
+      globalThis.fetch = async (_input, init) => {
+        headers = new Headers(init?.headers);
+        return new Response(JSON.stringify({ key: { id: "wamid-out" } }), {
+          status: 200,
+        });
+      };
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await provider.sendText({
+        instanceName: "mend-test",
+        number: "5511999999999",
+        text: "The fix is live.",
+        idempotencyKey: "mend:customer-response:issue-1",
+      });
+      expect(headers?.get("idempotency-key")).toBe(
+        "mend:customer-response:issue-1",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

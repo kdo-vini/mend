@@ -127,6 +127,194 @@ export type Database = {
           },
         ]
       }
+      bug_case_events: {
+        Row: {
+          bug_case_id: string
+          created_at: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          message: string
+          metadata_json: Json
+          stage: string
+          workspace_id: string
+        }
+        Insert: {
+          bug_case_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          message: string
+          metadata_json?: Json
+          stage: string
+          workspace_id: string
+        }
+        Update: {
+          bug_case_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          message?: string
+          metadata_json?: Json
+          stage?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bug_case_events_bug_case_id_fkey"
+            columns: ["bug_case_id"]
+            isOneToOne: false
+            referencedRelation: "bug_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_case_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bug_cases: {
+        Row: {
+          completed_at: string | null
+          conversation_id: string | null
+          created_at: string
+          customer_response_status: string
+          decision: string
+          deployment_url: string | null
+          duplicate_of_issue_id: string | null
+          evidence_json: Json
+          fingerprint: string | null
+          fix_run_id: string | null
+          health_status: string
+          id: string
+          investigation_run_id: string | null
+          issue_id: string
+          last_error: string | null
+          merge_sha: string | null
+          pr_number: number | null
+          pr_url: string | null
+          signal_message_id: string | null
+          stage: string
+          started_at: string
+          status: string
+          suspicion_score: number | null
+          updated_at: string
+          verdict: string
+          workspace_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_response_status?: string
+          decision?: string
+          deployment_url?: string | null
+          duplicate_of_issue_id?: string | null
+          evidence_json?: Json
+          fingerprint?: string | null
+          fix_run_id?: string | null
+          health_status?: string
+          id?: string
+          investigation_run_id?: string | null
+          issue_id: string
+          last_error?: string | null
+          merge_sha?: string | null
+          pr_number?: number | null
+          pr_url?: string | null
+          signal_message_id?: string | null
+          stage?: string
+          started_at?: string
+          status?: string
+          suspicion_score?: number | null
+          updated_at?: string
+          verdict?: string
+          workspace_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_response_status?: string
+          decision?: string
+          deployment_url?: string | null
+          duplicate_of_issue_id?: string | null
+          evidence_json?: Json
+          fingerprint?: string | null
+          fix_run_id?: string | null
+          health_status?: string
+          id?: string
+          investigation_run_id?: string | null
+          issue_id?: string
+          last_error?: string | null
+          merge_sha?: string | null
+          pr_number?: number | null
+          pr_url?: string | null
+          signal_message_id?: string | null
+          stage?: string
+          started_at?: string
+          status?: string
+          suspicion_score?: number | null
+          updated_at?: string
+          verdict?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bug_cases_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_duplicate_of_issue_id_fkey"
+            columns: ["duplicate_of_issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_fix_run_id_fkey"
+            columns: ["fix_run_id"]
+            isOneToOne: false
+            referencedRelation: "coding_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_investigation_run_id_fkey"
+            columns: ["investigation_run_id"]
+            isOneToOne: false
+            referencedRelation: "coding_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: true
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_signal_message_id_fkey"
+            columns: ["signal_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channel_connections: {
         Row: {
           connected_at: string | null
@@ -746,6 +934,58 @@ export type Database = {
             columns: ["label_id"]
             isOneToOne: false
             referencedRelation: "labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      github_setup_states: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          repository_id: string | null
+          state_hash: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          repository_id?: string | null
+          state_hash: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          repository_id?: string | null
+          state_hash?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "github_setup_states_repository_id_fkey"
+            columns: ["repository_id"]
+            isOneToOne: false
+            referencedRelation: "repositories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "github_setup_states_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "github_setup_states_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -1386,9 +1626,14 @@ export type Database = {
       }
       repositories: {
         Row: {
+          agent_provider: string
           allowed_commands: Json
           created_at: string
           default_branch: string
+          execution_plane: string
+          github_installation_id: string | null
+          github_owner: string | null
+          github_repo: string | null
           id: string
           local_path: string
           name: string
@@ -1396,9 +1641,14 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          agent_provider?: string
           allowed_commands?: Json
           created_at?: string
           default_branch?: string
+          execution_plane?: string
+          github_installation_id?: string | null
+          github_owner?: string | null
+          github_repo?: string | null
           id?: string
           local_path: string
           name: string
@@ -1406,9 +1656,14 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          agent_provider?: string
           allowed_commands?: Json
           created_at?: string
           default_branch?: string
+          execution_plane?: string
+          github_installation_id?: string | null
+          github_owner?: string | null
+          github_repo?: string | null
           id?: string
           local_path?: string
           name?: string
@@ -1737,6 +1992,57 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_bug_case: {
+        Args: {
+          p_bug_case_id: string
+          p_customer_response_status?: string
+          p_decision?: string
+          p_deployment_url?: string
+          p_event_type: string
+          p_fix_run_id?: string
+          p_health_status?: string
+          p_idempotency_key: string
+          p_investigation_run_id?: string
+          p_last_error?: string
+          p_merge_sha?: string
+          p_message: string
+          p_metadata?: Json
+          p_pr_number?: number
+          p_pr_url?: string
+          p_stage: string
+          p_status?: string
+          p_verdict?: string
+          p_workspace_id: string
+        }
+        Returns: {
+          completed_at: string | null
+          conversation_id: string | null
+          created_at: string
+          customer_response_status: string
+          decision: string
+          deployment_url: string | null
+          duplicate_of_issue_id: string | null
+          evidence_json: Json
+          fingerprint: string | null
+          fix_run_id: string | null
+          health_status: string
+          id: string
+          investigation_run_id: string | null
+          issue_id: string
+          last_error: string | null
+          merge_sha: string | null
+          pr_number: number | null
+          pr_url: string | null
+          signal_message_id: string | null
+          stage: string
+          started_at: string
+          status: string
+          suspicion_score: number | null
+          updated_at: string
+          verdict: string
+          workspace_id: string
+        }
+      }
       claim_ai_reply_send: {
         Args: {
           p_conversation_id: string

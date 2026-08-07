@@ -258,6 +258,12 @@ function createFakeDependencies(
       update: vi.fn(async (_context, id, input) => ({ id, ...input })),
       remove: vi.fn(async () => true),
     },
+    githubConnections: {
+      startSetup: vi.fn(async () => ({
+        installationUrl: "https://github.com/apps/mend/installations/new",
+      })),
+      completeSetup: vi.fn(async () => ({ id: repositoryId })),
+    },
     codingRuns: {
       list: vi.fn(async () => [{ id: runId, status: "queued" }]),
       create: vi.fn(async (_context, identifier, input) => ({
@@ -270,6 +276,10 @@ function createFakeDependencies(
       ),
       cancel: vi.fn(async (_context, id) => ({ id, status: "canceled" })),
       approve: vi.fn(async (_context, id) => ({ id, status: "approved" })),
+      publish: vi.fn(async (_context, id) => ({ id, status: "approved" })),
+      merge: vi.fn(async (_context, id) => ({ id, status: "approved" })),
+      deploy: vi.fn(async (_context, id) => ({ id, status: "approved" })),
+      health: vi.fn(async (_context, id) => ({ id, status: "approved" })),
       reject: vi.fn(async (_context, id) => ({ id, status: "rejected" })),
       patch: vi.fn(async (_context, id) =>
         id === runId ? { patch: "diff --git a/a b/a" } : null,
@@ -825,6 +835,15 @@ describe("Mend API router", () => {
           .set(headers)
       ).status,
     ).toBe(200);
+    for (const action of ["publish", "merge", "deploy", "health"] as const) {
+      expect(
+        (
+          await request(app)
+            .post(`/api/coding-runs/${runId}/${action}`)
+            .set(headers)
+        ).status,
+      ).toBe(200);
+    }
     expect(
       (await request(app).post(`/api/coding-runs/${runId}/reject`).set(headers))
         .status,
@@ -859,6 +878,30 @@ describe("Mend API router", () => {
       .set(headers)
       .send({ mode: "investigate", shell: "rm -rf /" });
     expect(run.status).toBe(400);
+  });
+
+  it("starts GitHub App setup with workspace auth and accepts the signed callback without a bearer token", async () => {
+    const dependencies = createFakeDependencies();
+    const app = makeApp(dependencies);
+    const started = await request(app)
+      .post(`/api/repositories/${repositoryId}/github/setup`)
+      .set(scoped(true));
+    expect(started.status).toBe(200);
+    expect(started.body.installationUrl).toContain("github.com/apps/mend");
+
+    const callbackDependencies = createFakeDependencies({ user: null });
+    const callback = await request(makeApp(callbackDependencies))
+      .get("/api/github/setup/callback")
+      .query({
+        installation_id: "42",
+        setup_action: "install",
+        state: "signed",
+      });
+    expect(callback.status).toBe(303);
+    expect(callback.headers.location).toContain("github=connected");
+    expect(
+      callbackDependencies.githubConnections.completeSetup,
+    ).toHaveBeenCalledOnce();
   });
 
   it("scopes personal planning routes and validates move statuses", async () => {

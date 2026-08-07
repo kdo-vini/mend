@@ -20,6 +20,12 @@ const aiTakeoverMigrationPath = fileURLToPath(
     import.meta.url,
   ),
 );
+const codingRunDedupeMigrationPath = fileURLToPath(
+  new URL(
+    "../supabase/migrations/20260807170000_dedupe_active_coding_runs.sql",
+    import.meta.url,
+  ),
+);
 
 describe("Supabase security migration contract", () => {
   it("keeps privileged implementations private and public RPCs invoker-only", async () => {
@@ -103,5 +109,12 @@ describe("Supabase security migration contract", () => {
     expect(sql).toContain("status in ('pending_review', 'auto_eligible')");
     expect(sql).toContain("latest_intent = null");
     expect(sql).toContain("current_summary = null");
+  });
+
+  it("prevents two workers from running the same coding mode concurrently", async () => {
+    const sql = await readFile(codingRunDedupeMigrationPath, "utf8");
+    expect(sql).toContain("coding_runs_active_issue_mode_idx");
+    expect(sql).toContain("where status in ('queued', 'running')");
+    expect(sql).toContain("duplicate_active_coding_run_reconciled");
   });
 });

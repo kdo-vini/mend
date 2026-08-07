@@ -670,6 +670,39 @@
   gap: 14px;
   margin-bottom: 16px;
 }
+
+.settings-agent-health {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-agent-health > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.settings-agent-health .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.settings-agent-health .status-dot.is-online {
+  background: var(--success);
+}
+
+.settings-agent-health .status-dot.is-offline {
+  background: var(--danger);
+}
 .settings-form-grid label,
 .modal label {
   display: flex;
@@ -677,6 +710,11 @@
   gap: 6px;
   color: var(--muted);
   font-size: 10px;
+}
+.settings-field-help {
+  color: var(--muted-2);
+  font-size: 9px;
+  line-height: 1.45;
 }
 .settings-form-grid input,
 .settings-form-grid select,

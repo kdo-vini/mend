@@ -4,6 +4,7 @@ import {
   Bot,
   ChevronRight,
   GitBranch,
+  Github,
   Info,
   Link2,
   MessageCircle,
@@ -16,7 +17,7 @@ import {
   Trash2,
   UsersRound,
 } from "lucide-react";
-import type { AiMode } from "../../../types";
+import type { AiMode, CodingAgentProvider } from "../../../types";
 import { currentInterfaceLanguage } from "../../../i18n/preferences";
 import type { GoogleConnection, McpConnection, WhatsAppInstance } from "../api";
 import {
@@ -32,8 +33,10 @@ import {
   loadLiveChannelFlow,
   listLiveChannels,
   listLiveRepositories,
+  listLiveCodingAgentHealth,
   listLiveGoogleConnections,
   saveLiveGoogleCalendarSelection,
+  startLiveGitHubSetup,
   startLiveGoogleOAuth,
   disconnectLiveGoogleConnection,
   createLiveMcpConnection,
@@ -102,7 +105,7 @@ const aiPolicyActionLabels: Record<AiPolicyAction, string> = {
   respond: "Respond to customers",
   triage: "Triage conversations",
   create_issue: "Create issues",
-  investigate: "Investigate with Codex",
+  investigate: "Investigate with a coding agent",
   propose_fix: "Propose code fixes",
   implement_fix: "Implement code fixes",
   publish: "Publish changes",
@@ -118,7 +121,7 @@ const aiPolicyChannelLabels: Record<AiPolicyChannel, string> = {
 const aiPolicyIntegrationLabels: Record<AiPolicyIntegration, string> = {
   knowledge: "Published knowledge",
   google_calendar: "Google Calendar",
-  codex: "Codex",
+  codex: "Coding agent CLI",
   mcp: "MCP plugins",
 };
 
@@ -181,11 +184,28 @@ export function SettingsPage({
       name: string;
       localPath: string;
       defaultBranch: string;
+      agentProvider: CodingAgentProvider;
+      executionPlane: "local_cli" | "github_actions";
+      githubOwner?: string;
+      githubRepo?: string;
+      githubInstallationId?: string;
     }>
   >([]);
+  const [codingAgentHealth, setCodingAgentHealth] = useState<
+    Awaited<ReturnType<typeof listLiveCodingAgentHealth>>
+  >([]);
+  const [repositoriesLoading, setRepositoriesLoading] = useState(false);
+  const [repositoriesError, setRepositoriesError] = useState<string | null>(
+    null,
+  );
   const [repositoryName, setRepositoryName] = useState("");
   const [repositoryPath, setRepositoryPath] = useState("");
   const [repositoryBranch, setRepositoryBranch] = useState("main");
+  const [repositoryAgent, setRepositoryAgent] =
+    useState<CodingAgentProvider>("codex");
+  const repositoryPlane = "local_cli" as const;
+  const [githubOwner, setGithubOwner] = useState("");
+  const [githubRepo, setGithubRepo] = useState("");
   const [flow, setFlow] = useState<SupportFlow | null>(null);
   const [flowNodeId, setFlowNodeId] = useState<string>();
   const [flowSaving, setFlowSaving] = useState(false);
@@ -363,25 +383,32 @@ export function SettingsPage({
     void loadSettingsData();
   }, [loadSettingsData]);
 
+  const loadRepositories = useCallback(async () => {
+    if (!workspaceId) return;
+    setRepositoriesLoading(true);
+    setRepositoriesError(null);
+    try {
+      const [rows, health] = await Promise.all([
+        listLiveRepositories(workspaceId),
+        listLiveCodingAgentHealth(workspaceId),
+      ]);
+      setRepositories(rows);
+      setCodingAgentHealth(health);
+    } catch (reason) {
+      setRepositoriesError(
+        reason instanceof Error
+          ? reason.message
+          : "Repositories could not be loaded.",
+      );
+    } finally {
+      setRepositoriesLoading(false);
+    }
+  }, [workspaceId]);
+
   useEffect(() => {
     if (!workspaceId || activeTab !== "repositories") return;
-    let active = true;
-    void listLiveRepositories(workspaceId)
-      .then((rows) => {
-        if (active) setRepositories(rows);
-      })
-      .catch((reason) => {
-        if (active)
-          onToast(
-            reason instanceof Error
-              ? reason.message
-              : "Repositories could not be loaded.",
-          );
-      });
-    return () => {
-      active = false;
-    };
-  }, [activeTab, onToast, workspaceId]);
+    void loadRepositories();
+  }, [activeTab, loadRepositories, workspaceId]);
 
   const connect = async () => {
     if (!selected) return;
@@ -490,7 +517,12 @@ export function SettingsPage({
   };
 
   const createRepository = async () => {
-    if (!workspaceId || !repositoryName.trim() || !repositoryPath.trim())
+    const localReady = repositoryPath.trim();
+    const githubValues = [githubOwner, githubRepo].filter((value) =>
+      value.trim(),
+    );
+    const githubReady = githubValues.length === 0 || githubValues.length === 2;
+    if (!workspaceId || !repositoryName.trim() || !localReady || !githubReady)
       return;
     setChannelAction(true);
     try {
@@ -499,10 +531,16 @@ export function SettingsPage({
         name: repositoryName,
         localPath: repositoryPath,
         defaultBranch: repositoryBranch,
+        agentProvider: repositoryAgent,
+        executionPlane: repositoryPlane,
+        githubOwner,
+        githubRepo,
       });
       setRepositories((current) => [repository, ...current]);
       setRepositoryName("");
       setRepositoryPath("");
+      setGithubOwner("");
+      setGithubRepo("");
       onToast("Repository configured");
     } catch (reason) {
       onToast(
@@ -511,6 +549,25 @@ export function SettingsPage({
           : "Repository could not be configured.",
       );
     } finally {
+      setChannelAction(false);
+    }
+  };
+
+  const connectRepositoryGitHub = async (repositoryId: string) => {
+    if (!workspaceId) return;
+    setChannelAction(true);
+    try {
+      const { installationUrl } = await startLiveGitHubSetup({
+        workspaceId,
+        repositoryId,
+      });
+      window.location.assign(installationUrl);
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "GitHub App setup could not start.",
+      );
       setChannelAction(false);
     }
   };
@@ -581,7 +638,11 @@ export function SettingsPage({
   };
 
   const togglePolicyValue = (
-    field: "allowedChannels" | "allowedIntegrations" | "allowedActions",
+    field:
+      | "allowedChannels"
+      | "allowedIntegrations"
+      | "allowedActions"
+      | "humanApprovalActions",
     value: AiPolicyChannel | AiPolicyIntegration | AiPolicyAction,
     checked: boolean,
   ) => {
@@ -1730,7 +1791,7 @@ export function SettingsPage({
                             )
                           }
                         />
-                        Start Codex automatically for confirmed bugs
+                        Let the selected coding agent implement confirmed bugs
                       </label>
                       <label>
                         <input
@@ -1812,8 +1873,10 @@ export function SettingsPage({
                         <h3>Workspace AI autonomy</h3>
                         <p>
                           Each workspace chooses the channels, integrations and
-                          capabilities available to its AI. Sensitive actions
-                          always remain behind human approval.
+                          capabilities available to its AI. Publication,
+                          deployment and deletion always remain behind human
+                          approval; implementation can be automated only when
+                          explicitly allowed below.
                         </p>
                       </div>
                     </div>
@@ -1884,9 +1947,27 @@ export function SettingsPage({
                       </div>
                       <div>
                         <strong>Human approval required</strong>
-                        {aiPolicy.humanApprovalActions.map((action) => (
+                        {aiPolicyActionValues.map((action) => (
                           <label key={action}>
-                            <input type="checkbox" checked disabled readOnly />
+                            <input
+                              type="checkbox"
+                              checked={aiPolicy.humanApprovalActions.includes(
+                                action,
+                              )}
+                              disabled={
+                                aiPolicySaving ||
+                                action === "publish" ||
+                                action === "deploy" ||
+                                action === "delete"
+                              }
+                              onChange={(event) =>
+                                togglePolicyValue(
+                                  "humanApprovalActions",
+                                  action,
+                                  event.target.checked,
+                                )
+                              }
+                            />
                             {aiPolicyActionLabels[action]}
                           </label>
                         ))}
@@ -2317,26 +2398,97 @@ export function SettingsPage({
                   <div>
                     <h2>Repositories</h2>
                     <p>
-                      Register a local repository before starting a controlled
-                      Codex run.
+                      Choose a CLI agent for isolated execution. Optionally use
+                      a GitHub App to publish reviewed pull requests.
                     </p>
                   </div>
+                  <button
+                    className="button button-ghost"
+                    type="button"
+                    disabled={repositoriesLoading || !workspaceId}
+                    onClick={() => void loadRepositories()}
+                  >
+                    <RefreshCw size={14} />
+                    {repositoriesLoading ? "Refreshing..." : "Refresh"}
+                  </button>
                 </div>
-                {repositories.map((repository) => (
-                  <div className="policy-row" key={repository.id}>
-                    <div>
-                      <strong>{repository.name}</strong>
-                      <p>
-                        {repository.localPath} · {repository.defaultBranch}
-                      </p>
-                    </div>
-                    <GitBranch size={15} />
+                {repositoriesLoading ? (
+                  <LoadingState label="Loading repositories and CLI health..." />
+                ) : repositoriesError ? (
+                  <div className="inline-empty" role="alert">
+                    <Info size={16} />
+                    <span>{repositoriesError}</span>
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => void loadRepositories()}
+                    >
+                      Retry
+                    </button>
                   </div>
-                ))}
-                {!repositories.length && (
-                  <div className="inline-empty">
-                    <GitBranch size={16} />
-                    <span>No repositories configured for this workspace.</span>
+                ) : (
+                  <>
+                    {repositories.map((repository) => (
+                      <div className="policy-row" key={repository.id}>
+                        <div>
+                          <strong>{repository.name}</strong>
+                          <p>
+                            {repository.agentProvider} CLI ·{" "}
+                            {repository.executionPlane === "github_actions"
+                              ? "GitHub Actions"
+                              : "Local runner"}{" "}
+                            · {repository.defaultBranch}
+                          </p>
+                          {repository.githubOwner && repository.githubRepo && (
+                            <p>
+                              {repository.githubOwner}/{repository.githubRepo}
+                              {repository.githubInstallationId
+                                ? ` · installation ${repository.githubInstallationId}`
+                                : " · GitHub App not installed"}
+                            </p>
+                          )}
+                        </div>
+                        {repository.githubInstallationId ? (
+                          <span className="connection-pill">
+                            <Github size={13} /> GitHub connected
+                          </span>
+                        ) : repository.githubOwner && repository.githubRepo ? (
+                          <button
+                            className="button button-secondary"
+                            type="button"
+                            disabled={channelAction}
+                            onClick={() =>
+                              void connectRepositoryGitHub(repository.id)
+                            }
+                          >
+                            <Github size={13} /> Connect GitHub App
+                          </button>
+                        ) : (
+                          <GitBranch size={15} />
+                        )}
+                      </div>
+                    ))}
+                    {!repositories.length && (
+                      <div className="inline-empty">
+                        <GitBranch size={16} />
+                        <span>
+                          No repositories configured for this workspace.
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+                {codingAgentHealth.length > 0 && (
+                  <div className="settings-agent-health" aria-live="polite">
+                    {codingAgentHealth.map((agent) => (
+                      <span key={agent.provider}>
+                        <span
+                          className={`status-dot ${agent.available ? "is-online" : "is-offline"}`}
+                        />
+                        {agent.provider} CLI ·{" "}
+                        {agent.available ? "installed" : "unavailable"}
+                      </span>
+                    ))}
                   </div>
                 )}
                 <div className="settings-form-grid">
@@ -2351,14 +2503,31 @@ export function SettingsPage({
                     />
                   </label>
                   <label>
-                    Local path
-                    <input
-                      value={repositoryPath}
-                      onChange={(event) =>
-                        setRepositoryPath(event.target.value)
+                    Coding agent
+                    <Select
+                      value={repositoryAgent}
+                      options={[
+                        { value: "codex", label: "Codex CLI" },
+                        { value: "claude", label: "Claude Code" },
+                        { value: "gemini", label: "Gemini CLI" },
+                        { value: "verboo", label: "Verboo CLI" },
+                        { value: "custom", label: "Custom CLI adapter" },
+                      ]}
+                      onChange={(value) =>
+                        setRepositoryAgent(value as CodingAgentProvider)
                       }
-                      placeholder="C:\workspace\support-app"
                     />
+                  </label>
+                  <label>
+                    Execution plane
+                    <input
+                      value="Isolated CLI + GitHub control plane"
+                      disabled
+                    />
+                    <small className="settings-field-help">
+                      The CLI investigates in a disposable workspace; GitHub
+                      owns branches, pull requests, checks, and release gates.
+                    </small>
                   </label>
                   <label>
                     Default branch
@@ -2370,6 +2539,34 @@ export function SettingsPage({
                       placeholder="main"
                     />
                   </label>
+                  <label>
+                    Local path
+                    <input
+                      value={repositoryPath}
+                      onChange={(event) =>
+                        setRepositoryPath(event.target.value)
+                      }
+                      placeholder="C:\workspace\support-app"
+                    />
+                  </label>
+                  <>
+                    <label>
+                      GitHub owner
+                      <input
+                        value={githubOwner}
+                        onChange={(event) => setGithubOwner(event.target.value)}
+                        placeholder="your-org"
+                      />
+                    </label>
+                    <label>
+                      GitHub repository
+                      <input
+                        value={githubRepo}
+                        onChange={(event) => setGithubRepo(event.target.value)}
+                        placeholder="support-app"
+                      />
+                    </label>
+                  </>
                 </div>
                 <button
                   className="button button-primary"
@@ -2378,7 +2575,11 @@ export function SettingsPage({
                     channelAction ||
                     !workspaceId ||
                     !repositoryName.trim() ||
-                    !repositoryPath.trim()
+                    !repositoryPath.trim() ||
+                    ([githubOwner, githubRepo].filter((value) => value.trim())
+                      .length !== 0 &&
+                      [githubOwner, githubRepo].filter((value) => value.trim())
+                        .length !== 2)
                   }
                   onClick={() => void createRepository()}
                 >

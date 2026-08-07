@@ -30,6 +30,8 @@ export interface SendTextInput {
   number: string;
   text: string;
   delay?: number;
+  /** Stable key for providers that support retry-safe outbound delivery. */
+  idempotencyKey?: string;
 }
 export interface SendMediaInput {
   instanceName: string;
@@ -490,6 +492,9 @@ export class WhatsmiauMessagingProvider {
       `/message/sendText/${encodeURIComponent(input.instanceName)}`,
       {
         method: "POST",
+        ...(input.idempotencyKey
+          ? { headers: { "idempotency-key": input.idempotencyKey } }
+          : {}),
         body: JSON.stringify({
           number: normalizePhoneNumber(input.number),
           text: input.text,

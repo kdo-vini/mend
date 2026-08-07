@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { InMemoryJobStore, type JobRecord } from "./jobs.js";
 import {
   LiveWorker,
+  repositorySafeTools,
+  SupabaseCodexStarter,
   SupabaseLiveWorkerAutomation,
   type LiveChannelBinding,
   type LiveWorkerAutomation,
@@ -182,6 +184,8 @@ class FakeSupabaseHandoff {
   state: Record<string, unknown> | null = null;
   issue: Record<string, unknown> | null = null;
   policy: Record<string, unknown> | null = null;
+  bugCase: Record<string, unknown> | null = null;
+  bugCaseEvents: Record<string, unknown>[] = [];
   notifications: Record<string, unknown>[] = [];
   messages: Record<string, unknown>[] = [];
   draftId = "draft-1";
@@ -205,11 +209,22 @@ class FakeSupabaseHandoff {
         if (table === "ai_draft_knowledge")
           return { data: { draft_id: this.draftId }, error: null };
         if (table === "issues") return { data: this.issue, error: null };
+        if (table === "bug_cases") return { data: this.bugCase, error: null };
         return { data: null, error: null };
       },
       insert: (values: Record<string, unknown>) => {
         if (table === "issues")
           this.issue = { id: "issue-1", identifier: values.identifier };
+        if (table === "bug_cases")
+          this.bugCase = {
+            id: "bug-case-1",
+            issue_id: values.issue_id,
+            workspace_id: values.workspace_id,
+            stage: values.stage,
+            duplicate_of_issue_id: null,
+            ...values,
+          };
+        if (table === "bug_case_events") this.bugCaseEvents.push(values);
         if (table === "notifications") this.notifications.push(values);
         return builder;
       },
@@ -231,16 +246,34 @@ class FakeSupabaseHandoff {
           }),
         ),
       single: async () => ({
-        data: this.issue ?? { id: "issue-1", identifier: "TEC-1" },
+        data:
+          table === "bug_cases"
+            ? this.bugCase
+            : (this.issue ?? { id: "issue-1", identifier: "TEC-1" }),
         error: null,
       }),
     };
     return builder;
   }
 
-  rpc(name: string) {
+  rpc(name: string, args?: Record<string, unknown>) {
     if (name === "claim_issue_number")
       return Promise.resolve({ data: "TEC-1", error: null });
+    if (name === "advance_bug_case") {
+      this.bugCase = {
+        ...(this.bugCase ?? {}),
+        stage: args?.p_stage,
+        status: args?.p_status ?? this.bugCase?.status ?? "active",
+        verdict: args?.p_verdict ?? this.bugCase?.verdict ?? "pending",
+        decision: args?.p_decision ?? this.bugCase?.decision ?? "pending",
+        investigation_run_id:
+          args?.p_investigation_run_id ??
+          this.bugCase?.investigation_run_id ??
+          null,
+        fix_run_id: args?.p_fix_run_id ?? this.bugCase?.fix_run_id ?? null,
+      };
+      return Promise.resolve({ data: this.bugCase, error: null });
+    }
     return Promise.resolve({ data: { inserted: true }, error: null });
   }
 }
@@ -259,6 +292,90 @@ async function enqueue(
 }
 
 describe("live Whatsmiau worker", () => {
+  it("deduplicates coding runs by mode and recovers a completed run", async () => {
+    const filters: Array<[string, unknown]> = [];
+    const completedRun = {
+      id: "run-fix-existing",
+      workspace_id: "workspace-1",
+      issue_id: "issue-1",
+      repository_id: "repo-1",
+      mode: "implement_fix",
+      status: "completed",
+      progress: 100,
+      branch_name: "ops/tec-1-fix",
+      commit_sha: null,
+      result_json: { agent: { report: { verdict: "confirmed" } } },
+      started_at: "2026-08-07T10:00:00.000Z",
+      finished_at: "2026-08-07T10:01:00.000Z",
+      created_by_user_id: null,
+      created_at: "2026-08-07T10:00:00.000Z",
+      updated_at: "2026-08-07T10:01:00.000Z",
+    };
+    const client = {
+      from: vi.fn(() => {
+        let selected = "";
+        const builder = {
+          select(columns: string) {
+            selected = columns;
+            return builder;
+          },
+          eq(column: string, value: unknown) {
+            filters.push([column, value]);
+            return builder;
+          },
+          in() {
+            return builder;
+          },
+          order() {
+            return builder;
+          },
+          limit() {
+            return builder;
+          },
+          async maybeSingle() {
+            return {
+              data:
+                selected === "*"
+                  ? completedRun
+                  : { id: completedRun.id, status: completedRun.status },
+              error: null,
+            };
+          },
+        };
+        return builder;
+      }),
+    };
+    const starter = new SupabaseCodexStarter(client as never);
+
+    const recovered = await starter.start({
+      workspaceId: "workspace-1",
+      bugCaseId: "bug-case-1",
+      issueId: "issue-1",
+      issueIdentifier: "TEC-1",
+      issueTitle: "Checkout fails",
+      summary: "Checkout fails",
+      customerMessage: "The checkout button does nothing.",
+      mode: "implement_fix",
+    });
+
+    expect(filters).toContainEqual(["mode", "implement_fix"]);
+    expect(recovered?.runId).toBe("run-fix-existing");
+    await expect(recovered?.completion).resolves.toMatchObject({
+      run: {
+        id: "run-fix-existing",
+        mode: "implement_fix",
+        status: "completed",
+      },
+    });
+  });
+
+  it("maps repository command names to executable safe tools", () => {
+    expect(repositorySafeTools(["install", "lint", "test"])).toEqual([
+      { kind: "command", name: "lint" },
+      { kind: "command", name: "test" },
+    ]);
+  });
+
   it("persists duplicate deliveries once and does not retrigger triage/knowledge", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const inbox = new FakeInbox();
@@ -568,10 +685,10 @@ describe("live Whatsmiau worker", () => {
     expect(provider.draftReply).not.toHaveBeenCalled();
   });
 
-  it("starts Codex for an enabled, confident bug and notifies when the result is ready", async () => {
+  it("investigates a confident bug even when automatic fixing is disabled", async () => {
     const client = new FakeSupabaseHandoff();
     client.policy = {
-      bug_auto_fix_enabled: true,
+      bug_auto_fix_enabled: false,
       notify_on_bug: true,
     };
     const provider: SupportAiProvider = {
@@ -626,7 +743,112 @@ describe("live Whatsmiau worker", () => {
       ),
     );
     expect(starter.start).toHaveBeenCalledWith(
-      expect.objectContaining({ issueIdentifier: "TEC-1" }),
+      expect.objectContaining({
+        bugCaseId: "bug-case-1",
+        issueIdentifier: "TEC-1",
+      }),
+    );
+    expect(client.bugCase).toMatchObject({
+      stage: "decision",
+      status: "awaiting_human",
+      verdict: "needs_human",
+      decision: "notify",
+    });
+  });
+
+  it("starts a separate implement run after a confirmed investigation", async () => {
+    const client = new FakeSupabaseHandoff();
+    client.policy = {
+      bug_auto_fix_enabled: true,
+      notify_on_bug: true,
+      allowed_actions: [
+        "respond",
+        "triage",
+        "create_issue",
+        "investigate",
+        "propose_fix",
+        "implement_fix",
+      ],
+    };
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply: vi.fn(async () => "unused"),
+      triage: vi.fn(async () =>
+        JSON.stringify({
+          intent: "bug",
+          priority: "high",
+          confidence: 0.99,
+          summary: "Checkout fails in production",
+          unsafe: false,
+        }),
+      ),
+    };
+    const start = vi
+      .fn()
+      .mockResolvedValueOnce({
+        runId: "run-investigate",
+        completion: Promise.resolve({
+          run: {
+            result: {
+              provider: "claude",
+              agent: {
+                report: {
+                  verdict: "confirmed",
+                  summary: "A missing guard reproduces the complaint.",
+                  evidence: [{ kind: "test" }],
+                },
+              },
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        runId: "run-fix",
+        completion: Promise.resolve({ status: "completed" }),
+      });
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+      undefined,
+      undefined,
+      { start },
+    );
+    await automation.process({
+      binding,
+      idempotencyKey: "confirmed-auto-fix",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "confirmed-auto-fix-job",
+      ),
+      knowledge: [],
+      message,
+      persisted: {
+        id: "message-confirmed-fix",
+        workspaceId: binding.workspaceId,
+        conversationId: "conversation-1",
+        contactId: "contact-1",
+        providerMessageId: message.providerMessageId,
+        direction: "inbound",
+        messageType: "text",
+        unreadCount: 1,
+        inserted: true,
+      },
+    });
+
+    await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+    expect(start.mock.calls[0]?.[0]).toMatchObject({ mode: "investigate" });
+    expect(start.mock.calls[1]?.[0]).toMatchObject({
+      mode: "implement_fix",
+      bugCaseId: "bug-case-1",
+    });
+    await vi.waitFor(() =>
+      expect(client.bugCase).toMatchObject({
+        stage: "verification",
+        status: "awaiting_human",
+        verdict: "confirmed",
+        decision: "autofix",
+        fix_run_id: "run-fix",
+      }),
     );
   });
 

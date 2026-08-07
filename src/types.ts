@@ -161,7 +161,79 @@ export interface CodingRun {
   diff?: string;
   diffTruncated?: boolean;
   checks?: Array<{ name: string; exitCode: number; output: string }>;
+  caseId?: string;
+  caseStatus?:
+    | "active"
+    | "awaiting_human"
+    | "completed"
+    | "failed"
+    | "canceled";
+  stage?: BugLoopStage;
+  provider?: CodingAgentProvider;
+  providerVersion?: string;
+  suspicionScore?: number;
+  verdict?: BugVerdict;
+  decision?: BugDecision;
+  evidence?: BugEvidence[];
+  pullRequest?: {
+    number: number;
+    url: string;
+    head?: string;
+    base?: string;
+    draft?: boolean;
+  };
+  mergeSha?: string;
+  deploymentUrl?: string;
+  healthStatus?: string;
+  customerResponseStatus?: string;
+  caseOnly?: boolean;
   events: RunEvent[];
+}
+
+export type CodingAgentProvider =
+  | "codex"
+  | "claude"
+  | "gemini"
+  | "verboo"
+  | "custom";
+
+export type BugLoopStage =
+  | "signal"
+  | "suspicion"
+  | "evidence"
+  | "investigation"
+  | "verdict"
+  | "decision"
+  | "fix"
+  | "verification"
+  | "pull_request"
+  | "approval"
+  | "merge"
+  | "deploy"
+  | "health_check"
+  | "customer_response"
+  | "completed"
+  | "failed";
+
+export type BugVerdict =
+  | "pending"
+  | "confirmed"
+  | "not_reproduced"
+  | "not_a_bug"
+  | "duplicate"
+  | "needs_human";
+
+export type BugDecision =
+  | "pending"
+  | "notify"
+  | "autofix"
+  | "manual_fix"
+  | "dismiss";
+
+export interface BugEvidence {
+  kind: string;
+  label: string;
+  detail?: string;
 }
 
 export interface RunEvent {

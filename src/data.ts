@@ -360,6 +360,25 @@ export const seedRuns: CodingRun[] = [
     duration: "02:48",
     summary:
       "Investigando o fechamento e comparando o fluxo de finalização com os estados de pagamento pendente.",
+    caseId: "case-204",
+    caseStatus: "active",
+    stage: "investigation",
+    provider: "gemini",
+    suspicionScore: 0.78,
+    verdict: "pending",
+    decision: "pending",
+    evidence: [
+      {
+        kind: "conversation",
+        label: "Relato recorrente do cliente",
+        detail: "O fechamento trava depois de um pagamento pendente.",
+      },
+      {
+        kind: "release",
+        label: "Versão afetada identificada",
+        detail: "A regressão começa na versão atual.",
+      },
+    ],
     files: ["src/checkout/close-register.ts", "src/orders/order-state.ts"],
     events: [
       {
@@ -403,6 +422,32 @@ export const seedRuns: CodingRun[] = [
     duration: "08:21",
     summary:
       "Corrigido o parsing do convite quando o dispositivo ainda não possui uma sessão local.",
+    caseId: "case-201",
+    caseStatus: "awaiting_human",
+    stage: "pull_request",
+    provider: "claude",
+    suspicionScore: 0.93,
+    verdict: "confirmed",
+    decision: "autofix",
+    evidence: [
+      {
+        kind: "reproduction",
+        label: "Falha reproduzida em workspace isolado",
+      },
+      {
+        kind: "trace",
+        label: "Token legado chega sem sessão local",
+      },
+    ],
+    pullRequest: {
+      number: 42,
+      url: "https://github.com/kdo-vini/mend/pull/42",
+      head: "ops/TEC-19-fix-invite",
+      base: "main",
+      draft: true,
+    },
+    healthStatus: "pending",
+    customerResponseStatus: "drafted",
     branch: "ops/TEC-19-fix-invite",
     commit: "7d31c4a",
     files: ["src/auth/invite.ts", "src/auth/invite.test.ts"],

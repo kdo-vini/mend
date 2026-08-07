@@ -32,6 +32,9 @@ Antes de escrever código novo:
 | `conversationReplyInput`                              | `server/automation/decision.ts`                                 | Montar o contexto de rascunho com histórico limitado, papéis inbound/outbound explícitos e um único alvo de resposta. Reutilizar nos fluxos automático e manual.                                                                                |
 | `useConfirmation` / `ConfirmDialog`                   | `src/shared/ui/`                                                | Confirmações destrutivas ou que autorizam escrita externa. Não usar `window.confirm`.                                                                                                                                                           |
 | `MembersPanel` / workspace invitation API             | `src/features/settings/components/` + `src/api/live-actions.ts` | Gestão de membros e convites sempre passa pela API workspace-scoped. A UI usa apenas os DTOs sanitizados; envio, recuperação, expiração, aceite e auditoria ficam no adapter/RPC protegido.                                                     |
+| `SupabaseBugLoopStore`                                | `server/bug-loop.ts`                                            | Criar, deduplicar e avançar casos de bug duráveis. Worker e rotas não devem escrever `bug_cases` ou `bug_case_events` diretamente.                                                                                                              |
+| `CodingAgentCli`                                      | `server/coding-agent-cli.ts`                                    | Executar Codex, Claude, Gemini ou Verboo pelo registro fechado de adapters. Não aceitar executável, argv ou template de comando da UI ou do banco.                                                                                              |
+| `GitHubControlPlane` / `GitHubAppTokenProvider`       | `server/github-control-plane.ts`                                | Toda escrita GitHub usa token curto e escopado da instalação. Tokens não entram no ambiente do agente e chamadas REST não devem ser duplicadas fora deste limite.                                                                               |
 
 Aliases antigos, como `encryptGoogleToken` e `decryptGoogleToken`, existem
 somente para compatibilidade com chamadas legadas. Código novo deve usar os
@@ -85,6 +88,22 @@ para telas estreitas.
 provider e quais dados podem entrar no contexto. O provider decide como montar a
 requisição Responses API/MCP. Nenhum componente React ou serviço de domínio
 deve conhecer o formato `mcp`, `mcp_call` ou `mcp_approval_request`.
+
+### Complaint-to-fix durável
+
+`bug_cases` é o checkpoint do produto e `bug_case_events` é o histórico
+append-only. O sinal usa a mensagem inbound como chave; investigação e correção
+são `coding_runs` separados. Retomadas devem usar chaves idempotentes e nunca
+repetir publicação, merge, deploy ou resposta externa por inferência de estado.
+
+O provider de suporte continua atrás de `SupportAiProvider`. Agentes de código
+ficam atrás de `CodingAgentCli`; um não substitui silenciosamente o outro.
+Providers CLI são selecionados pelo registro interno, e a configuração pública
+expõe apenas nomes e capacidades sanitizadas.
+
+GitHub é o plano de controle para publicação. O agente só produz relatório,
+evidência e patch no workspace efêmero. O backend executa checks independentes,
+valida o resultado e usa `GitHubControlPlane` para efeitos externos.
 
 ### Segredos e integrações
 

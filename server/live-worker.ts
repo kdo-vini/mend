@@ -53,6 +53,7 @@ import {
 } from "../src/shared/support-flow.js";
 import type { SafeTool } from "./codex.js";
 import { CodexService } from "./codex-service.js";
+import { createCodingAgentCli } from "./coding-agent-cli.js";
 import {
   SupabaseCodexRunStore,
   SupabaseRepositoryAdapter,
@@ -64,6 +65,12 @@ import {
   mcpConnectionRecordFromRow,
   type McpRuntimeConnection,
 } from "./mcp.js";
+import {
+  bugInvestigationOutcome,
+  SupabaseBugLoopStore,
+  type BugCaseReference,
+} from "./bug-loop.js";
+import { row, run } from "./adapters/supabase-mappers.js";
 
 type LiveWorkerSupabaseClient = SupabaseClient<Database>;
 type KnowledgeArticleRow =
@@ -72,6 +79,15 @@ type KnowledgeArticleRow =
 export const WHATSAPP_INGEST_JOB_TYPE = "whatsmiau.message.received";
 export const PROCESS_INBOUND_MESSAGE_JOB_TYPE = "mend.process_inbound_message";
 export const SEND_AI_REPLY_JOB_TYPE = "mend.send_ai_reply";
+export const CODING_RUN_CONTINUATION_JOB_TYPE = "mend.coding_run_continuation";
+
+export function repositorySafeTools(
+  allowedCommands: readonly string[] = [],
+): SafeTool[] {
+  return (["lint", "test", "build"] as const)
+    .filter((name) => allowedCommands.includes(name))
+    .map((name) => ({ kind: "command", name }));
+}
 
 interface ProcessInboundMessageJobPayload {
   stage: "process_inbound_message";
@@ -93,11 +109,13 @@ export interface LiveWorkerSendAiReplyInput {
 
 export interface LiveWorkerCodexStarterInput {
   workspaceId: string;
+  bugCaseId?: string;
   issueId: string;
   issueIdentifier: string;
   issueTitle: string;
   summary: string;
   customerMessage: string;
+  mode?: "investigate" | "implement_fix";
 }
 
 export interface LiveWorkerCodexStarter {
@@ -105,6 +123,20 @@ export interface LiveWorkerCodexStarter {
     runId: string;
     completion: Promise<unknown>;
   } | null>;
+}
+
+export interface CodingRunContinuationJobPayload {
+  stage: "coding_run_continuation";
+  workspaceId: string;
+  runId: string;
+  bugCaseId: string;
+  phase: "investigation" | "fix";
+  issue: { id: string; identifier: string; title: string };
+  triage: TriageResult;
+  customerMessage: string;
+  autoFixEnabled: boolean;
+  implementFixAllowed: boolean;
+  humanApprovalRequired: boolean;
 }
 
 interface SendAiReplyJobPayload extends LiveWorkerSendAiReplyInput {
@@ -115,6 +147,7 @@ type LiveWorkerJobPayload =
   | WhatsmiauMessageJobPayload
   | ProcessInboundMessageJobPayload
   | SendAiReplyJobPayload
+  | CodingRunContinuationJobPayload
   | MediaProcessJobPayload;
 
 interface UncheckedSupabaseQuery
@@ -215,6 +248,9 @@ export interface LiveWorkerAutomation {
     input: LiveWorkerAutomationInput,
   ): Promise<LiveWorkerAutomationResult | void>;
   sendAiReply?(input: LiveWorkerSendAiReplyInput): Promise<void>;
+  processCodingRunContinuation?(
+    input: CodingRunContinuationJobPayload,
+  ): Promise<void>;
 }
 
 export interface LiveWorkerUnmappedMessage {
@@ -389,6 +425,20 @@ export class LiveWorker {
       if (payload.stage !== "send_ai_reply" || !payload.binding?.workspaceId)
         throw new Error("invalid_send_ai_reply_job");
       await this.options.automation.sendAiReply(payload);
+      return;
+    }
+    if (job.type === CODING_RUN_CONTINUATION_JOB_TYPE) {
+      if (!this.options.automation?.processCodingRunContinuation)
+        throw new Error("coding_run_continuation_not_configured");
+      const payload = job.payload as CodingRunContinuationJobPayload;
+      if (
+        payload.stage !== "coding_run_continuation" ||
+        !payload.workspaceId ||
+        !payload.runId ||
+        !payload.bugCaseId
+      )
+        throw new Error("invalid_coding_run_continuation_job");
+      await this.options.automation.processCodingRunContinuation(payload);
       return;
     }
     if (job.type === MEDIA_PROCESS_JOB_TYPE) {
@@ -638,6 +688,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   private readonly inbox: InboxService;
   private readonly whatsapp?: WhatsAppService;
   private readonly push = new WorkspacePushNotifier();
+  private readonly bugLoop: SupabaseBugLoopStore;
+  private readonly continuationJobStore?: JobStore<LiveWorkerJobPayload>;
 
   constructor(
     private readonly client: LiveWorkerSupabaseClient,
@@ -645,8 +697,11 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     inbox?: InboxService,
     whatsappProvider?: WhatsAppProvider,
     private readonly codexStarter?: LiveWorkerCodexStarter,
+    continuationJobStore?: JobStore<LiveWorkerJobPayload>,
   ) {
     this.inbox = inbox ?? new InboxService(new SupabaseInboxPort(client));
+    this.bugLoop = new SupabaseBugLoopStore(client);
+    this.continuationJobStore = continuationJobStore;
     if (whatsappProvider)
       this.whatsapp = new WhatsAppService(this.inbox, whatsappProvider);
   }
@@ -672,12 +727,15 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   async process(
     input: LiveWorkerAutomationInput,
   ): Promise<LiveWorkerAutomationResult | void> {
-    if (await this.processSupportFlow(input)) return;
     const current = await this.currentState(input);
     if (current?.lastTriagedMessageId === input.persisted.id) {
       return;
     }
     if (current?.automationState === "human_paused") return;
+    if (await this.processSupportFlow(input)) {
+      await this.markMessageCheckpoint(input);
+      return;
+    }
     const modePolicy = await this.aiMode(input);
     if (modePolicy.mode === "off") return;
     const triage = await triageConversation(
@@ -747,6 +805,17 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       route === "bug_triage"
         ? await this.upsertIssue(input, triage)
         : undefined;
+    const bugCase = issue
+      ? await this.bugLoop.recordSuspicion({
+          workspaceId: input.binding.workspaceId,
+          issueId: issue.id,
+          conversationId: input.persisted.conversationId,
+          signalMessageId: input.persisted.id,
+          confidence: triage.confidence,
+          summary: triage.summary,
+          customerMessage: messageText(input.message),
+        })
+      : undefined;
     let draft: LiveWorkerDraft | undefined;
     if (provisionalDecision.allowed && route !== "bug_triage") {
       try {
@@ -851,14 +920,20 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (
       route === "bug_triage" &&
       issue &&
-      modePolicy.policy.bugAutoFixEnabled &&
       modePolicy.policy.allowedIntegrations.includes("codex") &&
       modePolicy.policy.allowedActions.includes("investigate") &&
       !triage.unsafe &&
       triage.confidence >= modePolicy.policy.safeAutoMinConfidence &&
+      !bugCase?.duplicate &&
       this.codexStarter
     ) {
-      await this.startCodexForBug(input, issue, triage);
+      await this.startCodexForBug(
+        input,
+        issue,
+        bugCase,
+        triage,
+        modePolicy.policy,
+      );
     }
     await this.auditDecision(
       input,
@@ -1303,63 +1378,482 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     }
   }
 
+  private continuationInput(
+    payload: CodingRunContinuationJobPayload,
+  ): LiveWorkerAutomationInput {
+    return {
+      binding: {
+        workspaceId: payload.workspaceId,
+        channelConnectionId: "bug-loop",
+        instanceName: "bug-loop",
+      },
+      idempotencyKey: `coding-run:${payload.runId}`,
+      job: {} as JobRecord<WhatsmiauMessageJobPayload>,
+      knowledge: [],
+      message: {
+        instanceName: "bug-loop",
+        providerMessageId: payload.runId,
+        remoteJid: "bug-loop",
+        phoneNumber: "",
+        direction: "inbound",
+        messageType: "text",
+        text: payload.customerMessage,
+        raw: { source: "coding_run_continuation" },
+      },
+      persisted: {
+        id: payload.issue.id,
+        workspaceId: payload.workspaceId,
+        conversationId: "bug-loop",
+        contactId: "bug-loop",
+        providerMessageId: payload.runId,
+        direction: "inbound",
+        messageType: "text",
+        unreadCount: 0,
+        inserted: true,
+      },
+    };
+  }
+
+  private async enqueueCodingContinuation(
+    payload: CodingRunContinuationJobPayload,
+  ): Promise<boolean> {
+    if (!this.continuationJobStore) return false;
+    try {
+      await this.continuationJobStore.enqueue({
+        workspaceId: payload.workspaceId,
+        type: CODING_RUN_CONTINUATION_JOB_TYPE,
+        payload,
+        dedupeKey: `mend:coding-run:${payload.runId}:continuation`,
+        maxAttempts: 40,
+        availableAt: new Date(Date.now() + 30_000),
+      });
+      return true;
+    } catch {
+      // A queue outage must not strand a run after its start checkpoint. The
+      // in-process completion callback is the best-effort fallback; the next
+      // inbound retry can recover a terminal run through the mode-aware dedupe.
+      return false;
+    }
+  }
+
+  async processCodingRunContinuation(
+    payload: CodingRunContinuationJobPayload,
+  ): Promise<void> {
+    const result = await this.client
+      .from("coding_runs")
+      .select("*")
+      .eq("workspace_id", payload.workspaceId)
+      .eq("id", payload.runId)
+      .maybeSingle();
+    if (result.error)
+      throw new Error(
+        `supabase:coding_runs:continuation:${result.error.message}`,
+      );
+    if (!result.data) throw new Error("coding_run_continuation_not_found");
+    let persisted = run(row(result.data));
+    const staleAfterMs = Math.min(
+      86_400_000,
+      Math.max(
+        60_000,
+        Number(process.env.MEND_CODING_RUN_STALE_MS ?? 1_800_000),
+      ),
+    );
+    const lastUpdate = Date.parse(persisted.updatedAt);
+    if (
+      (persisted.status === "queued" || persisted.status === "running") &&
+      Number.isFinite(lastUpdate) &&
+      Date.now() - lastUpdate > staleAfterMs
+    ) {
+      const recovered = await this.client
+        .from("coding_runs")
+        .update({
+          status: "failed",
+          finished_at: new Date().toISOString(),
+          result_json: {
+            ...(row(result.data).result_json &&
+            typeof row(result.data).result_json === "object"
+              ? (row(result.data).result_json as Record<string, unknown>)
+              : {}),
+            error: "coding_run_stale_executor",
+            staleAfterMs,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("workspace_id", payload.workspaceId)
+        .eq("id", payload.runId)
+        .eq("status", persisted.status)
+        .select("*")
+        .maybeSingle();
+      if (recovered.error)
+        throw new Error(
+          `supabase:coding_runs:stale_recovery:${recovered.error.message}`,
+        );
+      if (recovered.data) persisted = run(row(recovered.data));
+    }
+    if (persisted.status === "queued" || persisted.status === "running")
+      throw new Error("coding_run_not_terminal");
+    const input = this.continuationInput(payload);
+    if (payload.phase === "investigation") {
+      if (persisted.status === "failed" || persisted.status === "canceled")
+        return this.failInvestigation(payload, persisted.result);
+      return this.completeInvestigation(payload, { run: persisted });
+    }
+    if (persisted.status === "failed" || persisted.status === "canceled")
+      return this.failFix(payload, persisted.result);
+    await this.bugLoop.advance({
+      workspaceId: payload.workspaceId,
+      bugCaseId: payload.bugCaseId,
+      stage: "verification",
+      status: "awaiting_human",
+      eventType: "fix.verified",
+      message: "The fix run and independent checks are ready for approval.",
+      idempotencyKey: `fix:${payload.runId}:verified`,
+      metadata: { runId: payload.runId },
+    });
+    await this.notifyWorkspace(
+      input,
+      payload.triage,
+      "ai.codex_ready",
+      `Fix ready for ${payload.issue.identifier}`,
+      "Review the patch and independent checks before creating the commit and draft pull request.",
+      `ai-codex-fix-ready:${payload.runId}`,
+      payload.issue.id,
+    );
+  }
+
+  private async completeInvestigation(
+    payload: CodingRunContinuationJobPayload,
+    result: unknown,
+  ): Promise<void> {
+    const outcome = bugInvestigationOutcome(result);
+    const shouldAutoFix =
+      outcome.verdict === "confirmed" &&
+      payload.autoFixEnabled &&
+      payload.implementFixAllowed &&
+      !payload.humanApprovalRequired;
+    await this.bugLoop.advance({
+      workspaceId: payload.workspaceId,
+      bugCaseId: payload.bugCaseId,
+      stage: "verdict",
+      status: shouldAutoFix ? "active" : "awaiting_human",
+      verdict: outcome.verdict,
+      eventType: "investigation.completed",
+      message: "Investigation finished and its verdict is ready for review.",
+      idempotencyKey: `investigation:${payload.runId}:completed`,
+      metadata: { runId: payload.runId, ...outcome },
+    });
+    await this.bugLoop.advance({
+      workspaceId: payload.workspaceId,
+      bugCaseId: payload.bugCaseId,
+      stage: "decision",
+      status: shouldAutoFix ? "active" : "awaiting_human",
+      decision: shouldAutoFix ? "autofix" : "notify",
+      eventType: shouldAutoFix ? "decision.autofix" : "decision.notify",
+      message: shouldAutoFix
+        ? "Policy authorized a separate fix run."
+        : "The investigation requires an operator decision.",
+      idempotencyKey: `decision:${payload.runId}`,
+      metadata: { investigationRunId: payload.runId, verdict: outcome.verdict },
+    });
+    const input = this.continuationInput(payload);
+    await this.notifyWorkspace(
+      input,
+      payload.triage,
+      "ai.codex_ready",
+      `Investigation ready for ${payload.issue.identifier}`,
+      "The evidence and verdict are ready for human review before a fix starts.",
+      `ai-codex-ready:${payload.runId}`,
+      payload.issue.id,
+    );
+    if (shouldAutoFix)
+      await this.startFixForBug(
+        input,
+        payload.issue,
+        {
+          id: payload.bugCaseId,
+          issueId: payload.issue.id,
+          stage: "decision",
+          duplicate: false,
+        },
+        payload.triage,
+      );
+  }
+
+  private async failInvestigation(
+    payload: CodingRunContinuationJobPayload,
+    error: unknown,
+  ): Promise<void> {
+    await this.bugLoop.advance({
+      workspaceId: payload.workspaceId,
+      bugCaseId: payload.bugCaseId,
+      stage: "failed",
+      status: "failed",
+      eventType: "investigation.failed",
+      message: "The isolated investigation failed.",
+      idempotencyKey: `investigation:${payload.runId}:failed`,
+      metadata: { runId: payload.runId },
+      lastError: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  private async failFix(
+    payload: CodingRunContinuationJobPayload,
+    error: unknown,
+  ): Promise<void> {
+    await this.bugLoop.advance({
+      workspaceId: payload.workspaceId,
+      bugCaseId: payload.bugCaseId,
+      stage: "failed",
+      status: "failed",
+      eventType: "fix.failed",
+      message: "The separate fix run failed.",
+      idempotencyKey: `fix:${payload.runId}:failed`,
+      metadata: { runId: payload.runId },
+      lastError: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   private async startCodexForBug(
     input: LiveWorkerAutomationInput,
     issue: { id: string; identifier: string; operation: "created" | "updated" },
+    bugCase: BugCaseReference | undefined,
     triage: TriageResult,
+    policy: LiveWorkerAiPolicy,
   ): Promise<void> {
     try {
       const started = await this.codexStarter?.start({
         workspaceId: input.binding.workspaceId,
+        ...(bugCase ? { bugCaseId: bugCase.id } : {}),
         issueId: issue.id,
         issueIdentifier: issue.identifier,
         issueTitle: triage.summary,
         summary: triage.summary,
         customerMessage: input.message.text ?? "",
+        mode: "investigate",
       });
       if (!started) return;
+      if (bugCase) {
+        await this.bugLoop.advance({
+          workspaceId: input.binding.workspaceId,
+          bugCaseId: bugCase.id,
+          stage: "investigation",
+          eventType: "investigation.started",
+          message: "A coding agent started an isolated investigation.",
+          idempotencyKey: `investigation:${started.runId}:started`,
+          investigationRunId: started.runId,
+          metadata: { runId: started.runId },
+        });
+      }
       await this.notifyWorkspace(
         input,
         triage,
         "ai.codex_started",
-        `Codex started for ${issue.identifier}`,
-        `Codex is investigating this bug automatically. Run ${started.runId} will stop for approval before publication.`,
+        `Coding agent started for ${issue.identifier}`,
+        `The selected coding agent is investigating this bug. Run ${started.runId} will stop for approval before publication.`,
         `ai-codex-started:${started.runId}`,
         issue.id,
       );
-      void started.completion.then(
-        async () =>
-          this.notifyWorkspace(
+      if (bugCase) {
+        const continuation: CodingRunContinuationJobPayload = {
+          stage: "coding_run_continuation",
+          workspaceId: input.binding.workspaceId,
+          runId: started.runId,
+          bugCaseId: bugCase.id,
+          phase: "investigation",
+          issue: {
+            id: issue.id,
+            identifier: issue.identifier,
+            title: triage.summary,
+          },
+          triage,
+          customerMessage: input.message.text ?? "",
+          autoFixEnabled: policy.bugAutoFixEnabled,
+          implementFixAllowed: policy.allowedActions.includes("implement_fix"),
+          humanApprovalRequired:
+            policy.humanApprovalActions.includes("implement_fix"),
+        };
+        if (await this.enqueueCodingContinuation(continuation)) return;
+      }
+      void started.completion
+        .then(async (result) => {
+          const outcome = bugInvestigationOutcome(result);
+          const shouldAutoFix =
+            outcome.verdict === "confirmed" &&
+            policy.bugAutoFixEnabled &&
+            policy.allowedActions.includes("implement_fix") &&
+            !policy.humanApprovalActions.includes("implement_fix");
+          if (bugCase) {
+            await this.bugLoop.advance({
+              workspaceId: input.binding.workspaceId,
+              bugCaseId: bugCase.id,
+              stage: "verdict",
+              status: shouldAutoFix ? "active" : "awaiting_human",
+              verdict: outcome.verdict,
+              eventType: "investigation.completed",
+              message:
+                "Investigation finished and its verdict is ready for review.",
+              idempotencyKey: `investigation:${started.runId}:completed`,
+              metadata: { runId: started.runId, ...outcome },
+            });
+            await this.bugLoop.advance({
+              workspaceId: input.binding.workspaceId,
+              bugCaseId: bugCase.id,
+              stage: "decision",
+              status: shouldAutoFix ? "active" : "awaiting_human",
+              decision: shouldAutoFix ? "autofix" : "notify",
+              eventType: shouldAutoFix ? "decision.autofix" : "decision.notify",
+              message: shouldAutoFix
+                ? "Policy authorized a separate fix run."
+                : "The investigation requires an operator decision.",
+              idempotencyKey: `decision:${started.runId}`,
+              metadata: {
+                investigationRunId: started.runId,
+                verdict: outcome.verdict,
+              },
+            });
+          }
+          await this.notifyWorkspace(
             input,
             triage,
             "ai.codex_ready",
-            `Codex result ready for ${issue.identifier}`,
-            "The proposed fix and checks are ready for human approval.",
+            `Investigation ready for ${issue.identifier}`,
+            "The evidence and verdict are ready for human review before a fix starts.",
             `ai-codex-ready:${started.runId}`,
             issue.id,
-          ),
-        async (error) =>
-          this.notifyWorkspace(
+          );
+          if (shouldAutoFix && bugCase)
+            await this.startFixForBug(input, issue, bugCase, triage);
+        })
+        .catch(async (error) => {
+          if (bugCase) {
+            await this.bugLoop.advance({
+              workspaceId: input.binding.workspaceId,
+              bugCaseId: bugCase.id,
+              stage: "failed",
+              status: "failed",
+              eventType: "investigation.failed",
+              message: "The isolated investigation failed.",
+              idempotencyKey: `investigation:${started.runId}:failed`,
+              metadata: { runId: started.runId },
+              lastError: error instanceof Error ? error.message : String(error),
+            });
+          }
+          await this.notifyWorkspace(
             input,
             triage,
             "ai.codex_failed",
-            `Codex failed for ${issue.identifier}`,
-            `The automatic fix could not be completed: ${error instanceof Error ? error.message : String(error)}`,
+            `Investigation failed for ${issue.identifier}`,
+            `The automatic investigation could not be completed: ${error instanceof Error ? error.message : String(error)}`,
             `ai-codex-failed:${started.runId}`,
             issue.id,
-          ),
-      );
+          );
+        })
+        .catch(() => undefined);
     } catch (error) {
       await this.notifyWorkspace(
         input,
         triage,
         "ai.codex_failed",
-        `Codex could not start for ${issue.identifier}`,
+        `Coding agent could not start for ${issue.identifier}`,
         `Configure a repository before automatic fixes: ${error instanceof Error ? error.message : String(error)}`,
         `ai-codex-start-failed:${issue.id}:${input.persisted.id}`,
         issue.id,
       );
     }
+  }
+
+  private async startFixForBug(
+    input: LiveWorkerAutomationInput,
+    issue: { id: string; identifier: string },
+    bugCase: BugCaseReference,
+    triage: TriageResult,
+  ): Promise<void> {
+    const started = await this.codexStarter?.start({
+      workspaceId: input.binding.workspaceId,
+      bugCaseId: bugCase.id,
+      issueId: issue.id,
+      issueIdentifier: issue.identifier,
+      issueTitle: triage.summary,
+      summary: triage.summary,
+      customerMessage: input.message.text ?? "",
+      mode: "implement_fix",
+    });
+    if (!started) return;
+    await this.bugLoop.advance({
+      workspaceId: input.binding.workspaceId,
+      bugCaseId: bugCase.id,
+      stage: "fix",
+      status: "active",
+      eventType: "fix.started",
+      message:
+        "A separate coding agent run started the approved automatic fix.",
+      idempotencyKey: `fix:${started.runId}:started`,
+      fixRunId: started.runId,
+      metadata: { runId: started.runId },
+    });
+    await this.notifyWorkspace(
+      input,
+      triage,
+      "ai.codex_started",
+      `Automatic fix started for ${issue.identifier}`,
+      `Run ${started.runId} is implementing the fix. Publication still requires review.`,
+      `ai-codex-fix-started:${started.runId}`,
+      issue.id,
+    );
+    const continuation: CodingRunContinuationJobPayload = {
+      stage: "coding_run_continuation",
+      workspaceId: input.binding.workspaceId,
+      runId: started.runId,
+      bugCaseId: bugCase.id,
+      phase: "fix",
+      issue: {
+        id: issue.id,
+        identifier: issue.identifier,
+        title: triage.summary,
+      },
+      triage,
+      customerMessage: input.message.text ?? "",
+      autoFixEnabled: true,
+      implementFixAllowed: true,
+      humanApprovalRequired: false,
+    };
+    if (await this.enqueueCodingContinuation(continuation)) return;
+    void started.completion
+      .then(async () => {
+        await this.bugLoop.advance({
+          workspaceId: input.binding.workspaceId,
+          bugCaseId: bugCase.id,
+          stage: "verification",
+          status: "awaiting_human",
+          eventType: "fix.verified",
+          message: "The fix run and independent checks are ready for approval.",
+          idempotencyKey: `fix:${started.runId}:verified`,
+          metadata: { runId: started.runId },
+        });
+        await this.notifyWorkspace(
+          input,
+          triage,
+          "ai.codex_ready",
+          `Fix ready for ${issue.identifier}`,
+          "Review the patch and independent checks before creating the commit and draft pull request.",
+          `ai-codex-fix-ready:${started.runId}`,
+          issue.id,
+        );
+      })
+      .catch(async (error) => {
+        await this.bugLoop.advance({
+          workspaceId: input.binding.workspaceId,
+          bugCaseId: bugCase.id,
+          stage: "failed",
+          status: "failed",
+          eventType: "fix.failed",
+          message: "The separate fix run failed.",
+          idempotencyKey: `fix:${started.runId}:failed`,
+          metadata: { runId: started.runId },
+          lastError: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .catch(() => undefined);
   }
 
   private async buildDraft(
@@ -1690,6 +2184,25 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       : null;
   }
 
+  private async markMessageCheckpoint(
+    input: LiveWorkerAutomationInput,
+  ): Promise<void> {
+    const result = await this.client.from("conversation_ai_state").upsert(
+      {
+        workspace_id: input.binding.workspaceId,
+        conversation_id: input.persisted.conversationId,
+        last_triaged_message_id: input.persisted.id,
+        last_triaged_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "conversation_id" },
+    );
+    if (result.error)
+      throw new Error(
+        `supabase:conversation_ai_state:checkpoint:${result.error.message}`,
+      );
+  }
+
   private async auditDecision(
     input:
       | Pick<LiveWorkerAutomationInput, "binding" | "persisted">
@@ -1731,24 +2244,73 @@ export interface CreateSupabaseLiveWorkerOptions {
   workerId?: string;
 }
 
-class SupabaseCodexStarter implements LiveWorkerCodexStarter {
+export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
   constructor(private readonly client: LiveWorkerSupabaseClient) {}
 
-  async start(input: LiveWorkerCodexStarterInput) {
-    const existing = await this.client
+  private async findExistingRun(
+    workspaceId: string,
+    issueId: string,
+    mode: NonNullable<LiveWorkerCodexStarterInput["mode"]>,
+  ) {
+    return this.client
       .from("coding_runs")
       .select("id, status")
-      .eq("workspace_id", input.workspaceId)
-      .eq("issue_id", input.issueId)
+      .eq("workspace_id", workspaceId)
+      .eq("issue_id", issueId)
+      .eq("mode", mode)
       .in("status", ["queued", "running", "completed", "approved"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+  }
+
+  private async waitForTerminalRun(
+    store: SupabaseCodexRunStore,
+    runId: string,
+  ): Promise<{
+    run: NonNullable<Awaited<ReturnType<SupabaseCodexRunStore["getRun"]>>>;
+  }> {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      const persisted = await store.getRun(runId);
+      if (!persisted) throw new Error("Existing coding run disappeared");
+      if (persisted.status !== "queued" && persisted.status !== "running")
+        return { run: persisted };
+      await delay(5_000);
+    }
+    throw new Error("Existing coding run did not reach a terminal state");
+  }
+
+  async start(input: LiveWorkerCodexStarterInput) {
+    const mode = input.mode ?? "investigate";
+    const store = new SupabaseCodexRunStore(this.client);
+    const existing = await this.findExistingRun(
+      input.workspaceId,
+      input.issueId,
+      mode,
+    );
     if (existing.error)
       throw new Error(
         `supabase:coding_runs:existing:${existing.error.message}`,
       );
-    if (existing.data) return null;
+    const recoverExisting = async (candidate: typeof existing.data) => {
+      if (!candidate) return undefined;
+      const runId = String(candidate.id);
+      if (candidate.status === "completed" || candidate.status === "approved") {
+        const persisted = await store.getRun(runId);
+        if (!persisted)
+          throw new Error("Existing coding run could not be recovered");
+        return {
+          runId,
+          completion: Promise.resolve({ run: persisted }),
+        };
+      }
+      return {
+        runId,
+        completion: this.waitForTerminalRun(store, runId),
+      };
+    };
+    const recovered = await recoverExisting(existing.data);
+    if (recovered) return recovered;
 
     const repositoryRow = await this.client
       .from("repositories")
@@ -1771,37 +2333,69 @@ class SupabaseCodexStarter implements LiveWorkerCodexStarter {
       String(repositoryId),
     );
     if (!repository) throw new Error("Repository is unavailable");
-    const commands = ["lint", "test", "build"].filter((name) =>
-      repository.allowedCommands?.includes(name),
-    ) as unknown as SafeTool[];
+    if (repository.executionPlane === "github_actions")
+      throw new Error(
+        "github_actions_execution_not_configured: use local_cli until the GitHub Actions runner is connected",
+      );
+    const provider = repository.agentProvider ?? "codex";
+    const health = await createCodingAgentCli().health(provider);
+    if (!health.available)
+      throw new Error(
+        `coding_agent_unavailable:${provider}:${health.error ?? "CLI preflight failed"}`,
+      );
+    const commands = repositorySafeTools(repository.allowedCommands);
     const service = new CodexService({
       repositories,
-      runs: new SupabaseCodexRunStore(this.client),
+      runs: store,
       openAi: { enabled: Boolean(process.env.OPENAI_API_KEY) },
     });
-    const handle = await service.start({
-      workspaceId: input.workspaceId,
-      issueId: input.issueId,
-      repositoryId: String(repositoryId),
-      issueIdentifier: input.issueIdentifier,
-      issueTitle: input.issueTitle,
-      mode: "implement_fix",
-      tools: commands,
-      context: {
-        issue: {
-          id: input.issueId,
-          identifier: input.issueIdentifier,
-          title: input.issueTitle,
-          summary: input.summary,
-          description: `Customer report:\n${input.customerMessage}`,
+    try {
+      const handle = await service.start({
+        workspaceId: input.workspaceId,
+        issueId: input.issueId,
+        repositoryId: String(repositoryId),
+        issueIdentifier: input.issueIdentifier,
+        issueTitle: input.issueTitle,
+        mode,
+        tools: commands,
+        context: {
+          issue: {
+            id: input.issueId,
+            identifier: input.issueIdentifier,
+            title: input.issueTitle,
+            summary: input.summary,
+            description: `Customer report:\n${input.customerMessage}`,
+          },
+          conversation: {
+            summary: input.summary,
+            messages: [{ direction: "inbound", text: input.customerMessage }],
+          },
         },
-        conversation: {
-          summary: input.summary,
-          messages: [{ direction: "inbound", text: input.customerMessage }],
-        },
-      },
-    });
-    return { runId: handle.runId, completion: handle.completion };
+      });
+      return { runId: handle.runId, completion: handle.completion };
+    } catch (error) {
+      // The partial unique index protects the check-then-insert race between
+      // workers. Recover the winner instead of surfacing a duplicate-run
+      // error to the customer loop.
+      if (
+        !/duplicate|unique|coding_runs_active_issue_mode_idx/i.test(
+          String(error),
+        )
+      )
+        throw error;
+      const retry = await this.findExistingRun(
+        input.workspaceId,
+        input.issueId,
+        mode,
+      );
+      if (retry.error)
+        throw new Error(
+          `supabase:coding_runs:existing_retry:${retry.error.message}`,
+        );
+      const winner = await recoverExisting(retry.data);
+      if (winner) return winner;
+      throw error;
+    }
   }
 }
 
@@ -1827,6 +2421,7 @@ export function createSupabaseLiveWorker(
     inboxService,
     options.whatsappProvider,
     options.codexStarter ?? new SupabaseCodexStarter(options.client),
+    options.jobStore as unknown as JobStore<LiveWorkerJobPayload>,
   );
   return new LiveWorker({
     jobStore: options.jobStore,

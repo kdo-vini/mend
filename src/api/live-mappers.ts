@@ -2,6 +2,8 @@ import type {
   ConversationRecord,
   CodingRunEventRecord,
   CodingRunRecord,
+  BugCaseEventRecord,
+  BugCaseRecord,
   IssueRecord,
   KnowledgeArticleRecord,
   MessageRecord,
@@ -23,6 +25,11 @@ import type {
   AutomationState,
   AiDecision,
   HumanTakeoverReason,
+  BugDecision,
+  BugEvidence,
+  BugLoopStage,
+  BugVerdict,
+  CodingAgentProvider,
 } from "../types";
 import { currentInterfaceLanguage } from "../i18n/preferences";
 
@@ -82,6 +89,24 @@ const runStatusMap: Record<string, CodingRun["status"]> = {
   approved: "Approved",
   rejected: "Rejected",
 };
+const stageOrder: BugLoopStage[] = [
+  "signal",
+  "suspicion",
+  "evidence",
+  "investigation",
+  "verdict",
+  "decision",
+  "fix",
+  "verification",
+  "approval",
+  "pull_request",
+  "merge",
+  "deploy",
+  "health_check",
+  "customer_response",
+  "completed",
+  "failed",
+];
 const accents = ["#7c91ff", "#e9a75d", "#8ecb9c", "#b997e8", "#6fb6c8"];
 
 const fallback = <T>(
@@ -106,6 +131,12 @@ function accentFor(id: string) {
   let hash = 0;
   for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) | 0;
   return accents[Math.abs(hash) % accents.length];
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function displayTime(value: string | null | undefined) {
@@ -326,6 +357,8 @@ export function toUiRun(
   record: CodingRunRecord,
   events: CodingRunEventRecord[] = [],
   issueIdentifier?: string,
+  persistedCase?: BugCaseRecord,
+  caseEvents: BugCaseEventRecord[] = [],
 ): CodingRun {
   const result =
     record.result_json &&
@@ -339,6 +372,40 @@ export function toUiRun(
     !Array.isArray(result.agent)
       ? (result.agent as Record<string, unknown>)
       : {};
+  const agentReport = objectValue(agent.report);
+  const embeddedCase = objectValue(result.bugCase ?? result.bug_case);
+  const loop = persistedCase
+    ? (persistedCase as unknown as Record<string, unknown>)
+    : Object.keys(embeddedCase).length
+      ? embeddedCase
+      : result;
+  const pullRequest = objectValue(
+    loop.pullRequest ?? loop.pull_request ?? result.pullRequest,
+  );
+  const deployment = objectValue(loop.deployment ?? result.deployment);
+  const providerValue = String(
+    loop.provider ?? agent.provider ?? result.provider ?? "",
+  ).toLowerCase();
+  const provider = ["codex", "claude", "gemini", "verboo", "custom"].includes(
+    providerValue,
+  )
+    ? (providerValue as CodingAgentProvider)
+    : undefined;
+  const evidence = mapBugEvidence(
+    loop.evidence ?? loop.evidence_json ?? result.evidence,
+  );
+  const caseEvidence = persistedCase
+    ? mergeBugEvidence(
+        evidence,
+        investigationEvidence(persistedCase.id, caseEvents),
+      )
+    : evidence;
+  const stage = String(loop.stage ?? "") as BugLoopStage;
+  const verdict = String(loop.verdict ?? "") as BugVerdict;
+  const decision = String(loop.decision ?? "") as BugDecision;
+  const suspicionScore = Number(
+    loop.suspicionScore ?? loop.suspicion_score ?? Number.NaN,
+  );
   const fileNames = Array.isArray(result.files)
     ? result.files
         .map((file) =>
@@ -391,11 +458,13 @@ export function toUiRun(
             .toString()
             .padStart(2, "0")}`,
     summary:
-      typeof agent.finalText === "string"
-        ? agent.finalText
-        : typeof result.summary === "string"
-          ? result.summary
-          : "Persisted Codex run",
+      typeof agentReport.summary === "string"
+        ? agentReport.summary
+        : typeof agent.finalText === "string"
+          ? agent.finalText
+          : typeof result.summary === "string"
+            ? result.summary
+            : "Persisted engineering run",
     branch: record.branch_name ?? undefined,
     commit: record.commit_sha ?? undefined,
     published: Boolean(
@@ -414,19 +483,243 @@ export function toUiRun(
     diff: typeof result.patch === "string" ? result.patch : undefined,
     diffTruncated: result.diffTruncated === true,
     checks,
+    caseId:
+      typeof loop.id === "string"
+        ? loop.id
+        : typeof loop.caseId === "string"
+          ? loop.caseId
+          : undefined,
+    caseStatus:
+      loop.status === "active" ||
+      loop.status === "awaiting_human" ||
+      loop.status === "completed" ||
+      loop.status === "failed" ||
+      loop.status === "canceled"
+        ? loop.status
+        : undefined,
+    stage: stage || undefined,
+    provider,
+    providerVersion:
+      typeof loop.version === "string"
+        ? loop.version
+        : typeof agent.version === "string"
+          ? agent.version
+          : undefined,
+    suspicionScore: Number.isFinite(suspicionScore)
+      ? suspicionScore
+      : undefined,
+    verdict: verdict || undefined,
+    decision: decision || undefined,
+    evidence: caseEvidence,
+    pullRequest:
+      Number.isFinite(Number(pullRequest.number ?? loop.pr_number)) &&
+      typeof (pullRequest.url ?? loop.pr_url) === "string"
+        ? {
+            number: Number(pullRequest.number ?? loop.pr_number),
+            url: String(pullRequest.url ?? loop.pr_url),
+            ...(typeof pullRequest.head === "string"
+              ? { head: pullRequest.head }
+              : {}),
+            ...(typeof pullRequest.base === "string"
+              ? { base: pullRequest.base }
+              : {}),
+            ...(typeof pullRequest.draft === "boolean"
+              ? { draft: pullRequest.draft }
+              : {}),
+          }
+        : undefined,
+    mergeSha:
+      typeof loop.mergeSha === "string"
+        ? loop.mergeSha
+        : typeof loop.merge_sha === "string"
+          ? loop.merge_sha
+          : undefined,
+    deploymentUrl:
+      typeof loop.deploymentUrl === "string"
+        ? loop.deploymentUrl
+        : typeof loop.deployment_url === "string"
+          ? loop.deployment_url
+          : typeof deployment.url === "string"
+            ? deployment.url
+            : undefined,
+    healthStatus:
+      typeof loop.healthStatus === "string"
+        ? loop.healthStatus
+        : typeof loop.health_status === "string"
+          ? loop.health_status
+          : undefined,
+    customerResponseStatus:
+      typeof loop.customerResponseStatus === "string"
+        ? loop.customerResponseStatus
+        : typeof loop.customer_response_status === "string"
+          ? loop.customer_response_status
+          : undefined,
+    events: [
+      ...caseEvents
+        .filter((event) => event.bug_case_id === persistedCase?.id)
+        .map(toUiBugCaseEvent),
+      ...events
+        .filter((event) => event.coding_run_id === record.id)
+        .map((event) => ({
+          id: event.id,
+          label: event.event_type,
+          detail: event.message,
+          time: displayTime(event.created_at),
+          tone: event.event_type.includes("fail")
+            ? ("danger" as const)
+            : event.event_type.includes("complete")
+              ? ("success" as const)
+              : ("accent" as const),
+        })),
+    ],
+  };
+}
+
+function mapBugEvidence(value: unknown): BugEvidence[] {
+  return Array.isArray(value)
+    ? value
+        .map((item): BugEvidence | null => {
+          const record = objectValue(item);
+          const kind = String(record.kind ?? "evidence");
+          const label = String(
+            record.label ?? record.title ?? kind.replaceAll("_", " "),
+          ).trim();
+          if (!label) return null;
+          const detail = String(
+            record.detail ??
+              record.value ??
+              record.summary ??
+              record.customerMessage ??
+              "",
+          ).trim();
+          return {
+            kind,
+            label,
+            ...(detail ? { detail } : {}),
+          };
+        })
+        .filter((item): item is BugEvidence => Boolean(item))
+    : [];
+}
+
+function investigationEvidence(
+  caseId: string,
+  events: BugCaseEventRecord[],
+): BugEvidence[] {
+  return events
+    .filter(
+      (event) =>
+        event.bug_case_id === caseId &&
+        event.event_type === "investigation.completed",
+    )
+    .flatMap((event) =>
+      mapBugEvidence(objectValue(event.metadata_json).evidence),
+    );
+}
+
+function mergeBugEvidence(
+  first: BugEvidence[],
+  second: BugEvidence[],
+): BugEvidence[] {
+  const output = [...first];
+  const keys = new Set(output.map((item) => `${item.kind}:${item.label}`));
+  for (const item of second) {
+    const key = `${item.kind}:${item.label}`;
+    if (keys.has(key)) continue;
+    keys.add(key);
+    output.push(item);
+  }
+  return output;
+}
+
+function toUiBugCaseEvent(event: BugCaseEventRecord) {
+  return {
+    id: event.id,
+    label: event.event_type,
+    detail: event.message,
+    time: displayTime(event.created_at),
+    tone: event.event_type.includes("fail")
+      ? ("danger" as const)
+      : event.stage === "completed" || event.event_type.includes("complete")
+        ? ("success" as const)
+        : event.stage === "decision" || event.stage === "approval"
+          ? ("warning" as const)
+          : ("accent" as const),
+  };
+}
+
+export function toUiBugCase(
+  record: BugCaseRecord,
+  events: BugCaseEventRecord[] = [],
+  issueIdentifier?: string,
+): CodingRun {
+  const stage = record.stage as BugLoopStage;
+  const stageIndex = Math.max(0, stageOrder.indexOf(stage));
+  const status: CodingRun["status"] =
+    record.status === "completed"
+      ? "Completed"
+      : record.status === "failed"
+        ? "Failed"
+        : record.status === "canceled"
+          ? "Canceled"
+          : "Running";
+  const latestEvent = events
+    .filter((event) => event.bug_case_id === record.id)
+    .at(-1);
+  const investigationEvent = events
+    .filter(
+      (event) =>
+        event.bug_case_id === record.id &&
+        event.event_type === "investigation.completed",
+    )
+    .at(-1);
+  const investigationMetadata = investigationEvent
+    ? objectValue(investigationEvent.metadata_json)
+    : {};
+  return {
+    id: `case:${record.id}`,
+    issueId: record.issue_id,
+    issueIdentifier:
+      issueIdentifier ?? record.issue_id.slice(0, 8).toUpperCase(),
+    mode:
+      stageIndex < stageOrder.indexOf("fix") ? "Investigate" : "Implement fix",
+    status,
+    progress: Math.min(
+      100,
+      Math.round((stageIndex / (stageOrder.length - 1)) * 100),
+    ),
+    startedAt: displayTime(record.started_at),
+    duration: "-",
+    summary:
+      (typeof investigationMetadata.summary === "string"
+        ? investigationMetadata.summary
+        : undefined) ??
+      latestEvent?.message ??
+      `Bug case is at ${record.stage}`,
+    files: [],
+    checks: [],
+    caseId: record.id,
+    caseStatus: record.status as CodingRun["caseStatus"],
+    stage,
+    suspicionScore: record.suspicion_score ?? undefined,
+    verdict: record.verdict as BugVerdict,
+    decision: record.decision as BugDecision,
+    evidence: mergeBugEvidence(
+      mapBugEvidence(record.evidence_json),
+      investigationEvidence(record.id, events),
+    ),
+    pullRequest:
+      record.pr_number && record.pr_url
+        ? { number: record.pr_number, url: record.pr_url }
+        : undefined,
+    mergeSha: record.merge_sha ?? undefined,
+    deploymentUrl: record.deployment_url ?? undefined,
+    healthStatus: record.health_status,
+    customerResponseStatus: record.customer_response_status,
+    caseOnly: true,
     events: events
-      .filter((event) => event.coding_run_id === record.id)
-      .map((event) => ({
-        id: event.id,
-        label: event.event_type,
-        detail: event.message,
-        time: displayTime(event.created_at),
-        tone: event.event_type.includes("fail")
-          ? "danger"
-          : event.event_type.includes("complete")
-            ? "success"
-            : "accent",
-      })),
+      .filter((event) => event.bug_case_id === record.id)
+      .map(toUiBugCaseEvent),
   };
 }
 

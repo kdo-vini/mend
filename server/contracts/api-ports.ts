@@ -314,6 +314,11 @@ export interface RepositoryInput {
   localPath: string;
   defaultBranch: string;
   allowedCommands: string[];
+  agentProvider: "codex" | "claude" | "gemini" | "verboo" | "custom";
+  executionPlane: "local_cli" | "github_actions";
+  githubOwner?: string;
+  githubRepo?: string;
+  githubInstallationId?: string;
 }
 
 export type RepositoryPatchInput = Partial<RepositoryInput>;
@@ -363,12 +368,22 @@ export interface CodingRunPort {
   cancel(context: RequestContext, runId: string): Promise<unknown | null>;
   approve(context: RequestContext, runId: string): Promise<unknown | null>;
   publish(context: RequestContext, runId: string): Promise<unknown | null>;
+  merge(context: RequestContext, runId: string): Promise<unknown | null>;
   deploy(context: RequestContext, runId: string): Promise<unknown | null>;
+  health(context: RequestContext, runId: string): Promise<unknown | null>;
   reject(context: RequestContext, runId: string): Promise<unknown | null>;
   patch(
     context: RequestContext,
     runId: string,
   ): Promise<{ patch: string; truncated?: boolean } | null>;
+}
+
+export interface GitHubConnectionPort {
+  startSetup(
+    context: RequestContext,
+    repositoryId: string,
+  ): Promise<{ installationUrl: string }>;
+  completeSetup(query: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface ApiRouterDependencies {
@@ -380,6 +395,7 @@ export interface ApiRouterDependencies {
   issues: IssuePort;
   knowledge: KnowledgePort;
   repositories: RepositoryPort;
+  githubConnections: GitHubConnectionPort;
   codingRuns: CodingRunPort;
   googleConnections: GoogleConnectionPort;
   mcpConnections: McpConnectionPort;

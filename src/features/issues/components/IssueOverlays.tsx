@@ -299,7 +299,7 @@ export function IssueDetailPage({
               type="button"
               onClick={() => onStartRun(issue.id)}
             >
-              <TerminalSquare size={15} /> Run Codex
+              <TerminalSquare size={15} /> Run coding agent
             </button>
             <ActionMenu label={issue.identifier}>
               <button
@@ -517,7 +517,7 @@ export function IssueDetailPage({
           </section>
           <section className="detail-section">
             <SectionTitle
-              title="Codex runs"
+              title="Engineering runs"
               action={issueRuns.length ? "View all" : undefined}
             />
             {issueRuns.length ? (
@@ -531,7 +531,7 @@ export function IssueDetailPage({
             ) : (
               <div className="inline-empty">
                 <TerminalSquare size={18} />
-                <span>No Codex runs yet.</span>
+                <span>No engineering runs yet.</span>
                 <button
                   className="text-button"
                   type="button"
@@ -845,7 +845,7 @@ export function IssueInspector({
             type="button"
             onClick={() => onStartRun(issue.id)}
           >
-            <TerminalSquare size={14} /> Run Codex
+            <TerminalSquare size={14} /> Run coding agent
           </button>
         </div>
       </aside>

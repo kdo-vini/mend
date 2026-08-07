@@ -1,7 +1,7 @@
 {
   "kicker": "Primeiro support loop",
   "title": "Configure o Mend perto dos seus clientes",
-  "description": "Crie o workspace onde sua conexão do WhatsApp, conhecimento confiável, issues e execuções do Codex vão viver.",
+  "description": "Crie o workspace onde sua conexão do WhatsApp, conhecimento confiável, issues e execuções de engenharia vão viver.",
   "workspaceName": "Nome do workspace",
   "workspaceSlug": "Slug do workspace",
   "issuePrefix": "Prefixo das issues",
