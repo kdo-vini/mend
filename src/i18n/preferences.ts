@@ -17,7 +17,7 @@ export function storedInterfaceLanguage(): SupportedLocale {
 export async function applyInterfaceLanguage(
   locale: SupportedLocale,
 ): Promise<void> {
-  await i18n.changeLanguage(locale);
+  if (currentInterfaceLanguage() !== locale) await i18n.changeLanguage(locale);
   if (typeof document !== "undefined") document.documentElement.lang = locale;
   if (typeof window !== "undefined")
     window.localStorage.setItem(interfaceLanguageStorageKey, locale);

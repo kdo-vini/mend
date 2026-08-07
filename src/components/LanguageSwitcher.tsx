@@ -12,7 +12,7 @@ export function LanguageSwitcher({
 }) {
   const { t } = useTranslation("common");
   return (
-    <label>
+    <label className="language-switcher">
       {t("language.label")}
       <select
         value={normalizeLocale(value)}

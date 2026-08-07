@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import {
   acceptWorkspaceInvitation,
   signInWithGoogle as startGoogleSignIn,
@@ -77,7 +78,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const hydrate = async () => {
       const { data, error: sessionError } = await client.auth.getSession();
       if (!active) return;
-      if (sessionError) setError(t("authError"));
+      if (sessionError) setError(i18n.t("authError", { ns: "auth" }));
       if (data.session) {
         const locale = await resolveInterfaceLanguage(client);
         if (!active) return;
@@ -108,7 +109,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       active = false;
       listener.subscription.unsubscribe();
     };
-  }, [t]);
+  }, []);
 
   // The public landing has no dependency on session hydration. Render it
   // immediately so a slow auth check never flashes a loading shell on "/".

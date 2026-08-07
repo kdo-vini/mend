@@ -181,6 +181,31 @@
   color: var(--muted);
   font-size: 10px;
 }
+.auth-form .language-switcher {
+  gap: 7px;
+  color: var(--ink-soft);
+}
+.auth-form .language-switcher select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+.auth-form .language-switcher select:hover {
+  border-color: var(--ink-soft);
+  background: var(--surface-3);
+}
+.auth-form .language-switcher select:focus-visible {
+  border-color: var(--accent);
+}
+.auth-form .language-switcher select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 .auth-input {
   display: flex;
   align-items: center;
