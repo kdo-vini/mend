@@ -74,7 +74,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const hydrate = async () => {
       const { data, error: sessionError } = await client.auth.getSession();
       if (!active) return;
-      if (sessionError) setError(sessionError.message);
+      if (sessionError) setError(t("authError"));
       if (data.session) {
         const locale = await resolveInterfaceLanguage(client);
         if (!active) return;
@@ -105,7 +105,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       active = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [t]);
 
   // The public landing has no dependency on session hydration. Render it
   // immediately so a slow auth check never flashes a loading shell on "/".
@@ -156,7 +156,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
               password,
             })
           : await supabase.auth.signUp({ email: email.trim(), password });
-      if (result.error) setError(result.error.message);
+      if (result.error) setError(t("authError"));
       else if (authMode === "sign-up" && !result.data.session)
         setNotice(t("checkInboxConfirm"));
       else
@@ -177,15 +177,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
         supabase,
       );
       if (result.error) {
-        setError(result.error.message);
+        setError(t("googleSignInError"));
         setAuthAction(null);
       }
-    } catch (googleError) {
-      setError(
-        googleError instanceof Error
-          ? googleError.message
-          : t("googleSignInError"),
-      );
+    } catch {
+      setError(t("googleSignInError"));
       setAuthAction(null);
     }
   };
@@ -197,7 +193,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
     setError(null);
     const result = await supabase.auth.signInWithOtp({ email: email.trim() });
-    if (result.error) setError(result.error.message);
+    if (result.error) setError(t("authError"));
     else setNotice(t("magicLinkSent"));
   };
 
@@ -445,7 +441,7 @@ function AuthShell({
         <h2>{t("contextTitle")}</h2>
         <p>{t("contextDescription")}</p>
         <div className="auth-context-flow" aria-hidden="true">
-          <span>WhatsApp</span>
+          <span>{t("channelWhatsApp")}</span>
           <i>→</i>
           <span>{t("contextIssue")}</span>
           <i>→</i>

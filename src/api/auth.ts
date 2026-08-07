@@ -188,7 +188,7 @@ export function createWorkspace(
     slug: input.slug.trim().toLowerCase(),
     issuePrefix: input.issuePrefix?.trim().toUpperCase() ?? "MEND",
     timezone: input.timezone?.trim() || "America/Sao_Paulo",
-    defaultLanguage: input.defaultLanguage?.trim() || "en-US",
+    defaultLanguage: input.defaultLanguage?.trim() || "pt-BR",
   };
   return callRpc<Workspace>(supabase, "create_workspace", {
     p_name: values.name,

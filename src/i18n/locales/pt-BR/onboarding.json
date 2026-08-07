@@ -1,12 +1,12 @@
 {
   "kicker": "Primeiro support loop",
   "title": "Configure o Mend perto dos seus clientes",
-  "description": "Crie o workspace onde sua conexão do WhatsApp, conhecimento confiável, issues e execuções de engenharia vão viver.",
-  "workspaceName": "Nome do workspace",
-  "workspaceSlug": "Slug do workspace",
-  "issuePrefix": "Prefixo das issues",
-  "create": "Criar workspace",
-  "creating": "Criando workspace…",
-  "note": "Sua conta será a dona do workspace. Depois você pode conectar o WhatsApp.",
-  "error": "Não foi possível criar o workspace. Tente novamente."
+  "description": "Crie o espaço de trabalho onde sua conexão do WhatsApp, a base de conhecimento, os chamados e as execuções do Codex vão viver.",
+  "workspaceName": "Nome do espaço de trabalho",
+  "workspaceSlug": "Slug do espaço de trabalho",
+  "issuePrefix": "Prefixo dos chamados",
+  "create": "Criar espaço de trabalho",
+  "creating": "Criando espaço de trabalho…",
+  "note": "Sua conta será a dona do espaço de trabalho. Depois você pode conectar o WhatsApp.",
+  "error": "Não foi possível criar o espaço de trabalho. Tente novamente."
 }

@@ -1,5 +1,5 @@
 {
-  "title": "Knowledge",
+  "title": "Base de conhecimento",
   "empty": "Nenhum artigo ainda",
   "create": "Novo artigo",
   "ui": {
@@ -11,6 +11,41 @@
     "noMatching": "Nenhum artigo corresponde",
     "tryDifferent": "Tente outra busca ou categoria.",
     "createAnswer": "Crie uma resposta confiável para seu time reutilizar.",
-    "clearFilters": "Limpar filtros"
+    "clearFilters": "Limpar filtros",
+    "updated": "Atualizado {{date}}",
+    "publishedOnly": "Somente artigos publicados deste espaço de trabalho podem entrar no contexto da IA. Rascunhos permanecem internos.",
+    "loading": "Carregando conhecimento…",
+    "refresh": "Atualizar",
+    "connectWorkspace": "Conecte um espaço de trabalho primeiro",
+    "connectWorkspaceDescription": "A base de conhecimento pertence a um espaço de trabalho Mend autenticado. Nenhum artigo de demonstração é exibido.",
+    "edit": "Editar artigo",
+    "delete": "Excluir artigo",
+    "noArticles": "Nenhum artigo de conhecimento ainda",
+    "createReviewedAnswer": "Crie a primeira resposta revisada sobre seus sistemas, produtos e procedimentos de suporte.",
+    "workspaceKnowledge": "Base de conhecimento do espaço de trabalho",
+    "closeEditor": "Fechar editor de artigo"
+  },
+  "editor": {
+    "title": "Título",
+    "titlePlaceholder": "Como funciona nosso checkout",
+    "category": "Categoria",
+    "categoryPlaceholder": "Produto",
+    "body": "Corpo do artigo",
+    "bodyPlaceholder": "Explique o sistema, o procedimento correto e quando escalar.",
+    "status": "Status",
+    "draft": "Rascunho",
+    "published": "Publicado para a IA",
+    "save": "Salvar artigo"
+  },
+  "errors": {
+    "load": "Não foi possível carregar a base de conhecimento.",
+    "save": "Não foi possível salvar o artigo.",
+    "delete": "Não foi possível excluir o artigo."
+  },
+  "toasts": {
+    "updated": "Artigo atualizado",
+    "published": "Artigo publicado para a IA",
+    "savedDraft": "Artigo salvo como rascunho",
+    "deleted": "Artigo excluído"
   }
 }

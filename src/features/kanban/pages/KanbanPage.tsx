@@ -103,7 +103,7 @@ const demoTasks: PersonalTask[] = [
     id: "demo-task-1",
     workspaceId: "demo",
     userId: "demo-user",
-    title: "Review onboarding checklist",
+    title: "Revisar lista de onboarding",
     notes: null,
     status: "todo",
     dueOn: todayIso(),
@@ -116,7 +116,7 @@ const demoTasks: PersonalTask[] = [
     id: "demo-task-2",
     workspaceId: "demo",
     userId: "demo-user",
-    title: "Prepare triage handoff",
+    title: "Preparar repasse da triagem",
     notes: null,
     status: "in_progress",
     dueOn: todayIso(),
@@ -566,8 +566,7 @@ export function KanbanPage({
     <section className="kanban-page">
       {!online && (
         <div className="kanban-offline-banner" role="status">
-          Offline — the last loaded view is available, but changes are disabled
-          until you reconnect.
+          {t("ui.offline")}
         </div>
       )}
       <header className="kanban-header">
@@ -632,7 +631,7 @@ export function KanbanPage({
           <div
             className="kanban-range-switch"
             role="tablist"
-            aria-label="Personal range"
+            aria-label={t("ui.personalRange")}
           >
             {(["today", "week", "all"] as PersonalRange[]).map((value) => (
               <button
@@ -644,10 +643,10 @@ export function KanbanPage({
                 onClick={() => setRange(value)}
               >
                 {value === "today"
-                  ? "Today"
+                  ? t("ui.today")
                   : value === "week"
-                    ? "This week"
-                    : "All"}
+                    ? t("ui.thisWeek")
+                    : t("ui.all")}
               </button>
             ))}
           </div>
@@ -656,9 +655,9 @@ export function KanbanPage({
             <input
               disabled={!online}
               ref={taskInputRef}
-              aria-label="New personal task"
+              aria-label={t("ui.newPersonalTask")}
               value={taskTitle}
-              placeholder="Add a task…"
+              placeholder={t("ui.addTaskPlaceholder")}
               onChange={(event) => setTaskTitle(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void createTask();
@@ -670,7 +669,7 @@ export function KanbanPage({
               type="button"
               onClick={() => void createTask()}
             >
-              Add
+              {t("ui.add")}
             </button>
           </div>
           <button
@@ -679,7 +678,7 @@ export function KanbanPage({
             type="button"
             onClick={() => setEventComposerOpen((current) => !current)}
           >
-            <CalendarDays size={14} /> Add event
+            <CalendarDays size={14} /> {t("ui.addEvent")}
           </button>
         </div>
       )}
@@ -692,7 +691,7 @@ export function KanbanPage({
             type="button"
             onClick={() => void refreshPersonal()}
           >
-            Retry
+            {t("ui.retry")}
           </button>
         </div>
       )}
@@ -701,13 +700,13 @@ export function KanbanPage({
         <form className="kanban-event-composer" onSubmit={createEvent}>
           <input
             required
-            aria-label="Event title"
-            placeholder="Event title"
+            aria-label={t("ui.eventTitle")}
+            placeholder={t("ui.eventTitle")}
             value={eventTitle}
             onChange={(event) => setEventTitle(event.target.value)}
           />
           <label>
-            <span>Starts</span>
+            <span>{t("ui.starts")}</span>
             <input
               required
               type="datetime-local"
@@ -716,7 +715,7 @@ export function KanbanPage({
             />
           </label>
           <label>
-            <span>Ends</span>
+            <span>{t("ui.ends")}</span>
             <input
               type="datetime-local"
               value={eventEnd}
@@ -724,8 +723,8 @@ export function KanbanPage({
             />
           </label>
           <input
-            aria-label="Event location"
-            placeholder="Location (optional)"
+            aria-label={t("ui.eventLocation")}
+            placeholder={t("ui.eventLocationOptional")}
             value={eventLocation}
             onChange={(event) => setEventLocation(event.target.value)}
           />
@@ -734,12 +733,12 @@ export function KanbanPage({
             className="button button-primary"
             type="submit"
           >
-            Save event
+            {t("ui.saveEvent")}
           </button>
           <button
             className="icon-button subtle"
             type="button"
-            aria-label="Close event form"
+            aria-label={t("ui.closeEventForm")}
             onClick={() => setEventComposerOpen(false)}
           >
             <X size={15} />
@@ -752,7 +751,7 @@ export function KanbanPage({
           <AgendaStrip events={events} onRemove={removeEvent} />
         )}
         {loading ? (
-          <KanbanSkeleton />
+          <KanbanSkeleton label={t("ui.loading")} />
         ) : (
           <DesktopBoard
             mode={mode}
@@ -798,9 +797,9 @@ export function KanbanPage({
   );
 }
 
-function KanbanSkeleton() {
+function KanbanSkeleton({ label }: { label: string }) {
   return (
-    <div className="kanban-skeleton-row" aria-label="Loading Kanban">
+    <div className="kanban-skeleton-row" aria-label={label}>
       <span />
       <span />
       <span />
@@ -817,16 +816,17 @@ function AgendaStrip({
   events: PersonalEvent[];
   onRemove: (event: PersonalEvent) => void;
 }) {
+  const { t } = useTranslation("kanban");
   return (
-    <section className="kanban-agenda-strip" aria-label="Today's agenda">
+    <section className="kanban-agenda-strip" aria-label={t("ui.todaysAgenda")}>
       <div className="kanban-agenda-heading">
         <span>
-          <CalendarDays size={14} /> Today
+          <CalendarDays size={14} /> {t("ui.today")}
         </span>
         <small>
           {events.length
-            ? `${events.length} event${events.length === 1 ? "" : "s"}`
-            : "No events scheduled"}
+            ? t("ui.eventsCount", { count: events.length })
+            : t("ui.noEvents")}
         </small>
       </div>
       <div className="kanban-agenda-list">
@@ -839,7 +839,7 @@ function AgendaStrip({
               <button
                 className="icon-button subtle"
                 type="button"
-                aria-label={`Delete ${event.title}`}
+                aria-label={t("ui.deleteEvent", { title: event.title })}
                 onClick={() => onRemove(event)}
               >
                 <Trash2 size={13} />
@@ -847,10 +847,7 @@ function AgendaStrip({
             </div>
           ))
         ) : (
-          <span className="kanban-agenda-empty">
-            A quiet day is still a plan. Add an event when you need a time
-            anchor.
-          </span>
+          <span className="kanban-agenda-empty">{t("ui.quietDay")}</span>
         )}
       </div>
     </section>
@@ -897,15 +894,44 @@ function DesktopBoard({
   onAddCard: () => void;
   online: boolean;
 }) {
+  const { t } = useTranslation("kanban");
+  const issueStatusLabel = (status: IssueStatus) =>
+    status === "Triage"
+      ? t("data.issueStatus.triage", { ns: "common" })
+      : status === "Backlog"
+        ? t("data.issueStatus.backlog", { ns: "common" })
+        : status === "Todo"
+          ? t("data.issueStatus.todo", { ns: "common" })
+          : status === "In Progress"
+            ? t("data.issueStatus.inProgress", { ns: "common" })
+            : status === "Review"
+              ? t("data.issueStatus.review", { ns: "common" })
+              : status === "Done"
+                ? t("data.issueStatus.done", { ns: "common" })
+                : t("data.issueStatus.canceled", { ns: "common" });
+  const personalStatusLabel = (status: PersonalTaskStatus) =>
+    status === "todo"
+      ? t("data.issueStatus.todo", { ns: "common" })
+      : status === "in_progress"
+        ? t("data.issueStatus.inProgress", { ns: "common" })
+        : t("data.issueStatus.done", { ns: "common" });
+  const localizedSharedColumns = sharedColumns.map((column) => ({
+    ...column,
+    label: issueStatusLabel(column.status),
+  }));
+  const localizedPersonalColumns = personalColumns.map((column) => ({
+    ...column,
+    label: personalStatusLabel(column.status),
+  }));
   const columns =
     mode === "shared"
       ? [
-          ...sharedColumns,
+          ...localizedSharedColumns,
           ...(showCanceled
-            ? [{ status: "Canceled" as IssueStatus, label: "Canceled" }]
+            ? [{ status: "Canceled" as IssueStatus, label: t("ui.canceled") }]
             : []),
         ]
-      : personalColumns;
+      : localizedPersonalColumns;
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>(
     {},
   );
@@ -972,7 +998,7 @@ function DesktopBoard({
               <button
                 className="icon-button subtle"
                 type="button"
-                aria-label={`Filter ${column.label}`}
+                aria-label={t("ui.filterColumn", { column: column.label })}
               >
                 <ListFilter size={13} />
               </button>
@@ -1050,8 +1076,8 @@ function DesktopBoard({
               {!items.length && (
                 <div className="kanban-column-empty">
                   <CircleDot size={15} />
-                  <span>Nothing here yet</span>
-                  <small>Drop work into this stage or add a new item.</small>
+                  <span>{t("ui.nothingHere")}</span>
+                  <small>{t("ui.dropWork")}</small>
                 </div>
               )}
             </div>
@@ -1066,7 +1092,9 @@ function DesktopBoard({
                   }))
                 }
               >
-                Load more ({items.length - visibleItems.length})
+                {t("ui.loadMore", {
+                  count: items.length - visibleItems.length,
+                })}
               </button>
             )}
             <button
@@ -1075,7 +1103,7 @@ function DesktopBoard({
               type="button"
               onClick={onAddCard}
             >
-              <Plus size={13} /> Add card
+              <Plus size={13} /> {t("ui.addCard")}
             </button>
           </section>
         );
@@ -1085,9 +1113,10 @@ function DesktopBoard({
 }
 
 function CardMenu({ children }: { children: ReactNode }) {
+  const { t } = useTranslation("kanban");
   return (
     <details className="kanban-card-menu">
-      <summary aria-label="Card actions">
+      <summary aria-label={t("ui.cardActions")}>
         <MoreHorizontal size={14} />
       </summary>
       <div className="kanban-card-menu-popover">{children}</div>
@@ -1116,6 +1145,7 @@ function IssueCard({
   assigneeLabel: (value: string) => string;
   setDueDate: (value: string) => void;
 }) {
+  const { t } = useTranslation("kanban");
   return (
     <article
       className={`kanban-card issue-card ${drag?.id === issue.id ? "is-dragging" : ""}`}
@@ -1141,12 +1171,12 @@ function IssueCard({
         />
         <CardMenu>
           <button type="button" onClick={onOpen}>
-            Open issue
+            {t("ui.openIssue")}
           </button>
           <label>
-            Move to
+            {t("ui.moveTo")}
             <select
-              aria-label={`Move ${issue.identifier}`}
+              aria-label={t("ui.moveIssue", { identifier: issue.identifier })}
               value={issue.status}
               onChange={(event) => onMove(event.target.value as IssueStatus)}
             >
@@ -1170,7 +1200,7 @@ function IssueCard({
         <label className="kanban-due-control">
           <Clock3 size={12} />
           <input
-            aria-label={`Due date for ${issue.identifier}`}
+            aria-label={t("ui.dueDateFor", { name: issue.identifier })}
             type="date"
             value={issue.dueOn ?? ""}
             onChange={(event) => setDueDate(event.target.value)}
@@ -1179,7 +1209,7 @@ function IssueCard({
       </div>
       <div className="kanban-card-footer">
         <span className="drag-handle" aria-hidden="true">
-          <GripVertical size={13} /> Drag to reorder
+          <GripVertical size={13} /> {t("ui.dragToReorder")}
         </span>
         {issue.labels.slice(0, 2).map((label) => (
           <span className="kanban-label" key={label}>
@@ -1206,6 +1236,7 @@ function TaskCard({
   onMove: (status: PersonalTaskStatus) => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation("kanban");
   return (
     <article
       className={`kanban-card task-card ${drag?.id === task.id ? "is-dragging" : ""}`}
@@ -1216,12 +1247,12 @@ function TaskCard({
       onDragEnd={() => setDrag(null)}
     >
       <div className="kanban-card-topline">
-        <span className="task-kind">Personal task</span>
+        <span className="task-kind">{t("ui.personalTask")}</span>
         <CardMenu>
           <label>
-            Move to
+            {t("ui.moveTo")}
             <select
-              aria-label={`Move ${task.title}`}
+              aria-label={t("ui.moveTask", { title: task.title })}
               value={task.status}
               onChange={(event) =>
                 onMove(event.target.value as PersonalTaskStatus)
@@ -1235,7 +1266,7 @@ function TaskCard({
             </select>
           </label>
           <button type="button" className="danger-text" onClick={onDelete}>
-            Delete task
+            {t("ui.deleteTask")}
           </button>
         </CardMenu>
       </div>
@@ -1250,13 +1281,13 @@ function TaskCard({
         <span>{dateLabel(task.dueOn)}</span>
         {task.completedAt && (
           <span className="success-copy">
-            <Check size={12} /> Completed
+            <Check size={12} /> {t("ui.completed")}
           </span>
         )}
       </div>
       <div className="kanban-card-footer">
         <span className="drag-handle" aria-hidden="true">
-          <GripVertical size={13} /> Drag to reorder
+          <GripVertical size={13} /> {t("ui.dragToReorder")}
         </span>
       </div>
     </article>
@@ -1282,15 +1313,18 @@ function MobileAgenda({
   onIssueDueDate: (issue: Issue, dueOn: string) => void;
   onOpenIssue: (id: string) => void;
 }) {
+  const { t } = useTranslation("kanban");
   return (
     <div className="mobile-agenda">
       <section className="mobile-agenda-section">
         <header>
           <span>
-            <CalendarDays size={14} /> Next up
+            <CalendarDays size={14} /> {t("ui.nextUp")}
           </span>
           <small>
-            {events.length ? eventTimeLabel(events[0].startsAt) : "No event"}
+            {events.length
+              ? eventTimeLabel(events[0].startsAt)
+              : t("ui.noEvent")}
           </small>
         </header>
         {events.length ? (
@@ -1299,12 +1333,12 @@ function MobileAgenda({
               <time>{eventTimeLabel(event.startsAt)}</time>
               <span>
                 <strong>{event.title}</strong>
-                <small>{event.location || "Personal event"}</small>
+                <small>{event.location || t("ui.personalEvent")}</small>
               </span>
               <button
                 className="icon-button subtle"
                 type="button"
-                aria-label={`Delete ${event.title}`}
+                aria-label={t("ui.deleteEvent", { title: event.title })}
                 onClick={() => onRemoveEvent(event)}
               >
                 <Trash2 size={13} />
@@ -1312,17 +1346,17 @@ function MobileAgenda({
             </div>
           ))
         ) : (
-          <p className="mobile-agenda-empty">
-            No meetings planned. Your focus list is ready.
-          </p>
+          <p className="mobile-agenda-empty">{t("ui.noMeetings")}</p>
         )}
       </section>
       <section className="mobile-agenda-section">
         <header>
           <span>
-            <Check size={14} /> Today
+            <Check size={14} /> {t("ui.today")}
           </span>
-          <small>{tasks.length + issues.length} items</small>
+          <small>
+            {t("ui.itemsCount", { count: tasks.length + issues.length })}
+          </small>
         </header>
         {tasks.map((task) => (
           <div
@@ -1343,13 +1377,15 @@ function MobileAgenda({
               </span>
               <span>
                 <strong>{task.title}</strong>
-                <small>Personal task · {dateLabel(task.dueOn)}</small>
+                <small>
+                  {t("ui.personalTaskDate", { date: dateLabel(task.dueOn) })}
+                </small>
               </span>
               <ChevronDown size={14} />
             </button>
             <input
               className="mobile-agenda-date"
-              aria-label={`Due date for ${task.title}`}
+              aria-label={t("ui.dueDateFor", { name: task.title })}
               type="date"
               value={task.dueOn ?? ""}
               onChange={(event) => onTaskDueDate(task, event.target.value)}
@@ -1379,7 +1415,7 @@ function MobileAgenda({
             </button>
             <input
               className="mobile-agenda-date"
-              aria-label={`Due date for ${issue.identifier}`}
+              aria-label={t("ui.dueDateFor", { name: issue.identifier })}
               type="date"
               value={issue.dueOn ?? ""}
               onChange={(event) => onIssueDueDate(issue, event.target.value)}
@@ -1387,9 +1423,7 @@ function MobileAgenda({
           </div>
         ))}
         {!tasks.length && !issues.length && (
-          <p className="mobile-agenda-empty">
-            Nothing due today. Add a task from the header.
-          </p>
+          <p className="mobile-agenda-empty">{t("ui.nothingDue")}</p>
         )}
       </section>
     </div>
@@ -1405,10 +1439,33 @@ function MobileSharedList({
   showCanceled: boolean;
   onOpenIssue: (id: string) => void;
 }) {
+  const { t } = useTranslation(["kanban", "common"]);
+  const issueStatusLabel = (status: IssueStatus) =>
+    status === "Triage"
+      ? t("data.issueStatus.triage", { ns: "common" })
+      : status === "Backlog"
+        ? t("data.issueStatus.backlog", { ns: "common" })
+        : status === "Todo"
+          ? t("data.issueStatus.todo", { ns: "common" })
+          : status === "In Progress"
+            ? t("data.issueStatus.inProgress", { ns: "common" })
+            : status === "Review"
+              ? t("data.issueStatus.review", { ns: "common" })
+              : status === "Done"
+                ? t("data.issueStatus.done", { ns: "common" })
+                : t("data.issueStatus.canceled", { ns: "common" });
   const columns = [
-    ...sharedColumns,
+    ...sharedColumns.map((column) => ({
+      ...column,
+      label: issueStatusLabel(column.status),
+    })),
     ...(showCanceled
-      ? [{ status: "Canceled" as IssueStatus, label: "Canceled" }]
+      ? [
+          {
+            status: "Canceled" as IssueStatus,
+            label: issueStatusLabel("Canceled"),
+          },
+        ]
       : []),
   ];
   return (
@@ -1436,7 +1493,7 @@ function MobileSharedList({
                   <small>
                     {issue.identifier} ·{" "}
                     {issue.assignee === "Unassigned"
-                      ? "Unassigned"
+                      ? t("app.unassigned", { ns: "common" })
                       : issue.assignee}
                   </small>
                 </span>

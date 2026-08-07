@@ -4,14 +4,14 @@ import { normalizeLocale, resources } from "./resources";
 
 const storedLocale =
   typeof window === "undefined"
-    ? "en-US"
+    ? "pt-BR"
     : normalizeLocale(window.localStorage.getItem("mend.interface-language"));
 
 void i18n.use(initReactI18next).init({
   resources,
   lng: storedLocale,
-  fallbackLng: "en-US",
-  supportedLngs: ["en-US", "pt-BR"],
+  fallbackLng: "pt-BR",
+  supportedLngs: ["pt-BR", "en-US"],
   defaultNS: "common",
   ns: [
     "common",

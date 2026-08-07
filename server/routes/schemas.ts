@@ -42,7 +42,7 @@ export const workspaceCreateSchema = z
       .regex(/^[A-Z][A-Z0-9]{1,7}$/)
       .default("TEC"),
     timezone: z.string().trim().min(1).max(80).default("UTC"),
-    defaultLanguage: z.string().trim().min(2).max(12).default("en-US"),
+    defaultLanguage: z.string().trim().min(2).max(12).default("pt-BR"),
   })
   .strict();
 export const workspacePatchSchema = workspaceCreateSchema.partial().strict();

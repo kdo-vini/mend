@@ -1,6 +1,7 @@
 {
   "brand": {
     "name": "Mend",
+    "codex": "OpenAI Codex",
     "descriptor": "AI support for SaaS builders",
     "tagline": "Keep shipping. Mend the support loop.",
     "workspaceEyebrow": "Mend workspace"
@@ -14,14 +15,24 @@
     "save": "Save",
     "cancel": "Cancel",
     "close": "Close",
+    "confirm": "Confirm",
     "retry": "Retry",
-    "back": "Back"
+    "back": "Back",
+    "editValue": "Edit {{label}}",
+    "actionsFor": "Actions for {{label}}"
   },
   "states": {
     "loading": "Loading…",
     "saving": "Saving…",
     "unknownTime": "Unknown time",
-    "allCaughtUp": "All caught up"
+    "allCaughtUp": "All caught up",
+    "loadingInbox": "Loading Inbox…",
+    "loadingIssues": "Loading issues…",
+    "loadingKanban": "Loading Kanban…",
+    "loadingCodexRuns": "Loading Codex runs…",
+    "loadingKnowledge": "Loading knowledge…",
+    "loadingSettings": "Loading settings…",
+    "loadingDescription": "Keeping the current workspace context ready."
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
@@ -30,7 +41,25 @@
     "invalidInput": "Please check the information and try again.",
     "workspaceNotFound": "That Workspace could not be found.",
     "permissionDenied": "You do not have permission to do that.",
-    "technical": "A technical error occurred. Please try again."
+    "technical": "A technical error occurred. Please try again.",
+    "viewUnavailable": "Could not load this view",
+    "viewUnavailableDescription": "The latest data is unavailable right now. Try again in a moment.",
+    "interfaceUnavailable": "Interface unavailable",
+    "somethingWentWrong": "Something went wrong",
+    "interfaceDescription": "The workspace could not render this view. Your data is still safe; try again or reload the page.",
+    "liveReconciliation": "The live workspace data could not be refreshed.",
+    "liveDataUnavailable": "Workspace data is not available right now.",
+    "liveDataTitle": "Live data unavailable",
+    "liveDataDescription": "{{message}} No demo records are being shown.",
+    "issueCreate": "The issue could not be created.",
+    "issueUpdate": "The issue could not be updated.",
+    "issueDelete": "The issue could not be deleted.",
+    "issueResolve": "The issue could not be resolved and the customer could not be notified.",
+    "notificationDismiss": "The notification could not be dismissed.",
+    "notificationsDismiss": "The notifications could not be dismissed.",
+    "nativeNotificationsEnable": "Native notifications could not be enabled.",
+    "codexRunQueue": "The Codex run could not be queued.",
+    "codexRunUpdate": "The Codex run could not be updated."
   },
   "navigation": {
     "inbox": "Inbox",
@@ -62,6 +91,81 @@
     "logout": "Log out",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
-    "useTheme": "Use {{theme}} theme"
+    "useTheme": "Use {{theme}} theme",
+    "notificationsLabel": "Notifications{{count}}",
+    "notificationsLabel_one": "Notifications{{count}}",
+    "notificationsLabel_other": "Notifications{{count}}",
+    "unread_one": "{{count}} unread",
+    "unread_other": "{{count}} unread",
+    "shortcutCommand": "⌘ K"
+  },
+  "app": {
+    "currentOperator": "Current operator",
+    "workspaceMember": "Workspace member {{id}}",
+    "unassigned": "Unassigned",
+    "user": "User {{id}}",
+    "internalIssueSummary": "Internal work item created from the workspace.",
+    "issueImpactPending": "Impact to be assessed during triage.",
+    "codexRunPreparing": "Preparing an isolated workspace and assembling the issue context.",
+    "codexRunStartedDetail": "Run queued with a clean repository context"
+  },
+  "toasts": {
+    "liveDataUnavailable": "Live data unavailable: {{message}}",
+    "issueCreatedLive": "Issue created in the live workspace",
+    "issueCreated": "{{identifier}} created",
+    "issueDeleted": "{{identifier}} deleted",
+    "issueResolved": "{{identifier}} resolved and customer notified",
+    "browserNotificationsBlocked": "Browser notifications are blocked",
+    "nativeNotificationsUnsupported": "This browser does not support native notifications here",
+    "nativeNotificationsNotConfigured": "Native notifications are not configured yet",
+    "codexRunQueued": "Codex run queued for {{identifier}}",
+    "codexRunStarted": "Codex run started for {{identifier}}",
+    "codexRunCanceled": "Codex run canceled",
+    "codexResultApproved": "Codex result approved and committed locally",
+    "codexBranchPublished": "Codex branch published",
+    "codexDeploymentStarted": "Codex deployment started",
+    "codexResultRejected": "Codex result rejected",
+    "demoNoSession": "Demo mode has no signed-in session",
+    "workspaceSwitched": "Switched to {{name}}"
+  },
+  "data": {
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "noPriority": "No priority"
+    },
+    "issueStatus": {
+      "triage": "Triage",
+      "backlog": "Backlog",
+      "todo": "To do",
+      "inProgress": "In progress",
+      "review": "Review",
+      "done": "Done",
+      "canceled": "Canceled"
+    },
+    "runStatus": {
+      "completed": "Completed",
+      "running": "Running",
+      "failed": "Failed",
+      "canceled": "Canceled",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "articleStatus": {
+      "published": "Published",
+      "draft": "Draft"
+    },
+    "runMode": {
+      "investigate": "Investigate",
+      "proposeFix": "Propose fix",
+      "implementFix": "Implement fix"
+    }
+  },
+  "confirmations": {
+    "deleteIssueTitle": "Delete issue?",
+    "deleteIssueDescription": "Delete {{identifier}}? This cannot be undone.",
+    "deleteIssueConfirm": "Delete issue"
   }
 }

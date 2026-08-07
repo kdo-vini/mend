@@ -38,12 +38,8 @@ export function WorkspaceOnboarding({
         supabase ?? undefined,
       );
       onCreated(workspace);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : t("error", { ns: "onboarding" }),
-      );
+    } catch {
+      setError(t("error", { ns: "onboarding" }));
     } finally {
       setSaving(false);
     }

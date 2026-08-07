@@ -1,14 +1,12 @@
 import { AlertCircle, Inbox, RefreshCw, Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function Skeleton({ className = "" }: { className?: string }) {
   return <span className={`skeleton ${className}`} aria-hidden="true" />;
 }
 
-export function LoadingState({
-  label = "Loading workspace data…",
-}: {
-  label?: string;
-}) {
+export function LoadingState({ label }: { label?: string }) {
+  const { t } = useTranslation("common");
   return (
     <div
       className="resource-state resource-state-loading"
@@ -22,8 +20,8 @@ export function LoadingState({
           <Skeleton className="skeleton-preview-line" />
         </div>
       </div>
-      <strong>{label}</strong>
-      <span>Keeping the current workspace context ready.</span>
+      <strong>{label ?? t("states.loading")}</strong>
+      <span>{t("states.loadingDescription")}</span>
     </div>
   );
 }
@@ -54,26 +52,27 @@ export function EmptyState({
 }
 
 export function ErrorState({
-  title = "Could not load this view",
-  description = "The latest data is unavailable right now. Try again in a moment.",
+  title,
+  description,
   onRetry,
 }: {
   title?: string;
   description?: string;
   onRetry?: () => void;
 }) {
+  const { t } = useTranslation("common");
   return (
     <div className="resource-state resource-state-error" role="alert">
       <AlertCircle size={20} aria-hidden="true" />
-      <strong>{title}</strong>
-      <span>{description}</span>
+      <strong>{title ?? t("errors.viewUnavailable")}</strong>
+      <span>{description ?? t("errors.viewUnavailableDescription")}</span>
       {onRetry && (
         <button
           className="button button-ghost button-small"
           type="button"
           onClick={onRetry}
         >
-          <RefreshCw size={13} /> Try again
+          <RefreshCw size={13} /> {t("actions.retry")}
         </button>
       )}
     </div>

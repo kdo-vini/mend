@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Ellipsis } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function ActionMenu({
   label,
@@ -9,6 +10,7 @@ export function ActionMenu({
   label: string;
   children: ReactNode;
 }) {
+  const { t } = useTranslation("common");
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -61,7 +63,7 @@ export function ActionMenu({
         ref={triggerRef}
         className="icon-button subtle"
         type="button"
-        aria-label={`Actions for ${label}`}
+        aria-label={t("actions.actionsFor", { label })}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={toggle}

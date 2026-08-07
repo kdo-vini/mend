@@ -990,7 +990,7 @@ describe("live Whatsmiau worker", () => {
         '"direction":"outbound","text":"Nosso estoque é sincronizado pelo ERP."',
       ),
       expect.any(String),
-      "en-US",
+      "pt-BR",
     );
     expect(draftReply.mock.calls[0]?.[0]).toContain(
       '"reply_target":{"id":"message-unknown","direction":"inbound"',

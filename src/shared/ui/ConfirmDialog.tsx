@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +30,7 @@ export function ConfirmDialog({
   request: ConfirmationRequest;
   onResolve: (confirmed: boolean) => void;
 }) {
+  const { t } = useTranslation("common");
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -47,13 +49,13 @@ export function ConfirmDialog({
             ref={cancelButtonRef}
             onClick={() => onResolve(false)}
           >
-            {request.cancelLabel ?? "Cancel"}
+            {request.cancelLabel ?? t("actions.cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
             variant={request.destructive ? "destructive" : "default"}
             onClick={() => onResolve(true)}
           >
-            {request.confirmLabel ?? "Confirm"}
+            {request.confirmLabel ?? t("actions.confirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

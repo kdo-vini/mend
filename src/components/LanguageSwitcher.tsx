@@ -19,8 +19,8 @@ export function LanguageSwitcher({
         disabled={disabled}
         onChange={(event) => onChange(normalizeLocale(event.target.value))}
       >
-        <option value="en-US">{t("language.english")}</option>
         <option value="pt-BR">{t("language.portuguese")}</option>
+        <option value="en-US">{t("language.english")}</option>
       </select>
     </label>
   );

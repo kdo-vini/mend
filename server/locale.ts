@@ -4,7 +4,7 @@ export function normalizeLocale(value: unknown): SupportedLocale {
   const normalized = String(value ?? "")
     .trim()
     .toLowerCase();
-  return normalized === "pt" || normalized === "pt-br" ? "pt-BR" : "en-US";
+  return normalized === "en" || normalized === "en-us" ? "en-US" : "pt-BR";
 }
 
 export function replyLanguageInstruction(locale: SupportedLocale): string {

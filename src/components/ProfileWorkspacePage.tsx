@@ -30,6 +30,7 @@ import {
   saveInterfaceLanguage,
 } from "../i18n/preferences";
 import { normalizeLocale, type SupportedLocale } from "../i18n/resources";
+import { localizedError } from "../shared/ui/localizedError";
 
 type ProfileTab = "profile" | "workspace" | "subscription" | "security";
 
@@ -47,8 +48,11 @@ const profileTabs: Array<{
 const isProfileTab = (value: string | null): value is ProfileTab =>
   profileTabs.some((tab) => tab.id === value);
 
-function profileTabLabel(id: ProfileTab, t: (key: string) => string) {
-  return t(`profileTabs.${id}`);
+function profileTabLabel(
+  id: ProfileTab,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return t(`profileTabs.${id}`, { ns: "settings" });
 }
 
 function initials(name: string) {
@@ -63,8 +67,8 @@ function initials(name: string) {
   );
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "Not available";
+function formatDate(value: string | null | undefined, unavailable: string) {
+  if (!value) return unavailable;
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
@@ -110,7 +114,7 @@ export function ProfileWorkspacePage({
 
   const load = useCallback(async () => {
     if (!supabase) {
-      setError("Supabase is required to load your profile.");
+      setError(t("errors.supabaseUnavailable", { ns: "common" }));
       setLoading(false);
       return;
     }
@@ -123,13 +127,12 @@ export function ProfileWorkspacePage({
           ? getMyWorkspace(workspaceId, supabase)
           : getMyWorkspace(undefined, supabase),
       ]);
-      if (!nextUser)
-        throw new Error("Your authenticated account could not be loaded.");
+      if (!nextUser) throw new Error("authenticated_account_unavailable");
       const nextName =
         typeof nextUser.user_metadata.full_name === "string" &&
         nextUser.user_metadata.full_name.trim()
           ? nextUser.user_metadata.full_name.trim()
-          : (nextUser.email?.split("@")[0] ?? "Current operator");
+          : (nextUser.email?.split("@")[0] ?? t("app.currentOperator"));
       setUser(nextUser);
       setWorkspace(nextWorkspace);
       setInterfaceLanguage(currentInterfaceLanguage());
@@ -144,14 +147,12 @@ export function ProfileWorkspacePage({
       onIdentityUpdated({ name: nextName, email: nextUser.email ?? "" });
     } catch (reason) {
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "Your profile could not be loaded.",
+        localizedError(reason, t("profileLoadError", { ns: "settings" })),
       );
     } finally {
       setLoading(false);
     }
-  }, [onIdentityUpdated, workspaceId]);
+  }, [onIdentityUpdated, t, workspaceId]);
 
   const changeInterfaceLanguage = async (locale: SupportedLocale) => {
     const previous = interfaceLanguage;
@@ -181,7 +182,20 @@ export function ProfileWorkspacePage({
   const canEditWorkspace =
     workspace?.role === "owner" || workspace?.role === "admin";
   const accountName =
-    profileName.trim() || user?.email?.split("@")[0] || "Current operator";
+    profileName.trim() ||
+    user?.email?.split("@")[0] ||
+    t("app.currentOperator");
+  const roleLabel = (role: WorkspaceWithRole["role"]) =>
+    t(
+      role === "owner"
+        ? "ownerRole"
+        : role === "admin"
+          ? "adminRole"
+          : role === "agent"
+            ? "agentRole"
+            : "viewerRole",
+      { ns: "settings" },
+    );
   const authProvider = useMemo(() => {
     const provider = user?.app_metadata.provider;
     return typeof provider === "string" ? provider : "email";
@@ -213,12 +227,10 @@ export function ProfileWorkspacePage({
         name: profileName.trim(),
         email: data.user.email ?? "",
       });
-      onToast("Profile saved");
+      onToast(t("profileSaved", { ns: "settings" }));
     } catch (reason) {
       onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Profile could not be saved.",
+        localizedError(reason, t("profileSaveError", { ns: "settings" })),
       );
     } finally {
       setSaving(false);
@@ -228,13 +240,11 @@ export function ProfileWorkspacePage({
   const saveWorkspace = async () => {
     if (!workspace || !canEditWorkspace) return;
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(workspaceForm.slug)) {
-      onToast(
-        "Workspace slug must use lowercase letters, numbers and hyphens.",
-      );
+      onToast(t("workspaceSlugInvalid", { ns: "settings" }));
       return;
     }
     if (!/^[A-Z][A-Z0-9]{1,7}$/.test(workspaceForm.issuePrefix)) {
-      onToast("Issue prefix must contain 2–8 uppercase letters or numbers.");
+      onToast(t("issuePrefixInvalid", { ns: "settings" }));
       return;
     }
     setSaving(true);
@@ -255,12 +265,10 @@ export function ProfileWorkspacePage({
         defaultLanguage: normalizeLocale(updated.default_language),
       });
       onWorkspaceUpdated(updated);
-      onToast("Workspace saved");
+      onToast(t("workspaceSaved", { ns: "settings" }));
     } catch (reason) {
       onToast(
-        reason instanceof Error
-          ? reason.message
-          : "Workspace could not be saved.",
+        localizedError(reason, t("workspaceSaveError", { ns: "settings" })),
       );
     } finally {
       setSaving(false);
@@ -271,7 +279,10 @@ export function ProfileWorkspacePage({
     setSaving(true);
     const result = await signOut(supabase ?? undefined);
     setSaving(false);
-    if (result.error) onToast(result.error.message);
+    if (result.error)
+      onToast(
+        localizedError(result.error, t("signOutError", { ns: "settings" })),
+      );
   };
 
   if (loading)
@@ -402,24 +413,21 @@ export function ProfileWorkspacePage({
               <div className="profile-section-heading">
                 <div>
                   <h2>{t("workspaceIdentity", { ns: "settings" })}</h2>
-                  <p>
-                    These values are used by the Inbox, issue identifiers and
-                    localized automation.
-                  </p>
+                  <p>{t("workspaceFieldsDescription", { ns: "settings" })}</p>
                 </div>
-                <span className="role-pill">{workspace.role}</span>
+                <span className="role-pill">{roleLabel(workspace.role)}</span>
               </div>
               {!canEditWorkspace && (
                 <div className="settings-note">
                   <ShieldCheck size={14} />
                   <span>
-                    Only workspace owners and admins can change these fields.
+                    {t("workspaceFieldsPermission", { ns: "settings" })}
                   </span>
                 </div>
               )}
               <div className="profile-form two-column">
                 <label>
-                  Workspace name
+                  {t("workspaceName", { ns: "settings" })}
                   <input
                     value={workspaceForm.name}
                     disabled={!canEditWorkspace}
@@ -432,7 +440,7 @@ export function ProfileWorkspacePage({
                   />
                 </label>
                 <label>
-                  Workspace slug
+                  {t("workspaceSlug", { ns: "settings" })}
                   <input
                     value={workspaceForm.slug}
                     disabled={!canEditWorkspace}
@@ -447,7 +455,7 @@ export function ProfileWorkspacePage({
                   />
                 </label>
                 <label>
-                  Issue prefix
+                  {t("issuePrefix", { ns: "settings" })}
                   <input
                     value={workspaceForm.issuePrefix}
                     maxLength={8}
@@ -463,7 +471,7 @@ export function ProfileWorkspacePage({
                   />
                 </label>
                 <label>
-                  Timezone
+                  {t("timezone", { ns: "settings" })}
                   <Select
                     value={workspaceForm.timezone}
                     options={[
@@ -487,8 +495,14 @@ export function ProfileWorkspacePage({
                   <Select
                     value={workspaceForm.defaultLanguage}
                     options={[
-                      { value: "en-US", label: "English (US)" },
-                      { value: "pt-BR", label: "Português (Brasil)" },
+                      {
+                        value: "pt-BR",
+                        label: t("language.portuguese", { ns: "common" }),
+                      },
+                      {
+                        value: "en-US",
+                        label: t("language.english", { ns: "common" }),
+                      },
                     ]}
                     disabled={!canEditWorkspace}
                     onChange={(value) =>
@@ -512,7 +526,10 @@ export function ProfileWorkspacePage({
                   }
                   onClick={() => void saveWorkspace()}
                 >
-                  <Save size={14} /> {saving ? "Saving…" : "Save workspace"}
+                  <Save size={14} />{" "}
+                  {saving
+                    ? t("saving", { ns: "settings" })
+                    : t("saveWorkspace", { ns: "settings" })}
                 </button>
               </div>
             </section>
@@ -522,38 +539,31 @@ export function ProfileWorkspacePage({
             <section className="profile-section">
               <div className="profile-section-heading">
                 <div>
-                  <h2>Subscription</h2>
-                  <p>
-                    Mend is running as a private preview workspace. Billing has
-                    not been connected, so there is no fabricated plan or
-                    checkout action.
-                  </p>
+                  <h2>{t("subscriptionTitle", { ns: "settings" })}</h2>
+                  <p>{t("subscriptionDescription", { ns: "settings" })}</p>
                 </div>
               </div>
               <dl className="subscription-facts">
                 <div>
-                  <dt>Plan</dt>
-                  <dd>Private preview</dd>
+                  <dt>{t("plan", { ns: "settings" })}</dt>
+                  <dd>{t("privatePreview", { ns: "settings" })}</dd>
                 </div>
                 <div>
-                  <dt>Billing status</dt>
-                  <dd>Not configured</dd>
+                  <dt>{t("billingStatus", { ns: "settings" })}</dt>
+                  <dd>{t("notConfigured", { ns: "settings" })}</dd>
                 </div>
                 <div>
-                  <dt>Workspace</dt>
+                  <dt>{t("workspaceLabel", { ns: "settings" })}</dt>
                   <dd>{workspace.name}</dd>
                 </div>
                 <div>
-                  <dt>Access</dt>
-                  <dd>Workspace members only</dd>
+                  <dt>{t("access", { ns: "settings" })}</dt>
+                  <dd>{t("workspaceMembersOnly", { ns: "settings" })}</dd>
                 </div>
               </dl>
               <div className="settings-note">
                 <CreditCard size={14} />
-                <span>
-                  Plan selection, invoices and payment methods will be enabled
-                  only after a real billing provider is integrated.
-                </span>
+                <span>{t("billingNote", { ns: "settings" })}</span>
               </div>
             </section>
           )}
@@ -562,40 +572,41 @@ export function ProfileWorkspacePage({
             <section className="profile-section">
               <div className="profile-section-heading">
                 <div>
-                  <h2>Security</h2>
-                  <p>
-                    Authentication is managed by Supabase Auth. Mend never
-                    displays or stores your password in the workspace.
-                  </p>
+                  <h2>{t("securityTitle", { ns: "settings" })}</h2>
+                  <p>{t("securityDescription", { ns: "settings" })}</p>
                 </div>
               </div>
               <dl className="security-facts">
                 <div>
                   <dt>
-                    <Mail size={14} /> Sign-in email
+                    <Mail size={14} /> {t("signInEmail", { ns: "settings" })}
                   </dt>
                   <dd>{user.email}</dd>
                 </div>
                 <div>
                   <dt>
-                    <ShieldCheck size={14} /> Provider
+                    <ShieldCheck size={14} />{" "}
+                    {t("provider", { ns: "settings" })}
                   </dt>
                   <dd>{authProvider}</dd>
                 </div>
                 <div>
                   <dt>
-                    <CalendarDays size={14} /> Last sign-in
+                    <CalendarDays size={14} />{" "}
+                    {t("lastSignIn", { ns: "settings" })}
                   </dt>
-                  <dd>{formatDate(user.last_sign_in_at)}</dd>
+                  <dd>
+                    {formatDate(
+                      user.last_sign_in_at,
+                      t("notAvailable", { ns: "settings" }),
+                    )}
+                  </dd>
                 </div>
               </dl>
               <div className="danger-zone">
                 <div>
-                  <strong>End this session</strong>
-                  <p>
-                    You will return to the secure Mend sign-in screen on this
-                    device.
-                  </p>
+                  <strong>{t("endSession", { ns: "settings" })}</strong>
+                  <p>{t("endSessionDescription", { ns: "settings" })}</p>
                 </div>
                 <button
                   className="button button-danger"
@@ -603,7 +614,7 @@ export function ProfileWorkspacePage({
                   disabled={saving}
                   onClick={() => void leave()}
                 >
-                  <LogOut size={14} /> Sign out
+                  <LogOut size={14} /> {t("signOut", { ns: "settings" })}
                 </button>
               </div>
             </section>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   BookOpen,
   PenLine,
@@ -22,14 +23,11 @@ import { PageHeader } from "../../../shared/ui/PageHeader";
 import { EmptyState, Skeleton } from "../../../shared/ui/ResourceState";
 import { StatusArticle } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
+import { localizedError } from "../../../shared/ui/localizedError";
 
-function KnowledgeSkeletonPreview() {
+function KnowledgeSkeletonPreview({ label }: { label: string }) {
   return (
-    <div
-      className="knowledge-list-skeleton"
-      role="status"
-      aria-label="Loading knowledge"
-    >
+    <div className="knowledge-list-skeleton" role="status" aria-label={label}>
       {[0, 1, 2].map((item) => (
         <div className="knowledge-skeleton-row" key={item} aria-hidden="true">
           <Skeleton className="knowledge-icon" />
@@ -59,11 +57,12 @@ export function KnowledgeWorkspacePage({
   workspaceId: string | null;
   onToast: (message: string) => void;
 }) {
+  const { t } = useTranslation("knowledge");
   const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<KnowledgeDraft>({
     title: "",
-    category: "Support",
+    category: "Suporte",
     body: "",
     status: "draft",
   });
@@ -79,15 +78,11 @@ export function KnowledgeWorkspacePage({
     try {
       setArticles(await loadKnowledgeArticles(workspaceId));
     } catch (error) {
-      onToast(
-        error instanceof Error
-          ? error.message
-          : "Knowledge could not be loaded.",
-      );
+      onToast(localizedError(error, t("errors.load", { ns: "knowledge" })));
     } finally {
       setLoading(false);
     }
-  }, [onToast, workspaceId]);
+  }, [onToast, t, workspaceId]);
 
   useEffect(() => {
     void refresh();
@@ -100,7 +95,7 @@ export function KnowledgeWorkspacePage({
   );
 
   const openNewArticle = () => {
-    setEditing({ title: "", category: "Support", body: "", status: "draft" });
+    setEditing({ title: "", category: "Suporte", body: "", status: "draft" });
     setEditorOpen(true);
   };
 
@@ -111,7 +106,7 @@ export function KnowledgeWorkspacePage({
         workspaceId,
         articleId: editing.id,
         title: editing.title.trim(),
-        category: editing.category.trim() || "Support",
+        category: editing.category.trim() || "Suporte",
         body: editing.body.trim(),
         status: editing.status,
       });
@@ -121,18 +116,16 @@ export function KnowledgeWorkspacePage({
           : [article, ...current],
       );
       setEditorOpen(false);
-      setEditing({ title: "", category: "Support", body: "", status: "draft" });
+      setEditing({ title: "", category: "Suporte", body: "", status: "draft" });
       onToast(
         editing.id
-          ? "Article updated"
+          ? t("toasts.updated", { ns: "knowledge" })
           : editing.status === "published"
-            ? "Article published for AI"
-            : "Article saved as draft",
+            ? t("toasts.published", { ns: "knowledge" })
+            : t("toasts.savedDraft", { ns: "knowledge" }),
       );
     } catch (error) {
-      onToast(
-        error instanceof Error ? error.message : "Article could not be saved.",
-      );
+      onToast(localizedError(error, t("errors.save", { ns: "knowledge" })));
     }
   };
 
@@ -141,22 +134,18 @@ export function KnowledgeWorkspacePage({
     try {
       await removeKnowledgeArticle(workspaceId, id);
       setArticles((current) => current.filter((item) => item.id !== id));
-      onToast("Article deleted");
+      onToast(t("toasts.deleted", { ns: "knowledge" }));
     } catch (error) {
-      onToast(
-        error instanceof Error
-          ? error.message
-          : "Article could not be deleted.",
-      );
+      onToast(localizedError(error, t("errors.delete", { ns: "knowledge" })));
     }
   };
 
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Support context"
-        title="Knowledge"
-        description="Write the trusted articles Mend can use before drafting a WhatsApp reply."
+        eyebrow={t("ui.eyebrow")}
+        title={t("title")}
+        description={t("ui.description")}
         actions={
           <button
             className="button button-primary"
@@ -164,15 +153,15 @@ export function KnowledgeWorkspacePage({
             disabled={!workspaceId}
             onClick={openNewArticle}
           >
-            <Plus size={15} /> New article
+            <Plus size={15} /> {t("create")}
           </button>
         }
       />
       {!workspaceId && (
         <div className="settings-section">
           <EmptyState
-            title="Connect a workspace first"
-            description="Knowledge is scoped to an authenticated Mend workspace. No demo articles are shown."
+            title={t("ui.connectWorkspace")}
+            description={t("ui.connectWorkspaceDescription")}
           />
         </div>
       )}
@@ -185,8 +174,8 @@ export function KnowledgeWorkspacePage({
                 data-global-search
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search your articles"
-                aria-label="Search knowledge"
+                placeholder={t("ui.search")}
+                aria-label={t("ui.search")}
               />
             </label>
             <button
@@ -195,12 +184,13 @@ export function KnowledgeWorkspacePage({
               onClick={() => void refresh()}
               disabled={loading}
             >
-              <RefreshCw size={14} /> {loading ? "Loading…" : "Refresh"}
+              <RefreshCw size={14} />{" "}
+              {loading ? t("ui.loading") : t("ui.refresh")}
             </button>
           </div>
           <div className="knowledge-list">
             {loading ? (
-              <KnowledgeSkeletonPreview />
+              <KnowledgeSkeletonPreview label={t("ui.loading")} />
             ) : filtered.length ? (
               filtered.map((article) => (
                 <article className="knowledge-row" key={article.id}>
@@ -215,7 +205,9 @@ export function KnowledgeWorkspacePage({
                     <p>{article.excerpt}</p>
                     <div className="knowledge-meta">
                       <span>{article.category}</span>
-                      <span>Updated {article.updatedAt}</span>
+                      <span>
+                        {t("ui.updated", { date: article.updatedAt })}
+                      </span>
                     </div>
                   </div>
                   <ActionMenu label={article.title}>
@@ -236,7 +228,7 @@ export function KnowledgeWorkspacePage({
                         setEditorOpen(true);
                       }}
                     >
-                      <PenLine size={14} /> Edit article
+                      <PenLine size={14} /> {t("ui.edit")}
                     </button>
                     <button
                       className="danger"
@@ -244,15 +236,15 @@ export function KnowledgeWorkspacePage({
                       role="menuitem"
                       onClick={() => void remove(article.id)}
                     >
-                      <Trash2 size={14} /> Delete article
+                      <Trash2 size={14} /> {t("ui.delete")}
                     </button>
                   </ActionMenu>
                 </article>
               ))
             ) : (
               <EmptyState
-                title="No knowledge articles yet"
-                description="Create the first reviewed answer about your systems, products and support procedures."
+                title={t("ui.noArticles")}
+                description={t("ui.createReviewedAnswer")}
                 action={
                   <button
                     className="button button-ghost button-small"
@@ -260,7 +252,7 @@ export function KnowledgeWorkspacePage({
                     disabled={!workspaceId}
                     onClick={openNewArticle}
                   >
-                    <Plus size={13} /> New article
+                    <Plus size={13} /> {t("create")}
                   </button>
                 }
               />
@@ -268,10 +260,7 @@ export function KnowledgeWorkspacePage({
           </div>
           <div className="knowledge-note">
             <ShieldCheck size={15} />
-            <span>
-              Only published articles from this workspace are eligible for AI
-              context. Drafts stay internal.
-            </span>
+            <span>{t("ui.publishedOnly")}</span>
           </div>
         </>
       )}
@@ -290,23 +279,25 @@ export function KnowledgeWorkspacePage({
           >
             <div className="modal-header">
               <div>
-                <span className="page-kicker">Workspace knowledge</span>
+                <span className="page-kicker">
+                  {t("ui.workspaceKnowledge")}
+                </span>
                 <h2 id="article-editor-title">
-                  {editing.id ? "Edit article" : "New article"}
+                  {editing.id ? t("ui.edit") : t("create")}
                 </h2>
               </div>
               <button
                 className="icon-button"
                 type="button"
                 onClick={() => setEditorOpen(false)}
-                aria-label="Close article editor"
+                aria-label={t("ui.closeEditor")}
               >
                 <X size={17} />
               </button>
             </div>
             <div className="modal-body">
               <label>
-                Title
+                {t("editor.title")}
                 <input
                   autoFocus
                   value={editing.title}
@@ -316,11 +307,11 @@ export function KnowledgeWorkspacePage({
                       title: event.target.value,
                     }))
                   }
-                  placeholder="How our checkout works"
+                  placeholder={t("editor.titlePlaceholder")}
                 />
               </label>
               <label>
-                Category
+                {t("editor.category")}
                 <input
                   value={editing.category}
                   onChange={(event) =>
@@ -329,11 +320,11 @@ export function KnowledgeWorkspacePage({
                       category: event.target.value,
                     }))
                   }
-                  placeholder="Product"
+                  placeholder={t("editor.categoryPlaceholder")}
                 />
               </label>
               <label>
-                Article body
+                {t("editor.body")}
                 <textarea
                   rows={10}
                   value={editing.body}
@@ -343,16 +334,16 @@ export function KnowledgeWorkspacePage({
                       body: event.target.value,
                     }))
                   }
-                  placeholder="Explain the system, the correct procedure and when to escalate."
+                  placeholder={t("editor.bodyPlaceholder")}
                 />
               </label>
               <label>
-                Status
+                {t("editor.status")}
                 <Select
                   value={editing.status}
                   options={[
-                    { value: "draft", label: "Draft" },
-                    { value: "published", label: "Published for AI" },
+                    { value: "draft", label: t("editor.draft") },
+                    { value: "published", label: t("editor.published") },
                   ]}
                   onChange={(value) =>
                     setEditing((current) => ({
@@ -369,7 +360,7 @@ export function KnowledgeWorkspacePage({
                 type="button"
                 onClick={() => setEditorOpen(false)}
               >
-                Cancel
+                {t("actions.cancel", { ns: "common" })}
               </button>
               <button
                 className="button button-primary"
@@ -379,7 +370,7 @@ export function KnowledgeWorkspacePage({
                 }
                 onClick={() => void save()}
               >
-                <Save size={14} /> Save article
+                <Save size={14} /> {t("editor.save")}
               </button>
             </div>
           </div>

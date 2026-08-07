@@ -2030,8 +2030,8 @@ export function requestAiDraft(
       conversation,
       language:
         typeof window !== "undefined"
-          ? (window.localStorage.getItem("mend.interface-language") ?? "en-US")
-          : "en-US",
+          ? (window.localStorage.getItem("mend.interface-language") ?? "pt-BR")
+          : "pt-BR",
       ...(knowledgeContext.length
         ? { knowledge: knowledgeContext.join("\n\n") }
         : {}),
