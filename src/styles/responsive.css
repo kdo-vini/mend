@@ -76,7 +76,8 @@
   }
   .page,
   .inbox-page {
-    padding: 22px 17px;
+    padding: var(--page-padding-block-compact)
+      var(--page-padding-inline-compact);
   }
   .inbox-layout {
     grid-template-columns: minmax(260px, 305px) minmax(0, 1fr);

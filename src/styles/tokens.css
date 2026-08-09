@@ -24,6 +24,18 @@
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --page-padding-block: 29px;
+  --page-padding-inline: 34px;
+  --page-padding-block-compact: 22px;
+  --page-padding-inline-compact: 17px;
+  --page-padding-block-mobile: 16px;
+  --page-padding-inline-mobile: 13px;
+  --settings-nav-width: 185px;
+  --settings-nav-gap: 45px;
+  --settings-nav-width-compact: 150px;
+  --settings-nav-gap-compact: 28px;
+  --settings-mobile-gap: 18px;
+  --settings-content-max-width: 720px;
   --control-height: 32px;
   --radius: 0.625rem;
   --radius-small: 5px;

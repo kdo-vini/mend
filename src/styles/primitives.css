@@ -1,7 +1,7 @@
 .page,
 .inbox-page {
   min-height: 100vh;
-  padding: 29px 34px;
+  padding: var(--page-padding-block) var(--page-padding-inline);
 }
 .page-header,
 .inbox-toolbar {

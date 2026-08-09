@@ -6,6 +6,30 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test("settings keeps the standard workspace page frame", async ({ page }) => {
+  await page.goto("/settings?demo=1");
+  const settingsFrame = await page
+    .locator(".settings-v2-shell")
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        paddingBlockStart: style.paddingBlockStart,
+        paddingInlineStart: style.paddingInlineStart,
+      };
+    });
+
+  await page.goto("/issues?demo=1");
+  const standardFrame = await page.locator(".page").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      paddingBlockStart: style.paddingBlockStart,
+      paddingInlineStart: style.paddingInlineStart,
+    };
+  });
+
+  expect(settingsFrame).toEqual(standardFrame);
+});
+
 test("settings opens as a domain hub and keeps repositories focused", async ({
   page,
 }) => {
@@ -15,11 +39,27 @@ test("settings opens as a domain hub and keeps repositories focused", async ({
     page.getByRole("heading", { name: "Workspace settings" }),
   ).toBeVisible();
   if (test.info().project.name === "mobile") {
+    await expect(page.locator(".settings-v2-shell")).toHaveCSS(
+      "padding-left",
+      "13px",
+    );
+    await expect(page.locator(".settings-v2-shell")).toHaveCSS(
+      "padding-top",
+      "16px",
+    );
     await expect(page.getByLabel("Settings section")).toBeVisible();
     await page
       .getByLabel("Settings section")
       .selectOption("/settings/engineering/repositories");
   } else {
+    await expect(page.locator(".settings-v2-shell")).toHaveCSS(
+      "padding-left",
+      "34px",
+    );
+    await expect(page.locator(".settings-v2-shell")).toHaveCSS(
+      "padding-top",
+      "29px",
+    );
     await expect(
       page.getByRole("link", { name: "Coding connections", exact: true }),
     ).toBeVisible();

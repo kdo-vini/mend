@@ -11,6 +11,15 @@ principles, closed decisions, and explicit out-of-scope list are binding unless
 the user explicitly overrides them. If a request conflicts with the strategy,
 surface the conflict before making the change; do not silently expand scope.
 
+## Agent instruction contract (mandatory)
+
+`AGENTS.md` is the first repository instruction file for every agent task. It
+must be read before planning or changing files, and its rules remain active for
+the entire task. For any UI work, also read and follow the canonical
+[Mend UI design patterns](docs/design/MEND_DESIGN_PATTERNS.md) together with
+[`DESIGN.md`](DESIGN.md). The design patterns file is especially authoritative
+for page frames, spacing, responsive layout and visual review.
+
 ## Project Structure & Module Organization
 
 This repository is a TypeScript React/Vite SaaS with an Express backend.
