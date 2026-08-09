@@ -102,7 +102,14 @@ MEND_AGENT_MAX_RUNTIME_SECONDS=1200
 MEND_AGENT_MAX_CONCURRENCY=1
 MEND_GITHUB_ACTIONS_ENABLED=0
 MEND_WORKER_POLL_MS=1000
+MEND_CODEX_SANDBOX_MODE=external
 ```
+
+The runner image sets `MEND_CODEX_SANDBOX_MODE=external` because Alpine/Docker
+cannot grant Codex's nested `bwrap` namespace. Mend still runs the Agent in a
+private dedicated container and an isolated checkout, strips unrelated secrets,
+blocks publication until human approval, and verifies read-only runs produced no
+repository changes before accepting their result.
 
 Do not configure `OPENAI_API_KEY` as a global production dependency. Workspace
 credentials are stored encrypted in Supabase and are decrypted only in the

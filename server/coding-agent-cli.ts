@@ -398,6 +398,12 @@ export function buildCodingAgentInvocation(
   const model = boundedModel(input.model);
   const args: string[] = [];
   if (provider === "openai") {
+    const sandboxMode =
+      process.env.MEND_CODEX_SANDBOX_MODE === "external"
+        ? "danger-full-access"
+        : input.mode === "implement_fix"
+          ? "workspace-write"
+          : "read-only";
     args.push(
       "--ask-for-approval",
       "never",
@@ -406,7 +412,7 @@ export function buildCodingAgentInvocation(
       "--ephemeral",
       "--ignore-user-config",
       "--sandbox",
-      input.mode === "implement_fix" ? "workspace-write" : "read-only",
+      sandboxMode,
       "--cd",
       input.workspace,
       "--json",

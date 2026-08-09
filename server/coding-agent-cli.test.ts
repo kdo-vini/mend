@@ -37,6 +37,7 @@ const originalProviderKeys = {
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   VERBOO_API_KEY: process.env.VERBOO_API_KEY,
 };
+const originalCodexSandboxMode = process.env.MEND_CODEX_SANDBOX_MODE;
 
 afterEach(() => {
   if (originalGitHubKey === undefined)
@@ -48,6 +49,9 @@ afterEach(() => {
     if (value === undefined) delete process.env[envKey];
     else process.env[envKey] = value;
   }
+  if (originalCodexSandboxMode === undefined)
+    delete process.env.MEND_CODEX_SANDBOX_MODE;
+  else process.env.MEND_CODEX_SANDBOX_MODE = originalCodexSandboxMode;
 });
 
 describe("coding agent CLI boundary", () => {
@@ -126,6 +130,23 @@ describe("coding agent CLI boundary", () => {
     expect(() =>
       normalizeCodingAgentReport('{"summary":"missing verdict"}'),
     ).toThrow("structured report");
+  });
+
+  it("delegates Codex command isolation to the dedicated runner container", () => {
+    process.env.MEND_CODEX_SANDBOX_MODE = "external";
+    const invocation = buildCodingAgentInvocation(
+      "openai",
+      { command: "codex", argsPrefix: [] },
+      {
+        mode: "investigate",
+        workspace: os.tmpdir(),
+        prompt: "Inspect the repository.",
+      },
+      { schema: "/fixed/schema.json", result: "/fixed/result.json" },
+    );
+
+    expect(invocation.args).toContain("danger-full-access");
+    expect(invocation.args).not.toContain("read-only");
   });
 
   it("runs in a disposable repository copy and returns normalized evidence and patch", async () => {

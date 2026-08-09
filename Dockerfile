@@ -47,5 +47,6 @@ RUN npm install --global --omit=dev \
     @google/gemini-cli@0.54.4 \
     @verboo/code@0.15.3 \
   && npm cache clean --force
+ENV MEND_CODEX_SANDBOX_MODE=external
 USER node
 CMD ["node", "dist-server/server/index.js"]
