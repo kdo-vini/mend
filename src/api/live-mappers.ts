@@ -382,8 +382,9 @@ export function toUiRun(
   )
     ? (providerValue as CodingAgentProvider)
     : undefined;
-  const evidence = mapBugEvidence(
-    loop.evidence ?? loop.evidence_json ?? result.evidence,
+  const evidence = mergeBugEvidence(
+    mapBugEvidence(agentReport.evidence),
+    mapBugEvidence(loop.evidence ?? loop.evidence_json ?? result.evidence),
   );
   const caseEvidence = persistedCase
     ? mergeBugEvidence(
@@ -392,8 +393,18 @@ export function toUiRun(
       )
     : evidence;
   const stage = String(loop.stage ?? "") as BugLoopStage;
-  const verdict = String(loop.verdict ?? "") as BugVerdict;
-  const decision = String(loop.decision ?? "") as BugDecision;
+  const verdict = String(
+    agentReport.verdict ?? loop.verdict ?? "",
+  ) as BugVerdict;
+  const reportDecision =
+    agentReport.recommendedAction === "notify_only"
+      ? "notify"
+      : agentReport.recommendedAction === "propose_fix"
+        ? "manual_fix"
+        : agentReport.recommendedAction === "fix"
+          ? "autofix"
+          : undefined;
+  const decision = String(reportDecision ?? loop.decision ?? "") as BugDecision;
   const suspicionScore = Number(
     loop.suspicionScore ?? loop.suspicion_score ?? Number.NaN,
   );

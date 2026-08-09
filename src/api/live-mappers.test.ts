@@ -274,6 +274,15 @@ describe("live Agent run mapper", () => {
           finalText: "Fixed safely.",
           report: {
             summary: "The regression reproduces in the checkout path.",
+            verdict: "confirmed",
+            recommendedAction: "propose_fix",
+            evidence: [
+              {
+                kind: "code",
+                label: "Missing payment confirmation action",
+                detail: "The payment handler only refreshes the customer.",
+              },
+            ],
           },
         },
       },
@@ -292,6 +301,15 @@ describe("live Agent run mapper", () => {
       diff: "diff --git a/src/fix.ts b/src/fix.ts",
       checks: [{ name: "test", exitCode: 0, output: "passed" }],
       duration: "01:05",
+      verdict: "confirmed",
+      decision: "manual_fix",
+      evidence: [
+        {
+          kind: "code",
+          label: "Missing payment confirmation action",
+          detail: "The payment handler only refreshes the customer.",
+        },
+      ],
     });
   });
 
