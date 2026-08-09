@@ -396,6 +396,7 @@ export function buildCodingAgentInvocation(
       "--ask-for-approval",
       "never",
       "exec",
+      "--skip-git-repo-check",
       "--ephemeral",
       "--ignore-user-config",
       "--sandbox",

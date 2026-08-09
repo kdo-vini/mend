@@ -89,7 +89,13 @@ describe("coding agent CLI boundary", () => {
       expect(
         getCodingAgentDefinition(provider).capabilities.structuredOutput,
       ).toBe(true);
-      if (provider === "openai") expect(invocation.args).toContain("read-only");
+      if (provider === "openai") {
+        expect(invocation.args).toContain("read-only");
+        expect(invocation.args).toContain("--skip-git-repo-check");
+        expect(
+          invocation.args.indexOf("--skip-git-repo-check"),
+        ).toBeGreaterThan(invocation.args.indexOf("exec"));
+      }
       if (provider === "google") expect(invocation.args).toContain("plan");
       if (provider === "anthropic" || provider === "verboo")
         expect(invocation.args).toContain("--tools=Read,Glob,Grep");
