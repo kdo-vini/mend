@@ -1805,6 +1805,7 @@ export type LiveAgentConnection = {
     lastVerifiedAt: string;
     expiresAt: string;
   };
+  metadata?: Record<string, unknown>;
 };
 
 export type LiveStageRoutingPolicy = {
@@ -1918,6 +1919,17 @@ export type LiveAgentLoginJob = {
   expiresAt: string;
   errorCode?: string;
 };
+
+export async function listLiveAgentLoginJobs(
+  workspaceId: string,
+): Promise<LiveAgentLoginJob[]> {
+  const result = await apiRequest<{ data: LiveAgentLoginJob[] }>(
+    "/api/agent-connections/login/active",
+    {},
+    workspaceId,
+  );
+  return result.data ?? [];
+}
 
 export async function startLiveAgentLogin(input: {
   workspaceId: string;

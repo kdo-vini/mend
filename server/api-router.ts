@@ -109,8 +109,15 @@ function codingControlPlaneApiError(error: unknown): {
       code,
       message: "The selected coding route is unavailable or not verified.",
     };
+  if (code === "agent_subscription_consent_requires_verified_connection")
+    return {
+      status: 409,
+      code,
+      message:
+        "Verify the subscription connection and refresh its catalog before enabling automation.",
+    };
   if (
-    /^agent_subscription_(automation_not_consented|bundle_missing)/.test(code)
+    /^agent_subscription_(automation_not_consented|bundle_missing)$/.test(code)
   )
     return {
       status: 403,
@@ -139,6 +146,24 @@ function codingControlPlaneApiError(error: unknown): {
       status: 409,
       code,
       message: "Google subscription login is not available on this runner yet.",
+    };
+  if (/^subscription_connection_requires_login$/.test(code))
+    return {
+      status: 409,
+      code,
+      message: "Use the official login flow for subscription connections.",
+    };
+  if (/^login_runner_unavailable$/.test(code))
+    return {
+      status: 409,
+      code,
+      message: "The official login runner is unavailable. Start a new login.",
+    };
+  if (/^login_(?:start_failed|persistence_failed)$/.test(code))
+    return {
+      status: 502,
+      code,
+      message: "The official login could not be completed. Try again.",
     };
   return null;
 }

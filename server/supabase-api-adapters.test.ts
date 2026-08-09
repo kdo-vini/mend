@@ -4,6 +4,10 @@ import {
   createSupabaseApiAdapters,
   type WhatsmiauProviderPort,
 } from "./supabase-api-adapters.js";
+import type {
+  SubscriptionLoginChallenge,
+  SubscriptionLoginResult,
+} from "./coding-agent-auth.js";
 import { issueCreateSchema } from "./issue-service.js";
 
 type Row = Record<string, unknown>;
@@ -13,6 +17,7 @@ const workspaceId = "11111111-1111-4111-8111-111111111111";
 const otherWorkspaceId = "22222222-2222-4222-8222-222222222222";
 const userId = "33333333-3333-4333-8333-333333333333";
 const conversationId = "44444444-4444-4444-8444-444444444444";
+vi.stubEnv("CONNECTION_ENCRYPTION_KEY", "test-key");
 
 class FakeQuery implements PromiseLike<Result> {
   private filters: Array<{ kind: string; column?: string; value?: unknown }> =
@@ -241,6 +246,15 @@ const fakeProvider = (): WhatsmiauProviderPort => ({
 function adapters(
   client: FakeClient,
   whatsMiau: WhatsmiauProviderPort = fakeProvider(),
+  subscriptionLogin?: {
+    start: (
+      jobId: string,
+      provider: "openai" | "google",
+      onComplete: (result: SubscriptionLoginResult) => Promise<void>,
+    ) => Promise<SubscriptionLoginChallenge>;
+    poll: (jobId: string) => SubscriptionLoginResult | null;
+    cancel: (jobId: string) => Promise<boolean>;
+  },
 ) {
   return createSupabaseApiAdapters({
     client: client as unknown as SupabaseClient,
@@ -250,10 +264,274 @@ function adapters(
       draftReply: async () => "draft",
       triage: async () => "{}",
     },
+    ...(subscriptionLogin ? { subscriptionLogin } : {}),
   });
 }
 
 describe("Supabase API adapters", () => {
+  it("deduplicates active subscription login and scopes cancellation", async () => {
+    const client = new FakeClient({
+      agent_connections: [],
+      agent_connection_auth_jobs: [],
+    });
+    let onComplete:
+      | ((result: SubscriptionLoginResult) => Promise<void>)
+      | undefined;
+    const cancel = vi.fn(async () => true);
+    const login = {
+      start: vi.fn(
+        async (
+          _jobId: string,
+          _provider: "openai" | "google",
+          callback: (result: SubscriptionLoginResult) => Promise<void>,
+        ) => {
+          onComplete = callback;
+          return {
+            url: "https://auth.openai.example/device",
+            code: "ABCD-EFGH",
+            expiresAt: "2026-12-01T00:00:00.000Z",
+          };
+        },
+      ),
+      poll: vi.fn((_jobId: string) => ({
+        status: "awaiting_user" as const,
+        challenge: {
+          url: "https://auth.openai.example/device",
+          code: "ABCD-EFGH",
+          expiresAt: "2026-12-01T00:00:00.000Z",
+        },
+      })),
+      cancel,
+    };
+    const dependencies = adapters(client, fakeProvider(), login);
+    const context = { userId, workspaceId, role: "agent" as const };
+    const first = await dependencies.codingControlPlane.startLogin(context, {
+      provider: "openai",
+      label: "Primary ChatGPT",
+    });
+    const second = await dependencies.codingControlPlane.startLogin(context, {
+      provider: "openai",
+      label: "Duplicate ChatGPT",
+    });
+
+    expect(second.id).toBe(first.id);
+    expect(login.start).toHaveBeenCalledTimes(1);
+    expect(client.rows.get("agent_connection_auth_jobs")).toHaveLength(1);
+
+    await expect(
+      dependencies.codingControlPlane.cancelLogin(
+        { userId, workspaceId: otherWorkspaceId, role: "agent" },
+        first.id,
+      ),
+    ).resolves.toBeNull();
+    expect(cancel).not.toHaveBeenCalled();
+
+    await expect(
+      dependencies.codingControlPlane.cancelLogin(context, first.id),
+    ).resolves.toMatchObject({ id: first.id, status: "canceled" });
+    expect(cancel).toHaveBeenCalledWith(first.id);
+    expect(client.rows.get("agent_connections")?.[0]?.status).toBe("canceled");
+    expect(client.rows.get("agent_connection_auth_jobs")?.[0]?.status).toBe(
+      "canceled",
+    );
+
+    await onComplete?.({
+      status: "completed",
+      challenge: {
+        expiresAt: "2026-12-01T00:00:00.000Z",
+      },
+      bundle: { ".codex/auth.json": "secret" },
+    });
+    expect(client.rpcCalls).toEqual([
+      expect.objectContaining({ name: "complete_agent_subscription_login" }),
+    ]);
+    expect(client.rows.get("agent_connections")?.[0]?.status).toBe("canceled");
+  });
+
+  it("returns active login jobs after a refresh and exposes terminal runner loss", async () => {
+    const client = new FakeClient({
+      agent_connections: [
+        {
+          id: "connection-refresh",
+          workspace_id: workspaceId,
+          owner_user_id: userId,
+          label: "ChatGPT",
+          provider: "openai",
+          auth_method: "subscription",
+          purpose: "coding",
+          status: "pending",
+        },
+      ],
+      agent_connection_auth_jobs: [
+        {
+          id: "job-refresh",
+          connection_id: "connection-refresh",
+          workspace_id: workspaceId,
+          user_id: userId,
+          provider: "openai",
+          auth_method: "subscription",
+          status: "awaiting_user",
+          url: "https://auth.openai.example/device",
+          code: "ABCD-EFGH",
+          expires_at: "2026-12-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const dependencies = adapters(client);
+
+    await expect(
+      dependencies.codingControlPlane.listLoginJobs({
+        userId,
+        workspaceId,
+        role: "agent",
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: "job-refresh",
+        status: "failed",
+        errorCode: "login_runner_unavailable",
+      }),
+    ]);
+    expect(client.rows.get("agent_connection_auth_jobs")?.[0]).toEqual(
+      expect.objectContaining({
+        status: "failed",
+        error_code: "login_runner_unavailable",
+      }),
+    );
+    expect(client.rows.get("agent_connections")?.[0]?.status).toBe("error");
+  });
+
+  it("cancels a pending device login when its connection is revoked", async () => {
+    const connectionId = "connection-revoke-login";
+    const jobId = "job-revoke-login";
+    const client = new FakeClient({
+      agent_connections: [
+        {
+          id: connectionId,
+          workspace_id: workspaceId,
+          owner_user_id: userId,
+          label: "ChatGPT",
+          provider: "openai",
+          auth_method: "subscription",
+          purpose: "coding",
+          status: "pending",
+        },
+      ],
+      agent_connection_auth_jobs: [
+        {
+          id: jobId,
+          connection_id: connectionId,
+          workspace_id: workspaceId,
+          user_id: userId,
+          provider: "openai",
+          auth_method: "subscription",
+          status: "awaiting_user",
+          expires_at: "2026-12-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const cancel = vi.fn(async () => true);
+    const dependencies = adapters(client, fakeProvider(), {
+      start: async () => ({
+        expiresAt: "2026-12-01T00:00:00.000Z",
+      }),
+      poll: () => null,
+      cancel,
+    });
+
+    await expect(
+      dependencies.codingControlPlane.removeConnection(
+        { userId, workspaceId, role: "agent" },
+        connectionId,
+      ),
+    ).resolves.toBe(true);
+    expect(cancel).toHaveBeenCalledWith(jobId);
+    expect(client.rows.get("agent_connection_auth_jobs")?.[0]).toEqual(
+      expect.objectContaining({
+        status: "canceled",
+        error_code: "connection_revoked",
+      }),
+    );
+    expect(client.rows.get("agent_connections")?.[0]?.status).toBe("revoked");
+  });
+
+  it("does not kill a just-created job while the runner is registering", async () => {
+    const now = new Date().toISOString();
+    const client = new FakeClient({
+      agent_connections: [
+        {
+          id: "connection-fresh-login",
+          workspace_id: workspaceId,
+          owner_user_id: userId,
+          label: "ChatGPT",
+          provider: "openai",
+          auth_method: "subscription",
+          purpose: "coding",
+          status: "pending",
+        },
+      ],
+      agent_connection_auth_jobs: [
+        {
+          id: "job-fresh-login",
+          connection_id: "connection-fresh-login",
+          workspace_id: workspaceId,
+          user_id: userId,
+          provider: "openai",
+          auth_method: "subscription",
+          status: "pending",
+          expires_at: "2026-12-01T00:00:00.000Z",
+          created_at: now,
+          updated_at: now,
+        },
+      ],
+    });
+    const dependencies = adapters(client);
+
+    await expect(
+      dependencies.codingControlPlane.listLoginJobs({
+        userId,
+        workspaceId,
+        role: "agent",
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({ id: "job-fresh-login", status: "pending" }),
+    ]);
+    expect(client.rows.get("agent_connection_auth_jobs")?.[0]?.status).toBe(
+      "pending",
+    );
+  });
+
+  it("does not allow automation consent before a verified subscription catalog", async () => {
+    const connectionId = "connection-consent-gate";
+    const client = new FakeClient({
+      agent_connections: [
+        {
+          id: connectionId,
+          workspace_id: workspaceId,
+          owner_user_id: userId,
+          label: "ChatGPT",
+          provider: "openai",
+          auth_method: "subscription",
+          purpose: "coding",
+          status: "connected",
+          automation_consent: false,
+          catalog_json: null,
+        },
+      ],
+    });
+    const dependencies = adapters(client);
+
+    await expect(
+      dependencies.codingControlPlane.updateConnection(
+        { userId, workspaceId, role: "agent" },
+        connectionId,
+        { automationConsent: true },
+      ),
+    ).rejects.toThrow(
+      "agent_subscription_consent_requires_verified_connection",
+    );
+  });
+
   it("does not resolve an auto-fix case before a healthy deployment", async () => {
     const client = new FakeClient({
       issues: [

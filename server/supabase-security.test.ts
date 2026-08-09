@@ -32,6 +32,12 @@ const codingControlPlaneMigrationPath = fileURLToPath(
     import.meta.url,
   ),
 );
+const codingLoginHardeningMigrationPath = fileURLToPath(
+  new URL(
+    "../supabase/migrations/20260809180000_harden_coding_subscription_login.sql",
+    import.meta.url,
+  ),
+);
 
 describe("Supabase security migration contract", () => {
   it("keeps privileged implementations private and public RPCs invoker-only", async () => {
@@ -145,5 +151,22 @@ describe("Supabase security migration contract", () => {
     expect(sql).toContain("default 'unknown_legacy'");
     expect(sql).toContain("coding_routing_v2");
     expect(sql).toContain("coding_subscription_auth");
+  });
+
+  it("makes subscription login idempotent and completion race-safe", async () => {
+    const sql = await readFile(codingLoginHardeningMigrationPath, "utf8");
+    expect(sql).toContain("agent_connection_auth_jobs_active_idx");
+    expect(sql).toContain("where status in ('pending', 'awaiting_user')");
+    expect(sql).toContain("duplicate_active_login_reconciled");
+    expect(sql).toContain("complete_agent_subscription_login");
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("and connection_id = p_connection_id");
+    expect(sql).toContain("and status = 'pending';");
+    expect(sql).toContain(
+      "revoke execute on function public.complete_agent_subscription_login",
+    );
+    expect(sql).toContain(
+      "grant execute on function public.complete_agent_subscription_login(uuid, uuid, text)\n  to service_role;",
+    );
   });
 });

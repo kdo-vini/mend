@@ -15,6 +15,7 @@ export {
   verifyLiveAgentConnection,
   refreshLiveAgentModels,
   startLiveAgentLogin,
+  listLiveAgentLoginJobs,
   pollLiveAgentLogin,
   cancelLiveAgentLogin,
   listLiveAgentRoutingPolicies,

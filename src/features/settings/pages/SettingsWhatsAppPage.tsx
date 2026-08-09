@@ -66,12 +66,12 @@ export function SettingsWhatsAppPage({
       if (next?.state === "open") setQr(null);
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "WhatsApp is unavailable.",
+        reason instanceof Error ? reason.message : t("v2.whatsapp.errors.load"),
       );
     } finally {
       setLoading(false);
     }
-  }, [applyChannel, workspaceId]);
+  }, [applyChannel, t, workspaceId]);
 
   useEffect(() => void load(), [load]);
 
@@ -90,7 +90,7 @@ export function SettingsWhatsAppPage({
           applyChannel(next);
           if (next.state === "open") {
             setQr(null);
-            onToast("WhatsApp connected");
+            onToast(t("v2.whatsapp.connectedToast"));
           }
         })
         .catch(() => undefined);
@@ -104,6 +104,7 @@ export function SettingsWhatsAppPage({
     onToast,
     selected?.channelId,
     selected?.state,
+    t,
     workspaceId,
   ]);
 
@@ -121,7 +122,7 @@ export function SettingsWhatsAppPage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "The WhatsApp action failed.",
+          : t("v2.whatsapp.errors.action"),
       );
     } finally {
       setAction(null);
@@ -132,10 +133,9 @@ export function SettingsWhatsAppPage({
     if (!workspaceId || !selected?.channelId) return;
     if (
       !(await onConfirm({
-        title: "Disconnect WhatsApp?",
-        description:
-          "The number will stop receiving messages until it is paired again.",
-        confirmLabel: "Disconnect",
+        title: t("v2.whatsapp.disconnectTitle"),
+        description: t("v2.whatsapp.disconnectDescription"),
+        confirmLabel: t("v2.whatsapp.confirmDisconnect"),
         destructive: true,
       }))
     )
@@ -160,10 +160,10 @@ export function SettingsWhatsAppPage({
 
   const health =
     selected?.state === "open"
-      ? "Connected"
+      ? t("whatsapp.healthConnected")
       : selected
-        ? "Needs attention"
-        : "Not connected";
+        ? t("whatsapp.healthNeedsAttention")
+        : t("whatsapp.healthOffline");
   const tone = selected?.state === "open" ? "success" : "warning";
 
   return (
@@ -178,7 +178,7 @@ export function SettingsWhatsAppPage({
             onClick={() => void load()}
             disabled={loading}
           >
-            <RefreshCw size={13} /> Refresh
+            <RefreshCw size={13} /> {t("v2.whatsapp.refresh")}
           </button>
         }
       />
@@ -186,18 +186,18 @@ export function SettingsWhatsAppPage({
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Checking WhatsApp health…" />
+        <LoadingState label={t("v2.whatsapp.checking")} />
       ) : (
         <>
           <SettingsSection
-            title="Connected numbers"
-            description="Only connected numbers receive new customer messages."
+            title={t("v2.whatsapp.connectedNumbers")}
+            description={t("v2.whatsapp.connectedNumbersDescription")}
             actions={<SettingsStatus tone={tone}>{health}</SettingsStatus>}
           >
             {!channels.length ? (
               <EmptyState
-                title="No WhatsApp number"
-                description="Create a provider instance, then pair your WhatsApp Business number."
+                title={t("v2.whatsapp.noNumber")}
+                description={t("v2.whatsapp.noNumberDescription")}
               />
             ) : (
               <div className="settings-v2-list">
@@ -212,10 +212,17 @@ export function SettingsWhatsAppPage({
                     <div className="settings-v2-row-main">
                       <strong>{channel.instanceName}</strong>
                       <span>
-                        {channel.phoneNumber ?? "Phone not reported"} ·
-                        Whatsmiau
+                        {channel.phoneNumber ??
+                          t("v2.whatsapp.phoneNotReported")}{" "}
+                        · Whatsmiau
                       </span>
-                      <small>Provider state: {channel.state}</small>
+                      <small>
+                        {t("v2.whatsapp.providerState", {
+                          state: t(`whatsapp.states.${channel.state}`, {
+                            defaultValue: channel.state,
+                          }),
+                        })}
+                      </small>
                     </div>
                     <div className="settings-v2-row-actions">
                       <button
@@ -226,10 +233,12 @@ export function SettingsWhatsAppPage({
                           setQr(null);
                         }}
                       >
-                        <span className="sr-only">Select </span>
+                        <span className="sr-only">
+                          {t("v2.whatsapp.select")}{" "}
+                        </span>
                         {selected?.channelId === channel.channelId
-                          ? "Selected"
-                          : "Select"}
+                          ? t("v2.whatsapp.selected")
+                          : t("v2.whatsapp.select")}
                       </button>
                       {channel.state === "open" ? (
                         <button
@@ -241,7 +250,7 @@ export function SettingsWhatsAppPage({
                           }}
                           disabled={action !== null}
                         >
-                          <Unplug size={13} /> Disconnect
+                          <Unplug size={13} /> {t("v2.whatsapp.disconnect")}
                         </button>
                       ) : (
                         <button
@@ -258,7 +267,7 @@ export function SettingsWhatsAppPage({
                           }
                           disabled={action !== null || !channel.channelId}
                         >
-                          Connect
+                          {t("v2.whatsapp.connect")}
                         </button>
                       )}
                     </div>
@@ -269,15 +278,15 @@ export function SettingsWhatsAppPage({
           </SettingsSection>
           {selected && selected.state !== "open" && (
             <SettingsSection
-              title="Pair this number"
-              description="Generate a fresh QR code and keep this page open while the provider connects."
+              title={t("v2.whatsapp.pairNumber")}
+              description={t("v2.whatsapp.pairDescription")}
             >
               <div className="settings-v2-pairing">
                 {qr ? (
                   <img
                     className="qr-image"
                     src={qr}
-                    alt="WhatsApp pairing QR code"
+                    alt={t("whatsapp.qrAlt")}
                   />
                 ) : (
                   <div className="settings-v2-qr-placeholder">
@@ -286,12 +295,12 @@ export function SettingsWhatsAppPage({
                 )}
                 <div>
                   <strong>
-                    {qr ? "Scan this QR code" : "QR code ready when you are"}
+                    {qr ? t("v2.whatsapp.scanQr") : t("v2.whatsapp.qrReady")}
                   </strong>
                   <p>
                     {qr
-                      ? "Open WhatsApp Business on the phone and scan the code."
-                      : "The code expires quickly. Generate a new one when you are ready."}
+                      ? t("v2.whatsapp.scanDescription")
+                      : t("v2.whatsapp.generateDescription")}
                   </p>
                 </div>
                 <button
@@ -308,18 +317,20 @@ export function SettingsWhatsAppPage({
                   }
                 >
                   <QrCode size={14} />{" "}
-                  {action === "qr" ? "Generating…" : "Generate QR"}
+                  {action === "qr"
+                    ? t("v2.whatsapp.generating")
+                    : t("v2.whatsapp.generate")}
                 </button>
               </div>
             </SettingsSection>
           )}
           <SettingsSection
-            title="Pair a new number"
-            description="Create a server-side provider instance without exposing its API key to the browser."
+            title={t("v2.whatsapp.pairNew")}
+            description={t("v2.whatsapp.pairNewDescription")}
           >
             <div className="settings-v2-form-grid">
               <label>
-                Instance name
+                {t("v2.whatsapp.instanceName")}
                 <input
                   value={instanceName}
                   onChange={(event) => setInstanceName(event.target.value)}
@@ -334,7 +345,9 @@ export function SettingsWhatsAppPage({
               onClick={() => void create()}
             >
               <Smartphone size={14} />{" "}
-              {action === "create" ? "Creating…" : "Create instance"}
+              {action === "create"
+                ? t("v2.whatsapp.creating")
+                : t("v2.whatsapp.createInstance")}
             </button>
           </SettingsSection>
         </>

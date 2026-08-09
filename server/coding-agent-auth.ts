@@ -148,8 +148,63 @@ export async function startSubscriptionLogin(
   };
   active.completion = new Promise((resolve) => {
     let output = "";
+    let settled = false;
     const updateChallenge = () => {
       state.challenge = challengeFromOutput(output, expiresAt);
+    };
+    const finish = async () => {
+      if (settled) return;
+      settled = true;
+      try {
+        await onComplete({ ...state });
+      } catch (error) {
+        console.error(
+          "[mend-coding-login] completion persistence failed",
+          error,
+        );
+      } finally {
+        activeLogins.delete(jobId);
+        try {
+          await rm(homeDirectory, { recursive: true, force: true });
+        } catch (error) {
+          console.error(
+            "[mend-coding-login] temporary home cleanup failed",
+            error,
+          );
+        }
+        resolve();
+      }
+    };
+    const finishFromClose = async (code: number | null) => {
+      if (settled) return;
+      updateChallenge();
+      try {
+        if (active.canceled) {
+          state.status = "canceled";
+        } else if (active.expired) {
+          state.status = "expired";
+          state.errorCode = "login_expired";
+        } else if (
+          code === 0 &&
+          (await validateCodexLogin(homeDirectory, executable))
+        ) {
+          const bundle = await authBundle(homeDirectory);
+          if (Object.keys(bundle).length) {
+            state.status = "completed";
+            state.bundle = bundle;
+          } else {
+            state.status = "failed";
+            state.errorCode = "codex_auth_bundle_missing";
+          }
+        } else {
+          state.status = "failed";
+          state.errorCode = `codex_login_exit_${code ?? 1}`;
+        }
+      } catch {
+        state.status = "failed";
+        state.errorCode = "login_validation_failed";
+      }
+      await finish();
     };
     const onData = (chunk: Buffer) => {
       output = `${output}${chunk.toString("utf8")}`.slice(-20_000);
@@ -157,44 +212,14 @@ export async function startSubscriptionLogin(
     };
     child.stdout?.on("data", onData);
     child.stderr?.on("data", onData);
-    child.once("error", async (error) => {
+    child.once("error", () => {
       if (!active.canceled) {
         state.status = "failed";
-        state.errorCode = error.message.slice(0, 120);
+        state.errorCode = "login_runner_process_error";
       }
-      await onComplete({ ...state });
-      activeLogins.delete(jobId);
-      await rm(homeDirectory, { recursive: true, force: true });
-      resolve();
+      void finish();
     });
-    child.once("close", async (code) => {
-      updateChallenge();
-      if (active.canceled) {
-        state.status = "canceled";
-      } else if (active.expired) {
-        state.status = "expired";
-        state.errorCode = "login_expired";
-      } else if (
-        code === 0 &&
-        (await validateCodexLogin(homeDirectory, executable))
-      ) {
-        const bundle = await authBundle(homeDirectory);
-        if (Object.keys(bundle).length) {
-          state.status = "completed";
-          state.bundle = bundle;
-        } else {
-          state.status = "failed";
-          state.errorCode = "codex_auth_bundle_missing";
-        }
-      } else {
-        state.status = "failed";
-        state.errorCode = `codex_login_exit_${code ?? 1}`;
-      }
-      await onComplete({ ...state });
-      activeLogins.delete(jobId);
-      await rm(homeDirectory, { recursive: true, force: true });
-      resolve();
-    });
+    child.once("close", (code) => void finishFromClose(code));
   });
   activeLogins.set(jobId, active);
   await new Promise((resolve) => setTimeout(resolve, 250));

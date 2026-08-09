@@ -62,19 +62,19 @@ export function SettingsIntegrationsPage() {
             to="/settings/integrations/github"
             icon={<Github size={17} />}
             title="GitHub"
-            description="Repository selection, branches and publishing access."
+            description={t("v2.integrations.githubDescription")}
           />
           <IntegrationLink
             to="/settings/integrations/google"
             icon={<span className="integration-letter">G</span>}
             title="Google Calendar"
-            description="Calendars available to authorized actions."
+            description={t("v2.integrations.googleDescription")}
           />
           <IntegrationLink
             to="/settings/integrations/mcp"
             icon={<Link2 size={17} />}
-            title="MCP plugins"
-            description="Trusted tools with explicit read and write controls."
+            title={t("v2.layout.items.mcp")}
+            description={t("v2.integrations.mcpDescription")}
           />
         </div>
       </SettingsSection>
@@ -134,12 +134,14 @@ export function SettingsGithubPage({
       );
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "GitHub is unavailable.",
+        reason instanceof Error
+          ? reason.message
+          : t("v2.integrations.errors.github"),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
   const connect = async () => {
     if (!workspaceId) return;
@@ -151,7 +153,7 @@ export function SettingsGithubPage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "GitHub setup could not start.",
+          : t("v2.integrations.errors.github"),
       );
       setAction(null);
     }
@@ -160,10 +162,9 @@ export function SettingsGithubPage({
     if (
       !workspaceId ||
       !(await onConfirm({
-        title: "Disconnect GitHub?",
-        description:
-          "Repository selection and publishing access will stop until the GitHub App is connected again.",
-        confirmLabel: "Disconnect",
+        title: t("v2.integrations.confirmDisconnectGithubTitle"),
+        description: t("v2.integrations.confirmDisconnectGithubDescription"),
+        confirmLabel: t("v2.integrations.confirmDisconnect"),
         destructive: true,
       }))
     )
@@ -173,12 +174,12 @@ export function SettingsGithubPage({
       await disconnectLiveGitHub(workspaceId);
       setConnection({ connected: false });
       setRepositories([]);
-      onToast("GitHub disconnected.");
+      onToast(t("v2.integrations.githubDisconnected"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "GitHub could not be disconnected.",
+          : t("v2.integrations.errors.github"),
       );
     } finally {
       setAction(null);
@@ -196,7 +197,7 @@ export function SettingsGithubPage({
             onClick={() => void load()}
             disabled={loading}
           >
-            <RefreshCw size={13} /> Refresh
+            <RefreshCw size={13} /> {t("v2.integrations.refresh")}
           </button>
         }
       />
@@ -204,17 +205,19 @@ export function SettingsGithubPage({
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Checking GitHub access…" />
+        <LoadingState label={t("v2.integrations.checkingGithub")} />
       ) : (
         <>
           <SettingsSection
-            title="Workspace GitHub space"
-            description="This connection is the source for repository selection and publishing access."
+            title={t("v2.integrations.workspaceGithub")}
+            description={t("v2.integrations.githubDescription")}
             actions={
               <SettingsStatus
                 tone={connection.connected ? "success" : "warning"}
               >
-                {connection.connected ? "Connected" : "Not connected"}
+                {connection.connected
+                  ? t("v2.integrations.connected")
+                  : t("v2.integrations.notConnected")}
               </SettingsStatus>
             }
           >
@@ -224,7 +227,9 @@ export function SettingsGithubPage({
                   <Github size={18} />
                   <strong>{connection.owner ?? "GitHub account"}</strong>
                   <span>
-                    Connected {formatSettingsDate(connection.connectedAt)}
+                    {t("v2.integrations.connectedDate", {
+                      date: formatSettingsDate(connection.connectedAt),
+                    })}
                   </span>
                 </div>
                 <button
@@ -233,17 +238,14 @@ export function SettingsGithubPage({
                   onClick={() => void disconnect()}
                   disabled={action !== null}
                 >
-                  Disconnect
+                  {t("v2.integrations.disconnect")}
                 </button>
               </div>
             ) : (
               <div className="settings-v2-callout">
                 <div>
-                  <strong>Connect GitHub to select repositories</strong>
-                  <p>
-                    The official GitHub App controls which codebases Mend can
-                    access. No repository is selected automatically.
-                  </p>
+                  <strong>{t("v2.integrations.connectGithubToSelect")}</strong>
+                  <p>{t("v2.integrations.githubAccessDescription")}</p>
                 </div>
                 <button
                   className="button button-primary button-small"
@@ -252,15 +254,19 @@ export function SettingsGithubPage({
                   disabled={action !== null}
                 >
                   <Github size={13} />{" "}
-                  {action === "connect" ? "Opening GitHub…" : "Connect GitHub"}
+                  {action === "connect"
+                    ? t("v2.integrations.openingGithub")
+                    : t("v2.integrations.connectGithub")}
                 </button>
               </div>
             )}
           </SettingsSection>
           {connection.connected && (
             <SettingsSection
-              title="Available repositories"
-              description="These repositories are visible to the GitHub App. Configure a repository under Engineering when you are ready."
+              title={t("v2.integrations.availableRepositories")}
+              description={t(
+                "v2.integrations.availableRepositoriesDescription",
+              )}
             >
               {repositories.length ? (
                 <div className="settings-v2-list">
@@ -276,21 +282,24 @@ export function SettingsGithubPage({
                         <strong>
                           {repo.owner}/{repo.repo}
                         </strong>
-                        <span>Default branch · {repo.defaultBranch}</span>
+                        <span>
+                          {t("v2.integrations.defaultBranch")} ·{" "}
+                          {repo.defaultBranch}
+                        </span>
                       </div>
                       <Link
                         className="button button-ghost button-small"
                         to="/settings/engineering/repositories"
                       >
-                        Configure
+                        {t("v2.integrations.configure")}
                       </Link>
                     </div>
                   ))}
                 </div>
               ) : (
                 <EmptyState
-                  title="No repositories available"
-                  description="Grant the Mend GitHub App access to at least one repository, then refresh."
+                  title={t("v2.integrations.noRepositories")}
+                  description={t("v2.integrations.noRepositoriesDescription")}
                 />
               )}
             </SettingsSection>
@@ -325,12 +334,12 @@ export function SettingsGooglePage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "Google connections are unavailable.",
+          : t("v2.integrations.errors.google"),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
   const connect = async () => {
     if (!workspaceId) return;
@@ -342,7 +351,7 @@ export function SettingsGooglePage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "Google OAuth could not start.",
+          : t("v2.integrations.errors.oauth"),
       );
       setAction(null);
     }
@@ -351,9 +360,12 @@ export function SettingsGooglePage({
     if (
       !workspaceId ||
       !(await onConfirm({
-        title: "Disconnect Google account?",
-        description: `Disconnect ${connection.accountEmail ?? "this account"}? Its server-side tokens will be removed.`,
-        confirmLabel: "Disconnect",
+        title: t("v2.integrations.confirmDisconnectGoogleTitle"),
+        description: t("v2.integrations.confirmDisconnectGoogleDescription", {
+          account:
+            connection.accountEmail ?? t("v2.integrations.googleAccount"),
+        }),
+        confirmLabel: t("v2.integrations.confirmDisconnect"),
         destructive: true,
       }))
     )
@@ -362,12 +374,12 @@ export function SettingsGooglePage({
     try {
       await disconnectLiveGoogleConnection(workspaceId, connection.id);
       await load();
-      onToast("Google account disconnected.");
+      onToast(t("v2.integrations.googleDisconnected"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Google account could not be disconnected.",
+          : t("v2.integrations.errors.google"),
       );
     } finally {
       setAction(null);
@@ -388,12 +400,12 @@ export function SettingsGooglePage({
       setConnections((current) =>
         current.map((item) => (item.id === next.id ? next : item)),
       );
-      onToast("Google calendar selection saved.");
+      onToast(t("v2.integrations.googleCalendarSaved"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Calendar selection could not be saved.",
+          : t("v2.integrations.errors.googleSave"),
       );
     } finally {
       setAction(null);
@@ -411,7 +423,7 @@ export function SettingsGooglePage({
             onClick={() => void connect()}
             disabled={action === "connect"}
           >
-            <span>+</span> Connect account
+            <span>+</span> {t("v2.integrations.connectAccount")}
           </button>
         }
       />
@@ -419,16 +431,16 @@ export function SettingsGooglePage({
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Loading Google connections…" />
+        <LoadingState label={t("v2.integrations.loadingGoogle")} />
       ) : (
         <SettingsSection
-          title="Connected accounts"
-          description="Calendar access stays scoped to the calendars you select."
+          title={t("v2.integrations.connectedAccounts")}
+          description={t("v2.integrations.googleAccountsDescription")}
         >
           {!connections.length ? (
             <EmptyState
-              title="No Google account connected"
-              description="Connect a Google account when OAuth credentials are configured for this server."
+              title={t("v2.integrations.noGoogleAccounts")}
+              description={t("v2.integrations.connectGoogleDescription")}
             />
           ) : (
             <div className="settings-v2-list">
@@ -441,11 +453,15 @@ export function SettingsGooglePage({
                     <strong>
                       {connection.accountName ??
                         connection.accountEmail ??
-                        "Google account"}
+                        t("v2.integrations.googleAccount")}
                     </strong>
                     <span>
-                      {connection.accountEmail ?? "Email not reported"} ·{" "}
-                      {connection.status}
+                      {connection.accountEmail ??
+                        t("v2.integrations.emailNotReported")}{" "}
+                      ·{" "}
+                      {t(`google.statuses.${connection.status}`, {
+                        defaultValue: connection.status,
+                      })}
                     </span>
                     <div className="settings-v2-calendar-grid">
                       {connection.calendars.map((calendar) => (
@@ -467,7 +483,9 @@ export function SettingsGooglePage({
                             }}
                           />
                           {calendar.summary}
-                          {calendar.primary ? " (primary)" : ""}
+                          {calendar.primary
+                            ? ` (${t("v2.integrations.primary")})`
+                            : ""}
                         </label>
                       ))}
                     </div>
@@ -478,7 +496,7 @@ export function SettingsGooglePage({
                     onClick={() => void disconnect(connection)}
                     disabled={action === connection.id}
                   >
-                    <Trash2 size={13} /> Disconnect
+                    <Trash2 size={13} /> {t("v2.integrations.disconnect")}
                   </button>
                 </div>
               ))}
@@ -519,12 +537,12 @@ export function SettingsMcpPage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "MCP plugins are unavailable.",
+          : t("v2.integrations.errors.mcp"),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
   const create = async () => {
     if (!workspaceId || !name.trim() || !url.trim()) return;
@@ -536,7 +554,7 @@ export function SettingsMcpPage({
         authMode === "headers" &&
         (!parsed || Array.isArray(parsed) || typeof parsed !== "object")
       )
-        throw new Error("Secret headers must be a JSON object.");
+        throw new Error(t("v2.integrations.errors.headers"));
       await createLiveMcpConnection(workspaceId, {
         name,
         description,
@@ -549,12 +567,12 @@ export function SettingsMcpPage({
       setUrl("");
       setHeaders("{}");
       await load();
-      onToast("MCP plugin connected.");
+      onToast(t("v2.integrations.connectedToast"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "MCP plugin could not be connected.",
+          : t("v2.integrations.errors.connect"),
       );
     } finally {
       setAction(null);
@@ -582,7 +600,7 @@ export function SettingsMcpPage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "MCP settings could not be saved.",
+          : t("v2.integrations.errors.save"),
       );
     } finally {
       setAction(null);
@@ -592,10 +610,9 @@ export function SettingsMcpPage({
     if (
       !workspaceId ||
       !(await onConfirm({
-        title: "Disconnect MCP plugin?",
-        description:
-          "This removes its server-side credentials and disables all tools.",
-        confirmLabel: "Disconnect",
+        title: t("v2.integrations.confirmDisconnectMcpTitle"),
+        description: t("v2.integrations.confirmDisconnectMcpDescription"),
+        confirmLabel: t("v2.integrations.confirmDisconnect"),
         destructive: true,
       }))
     )
@@ -606,12 +623,12 @@ export function SettingsMcpPage({
       setConnections((current) =>
         current.filter((item) => item.id !== connection.id),
       );
-      onToast("MCP plugin disconnected.");
+      onToast(t("v2.integrations.disconnectedToast"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "MCP plugin could not be disconnected.",
+          : t("v2.integrations.errors.disconnect"),
       );
     } finally {
       setAction(null);
@@ -627,16 +644,16 @@ export function SettingsMcpPage({
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Loading MCP plugins…" />
+        <LoadingState label={t("v2.integrations.loadingMcp")} />
       ) : (
         <>
           <SettingsSection
-            title="Add a plugin"
-            description="Credentials are encrypted server-side and never returned to this page."
+            title={t("v2.integrations.addPlugin")}
+            description={t("v2.integrations.mcpCredentialsDescription")}
           >
             <div className="settings-v2-form-grid">
               <label>
-                Plugin name
+                {t("v2.integrations.pluginName")}
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
@@ -644,7 +661,7 @@ export function SettingsMcpPage({
                 />
               </label>
               <label>
-                Purpose
+                {t("v2.integrations.purpose")}
                 <input
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
@@ -652,7 +669,7 @@ export function SettingsMcpPage({
                 />
               </label>
               <label>
-                Server URL
+                {t("v2.integrations.serverUrl")}
                 <input
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
@@ -661,22 +678,25 @@ export function SettingsMcpPage({
                 />
               </label>
               <label>
-                Authentication
+                {t("v2.integrations.authentication")}
                 <Select
                   value={authMode}
                   onChange={(value) =>
                     setAuthMode(value as McpConnection["authMode"])
                   }
                   options={[
-                    { value: "none", label: "None" },
-                    { value: "headers", label: "Secret headers" },
-                    { value: "oauth", label: "OAuth" },
+                    { value: "none", label: t("v2.integrations.none") },
+                    {
+                      value: "headers",
+                      label: t("v2.integrations.secretHeaders"),
+                    },
+                    { value: "oauth", label: t("v2.integrations.oauth") },
                   ]}
                 />
               </label>
               {authMode === "headers" && (
                 <label className="settings-form-wide">
-                  Secret headers
+                  {t("v2.integrations.secretHeaders")}
                   <textarea
                     rows={3}
                     value={headers}
@@ -691,17 +711,17 @@ export function SettingsMcpPage({
               onClick={() => void create()}
               disabled={action === "create" || !name.trim() || !url.trim()}
             >
-              <Plus size={14} /> Add plugin
+              <Plus size={14} /> {t("v2.integrations.addPlugin")}
             </button>
           </SettingsSection>
           <SettingsSection
-            title="Connected plugins"
-            description="Write access is an explicit workspace policy, not a side effect of connecting a server."
+            title={t("v2.integrations.connectedPlugins")}
+            description={t("v2.integrations.connectedPluginsDescription")}
           >
             {!connections.length ? (
               <EmptyState
-                title="No MCP plugins connected"
-                description="Connect a trusted server above, then choose which tools Mend may use."
+                title={t("v2.integrations.noPlugins")}
+                description={t("v2.integrations.connectPluginDescription")}
               />
             ) : (
               <div className="settings-v2-list">
@@ -725,7 +745,7 @@ export function SettingsMcpPage({
                           setError(
                             reason instanceof Error
                               ? reason.message
-                              : "MCP test failed.",
+                              : t("v2.integrations.errors.test"),
                           ),
                         )
                         .finally(() => setAction(null));
@@ -741,7 +761,7 @@ export function SettingsMcpPage({
                           setError(
                             reason instanceof Error
                               ? reason.message
-                              : "OAuth could not start.",
+                              : t("v2.integrations.errors.oauth"),
                           ),
                         )
                         .finally(() => setAction(null));
@@ -780,6 +800,7 @@ function McpRow({
   ) => void;
   onDisconnect: () => void;
 }) {
+  const { t } = useTranslation("settings");
   const [enabled, setEnabled] = useState(new Set(connection.allowedToolNames));
   const [writeModes, setWriteModes] = useState(connection.writeModes);
   const save = (nextEnabled = enabled, nextModes = writeModes) =>
@@ -794,7 +815,10 @@ function McpRow({
       <div className="settings-v2-row-main">
         <strong>{connection.name}</strong>
         <span>
-          {connection.description || connection.serverUrl} · {connection.status}
+          {connection.description || connection.serverUrl} ·{" "}
+          {t(`mcp.statuses.${connection.status}`, {
+            defaultValue: connection.status,
+          })}
         </span>
         {connection.lastError && (
           <small role="alert">{connection.lastError}</small>
@@ -814,12 +838,15 @@ function McpRow({
                   void save(next);
                 }}
               />
-              {tool.name} {tool.readOnly ? "(read)" : "(write)"}
+              {tool.name}{" "}
+              {tool.readOnly
+                ? t("v2.integrations.read")
+                : t("v2.integrations.write")}
             </label>
           ))}
         </div>
         <label className="settings-v2-inline-field">
-          Write access
+          {t("v2.integrations.writeAccess")}
           <Select
             value={writeModes.length === 2 ? "both" : (writeModes[0] ?? "none")}
             onChange={(value) => {
@@ -833,10 +860,19 @@ function McpRow({
               void save(enabled, [...next]);
             }}
             options={[
-              { value: "none", label: "None" },
-              { value: "draft", label: "Copilot / draft" },
-              { value: "safe_auto", label: "Auto-reply" },
-              { value: "both", label: "Copilot and auto-reply" },
+              { value: "none", label: t("v2.integrations.none") },
+              {
+                value: "draft",
+                label: t("v2.integrations.copilotDraft"),
+              },
+              {
+                value: "safe_auto",
+                label: t("v2.integrations.autoReply"),
+              },
+              {
+                value: "both",
+                label: t("v2.integrations.copilotAutoReply"),
+              },
             ]}
           />
         </label>
@@ -850,7 +886,7 @@ function McpRow({
               onClick={onOAuth}
               disabled={action === connection.id}
             >
-              Authorize
+              {t("v2.integrations.authorize")}
             </button>
           )}
         <button
@@ -859,7 +895,7 @@ function McpRow({
           onClick={onTest}
           disabled={action === connection.id}
         >
-          <RefreshCw size={13} /> Test
+          <RefreshCw size={13} /> {t("v2.integrations.test")}
         </button>
         <button
           className="button button-danger button-small"
@@ -867,7 +903,7 @@ function McpRow({
           onClick={onDisconnect}
           disabled={action === connection.id}
         >
-          <Trash2 size={13} /> Disconnect
+          <Trash2 size={13} /> {t("v2.integrations.disconnect")}
         </button>
       </div>
     </div>

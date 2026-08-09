@@ -123,14 +123,23 @@ export function registerCodingControlPlaneRoutes(
   router.post(
     "/api/agent-connections/login",
     asyncRoute(async (request, response) => {
+      const result = await controlPlane.startLogin(
+        await scoped(request, response),
+        parse(agentLoginStartSchema, request.body),
+      );
       send(
         response,
-        202,
-        await controlPlane.startLogin(
-          await scoped(request, response),
-          parse(agentLoginStartSchema, request.body),
-        ),
+        ["pending", "awaiting_user"].includes(result.status) ? 202 : 200,
+        result,
       );
+    }),
+  );
+  router.get(
+    "/api/agent-connections/login/active",
+    asyncRoute(async (request, response) => {
+      send(response, 200, {
+        data: await controlPlane.listLoginJobs(await scoped(request, response)),
+      });
     }),
   );
   router.get(

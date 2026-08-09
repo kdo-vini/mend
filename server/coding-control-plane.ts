@@ -17,6 +17,7 @@ export type ConnectionStatus =
   | "connected"
   | "expired"
   | "revoked"
+  | "canceled"
   | "error";
 export type PolicySource = "override" | "repository" | "workspace";
 

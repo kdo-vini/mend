@@ -457,6 +457,7 @@ export interface CodingControlPlanePort {
     context: RequestContext,
     input: AgentLoginStartInput,
   ): Promise<AgentLoginJob>;
+  listLoginJobs(context: RequestContext): Promise<AgentLoginJob[]>;
   pollLogin(
     context: RequestContext,
     jobId: string,

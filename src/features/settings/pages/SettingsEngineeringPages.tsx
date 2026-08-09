@@ -18,6 +18,7 @@ import {
   cancelLiveAgentLogin,
   getLiveGitHubConnection,
   listLiveAgentConnections,
+  listLiveAgentLoginJobs,
   listLiveAgentRoutingPolicies,
   listLiveGitHubRepositories,
   listLiveRepositories,
@@ -87,12 +88,12 @@ export function SettingsRepositoriesPage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "Repositories could not be loaded.",
+          : t("v2.repositories.loadError"),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
   const reset = () => {
     setEditing(null);
@@ -144,12 +145,16 @@ export function SettingsRepositoriesPage({
           : [next, ...rows],
       );
       reset();
-      onToast(editing ? "Repository updated." : "Repository configured.");
+      onToast(
+        editing
+          ? t("v2.repositories.updatedToast")
+          : t("v2.repositories.configuredToast"),
+      );
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Repository could not be saved.",
+          : t("v2.repositories.saveError"),
       );
     } finally {
       setAction(null);
@@ -159,9 +164,11 @@ export function SettingsRepositoriesPage({
     if (
       !workspaceId ||
       !(await onConfirm({
-        title: "Remove repository?",
-        description: `${repository.name} will no longer be available for coding runs.`,
-        confirmLabel: "Remove repository",
+        title: t("v2.repositories.confirmTitle"),
+        description: t("v2.repositories.confirmDescription", {
+          name: repository.name,
+        }),
+        confirmLabel: t("v2.repositories.confirmLabel"),
         destructive: true,
       }))
     )
@@ -171,12 +178,12 @@ export function SettingsRepositoriesPage({
       await removeLiveRepository({ workspaceId, repositoryId: repository.id });
       setRepositories((rows) => rows.filter((row) => row.id !== repository.id));
       if (editing === repository.id) reset();
-      onToast("Repository removed.");
+      onToast(t("v2.repositories.removedToast"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Repository could not be removed.",
+          : t("v2.repositories.removeError"),
       );
     } finally {
       setAction(null);
@@ -194,7 +201,7 @@ export function SettingsRepositoriesPage({
             onClick={() => void load()}
             disabled={loading}
           >
-            <RefreshCw size={13} /> Refresh
+            <RefreshCw size={13} /> {t("v2.repositories.refresh")}
           </button>
         }
       />
@@ -202,34 +209,31 @@ export function SettingsRepositoriesPage({
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Loading repositories…" />
+        <LoadingState label={t("v2.repositories.loading")} />
       ) : (
         <>
           <SettingsSection
-            title="Repository access"
-            description="GitHub controls source access; this page controls which repositories are part of the Mend workspace."
+            title={t("v2.repositories.accessTitle")}
+            description={t("v2.repositories.accessDescription")}
             actions={
               <SettingsStatus tone={githubConnected ? "success" : "warning"}>
                 {githubConnected
                   ? `GitHub · ${githubOwner}`
-                  : "GitHub not connected"}
+                  : t("v2.repositories.githubNotConnected")}
               </SettingsStatus>
             }
           >
             {!githubConnected && (
               <div className="settings-v2-callout">
                 <div>
-                  <strong>Connect GitHub before adding a repository</strong>
-                  <p>
-                    Mend only lists repositories from the official GitHub App
-                    installation.
-                  </p>
+                  <strong>{t("v2.repositories.connectBeforeAdd")}</strong>
+                  <p>{t("v2.repositories.githubAppDescription")}</p>
                 </div>
                 <Link
                   className="button button-secondary button-small"
                   to="/settings/integrations/github"
                 >
-                  <Github size={13} /> Manage GitHub
+                  <Github size={13} /> {t("v2.repositories.manageGithub")}
                 </Link>
               </div>
             )}
@@ -245,13 +249,13 @@ export function SettingsRepositoriesPage({
                       <span>
                         {repository.githubOwner && repository.githubRepo
                           ? `${repository.githubOwner}/${repository.githubRepo}`
-                          : "GitHub repository not selected"}
+                          : t("v2.repositories.repositoryNotSelected")}
                       </span>
                       <small>
                         {repository.defaultBranch} ·{" "}
                         {repository.executionPlane === "github_actions"
-                          ? "GitHub Actions"
-                          : "Dokploy runner"}
+                          ? t("v2.repositories.githubActions")
+                          : t("v2.repositories.dokployRunner")}
                       </small>
                     </div>
                     <div className="settings-v2-row-actions">
@@ -260,7 +264,7 @@ export function SettingsRepositoriesPage({
                         type="button"
                         onClick={() => edit(repository)}
                       >
-                        Edit
+                        {t("v2.repositories.edit")}
                       </button>
                       <button
                         className="button button-danger button-small"
@@ -268,7 +272,7 @@ export function SettingsRepositoriesPage({
                         onClick={() => void remove(repository)}
                         disabled={action === repository.id}
                       >
-                        <Trash2 size={13} /> Remove
+                        <Trash2 size={13} /> {t("v2.repositories.remove")}
                       </button>
                     </div>
                   </div>
@@ -276,37 +280,41 @@ export function SettingsRepositoriesPage({
               </div>
             ) : (
               <EmptyState
-                title="No repositories configured"
-                description="Add the first codebase below, then choose its default branch."
+                title={t("v2.repositories.emptyTitle")}
+                description={t("v2.repositories.emptyDescription")}
               />
             )}
           </SettingsSection>
           <SettingsSection
-            title={editing ? "Edit repository" : "Add a repository"}
-            description="Routing, models and coding connections are managed separately so repository identity stays simple."
+            title={
+              editing
+                ? t("v2.repositories.editTitle")
+                : t("v2.repositories.addTitle")
+            }
+            description={t("v2.repositories.formDescription")}
           >
             <div
               id="settings-repository-editor"
               className="settings-v2-form-grid"
             >
               <label>
-                Name
+                {t("v2.repositories.name")}
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="Support app"
+                  placeholder={t("v2.repositories.namePlaceholder")}
                 />
               </label>
               <label>
-                Default branch
+                {t("v2.repositories.defaultBranch")}
                 <input
                   value={branch}
                   onChange={(event) => setBranch(event.target.value)}
-                  placeholder="main"
+                  placeholder={t("v2.repositories.branchPlaceholder")}
                 />
               </label>
               <label className="settings-form-wide">
-                GitHub repository
+                {t("v2.repositories.githubRepository")}
                 <Select
                   value={githubRepo}
                   onChange={(value) => {
@@ -323,8 +331,8 @@ export function SettingsRepositoriesPage({
                     {
                       value: "",
                       label: githubConnected
-                        ? "Select a repository"
-                        : "Connect GitHub first",
+                        ? t("v2.repositories.selectRepository")
+                        : t("v2.repositories.connectGithubFirst"),
                       disabled: true,
                     },
                     ...githubRepos.map((item) => ({
@@ -343,7 +351,7 @@ export function SettingsRepositoriesPage({
                   type="button"
                   onClick={reset}
                 >
-                  Cancel
+                  {t("v2.repositories.cancel")}
                 </button>
               )}
               <button
@@ -354,10 +362,10 @@ export function SettingsRepositoriesPage({
               >
                 <Save size={14} />{" "}
                 {action === "save"
-                  ? "Saving…"
+                  ? t("v2.repositories.saving")
                   : editing
-                    ? "Save changes"
-                    : "Add repository"}
+                    ? t("v2.repositories.saveChanges")
+                    : t("v2.repositories.addRepository")}
               </button>
             </div>
           </SettingsSection>
@@ -395,17 +403,22 @@ export function SettingsCodingConnectionsPage({
     setLoading(true);
     setError(null);
     try {
-      setConnections(await listLiveAgentConnections(workspaceId));
+      const [nextConnections, activeJobs] = await Promise.all([
+        listLiveAgentConnections(workspaceId),
+        listLiveAgentLoginJobs(workspaceId),
+      ]);
+      setConnections(nextConnections);
+      setLoginJob(activeJobs.find((job) => job.provider === "openai") ?? null);
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Coding connections are unavailable.",
+          : t("v2.codingConnections.errors.load"),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
   useEffect(() => {
     if (
@@ -417,16 +430,31 @@ export function SettingsCodingConnectionsPage({
     const timer = window.setInterval(() => {
       void pollLiveAgentLogin({ workspaceId, jobId: loginJob.id })
         .then((job) => {
-          setLoginJob(job);
           if (job.status === "completed") {
-            onToast("Subscription connected.");
+            onToast(t("v2.codingConnections.subscriptionConnected"));
+            setLoginJob(null);
             void load();
+          } else if (["failed", "expired", "canceled"].includes(job.status)) {
+            setLoginJob(job);
+            setError(
+              t(`v2.codingConnections.loginStatus.${job.status}`, {
+                defaultValue: t("v2.codingConnections.errors.loginFailed"),
+              }),
+            );
+          } else {
+            setLoginJob(job);
           }
         })
-        .catch(() => undefined);
+        .catch((reason) =>
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : t("v2.codingConnections.errors.poll"),
+          ),
+        );
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [load, loginJob, onToast, workspaceId]);
+  }, [load, loginJob, onToast, t, workspaceId]);
   const create = async () => {
     if (!workspaceId || !label.trim()) return;
     setAction("create");
@@ -436,13 +464,25 @@ export function SettingsCodingConnectionsPage({
         if (provider !== "openai")
           throw new Error(
             provider === "anthropic"
-              ? "Claude.ai login is unavailable on hosted Mend runners for compliance reasons. Use an Anthropic API key."
-              : "Subscription login is not available for this provider on the hosted runner.",
+              ? t("v2.codingConnections.errors.anthropicSubscription")
+              : t("v2.codingConnections.errors.providerSubscription"),
           );
-        setLoginJob(
-          await startLiveAgentLogin({ workspaceId, provider: "openai", label }),
-        );
-        onToast("Official subscription login started.");
+        const nextJob = await startLiveAgentLogin({
+          workspaceId,
+          provider: "openai",
+          label,
+        });
+        if (["pending", "awaiting_user"].includes(nextJob.status)) {
+          setLoginJob(nextJob);
+          onToast(t("v2.codingConnections.officialLoginStarted"));
+        } else {
+          setLoginJob(nextJob);
+          setError(
+            t(`v2.codingConnections.loginStatus.${nextJob.status}`, {
+              defaultValue: t("v2.codingConnections.errors.loginFailed"),
+            }),
+          );
+        }
       } else {
         const connection = await createLiveAgentConnection({
           workspaceId,
@@ -454,13 +494,13 @@ export function SettingsCodingConnectionsPage({
         setConnections((rows) => [connection, ...rows]);
         setApiKey("");
         setLabel("");
-        onToast("Coding API key saved securely.");
+        onToast(t("v2.codingConnections.apiKeySaved"));
       }
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Connection could not be created.",
+          : t("v2.codingConnections.errors.create"),
       );
     } finally {
       setAction(null);
@@ -484,7 +524,7 @@ export function SettingsCodingConnectionsPage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "Consent could not be updated.",
+          : t("v2.codingConnections.errors.consent"),
       );
     }
   };
@@ -501,14 +541,14 @@ export function SettingsCodingConnectionsPage({
       );
       onToast(
         next.status === "connected"
-          ? "Coding connection verified."
-          : "Coding connection needs attention.",
+          ? t("v2.codingConnections.verifiedToast")
+          : t("v2.codingConnections.needsAttentionToast"),
       );
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Connection verification failed.",
+          : t("v2.codingConnections.errors.verify"),
       );
     } finally {
       setAction(null);
@@ -529,12 +569,12 @@ export function SettingsCodingConnectionsPage({
             : row,
         ),
       );
-      onToast("Model catalog refreshed.");
+      onToast(t("v2.codingConnections.catalogRefreshed"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Model catalog is unavailable.",
+          : t("v2.codingConnections.errors.catalog"),
       );
     } finally {
       setAction(null);
@@ -544,10 +584,9 @@ export function SettingsCodingConnectionsPage({
     if (
       !workspaceId ||
       !(await onConfirm({
-        title: "Revoke coding connection?",
-        description:
-          "This disables the connection for future runs and removes its server-side secret.",
-        confirmLabel: "Revoke connection",
+        title: t("v2.codingConnections.confirmTitle"),
+        description: t("v2.codingConnections.confirmDescription"),
+        confirmLabel: t("v2.codingConnections.confirmLabel"),
         destructive: true,
       }))
     )
@@ -559,12 +598,12 @@ export function SettingsCodingConnectionsPage({
         connectionId: connection.id,
       });
       setConnections((rows) => rows.filter((row) => row.id !== connection.id));
-      onToast("Coding connection revoked.");
+      onToast(t("v2.codingConnections.revokedToast"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Connection could not be revoked.",
+          : t("v2.codingConnections.errors.revoke"),
       );
     } finally {
       setAction(null);
@@ -572,18 +611,24 @@ export function SettingsCodingConnectionsPage({
   };
   const cancelLogin = async () => {
     if (!workspaceId || !loginJob) return;
+    setAction("cancel-login");
     try {
-      setLoginJob(
-        await cancelLiveAgentLogin({ workspaceId, jobId: loginJob.id }),
-      );
+      await cancelLiveAgentLogin({ workspaceId, jobId: loginJob.id });
+      setLoginJob(null);
+      await load();
+      onToast(t("v2.codingConnections.loginCanceled"));
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Login could not be cancelled.",
+          : t("v2.codingConnections.errors.cancel"),
       );
+    } finally {
+      setAction(null);
     }
   };
+  const loginActive =
+    loginJob && ["pending", "awaiting_user"].includes(loginJob.status);
   return (
     <div className="settings-v2-page">
       <SettingsPageHeader
@@ -594,24 +639,24 @@ export function SettingsCodingConnectionsPage({
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Loading coding connections…" />
+        <LoadingState label={t("v2.codingConnections.loading")} />
       ) : (
         <>
           <SettingsSection
-            title="Add a connection"
-            description="API keys are encrypted server-side and never returned after saving."
+            title={t("v2.codingConnections.addTitle")}
+            description={t("v2.codingConnections.addDescription")}
           >
             <div className="settings-v2-form-grid">
               <label>
-                Connection label
+                {t("v2.codingConnections.label")}
                 <input
                   value={label}
                   onChange={(event) => setLabel(event.target.value)}
-                  placeholder="Research Claude API"
+                  placeholder={t("v2.codingConnections.labelPlaceholder")}
                 />
               </label>
               <label>
-                Provider
+                {t("v2.codingConnections.provider")}
                 <Select
                   value={provider}
                   onChange={(value) => {
@@ -619,25 +664,40 @@ export function SettingsCodingConnectionsPage({
                     if (value !== "openai") setAuthMethod("api_key");
                   }}
                   options={[
-                    { value: "openai", label: "OpenAI / Codex" },
-                    { value: "anthropic", label: "Anthropic / Claude" },
-                    { value: "google", label: "Google / Gemini" },
-                    { value: "verboo", label: "Verboo" },
+                    {
+                      value: "openai",
+                      label: t("v2.codingConnections.providerOpenai"),
+                    },
+                    {
+                      value: "anthropic",
+                      label: t("v2.codingConnections.providerAnthropic"),
+                    },
+                    {
+                      value: "google",
+                      label: t("v2.codingConnections.providerGoogle"),
+                    },
+                    {
+                      value: "verboo",
+                      label: t("v2.codingConnections.providerVerboo"),
+                    },
                   ]}
                 />
               </label>
               <label>
-                Authentication
+                {t("v2.codingConnections.authentication")}
                 <Select
                   value={authMethod}
                   onChange={(value) =>
                     setAuthMethod(value as typeof authMethod)
                   }
                   options={[
-                    { value: "api_key", label: "API key" },
+                    {
+                      value: "api_key",
+                      label: t("v2.codingConnections.apiKeyMethod"),
+                    },
                     {
                       value: "subscription",
-                      label: "Personal subscription",
+                      label: t("v2.codingConnections.subscriptionMethod"),
                       disabled: provider !== "openai",
                     },
                   ]}
@@ -645,20 +705,44 @@ export function SettingsCodingConnectionsPage({
               </label>
               {authMethod === "api_key" && (
                 <label>
-                  API key
+                  {t("v2.codingConnections.apiKey")}
                   <input
                     type="password"
                     value={apiKey}
                     onChange={(event) => setApiKey(event.target.value)}
-                    placeholder="Stored encrypted and never returned"
+                    placeholder={t("v2.codingConnections.apiKeyPlaceholder")}
                     autoComplete="off"
                   />
                 </label>
               )}
             </div>
-            {authMethod === "subscription" && (
+            {provider !== "openai" && (
+              <div className="settings-v2-callout">
+                <div>
+                  <strong>
+                    {t("v2.codingConnections.subscriptionAvailability")}
+                  </strong>
+                  <p>
+                    {provider === "anthropic"
+                      ? t("v2.codingConnections.errors.anthropicSubscription")
+                      : t("v2.codingConnections.errors.providerSubscription")}
+                  </p>
+                </div>
+              </div>
+            )}
+            {authMethod === "subscription" && provider === "openai" && (
+              <div className="settings-v2-callout">
+                <div>
+                  <strong>
+                    {t("v2.codingConnections.officialLoginLabel")}
+                  </strong>
+                  <p>{t("v2.codingConnections.officialLoginDescription")}</p>
+                </div>
+              </div>
+            )}
+            {authMethod === "subscription" && provider === "openai" && (
               <div className="coding-auth-tutorial">
-                <strong>Connect your ChatGPT subscription</strong>
+                <strong>{t("v2.codingConnections.tutorialTitle")}</strong>
                 <ol>
                   <li>
                     <a
@@ -666,32 +750,29 @@ export function SettingsCodingConnectionsPage({
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Enable ChatGPT authorization here
+                      {t("v2.codingConnections.tutorialAuthorize")}
                     </a>{" "}
-                    in Security &amp; login.
+                    {t("v2.codingConnections.tutorialSecurity")}
                   </li>
-                  <li>Turn on “Authorize device code for Codex”.</li>
-                  <li>Return to Mend and start the official login.</li>
-                  <li>
-                    Open the official login link and enter the one-time code
-                    shown here.
-                  </li>
+                  <li>{t("v2.codingConnections.tutorialStep2")}</li>
+                  <li>{t("v2.codingConnections.tutorialStep3")}</li>
+                  <li>{t("v2.codingConnections.tutorialStep4")}</li>
                 </ol>
-                <p>
-                  Claude.ai subscription login is intentionally unavailable on
-                  hosted Mend runners. The subscription belongs to you and
-                  automation requires separate consent.
-                </p>
+                <p>{t("v2.codingConnections.tutorialCompliance")}</p>
               </div>
             )}
             {loginJob &&
               ["pending", "awaiting_user"].includes(loginJob.status) && (
                 <div className="coding-login-challenge">
-                  <strong>Finish official login</strong>
-                  <span>Expires {formatSettingsDate(loginJob.expiresAt)}</span>
+                  <strong>{t("v2.codingConnections.finishLogin")}</strong>
+                  <span>
+                    {t("v2.codingConnections.expires", {
+                      date: formatSettingsDate(loginJob.expiresAt),
+                    })}
+                  </span>
                   {loginJob.url && (
                     <a href={loginJob.url} target="_blank" rel="noreferrer">
-                      Open official login
+                      {t("v2.codingConnections.openOfficialLogin")}
                     </a>
                   )}
                   {loginJob.code && <code>{loginJob.code}</code>}
@@ -699,8 +780,28 @@ export function SettingsCodingConnectionsPage({
                     className="button button-ghost button-small"
                     type="button"
                     onClick={() => void cancelLogin()}
+                    disabled={action === "cancel-login"}
                   >
-                    Cancel login
+                    {t("v2.codingConnections.cancelLogin")}
+                  </button>
+                </div>
+              )}
+            {loginJob &&
+              ["failed", "expired", "canceled"].includes(loginJob.status) && (
+                <div className="settings-v2-error" role="alert">
+                  <span>
+                    {t(`v2.codingConnections.loginStatus.${loginJob.status}`, {
+                      defaultValue: t(
+                        "v2.codingConnections.errors.loginFailed",
+                      ),
+                    })}
+                  </span>
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => setLoginJob(null)}
+                  >
+                    {t("v2.codingConnections.tryAgain")}
                   </button>
                 </div>
               )}
@@ -710,24 +811,25 @@ export function SettingsCodingConnectionsPage({
               onClick={() => void create()}
               disabled={
                 action === "create" ||
+                (authMethod === "subscription" && Boolean(loginActive)) ||
                 !label.trim() ||
                 (authMethod === "api_key" && !apiKey.trim())
               }
             >
               <KeyRound size={14} />{" "}
               {authMethod === "subscription"
-                ? "Start official login"
-                : "Save connection"}
+                ? t("v2.codingConnections.startOfficialLogin")
+                : t("v2.codingConnections.saveConnection")}
             </button>
           </SettingsSection>
           <SettingsSection
-            title="Connected providers"
-            description="Verify access and refresh the catalog before using a connection in routing."
+            title={t("v2.codingConnections.connectedTitle")}
+            description={t("v2.codingConnections.connectedDescription")}
           >
             {!connections.length ? (
               <EmptyState
-                title="No coding connections yet"
-                description="Add an API key or connect your ChatGPT subscription above."
+                title={t("v2.codingConnections.emptyTitle")}
+                description={t("v2.codingConnections.emptyDescription")}
               />
             ) : (
               <div className="settings-v2-list">
@@ -741,20 +843,40 @@ export function SettingsCodingConnectionsPage({
                       <span>
                         {providerLabel(connection.provider)} ·{" "}
                         {connection.authMethod === "subscription"
-                          ? "Personal subscription"
-                          : "API key"}{" "}
-                        · {connection.status}
+                          ? t("v2.codingConnections.personalSubscription")
+                          : t("v2.codingConnections.apiKeyShort")}{" "}
+                        ·{" "}
+                        {t(
+                          `v2.codingConnections.statuses.${connection.status}`,
+                          {
+                            defaultValue: connection.status,
+                          },
+                        )}
                       </span>
                       <small>
                         {connection.catalog
-                          ? `${connection.catalog.models.length} models · verified ${formatSettingsDate(connection.catalog.lastVerifiedAt)}`
-                          : "Catalog not verified"}
+                          ? `${t("v2.codingConnections.models", { count: connection.catalog.models.length })} · ${t("v2.codingConnections.verified", { date: formatSettingsDate(connection.catalog.lastVerifiedAt) })}`
+                          : t(
+                              "v2.codingConnections.catalogVerificationRequired",
+                            )}
                       </small>
                       {connection.authMethod === "subscription" && (
                         <label className="coding-consent">
                           <input
                             type="checkbox"
                             checked={connection.automationConsent}
+                            disabled={
+                              connection.status !== "connected" ||
+                              !connection.catalog
+                            }
+                            title={
+                              connection.status === "connected" &&
+                              connection.catalog
+                                ? undefined
+                                : t(
+                                    "v2.codingConnections.automationRequiresCatalog",
+                                  )
+                            }
                             onChange={(event) =>
                               void updateConsent(
                                 connection,
@@ -762,7 +884,7 @@ export function SettingsCodingConnectionsPage({
                               )
                             }
                           />
-                          Allow this subscription in automations
+                          {t("v2.codingConnections.allowAutomation")}
                         </label>
                       )}
                     </div>
@@ -773,7 +895,7 @@ export function SettingsCodingConnectionsPage({
                         onClick={() => void catalog(connection)}
                         disabled={action === connection.id}
                       >
-                        Catalog
+                        {t("v2.codingConnections.catalog")}
                       </button>
                       <button
                         className="button button-secondary button-small"
@@ -781,7 +903,7 @@ export function SettingsCodingConnectionsPage({
                         onClick={() => void verify(connection)}
                         disabled={action === connection.id}
                       >
-                        Verify
+                        {t("v2.codingConnections.verify")}
                       </button>
                       <button
                         className="button button-danger button-small"
@@ -789,7 +911,7 @@ export function SettingsCodingConnectionsPage({
                         onClick={() => void revoke(connection)}
                         disabled={action === connection.id}
                       >
-                        Revoke
+                        {t("v2.codingConnections.revoke")}
                       </button>
                     </div>
                   </div>
@@ -846,12 +968,12 @@ export function SettingsCodingRoutingPage({
       setError(
         reason instanceof Error
           ? reason.message
-          : "Coding routing is unavailable.",
+          : t("v2.codingRouting.loadError"),
       );
     } finally {
       setLoading(false);
     }
-  }, [repositoryId, workspaceId]);
+  }, [repositoryId, t, workspaceId]);
   useEffect(() => void load(), [load]);
   const policyFor = (stage: CodingStage) =>
     policies.find((policy) => policy.stage === stage) ?? {
@@ -877,12 +999,18 @@ export function SettingsCodingRoutingPage({
         ...current.filter((policy) => policy.stage !== stage),
         next,
       ]);
-      onToast(`${stage} routing saved.`);
+      onToast(
+        t("v2.codingRouting.saved", {
+          stage: t(`v2.codingRouting.stageLabels.${stage}`),
+        }),
+      );
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "Routing policy could not be saved.",
+          : t("v2.codingRouting.saveError", {
+              stage: t(`v2.codingRouting.stageLabels.${stage}`),
+            }),
       );
     } finally {
       setSaving(null);
@@ -900,24 +1028,29 @@ export function SettingsCodingRoutingPage({
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Loading coding routes…" />
+        <LoadingState label={t("v2.codingRouting.loading")} />
       ) : (
         <>
           <SettingsSection
-            title="Routing scope"
-            description="Workspace defaults apply unless a repository override is selected."
+            title={t("v2.codingRouting.scopeTitle")}
+            description={t("v2.codingRouting.scopeDescription")}
           >
             <div className="settings-v2-form-grid">
               <label>
-                Scope
+                {t("v2.codingRouting.scope")}
                 <Select
                   value={repositoryId}
                   onChange={(value) => setRepositoryId(value)}
                   options={[
-                    { value: "", label: "Workspace default" },
+                    {
+                      value: "",
+                      label: t("v2.codingRouting.workspaceDefault"),
+                    },
                     ...repositories.map((repository) => ({
                       value: repository.id,
-                      label: `Repository · ${repository.name}`,
+                      label: t("v2.codingRouting.repositoryOption", {
+                        name: repository.name,
+                      }),
                     })),
                   ]}
                 />
@@ -925,8 +1058,8 @@ export function SettingsCodingRoutingPage({
             </div>
           </SettingsSection>
           <SettingsSection
-            title="Stages"
-            description="A verified catalog is required before a model can be selected. Fallback remains off unless you explicitly enable it."
+            title={t("v2.codingRouting.stagesTitle")}
+            description={t("v2.codingRouting.stagesDescription")}
           >
             <div className="settings-v2-routing-list">
               {codingStages.map((stage) => {
@@ -946,20 +1079,16 @@ export function SettingsCodingRoutingPage({
                 return (
                   <div className="settings-v2-routing-row" key={stage}>
                     <div className="settings-v2-routing-heading">
-                      <strong>{stage}</strong>
+                      <strong>
+                        {t(`v2.codingRouting.stageLabels.${stage}`)}
+                      </strong>
                       <span>
-                        {stage === "research"
-                          ? "Evidence and diagnosis"
-                          : stage === "implement"
-                            ? "Apply the proposed change"
-                            : stage === "review"
-                              ? "Review diff and checks"
-                              : "Interpret verification failures"}
+                        {t(`v2.codingRouting.stageDescriptions.${stage}`)}
                       </span>
                     </div>
                     <div className="settings-v2-form-grid">
                       <label>
-                        Connection
+                        {t("v2.codingRouting.connection")}
                         <Select
                           value={policy.connectionId ?? ""}
                           onChange={(value) =>
@@ -970,7 +1099,10 @@ export function SettingsCodingRoutingPage({
                             })
                           }
                           options={[
-                            { value: "", label: "Select connection" },
+                            {
+                              value: "",
+                              label: t("v2.codingRouting.selectConnection"),
+                            },
                             ...connections.map((item) => ({
                               value: item.id,
                               label: `${item.label} · ${providerLabel(item.provider)}`,
@@ -983,7 +1115,7 @@ export function SettingsCodingRoutingPage({
                         />
                       </label>
                       <label>
-                        Model
+                        {t("v2.codingRouting.model")}
                         <Select
                           value={policy.model ?? ""}
                           disabled={!connection?.catalog?.models.length}
@@ -1002,7 +1134,7 @@ export function SettingsCodingRoutingPage({
                               : [
                                   {
                                     value: "",
-                                    label: "Refresh a verified catalog",
+                                    label: t("v2.codingRouting.refreshCatalog"),
                                     disabled: true,
                                   },
                                 ]
@@ -1011,14 +1143,17 @@ export function SettingsCodingRoutingPage({
                       </label>
                       {model?.efforts?.length ? (
                         <label>
-                          Effort
+                          {t("v2.codingRouting.effort")}
                           <Select
                             value={policy.effort ?? ""}
                             onChange={(value) =>
                               update(stage, { effort: value || undefined })
                             }
                             options={[
-                              { value: "", label: "Default effort" },
+                              {
+                                value: "",
+                                label: t("v2.codingRouting.defaultEffort"),
+                              },
                               ...model.efforts.map((effort) => ({
                                 value: effort,
                                 label: effort,
@@ -1028,11 +1163,11 @@ export function SettingsCodingRoutingPage({
                         </label>
                       ) : (
                         <div className="settings-v2-capability-note">
-                          No effort capability
+                          {t("v2.codingRouting.noEffort")}
                         </div>
                       )}
                       <label>
-                        Max duration (s)
+                        {t("v2.codingRouting.maxDuration")}
                         <input
                           type="number"
                           min="1"
@@ -1046,7 +1181,7 @@ export function SettingsCodingRoutingPage({
                         />
                       </label>
                       <label>
-                        Max output tokens
+                        {t("v2.codingRouting.maxOutput")}
                         <input
                           type="number"
                           min="1"
@@ -1057,7 +1192,7 @@ export function SettingsCodingRoutingPage({
                         />
                       </label>
                       <label>
-                        Max repairs
+                        {t("v2.codingRouting.maxRepairs")}
                         <input
                           type="number"
                           min="0"
@@ -1079,13 +1214,18 @@ export function SettingsCodingRoutingPage({
                             })
                           }
                         />
-                        Enable explicit fallback
+                        {t("v2.codingRouting.explicitFallback")}
                       </label>
                       {policy.fallbackEnabled && (
                         <select
                           className="coding-fallback-select"
                           multiple
-                          aria-label={`${stage} fallback connections`}
+                          aria-label={t(
+                            "v2.codingRouting.fallbackConnections",
+                            {
+                              stage,
+                            },
+                          )}
                           value={policy.fallbackConnectionIds ?? []}
                           onChange={(event) =>
                             update(stage, {
@@ -1124,7 +1264,9 @@ export function SettingsCodingRoutingPage({
                         }
                       >
                         <Save size={13} />{" "}
-                        {saving === stage ? "Saving…" : "Save stage"}
+                        {saving === stage
+                          ? t("v2.codingRouting.saving")
+                          : t("v2.codingRouting.saveStage")}
                       </button>
                     </div>
                   </div>

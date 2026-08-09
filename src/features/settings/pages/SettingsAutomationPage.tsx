@@ -9,11 +9,10 @@ import {
   aiPolicyIntegrationValues,
   aiTriageRouteValues,
   triageIntentValues,
-  type AiPolicyAction,
   type AiPolicyChannel,
+  type AiPolicyAction,
   type AiPolicyIntegration,
   type AiTriageRoute,
-  type TriageIntent,
 } from "../../../ai-policy";
 import {
   defaultSupportFlow,
@@ -43,46 +42,6 @@ import {
 } from "../components/SettingsShared";
 import type { SettingsWorkspacePageProps } from "./SettingsWorkspacePage";
 
-const intentLabels: Record<TriageIntent, string> = {
-  question: "Question / pricing",
-  how_to: "How-to",
-  status: "Status",
-  bug: "Bug report",
-  incident: "Incident",
-  billing: "Billing",
-  feature: "Feature request",
-  social: "Greeting / thanks",
-  other: "Other / unknown",
-};
-
-const routeLabels: Record<AiTriageRoute, string> = {
-  knowledge_auto_reply: "Answer from published knowledge",
-  safe_auto_reply: "Low-risk reply without knowledge",
-  draft_for_review: "Draft for human review",
-  human_escalation: "Escalate to a human",
-  bug_triage: "Bug triage",
-  no_action: "No action",
-};
-
-const actionLabels: Record<AiPolicyAction, string> = {
-  respond: "Respond to customers",
-  triage: "Triage conversations",
-  create_issue: "Create issues",
-  investigate: "Investigate with a coding agent",
-  propose_fix: "Propose code fixes",
-  implement_fix: "Implement code fixes",
-  publish: "Publish changes",
-  deploy: "Deploy changes",
-  delete: "Delete data",
-};
-
-const integrationLabels: Record<AiPolicyIntegration, string> = {
-  knowledge: "Published knowledge",
-  google_calendar: "Google Calendar",
-  agent: "Coding agent",
-  mcp: "MCP plugins",
-};
-
 export function SettingsAutomationPage(props: SettingsWorkspacePageProps) {
   const { section } = useParams();
   return section === "flows" ? (
@@ -110,12 +69,12 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
       if (next.dominantMode !== "mixed") setMode(next.dominantMode);
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "AI policy is unavailable.",
+        reason instanceof Error ? reason.message : t("v2.ai.unavailable"),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
 
   const toggle = <T extends string>(values: T[], value: T) =>
@@ -130,14 +89,12 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
       await saveLiveWorkspaceAiPolicy(workspaceId, policy);
       const result = await saveLiveConversationAiPolicy(workspaceId, mode);
       onToast(
-        `AI policy saved for ${result.updatedCount} live conversation${result.updatedCount === 1 ? "" : "s"}.`,
+        t("v2.ai.saved", {
+          count: result.updatedCount,
+        }),
       );
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "AI policy could not be saved.",
-      );
+      setError(reason instanceof Error ? reason.message : t("v2.ai.saveError"));
     } finally {
       setSaving(false);
     }
@@ -152,48 +109,51 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Loading AI policy…" />
+        <LoadingState label={t("v2.ai.loading")} />
       ) : error ? (
         <SettingsError message={error} onRetry={() => void load()} />
       ) : !policy ? (
         <EmptyState
-          title="AI policy unavailable"
-          description="Select a workspace before editing automation."
+          title={t("v2.ai.unavailable")}
+          description={t("v2.workspaceRequired.description")}
         />
       ) : (
         <>
           <SettingsSection
-            title="Conversation mode"
-            description="This mode applies to current live conversations. Workspace routes below remain the source of truth for new messages."
+            title={t("v2.ai.conversationMode")}
+            description={t("v2.ai.conversationModeDescription")}
           >
             <div className="settings-v2-form-grid">
               <label>
-                Mode
+                {t("v2.ai.mode")}
                 <Select
                   value={mode}
                   onChange={(value) => setMode(value as AiMode)}
                   options={[
-                    { value: "off", label: "Manual" },
-                    { value: "draft", label: "Copilot / draft" },
-                    { value: "safe_auto", label: "Safe auto-reply" },
+                    { value: "off", label: t("v2.ai.manual") },
+                    { value: "draft", label: t("v2.ai.copilot") },
+                    { value: "safe_auto", label: t("v2.ai.safeAutoReply") },
                   ]}
                 />
               </label>
             </div>
             <p className="settings-field-help">
-              {policy.totalConversations} live conversations ·{" "}
-              {policy.counts.off} manual · {policy.counts.draft} drafts ·{" "}
-              {policy.counts.safe_auto} auto-replies.
+              {t("v2.ai.conversationSummary", {
+                total: policy.totalConversations,
+                off: policy.counts.off,
+                drafts: policy.counts.draft,
+                autoReply: policy.counts.safe_auto,
+              })}
             </p>
           </SettingsSection>
           <SettingsSection
-            title="Triage routes"
-            description="A published-knowledge route falls back to human review when relevant evidence is missing."
+            title={t("v2.ai.triageTitle")}
+            description={t("v2.ai.triageDescription")}
           >
             <div className="settings-v2-policy-grid">
               {triageIntentValues.map((intent) => (
                 <label key={intent}>
-                  {intentLabels[intent]}
+                  {t(`ai.intents.${intent}`)}
                   <Select
                     value={policy.routes[intent]}
                     onChange={(value) =>
@@ -207,7 +167,7 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
                     }
                     options={aiTriageRouteValues.map((value) => ({
                       value,
-                      label: routeLabels[value],
+                      label: t(`ai.routes.${value}`),
                     }))}
                   />
                 </label>
@@ -215,12 +175,12 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
             </div>
           </SettingsSection>
           <SettingsSection
-            title="Autonomy boundaries"
-            description="Sensitive actions remain behind human approval even when they are enabled for the workspace."
+            title={t("v2.ai.autonomyTitle")}
+            description={t("v2.ai.autonomyDescription")}
           >
             <div className="settings-v2-check-grid">
               <fieldset>
-                <legend>Allowed channels</legend>
+                <legend>{t("v2.ai.allowedChannels")}</legend>
                 {aiPolicyChannelValues.map((value) => (
                   <label key={value}>
                     <input
@@ -236,12 +196,12 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
                         })
                       }
                     />
-                    {value === "whatsapp" ? "WhatsApp" : "Web conversations"}
+                    {t(`ai.channels.${value}`)}
                   </label>
                 ))}
               </fieldset>
               <fieldset>
-                <legend>Allowed integrations</legend>
+                <legend>{t("v2.ai.allowedIntegrations")}</legend>
                 {aiPolicyIntegrationValues.map((value) => (
                   <label key={value}>
                     <input
@@ -257,12 +217,12 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
                         })
                       }
                     />
-                    {integrationLabels[value]}
+                    {t(`ai.integrations.${value}`)}
                   </label>
                 ))}
               </fieldset>
               <fieldset>
-                <legend>Allowed actions</legend>
+                <legend>{t("v2.ai.allowedActions")}</legend>
                 {aiPolicyActionValues.map((value) => (
                   <label key={value}>
                     <input
@@ -278,7 +238,7 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
                         })
                       }
                     />
-                    {actionLabels[value]}
+                    {t(`ai.actions.${value}`)}
                   </label>
                 ))}
               </fieldset>
@@ -295,7 +255,7 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
                     })
                   }
                 />
-                Require published knowledge for knowledge replies
+                {t("v2.ai.requireKnowledge")}
               </label>
               <label>
                 <input
@@ -308,7 +268,7 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
                     })
                   }
                 />
-                Notify the team when a case escalates
+                {t("v2.ai.notifyEscalation")}
               </label>
               <label>
                 <input
@@ -318,19 +278,19 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
                     setPolicy({ ...policy, notifyOnBug: event.target.checked })
                   }
                 />
-                Notify the team when a bug is reported
+                {t("v2.ai.notifyBug")}
               </label>
             </div>
           </SettingsSection>
           <div className="settings-v2-save-bar">
-            <span>Changes apply to new automation decisions after saving.</span>
+            <span>{t("v2.ai.saveBar")}</span>
             <button
               className="button button-primary"
               type="button"
               onClick={() => void savePolicy()}
               disabled={saving}
             >
-              <Save size={14} /> {saving ? "Saving…" : "Save AI policy"}
+              <Save size={14} /> {saving ? t("v2.ai.saving") : t("v2.ai.save")}
             </button>
           </div>
         </>
@@ -373,14 +333,12 @@ function SettingsFlowsPage({
       setSelectedId((next ?? defaultSupportFlow()).rootNodeId);
     } catch (reason) {
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "Support flow is unavailable.",
+        reason instanceof Error ? reason.message : t("v2.flow.loadError"),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
 
   const updateNode = (update: Partial<SupportFlowNode>) =>
@@ -399,12 +357,12 @@ function SettingsFlowsPage({
     const channel =
       channels.find((item) => item.state === "open") ?? channels[0];
     if (!channel?.channelId) {
-      setError("Connect a WhatsApp number before saving a flow.");
+      setError(t("v2.flow.connectFirst"));
       return;
     }
     const parsed = supportFlowSchema.safeParse(flow);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "The flow is invalid.");
+      setError(parsed.error.issues[0]?.message ?? t("v2.flow.error"));
       return;
     }
     setSaving(true);
@@ -414,13 +372,9 @@ function SettingsFlowsPage({
         channelId: channel.channelId,
         flow,
       });
-      onToast("Support flow saved.");
+      onToast(t("v2.flow.saved"));
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Support flow could not be saved.",
-      );
+      setError(reason instanceof Error ? reason.message : t("v2.flow.error"));
     } finally {
       setSaving(false);
     }
@@ -435,13 +389,13 @@ function SettingsFlowsPage({
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
-        <LoadingState label="Loading support flow…" />
+        <LoadingState label={t("v2.flow.loading")} />
       ) : error && !flow ? (
         <SettingsError message={error} onRetry={() => void load()} />
       ) : !flow ? (
         <EmptyState
-          title="No flow loaded"
-          description="Connect a WhatsApp number before configuring a flow."
+          title={t("v2.flow.loadError")}
+          description={t("v2.flow.connectFirst")}
         />
       ) : (
         <>
@@ -450,21 +404,21 @@ function SettingsFlowsPage({
           )}
           {!channels.length && (
             <EmptyState
-              title="Connect WhatsApp first"
-              description="A flow belongs to a real channel and cannot be saved without one."
+              title={t("v2.flow.connectFirst")}
+              description={t("v2.flow.noChannelDescription")}
               action={
                 <Link
                   className="button button-secondary button-small"
                   to="/settings/channels/whatsapp"
                 >
-                  Open WhatsApp settings
+                  {t("v2.flow.openWhatsapp")}
                 </Link>
               }
             />
           )}
           <SettingsSection
-            title="Flow settings"
-            description="Keep the first interaction short and make human handoff explicit."
+            title={t("v2.flow.settingsTitle")}
+            description={t("v2.flow.settingsDescription")}
           >
             <div className="settings-v2-form-grid">
               <label className="settings-v2-checkbox-field">
@@ -475,10 +429,10 @@ function SettingsFlowsPage({
                     setFlow({ ...flow, enabled: event.target.checked })
                   }
                 />
-                Enable this flow
+                {t("v2.flow.enable")}
               </label>
               <label>
-                Start when
+                {t("v2.flow.startWhen")}
                 <Select
                   value={flow.trigger.type}
                   onChange={(value) =>
@@ -491,14 +445,14 @@ function SettingsFlowsPage({
                     })
                   }
                   options={[
-                    { value: "first_message", label: "A new chat starts" },
-                    { value: "keywords", label: "A keyword is detected" },
+                    { value: "first_message", label: t("v2.flow.newChat") },
+                    { value: "keywords", label: t("v2.flow.keyword") },
                   ]}
                 />
               </label>
               {flow.trigger.type === "keywords" && (
                 <label>
-                  Keywords
+                  {t("v2.flow.keywords")}
                   <input
                     value={flow.trigger.keywords.join(", ")}
                     onChange={(event) =>
@@ -513,15 +467,15 @@ function SettingsFlowsPage({
                         },
                       })
                     }
-                    placeholder="price, order, help"
+                    placeholder={t("v2.flow.keywordsPlaceholder")}
                   />
                 </label>
               )}
             </div>
           </SettingsSection>
           <SettingsSection
-            title="Flow steps"
-            description="Select a step to edit its customer-facing message."
+            title={t("v2.flow.stepsTitle")}
+            description={t("v2.flow.stepsDescription")}
           >
             <div className="settings-v2-flow-editor">
               <div className="settings-v2-flow-list">
@@ -543,23 +497,23 @@ function SettingsFlowsPage({
                     const id = `step-${Date.now()}`;
                     const node: SupportFlowNode = {
                       id,
-                      title: "New step",
+                      title: t("v2.flow.newStep"),
                       type: "message",
-                      message: "Write the message this step should send.",
+                      message: t("v2.flow.newStepMessage"),
                       options: [],
                     };
                     setFlow({ ...flow, nodes: [...flow.nodes, node] });
                     setSelectedId(id);
                   }}
                 >
-                  <Plus size={13} /> Add step
+                  <Plus size={13} /> {t("v2.flow.addStep")}
                 </button>
               </div>
               {selectedNode && (
                 <div className="settings-v2-flow-form">
                   <div className="settings-v2-form-grid">
                     <label>
-                      Step name
+                      {t("v2.flow.stepName")}
                       <input
                         value={selectedNode.title}
                         onChange={(event) =>
@@ -568,7 +522,7 @@ function SettingsFlowsPage({
                       />
                     </label>
                     <label>
-                      Step type
+                      {t("v2.flow.stepType")}
                       <Select
                         value={selectedNode.type}
                         onChange={(value) =>
@@ -579,17 +533,18 @@ function SettingsFlowsPage({
                           })
                         }
                         options={[
-                          { value: "menu", label: "Menu with options" },
-                          { value: "message", label: "Send a message" },
-                          { value: "handoff", label: "Hand off to a person" },
+                          { value: "menu", label: t("v2.flow.menu") },
+                          { value: "message", label: t("v2.flow.message") },
+                          { value: "handoff", label: t("v2.flow.handoff") },
                         ]}
                       />
                     </label>
                     <label className="settings-form-wide">
-                      Customer message
+                      {t("v2.flow.customerMessage")}
                       <textarea
                         rows={5}
                         value={selectedNode.message}
+                        placeholder={t("v2.flow.messagePlaceholder")}
                         onChange={(event) =>
                           updateNode({ message: event.target.value })
                         }
@@ -615,7 +570,7 @@ function SettingsFlowsPage({
                         setSelectedId(nodes[0]?.id);
                       }}
                     >
-                      <Trash2 size={13} /> Remove step
+                      <Trash2 size={13} /> {t("v2.flow.removeStep")}
                     </button>
                   )}
                 </div>
@@ -623,14 +578,15 @@ function SettingsFlowsPage({
             </div>
           </SettingsSection>
           <div className="settings-v2-save-bar">
-            <span>Flows run before AI triage on new chats.</span>
+            <span>{t("v2.flow.saveBar")}</span>
             <button
               className="button button-primary"
               type="button"
               disabled={saving || !channels.length}
               onClick={() => void save()}
             >
-              <Save size={14} /> {saving ? "Saving…" : "Save support flow"}
+              <Save size={14} />{" "}
+              {saving ? t("v2.flow.saving") : t("v2.flow.save")}
             </button>
           </div>
         </>

@@ -218,6 +218,14 @@ import {
 
 type AnySupabaseClient = SupabaseClient;
 
+function subscriptionLoginErrorCode(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (raw === "google_subscription_login_requires_interactive_runner")
+    return raw;
+  if (/^(?:login|codex)_[a-z0-9_]+$/i.test(raw)) return raw.slice(0, 120);
+  return "login_start_failed";
+}
+
 export interface WhatsmiauProviderPort extends WhatsAppProvider {
   createInstance(input: {
     instanceName: string;
@@ -253,6 +261,11 @@ export interface SupabaseApiAdapterOptions {
   codexService?: CodexService;
   jobStore?: JobStore<WhatsmiauMessageJobPayload>;
   codingCatalogProvider?: CodingCatalogProvider;
+  subscriptionLogin?: {
+    start: typeof startSubscriptionLogin;
+    poll: typeof pollSubscriptionLogin;
+    cancel: typeof cancelSubscriptionLogin;
+  };
 }
 
 export type SupabaseApiPortDependencies = {
@@ -2712,6 +2725,11 @@ export class SupabaseCodingControlPlaneAdapter
     private readonly catalogProviderFactory: (
       provider: AgentProvider,
     ) => CodingCatalogProvider = catalogProviderFor,
+    private readonly subscriptionLogin = {
+      start: startSubscriptionLogin,
+      poll: pollSubscriptionLogin,
+      cancel: cancelSubscriptionLogin,
+    },
   ) {}
 
   async resolveConnectionSecret(
@@ -2822,9 +2840,13 @@ export class SupabaseCodingControlPlaneAdapter
     const connections = await this.listWorkspaceConnections(
       context.workspaceId,
     );
+    const visible = connections.filter(
+      (connection) =>
+        !["pending", "revoked", "canceled"].includes(connection.status),
+    );
     return context.role === "owner" || context.role === "admin"
-      ? connections
-      : connections.filter(
+      ? visible
+      : visible.filter(
           (connection) => connection.ownerUserId === context.userId,
         );
   }
@@ -2891,6 +2913,15 @@ export class SupabaseCodingControlPlaneAdapter
       context.role !== "owner"
     )
       throw new Error("agent_subscription_consent_owner_only");
+    if (
+      input.automationConsent === true &&
+      (current.authMethod !== "subscription" ||
+        current.status !== "connected" ||
+        !current.catalog)
+    )
+      throw new Error(
+        "agent_subscription_consent_requires_verified_connection",
+      );
     const result = await this.privilegedClient
       .from("agent_connections")
       .update({
@@ -2935,11 +2966,35 @@ export class SupabaseCodingControlPlaneAdapter
       .select("id");
     const removed =
       rows(checked("agent_connections.revoke", result)).length > 0;
-    if (removed)
+    if (removed) {
+      const pendingJobs = await this.privilegedClient
+        .from("agent_connection_auth_jobs")
+        .select("id")
+        .eq("connection_id", connectionId)
+        .eq("workspace_id", context.workspaceId)
+        .in("status", ["pending", "awaiting_user"]);
+      for (const job of rows(
+        checked("agent_connections.revoke_login_lookup", pendingJobs),
+      )) {
+        const jobId = str(job.id);
+        const canceled = await this.privilegedClient
+          .from("agent_connection_auth_jobs")
+          .update({
+            status: "canceled",
+            error_code: "connection_revoked",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId)
+          .eq("workspace_id", context.workspaceId)
+          .in("status", ["pending", "awaiting_user"]);
+        checked("agent_connections.revoke_login_cancel", canceled);
+        await this.subscriptionLogin.cancel(jobId);
+      }
       await this.privilegedClient
         .from("agent_connection_secrets")
         .delete()
         .eq("connection_id", connectionId);
+    }
     return removed;
   }
 
@@ -3043,12 +3098,165 @@ export class SupabaseCodingControlPlaneAdapter
     };
   }
 
+  private async activeLoginRows(
+    context: RequestContext,
+    provider?: AgentProvider,
+  ): Promise<Row[]> {
+    const expired = await this.privilegedClient
+      .from("agent_connection_auth_jobs")
+      .select("id, connection_id")
+      .eq("workspace_id", context.workspaceId)
+      .eq("user_id", context.userId)
+      .in("status", ["pending", "awaiting_user"])
+      .lt("expires_at", new Date().toISOString());
+    for (const value of rows(
+      checked("agent_connections.login_expired_lookup", expired),
+    )) {
+      const jobId = str(value.id);
+      const updated = await this.privilegedClient
+        .from("agent_connection_auth_jobs")
+        .update({
+          status: "expired",
+          error_code: "login_expired",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId)
+        .eq("workspace_id", context.workspaceId)
+        .in("status", ["pending", "awaiting_user"]);
+      checked("agent_connections.login_expired_update", updated);
+      if (value.connection_id)
+        await this.markLoginConnection(
+          str(value.connection_id),
+          context.workspaceId,
+          "expired",
+        );
+    }
+    let request = this.privilegedClient
+      .from("agent_connection_auth_jobs")
+      .select("*")
+      .eq("workspace_id", context.workspaceId)
+      .eq("user_id", context.userId)
+      .in("status", ["pending", "awaiting_user"])
+      .order("created_at", { ascending: true })
+      .limit(20);
+    if (provider) request = request.eq("provider", provider);
+    return rows(checked("agent_connections.login_active", await request));
+  }
+
+  private async markLoginTerminal(
+    value: Row,
+    context: RequestContext,
+    status: "failed" | "expired",
+    errorCode: "login_runner_unavailable" | "login_expired",
+  ): Promise<AgentLoginJob> {
+    const jobId = str(value.id);
+    const updated = await this.privilegedClient
+      .from("agent_connection_auth_jobs")
+      .update({
+        status,
+        error_code: errorCode,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("workspace_id", context.workspaceId)
+      .in("status", ["pending", "awaiting_user"])
+      .select("*")
+      .maybeSingle();
+    const data = checked("agent_connections.login_terminal", updated);
+    if (value.connection_id)
+      await this.markLoginConnection(
+        str(value.connection_id),
+        context.workspaceId,
+        status === "expired" ? "expired" : "error",
+      );
+    return this.loginJob(
+      row(data ?? { ...value, status, error_code: errorCode }),
+    );
+  }
+
+  private runnerHeartbeatFresh(value: Row): boolean {
+    const updatedAt = Date.parse(str(value.updated_at, str(value.created_at)));
+    return Number.isFinite(updatedAt) && Date.now() - updatedAt < 30_000;
+  }
+
+  private async loginJobWithRunnerFallback(
+    value: Row,
+    context: RequestContext,
+  ): Promise<AgentLoginJob> {
+    return this.runnerHeartbeatFresh(value)
+      ? this.loginJob(value)
+      : this.markLoginTerminal(
+          value,
+          context,
+          "failed",
+          "login_runner_unavailable",
+        );
+  }
+
+  private async markLoginConnection(
+    connectionId: string,
+    workspaceId: string,
+    status: "error" | "expired" | "canceled",
+  ): Promise<void> {
+    const result = await this.privilegedClient
+      .from("agent_connections")
+      .update({
+        status,
+        automation_consent: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connectionId)
+      .eq("workspace_id", workspaceId)
+      .eq("status", "pending");
+    checked("agent_connections.login_connection_status", result);
+  }
+
+  private async markLoginPersistenceFailure(
+    jobId: string,
+    connectionId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    await Promise.allSettled([
+      (async () => {
+        const result = await this.privilegedClient
+          .from("agent_connection_auth_jobs")
+          .update({
+            status: "failed",
+            error_code: "login_persistence_failed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId)
+          .eq("workspace_id", workspaceId)
+          .in("status", ["pending", "awaiting_user"]);
+        checked("agent_connections.login_persistence_job", result);
+      })(),
+      this.markLoginConnection(connectionId, workspaceId, "error"),
+    ]);
+  }
+
   async startLogin(
     context: RequestContext,
     input: AgentLoginStartInput,
   ): Promise<AgentLoginJob> {
     if (input.provider !== "openai")
       throw new Error("google_subscription_login_requires_interactive_runner");
+    const existing = (await this.activeLoginRows(context, input.provider))[0];
+    if (existing) {
+      const active = this.subscriptionLogin.poll(str(existing.id));
+      return {
+        ...(active
+          ? this.loginJob(existing)
+          : await this.loginJobWithRunnerFallback(existing, context)),
+        ...(active
+          ? {
+              status: active.status,
+              ...(active.challenge.url ? { url: active.challenge.url } : {}),
+              ...(active.challenge.code ? { code: active.challenge.code } : {}),
+              ...(active.errorCode ? { errorCode: active.errorCode } : {}),
+            }
+          : {}),
+      };
+    }
     const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
     const connectionResult = await this.privilegedClient
       .from("agent_connections")
@@ -3079,52 +3287,79 @@ export class SupabaseCodingControlPlaneAdapter
       })
       .select("*")
       .single();
+    if (result.error) {
+      await this.privilegedClient
+        .from("agent_connections")
+        .delete()
+        .eq("id", connectionId)
+        .eq("workspace_id", context.workspaceId);
+      const active = (await this.activeLoginRows(context, input.provider))[0];
+      if (active) return this.loginJobWithRunnerFallback(active, context);
+      throw new Error(`agent_connections.login_job:${result.error.message}`);
+    }
     const job = this.loginJob(
       row(checked("agent_connections.login_job", result)),
     );
     try {
-      const challenge = await startSubscriptionLogin(
+      const challenge = await this.subscriptionLogin.start(
         job.id,
         input.provider,
         async (login) => {
-          const update: Record<string, unknown> = {
-            status: login.status,
-            ...(login.challenge.url ? { url: login.challenge.url } : {}),
-            ...(login.challenge.code ? { code: login.challenge.code } : {}),
-            ...(login.errorCode ? { error_code: login.errorCode } : {}),
-            updated_at: new Date().toISOString(),
-          };
-          await this.privilegedClient
-            .from("agent_connection_auth_jobs")
-            .update(update)
-            .eq("id", job.id);
-          if (login.status === "completed" && login.bundle) {
-            await this.privilegedClient
-              .from("agent_connection_secrets")
-              .upsert({
-                connection_id: connectionId,
-                encrypted_bundle: encryptConnectionSecret(
-                  JSON.stringify(login.bundle),
-                  connectionEncryptionKey(),
-                ),
-                updated_at: new Date().toISOString(),
-              });
-            await this.privilegedClient
-              .from("agent_connections")
-              .update({
-                status: "connected",
-                automation_consent: false,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", connectionId);
-          } else if (login.status === "failed" || login.status === "expired") {
-            await this.privilegedClient
-              .from("agent_connections")
-              .update({
-                status: login.status === "expired" ? "expired" : "error",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", connectionId);
+          try {
+            const update: Record<string, unknown> = {
+              status: login.status,
+              ...(login.challenge.url ? { url: login.challenge.url } : {}),
+              ...(login.challenge.code ? { code: login.challenge.code } : {}),
+              ...(login.errorCode ? { error_code: login.errorCode } : {}),
+              updated_at: new Date().toISOString(),
+            };
+            if (login.status === "completed" && login.bundle) {
+              const completed = await this.privilegedClient.rpc(
+                "complete_agent_subscription_login",
+                {
+                  p_job_id: job.id,
+                  p_connection_id: connectionId,
+                  p_encrypted_bundle: encryptConnectionSecret(
+                    JSON.stringify(login.bundle),
+                    connectionEncryptionKey(),
+                  ),
+                },
+              );
+              if (completed.error) throw completed.error;
+              return;
+            }
+            const updated = await this.privilegedClient
+              .from("agent_connection_auth_jobs")
+              .update(update)
+              .eq("id", job.id)
+              .eq("workspace_id", context.workspaceId)
+              .in("status", ["pending", "awaiting_user"]);
+            if (updated.error) throw updated.error;
+            if (login.status === "failed")
+              await this.markLoginConnection(
+                connectionId,
+                context.workspaceId,
+                "error",
+              );
+            else if (login.status === "expired")
+              await this.markLoginConnection(
+                connectionId,
+                context.workspaceId,
+                "expired",
+              );
+            else if (login.status === "canceled")
+              await this.markLoginConnection(
+                connectionId,
+                context.workspaceId,
+                "canceled",
+              );
+          } catch (error) {
+            await this.markLoginPersistenceFailure(
+              job.id,
+              connectionId,
+              context.workspaceId,
+            );
+            throw error;
           }
         },
       );
@@ -3137,26 +3372,42 @@ export class SupabaseCodingControlPlaneAdapter
           updated_at: new Date().toISOString(),
         })
         .eq("id", job.id)
+        .eq("workspace_id", context.workspaceId)
+        .eq("status", "pending")
         .select("*")
+        .maybeSingle();
+      const updatedData = checked("agent_connections.login_challenge", updated);
+      if (updatedData) return this.loginJob(row(updatedData));
+      const current = await this.privilegedClient
+        .from("agent_connection_auth_jobs")
+        .select("*")
+        .eq("id", job.id)
+        .eq("workspace_id", context.workspaceId)
         .single();
       return this.loginJob(
-        row(checked("agent_connections.login_challenge", updated)),
+        row(checked("agent_connections.login_challenge_current", current)),
       );
     } catch (error) {
       await this.privilegedClient
         .from("agent_connection_auth_jobs")
         .update({
           status: "failed",
-          error_code: String(
-            error instanceof Error ? error.message : error,
-          ).slice(0, 120),
+          error_code: subscriptionLoginErrorCode(error),
           updated_at: new Date().toISOString(),
         })
-        .eq("id", job.id);
+        .eq("id", job.id)
+        .eq("workspace_id", context.workspaceId)
+        .in("status", ["pending", "awaiting_user"]);
       await this.privilegedClient
         .from("agent_connections")
-        .update({ status: "error", updated_at: new Date().toISOString() })
-        .eq("id", connectionId);
+        .update({
+          status: "error",
+          automation_consent: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", connectionId)
+        .eq("workspace_id", context.workspaceId)
+        .eq("status", "pending");
       const failed = await this.privilegedClient
         .from("agent_connection_auth_jobs")
         .select("*")
@@ -3168,11 +3419,32 @@ export class SupabaseCodingControlPlaneAdapter
     }
   }
 
+  async listLoginJobs(context: RequestContext): Promise<AgentLoginJob[]> {
+    const jobs = await this.activeLoginRows(context);
+    const result: AgentLoginJob[] = [];
+    for (const value of jobs) {
+      const job = this.loginJob(value);
+      const active = this.subscriptionLogin.poll(job.id);
+      result.push(
+        active
+          ? {
+              ...job,
+              status: active.status,
+              ...(active.challenge.url ? { url: active.challenge.url } : {}),
+              ...(active.challenge.code ? { code: active.challenge.code } : {}),
+              ...(active.errorCode ? { errorCode: active.errorCode } : {}),
+            }
+          : await this.loginJobWithRunnerFallback(value, context),
+      );
+    }
+    return result;
+  }
+
   async pollLogin(
     context: RequestContext,
     jobId: string,
   ): Promise<AgentLoginJob | null> {
-    const active = pollSubscriptionLogin(jobId);
+    const active = this.subscriptionLogin.poll(jobId);
     if (active) {
       const current = await this.privilegedClient
         .from("agent_connection_auth_jobs")
@@ -3182,6 +3454,14 @@ export class SupabaseCodingControlPlaneAdapter
         .maybeSingle();
       const data = checked("agent_connections.login_poll", current);
       if (!data) return null;
+      if (!["pending", "awaiting_user"].includes(str(row(data).status)))
+        return this.loginJob(row(data));
+      const heartbeat = await this.privilegedClient
+        .from("agent_connection_auth_jobs")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", jobId)
+        .eq("workspace_id", context.workspaceId);
+      checked("agent_connections.login_poll_heartbeat", heartbeat);
       return {
         ...this.loginJob(row(data)),
         status: active.status,
@@ -3199,25 +3479,58 @@ export class SupabaseCodingControlPlaneAdapter
     const data = checked("agent_connections.login_poll_db", result);
     if (!data) return null;
     const job = this.loginJob(row(data));
-    return Date.parse(job.expiresAt) <= Date.now() &&
+    if (
+      Date.parse(job.expiresAt) <= Date.now() &&
       ["pending", "awaiting_user"].includes(job.status)
-      ? { ...job, status: "expired", errorCode: "login_expired" }
-      : job;
+    ) {
+      return this.markLoginTerminal(
+        { ...row(data), error_code: "login_expired" },
+        context,
+        "expired",
+        "login_expired",
+      );
+    }
+    if (["pending", "awaiting_user"].includes(job.status))
+      return this.loginJobWithRunnerFallback(row(data), context);
+    return job;
   }
 
   async cancelLogin(
     context: RequestContext,
     jobId: string,
   ): Promise<AgentLoginJob | null> {
-    await cancelSubscriptionLogin(jobId);
     const result = await this.privilegedClient
+      .from("agent_connection_auth_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const current = checked("agent_connections.login_cancel_lookup", result);
+    if (!current) return null;
+    const currentRow = row(current);
+    if (!["pending", "awaiting_user"].includes(str(currentRow.status)))
+      return this.loginJob(currentRow);
+    const canceled = await this.privilegedClient
       .from("agent_connection_auth_jobs")
       .update({ status: "canceled", updated_at: new Date().toISOString() })
       .eq("id", jobId)
       .eq("workspace_id", context.workspaceId)
+      .in("status", ["pending", "awaiting_user"]);
+    checked("agent_connections.login_cancel", canceled);
+    await this.subscriptionLogin.cancel(jobId);
+    if (currentRow.connection_id)
+      await this.markLoginConnection(
+        str(currentRow.connection_id),
+        context.workspaceId,
+        "canceled",
+      );
+    const canceledResult = await this.privilegedClient
+      .from("agent_connection_auth_jobs")
       .select("*")
+      .eq("id", jobId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle();
-    const data = checked("agent_connections.login_cancel", result);
+    const data = checked("agent_connections.login_cancel", canceledResult);
     return data ? this.loginJob(row(data)) : null;
   }
 
@@ -5225,6 +5538,7 @@ export function createSupabaseApiAdapters(
     options.codingCatalogProvider
       ? () => options.codingCatalogProvider as CodingCatalogProvider
       : catalogProviderFor,
+    options.subscriptionLogin,
   );
   const conversations = new SupabaseConversationAdapter(
     client,

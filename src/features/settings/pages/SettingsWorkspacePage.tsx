@@ -195,14 +195,12 @@ export function SettingsOverviewPage({
       setMemberCount(results[5].length);
     } catch (reason) {
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "Workspace overview could not be loaded.",
+        reason instanceof Error ? reason.message : t("v2.overview.loadError"),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
 
   useEffect(() => void load(), [load]);
 

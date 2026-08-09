@@ -103,3 +103,25 @@ test("settings navigation becomes a compact mobile selector", async ({
   const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
   expect(bodyWidth).toBeLessThanOrEqual(390);
 });
+
+test("settings uses the selected language for coding connections", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("mend.interface-language", "pt-BR");
+  });
+  await page.goto("/settings/engineering/coding/connections?demo=1");
+
+  await expect(
+    page.getByRole("heading", { name: "Conexões de coding" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Connected providers", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Verify access and refresh the catalog before using a connection in routing.",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+});

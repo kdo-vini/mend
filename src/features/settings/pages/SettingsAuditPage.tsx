@@ -29,13 +29,11 @@ export function SettingsAuditPage({
     try {
       setRows(await listLiveAuditLog(workspaceId));
     } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Audit log is unavailable.",
-      );
+      setError(reason instanceof Error ? reason.message : t("v2.audit.error"));
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
 
   return (
@@ -50,33 +48,35 @@ export function SettingsAuditPage({
             onClick={() => void load()}
             disabled={loading}
           >
-            <FileClock size={13} /> Refresh
+            <FileClock size={13} /> {t("v2.audit.refresh")}
           </button>
         }
       />
       <SettingsSection
-        title="Recent activity"
-        description="Access, policy and integration changes stay visible here."
+        title={t("v2.audit.recentActivity")}
+        description={t("v2.audit.description")}
       >
         {loading ? (
-          <LoadingState label="Loading audit events…" />
+          <LoadingState label={t("v2.audit.loading")} />
         ) : error ? (
           <SettingsError message={error} onRetry={() => void load()} />
         ) : !rows.length ? (
           <EmptyState
-            title="No audit events yet"
-            description="Events will appear after live workspace activity."
+            title={t("v2.audit.emptyTitle")}
+            description={t("v2.audit.emptyDescription")}
           />
         ) : (
           <div className="settings-v2-audit-list">
             {rows.map((row) => (
               <div className="settings-v2-audit-row" key={row.id}>
                 <div>
-                  <strong>{row.action ?? "Workspace event"}</strong>
+                  <strong>{row.action ?? t("v2.audit.workspaceEvent")}</strong>
                   <span>
                     {row.actor_user_id
-                      ? `Actor ${row.actor_user_id.slice(0, 8)}`
-                      : "System"}
+                      ? t("v2.audit.actor", {
+                          id: row.actor_user_id.slice(0, 8),
+                        })
+                      : t("v2.audit.system")}
                   </span>
                 </div>
                 <time dateTime={row.created_at}>
