@@ -335,7 +335,7 @@ function codingAgentEnvironment(
     "PROGRAMDATA",
   ]);
   const providerKeys: Record<CodingAgentName, readonly string[]> = {
-    openai: ["OPENAI_API_KEY"],
+    openai: ["CODEX_API_KEY", "OPENAI_API_KEY"],
     anthropic: ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"],
     google: ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI"],
     verboo: ["VERBOO_API_KEY"],
@@ -357,15 +357,21 @@ function codingAgentEnvironment(
   env.CLAUDE_CONFIG_DIR = path.join(homeDirectory, ".claude");
   env.GEMINI_CLI_HOME = path.join(homeDirectory, ".gemini");
   env.MEND_CODING_AGENT = provider;
-  if (apiKey) {
+  if (provider === "openai") {
+    // `codex exec` uses CODEX_API_KEY for non-interactive authentication.
+    // Accept OPENAI_API_KEY as an input fallback, but never forward it under
+    // the ineffective name or let it override the workspace BYOK credential.
+    const codexApiKey =
+      apiKey?.trim() || env.CODEX_API_KEY?.trim() || env.OPENAI_API_KEY?.trim();
+    delete env.OPENAI_API_KEY;
+    if (codexApiKey) env.CODEX_API_KEY = codexApiKey;
+  } else if (apiKey) {
     const key =
-      provider === "openai"
-        ? "OPENAI_API_KEY"
-        : provider === "anthropic"
-          ? "ANTHROPIC_API_KEY"
-          : provider === "google"
-            ? "GEMINI_API_KEY"
-            : "VERBOO_API_KEY";
+      provider === "anthropic"
+        ? "ANTHROPIC_API_KEY"
+        : provider === "google"
+          ? "GEMINI_API_KEY"
+          : "VERBOO_API_KEY";
     env[key] = apiKey;
   }
   return env;

@@ -31,10 +31,11 @@ const report = {
 const originalGitHubKey = process.env.MEND_GITHUB_APP_PRIVATE_KEY;
 const originalGitHubToken = process.env.GITHUB_TOKEN;
 const originalProviderKeys = {
-  openai: process.env.OPENAI_API_KEY,
-  anthropic: process.env.ANTHROPIC_API_KEY,
-  google: process.env.GEMINI_API_KEY,
-  verboo: process.env.VERBOO_API_KEY,
+  CODEX_API_KEY: process.env.CODEX_API_KEY,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  VERBOO_API_KEY: process.env.VERBOO_API_KEY,
 };
 
 afterEach(() => {
@@ -43,15 +44,7 @@ afterEach(() => {
   else process.env.MEND_GITHUB_APP_PRIVATE_KEY = originalGitHubKey;
   if (originalGitHubToken === undefined) delete process.env.GITHUB_TOKEN;
   else process.env.GITHUB_TOKEN = originalGitHubToken;
-  for (const [key, value] of Object.entries(originalProviderKeys)) {
-    const envKey =
-      key === "openai"
-        ? "OPENAI_API_KEY"
-        : key === "anthropic"
-          ? "ANTHROPIC_API_KEY"
-          : key === "google"
-            ? "GEMINI_API_KEY"
-            : "VERBOO_API_KEY";
+  for (const [envKey, value] of Object.entries(originalProviderKeys)) {
     if (value === undefined) delete process.env[envKey];
     else process.env[envKey] = value;
   }
@@ -62,6 +55,7 @@ describe("coding agent CLI boundary", () => {
     process.env.MEND_GITHUB_APP_PRIVATE_KEY = "write-private-key";
     process.env.GITHUB_TOKEN = "ghs_write_token";
     process.env.OPENAI_API_KEY = "openai-secret";
+    process.env.CODEX_API_KEY = "stale-codex-secret";
     process.env.ANTHROPIC_API_KEY = "anthropic-secret";
     process.env.GEMINI_API_KEY = "gemini-secret";
     process.env.VERBOO_API_KEY = "verboo-secret";
@@ -73,6 +67,7 @@ describe("coding agent CLI boundary", () => {
           mode: "investigate",
           workspace: os.tmpdir(),
           prompt: "Complaint with ; rm -rf and $(whoami)",
+          apiKey: `${provider}-byok-secret`,
         },
         { schema: "/fixed/schema.json", result: "/fixed/result.json" },
       );
@@ -81,8 +76,9 @@ describe("coding agent CLI boundary", () => {
       expect(invocation.env.MEND_GITHUB_APP_PRIVATE_KEY).toBeUndefined();
       expect(invocation.env.GITHUB_TOKEN).toBeUndefined();
       if (provider === "verboo") {
-        expect(invocation.env.VERBOO_API_KEY).toBe("verboo-secret");
+        expect(invocation.env.VERBOO_API_KEY).toBe("verboo-byok-secret");
         expect(invocation.env.OPENAI_API_KEY).toBeUndefined();
+        expect(invocation.env.CODEX_API_KEY).toBeUndefined();
         expect(invocation.env.ANTHROPIC_API_KEY).toBeUndefined();
         expect(invocation.env.GEMINI_API_KEY).toBeUndefined();
       }
@@ -90,6 +86,8 @@ describe("coding agent CLI boundary", () => {
         getCodingAgentDefinition(provider).capabilities.structuredOutput,
       ).toBe(true);
       if (provider === "openai") {
+        expect(invocation.env.CODEX_API_KEY).toBe("openai-byok-secret");
+        expect(invocation.env.OPENAI_API_KEY).toBeUndefined();
         expect(invocation.args).toContain("read-only");
         expect(invocation.args).toContain("--skip-git-repo-check");
         expect(
