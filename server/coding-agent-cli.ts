@@ -450,7 +450,13 @@ export function buildCodingAgentInvocation(
     ...executable,
     args: [...executable.argsPrefix, ...args],
     cwd: input.workspace,
-    env: codingAgentEnvironment(provider, input.workspace, input.apiKey),
+    // Keep provider auth/cache files in the disposable state directory so
+    // read-only runs cannot make the repository appear modified.
+    env: codingAgentEnvironment(
+      provider,
+      path.dirname(paths.schema),
+      input.apiKey,
+    ),
     stdin: validatePrompt(input.prompt),
     timeoutMs: input.timeoutMs ?? defaultTimeoutMs,
     signal: input.signal,

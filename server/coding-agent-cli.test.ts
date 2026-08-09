@@ -75,6 +75,8 @@ describe("coding agent CLI boundary", () => {
       expect(invocation.stdin).toContain("Complaint with ; rm -rf");
       expect(invocation.env.MEND_GITHUB_APP_PRIVATE_KEY).toBeUndefined();
       expect(invocation.env.GITHUB_TOKEN).toBeUndefined();
+      expect(invocation.env.HOME).toBe(path.dirname("/fixed/schema.json"));
+      expect(invocation.env.HOME).not.toBe(invocation.cwd);
       if (provider === "verboo") {
         expect(invocation.env.VERBOO_API_KEY).toBe("verboo-byok-secret");
         expect(invocation.env.OPENAI_API_KEY).toBeUndefined();
