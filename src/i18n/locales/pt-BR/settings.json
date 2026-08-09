@@ -419,5 +419,83 @@
     "emptyDescription": "As ações aparecerão aqui após atividades ao vivo do espaço de trabalho. Nenhum evento de exemplo é exibido.",
     "liveEvents": "Eventos de auditoria ao vivo",
     "system": "Sistema"
+  },
+  "v2": {
+    "layout": {
+      "eyebrow": "Controle do espaço de trabalho",
+      "title": "Configurações",
+      "navigation": "Navegação de configurações",
+      "breadcrumb": "Caminho de navegação",
+      "sectionSelect": "Seção de configurações",
+      "groups": {
+        "workspace": "Espaço de trabalho",
+        "automation": "Automação",
+        "integrations": "Integrações",
+        "engineering": "Engenharia"
+      },
+      "items": {
+        "overview": "Visão geral",
+        "whatsapp": "WhatsApp",
+        "team": "Equipe e acesso",
+        "audit": "Registro de auditoria",
+        "ai": "Comportamento da IA",
+        "flows": "Fluxos de suporte",
+        "integrations": "Todas as integrações",
+        "github": "GitHub",
+        "google": "Google Calendar",
+        "mcp": "Plugins MCP",
+        "repositories": "Repositórios",
+        "codingConnections": "Conexões de coding",
+        "codingRouting": "Roteamento de coding"
+      }
+    },
+    "workspaceRequired": {
+      "title": "Nenhum espaço de trabalho selecionado",
+      "description": "Selecione um espaço de trabalho no seletor do aplicativo antes de alterar configurações operacionais."
+    },
+    "overview": {
+      "title": "Configurações do espaço de trabalho",
+      "description": "Mantenha canais, automações e acesso de engenharia prontos para o próximo caso de cliente.",
+      "loading": "Carregando saúde do espaço de trabalho…",
+      "readiness": "Prontidão",
+      "readinessDescription": "O caminho mais curto para um loop seguro entre suporte e engenharia.",
+      "nextActions": "Próximas ações",
+      "nextActionsDescription": "Cada configuração fica próxima da decisão que ela controla.",
+      "whatsappLabel": "Canal do WhatsApp",
+      "whatsappDescription": "Conecte um número real e acompanhe sua saúde ao vivo.",
+      "externalAccessLabel": "Acesso externo",
+      "externalAccessDescription": "GitHub, Google Calendar e ferramentas MCP confiáveis.",
+      "codingLabel": "Control plane de coding",
+      "codingDescription": "Providers e rotas por etapa usados nas execuções controladas.",
+      "repositoriesLabel": "Repositórios",
+      "repositoriesDescription": "Bases de código que o Mend pode investigar e alterar.",
+      "teamLabel": "Equipe e acesso",
+      "teamDescription": "Pessoas que podem revisar, aprovar e operar o Mend.",
+      "connected": "Conectado",
+      "needsAttention": "Precisa de atenção",
+      "reviewConnections": "Revisar conexões",
+      "configured": "Configurado",
+      "notReady": "Não está pronto",
+      "addRepository": "Adicionar repositório",
+      "connectionCount_one": "{{count}} conexão",
+      "connectionCount_other": "{{count}} conexões",
+      "memberCount_one": "{{count}} membro",
+      "memberCount_other": "{{count}} membros",
+      "nextActionsTitle": "Separe automação de suporte de automação de código",
+      "nextActionsDescriptionText": "O comportamento da IA controla respostas aos clientes. O roteamento de coding controla pesquisa, implementação, revisão e verificação.",
+      "reviewAi": "Revisar política da IA",
+      "reviewCoding": "Revisar rotas de coding"
+    },
+    "pages": {
+      "integrationsTitle": "Integrações",
+      "integrationsDescription": "Conecte os serviços que o Mend precisa e mantenha cada permissão externa visível.",
+      "integrationDirectory": "Diretório de integrações",
+      "integrationDirectoryDescription": "Cada integração tem sua própria página, ciclo de vida e limite de acesso.",
+      "githubDescription": "Conecte o GitHub uma vez e escolha os repositórios disponíveis para este espaço de trabalho.",
+      "codingConnectionsTitle": "Conexões de coding",
+      "codingConnectionsDescription": "Conecte providers, assinaturas e catálogos oficiais de modelos para execuções de engenharia controladas.",
+      "codingRoutingTitle": "Roteamento de coding",
+      "codingRoutingDescription": "Escolha a conexão, o modelo e os limites para cada etapa do loop de engenharia controlado."
+    }
   }
 }

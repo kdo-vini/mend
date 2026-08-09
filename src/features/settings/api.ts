@@ -49,12 +49,15 @@ export type {
   WhatsAppInstance,
   LiveWorkspaceMember,
   LiveWorkspaceInvitation,
+  LiveRepository,
   LiveGitHubConnection,
   LiveGitHubRepository,
   LiveAgentCredential,
   LiveAgentConnection,
   LiveAgentLoginJob,
   LiveStageRoutingPolicy,
+  CodingStage,
+  CodingAuthMethod,
 } from "../../api/live-actions";
 export {
   disconnectLiveGoogleConnection,

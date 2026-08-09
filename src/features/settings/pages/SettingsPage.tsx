@@ -3156,13 +3156,44 @@ export function SettingsPage({
                     )}
                   </div>
                   {codingConnectionAuthMethod === "subscription" && (
-                    <p className="settings-field-help">
-                      OpenAI uses the official Codex device-auth flow. Gemini
-                      subscription login is disabled until this headless runner
-                      can complete the official interactive flow. Claude.ai
-                      login is disabled because Mend hosted runners cannot
-                      intermediate Pro/Max credentials.
-                    </p>
+                    <>
+                      <p className="settings-field-help">
+                        OpenAI uses the official Codex device-auth flow. Gemini
+                        subscription login is disabled until this headless
+                        runner can complete the official interactive flow.
+                        Claude.ai login is disabled because Mend hosted runners
+                        cannot intermediate Pro/Max credentials.
+                      </p>
+                      {codingConnectionProvider === "openai" && (
+                        <div className="coding-auth-tutorial">
+                          <strong>Connect your ChatGPT subscription</strong>
+                          <ol>
+                            <li>
+                              <a
+                                href="https://chatgpt.com/#settings/Security"
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Enable ChatGPT authorization here
+                              </a>
+                              <span> in Security &amp; login.</span>
+                            </li>
+                            <li>Turn on “Authorize device code for Codex”.</li>
+                            <li>
+                              Return to Mend and click “Start official login”.
+                            </li>
+                            <li>
+                              Open the official login link and enter the
+                              one-time code shown here.
+                            </li>
+                          </ol>
+                          <p>
+                            The code is private. Never share it in chat or with
+                            anyone who asks for it.
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
                   <button
                     className="button button-primary"

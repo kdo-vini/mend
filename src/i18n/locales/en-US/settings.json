@@ -419,5 +419,83 @@
     "emptyDescription": "Actions will appear here after live workspace activity. No sample events are displayed.",
     "liveEvents": "Live audit events",
     "system": "System"
+  },
+  "v2": {
+    "layout": {
+      "eyebrow": "Workspace control",
+      "title": "Settings",
+      "navigation": "Settings navigation",
+      "breadcrumb": "Breadcrumb",
+      "sectionSelect": "Settings section",
+      "groups": {
+        "workspace": "Workspace",
+        "automation": "Automation",
+        "integrations": "Integrations",
+        "engineering": "Engineering"
+      },
+      "items": {
+        "overview": "Overview",
+        "whatsapp": "WhatsApp",
+        "team": "Team & access",
+        "audit": "Audit log",
+        "ai": "AI behavior",
+        "flows": "Support flows",
+        "integrations": "All integrations",
+        "github": "GitHub",
+        "google": "Google Calendar",
+        "mcp": "MCP plugins",
+        "repositories": "Repositories",
+        "codingConnections": "Coding connections",
+        "codingRouting": "Coding routing"
+      }
+    },
+    "workspaceRequired": {
+      "title": "No workspace selected",
+      "description": "Select a workspace from the app switcher before changing operational settings."
+    },
+    "overview": {
+      "title": "Workspace settings",
+      "description": "Keep channels, automation and engineering access ready for the next customer case.",
+      "loading": "Loading workspace health…",
+      "readiness": "Readiness",
+      "readinessDescription": "The shortest path to a safe support-to-engineering loop.",
+      "nextActions": "Next actions",
+      "nextActionsDescription": "Configuration stays close to the decision it controls.",
+      "whatsappLabel": "WhatsApp channel",
+      "whatsappDescription": "Pair a real number and keep its live health visible.",
+      "externalAccessLabel": "External access",
+      "externalAccessDescription": "GitHub, Google Calendar and trusted MCP tools.",
+      "codingLabel": "Coding control plane",
+      "codingDescription": "Providers and stage routes used by controlled runs.",
+      "repositoriesLabel": "Repositories",
+      "repositoriesDescription": "Codebases Mend can investigate and change.",
+      "teamLabel": "Team & access",
+      "teamDescription": "People who can review, approve and operate Mend.",
+      "connected": "Connected",
+      "needsAttention": "Needs attention",
+      "reviewConnections": "Review connections",
+      "configured": "Configured",
+      "notReady": "Not ready",
+      "addRepository": "Add a repository",
+      "connectionCount_one": "{{count}} connection",
+      "connectionCount_other": "{{count}} connections",
+      "memberCount_one": "{{count}} member",
+      "memberCount_other": "{{count}} members",
+      "nextActionsTitle": "Separate support automation from code automation",
+      "nextActionsDescriptionText": "AI behavior controls customer replies. Coding routing controls research, implementation, review and verification.",
+      "reviewAi": "Review AI policy",
+      "reviewCoding": "Review coding routes"
+    },
+    "pages": {
+      "integrationsTitle": "Integrations",
+      "integrationsDescription": "Connect the services Mend needs, and keep every external permission visible.",
+      "integrationDirectory": "Connection directory",
+      "integrationDirectoryDescription": "Each integration has its own page, lifecycle and access boundary.",
+      "githubDescription": "Connect GitHub once, then choose repositories from the installation available to this workspace.",
+      "codingConnectionsTitle": "Coding connections",
+      "codingConnectionsDescription": "Connect providers, subscriptions and official model catalogs for controlled engineering runs.",
+      "codingRoutingTitle": "Coding routing",
+      "codingRoutingDescription": "Choose the connection, model and limits for each stage of the controlled engineering loop."
+    }
   }
 }

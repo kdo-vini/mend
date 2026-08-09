@@ -23,7 +23,7 @@ export function WorkspaceRoutes(elements: WorkspaceRouteElements) {
       <Route path="/kanban" element={elements.kanban} />
       <Route path="/agent-runs" element={elements.runs} />
       <Route path="/knowledge" element={elements.knowledge} />
-      <Route path="/settings" element={elements.settings} />
+      <Route path="/settings/*" element={elements.settings} />
       <Route path="/profile" element={elements.profile} />
       <Route path="*" element={elements.fallback} />
     </Routes>
