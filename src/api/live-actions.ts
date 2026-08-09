@@ -1601,11 +1601,18 @@ export async function startLiveAgentRun(
     issueId: string;
     issueIdentifier?: string;
     mode: CodingRun["mode"];
+    stage?: CodingStage;
+    researchArtifactId?: string;
     instructions?: string;
     repositoryId?: string;
+    routeOverride?: LiveStageRoutingPolicy;
   },
   client: MendSupabaseClient | null = supabase,
 ) {
+  if (input.stage && !mendApiBaseUrl)
+    throw new LiveActionError(
+      "Coding Control Plane V2 runs require the Mend API endpoint.",
+    );
   if (mendApiBaseUrl)
     return apiRequest<RunRow | { run: RunRow }>(
       `/api/issues/${encodeURIComponent(input.issueIdentifier ?? input.issueId)}/agent-runs`,
@@ -1613,8 +1620,15 @@ export async function startLiveAgentRun(
         method: "POST",
         body: JSON.stringify({
           mode: dbRunMode(input.mode),
+          ...(input.stage ? { stage: input.stage } : {}),
+          ...(input.researchArtifactId
+            ? { researchArtifactId: input.researchArtifactId }
+            : {}),
           instructions: input.instructions,
           ...(input.repositoryId ? { repositoryId: input.repositoryId } : {}),
+          ...(input.routeOverride
+            ? { routeOverride: input.routeOverride }
+            : {}),
         }),
       },
       input.workspaceId,
@@ -1626,6 +1640,10 @@ export async function startLiveAgentRun(
         workspace_id: input.workspaceId,
         issue_id: input.issueId,
         mode: dbRunMode(input.mode),
+        ...(input.stage ? { stage: input.stage } : {}),
+        ...(input.researchArtifactId
+          ? { research_artifact_id: input.researchArtifactId }
+          : {}),
         status: "queued",
         result_json: { instructions: input.instructions ?? "" },
       })
@@ -1760,6 +1778,209 @@ export async function removeLiveAgentCredential(input: {
   await apiRequest<void>(
     `/api/agent-credentials/${input.task}/${input.provider}`,
     { method: "DELETE" },
+    input.workspaceId,
+  );
+}
+
+export type CodingStage = "research" | "implement" | "review" | "verify";
+export type CodingAuthMethod = "api_key" | "subscription";
+export type LiveAgentConnection = {
+  id: string;
+  workspaceId: string;
+  ownerUserId?: string;
+  label: string;
+  provider: CodingAgentProvider;
+  authMethod: CodingAuthMethod;
+  purpose: "coding" | "support";
+  status: string;
+  automationConsent: boolean;
+  cliVersion?: string;
+  lastValidatedAt?: string;
+  catalog?: {
+    connectionId: string;
+    provider: CodingAgentProvider;
+    cliVersion: string;
+    models: Array<{ id: string; label?: string; efforts?: string[] }>;
+    source: string;
+    lastVerifiedAt: string;
+    expiresAt: string;
+  };
+};
+
+export type LiveStageRoutingPolicy = {
+  repositoryId?: string;
+  stage: CodingStage;
+  connectionId?: string;
+  model?: string;
+  effort?: string;
+  budget?: Record<string, unknown>;
+  fallbackEnabled?: boolean;
+  fallbackConnectionIds?: string[];
+  preset: "Economy" | "Balanced" | "Quality" | "Custom";
+};
+
+export async function listLiveAgentConnections(
+  workspaceId: string,
+): Promise<LiveAgentConnection[]> {
+  const result = await apiRequest<{ data: LiveAgentConnection[] }>(
+    "/api/agent-connections",
+    {},
+    workspaceId,
+  );
+  return result.data ?? [];
+}
+
+export async function createLiveAgentConnection(input: {
+  workspaceId: string;
+  label: string;
+  provider: CodingAgentProvider;
+  authMethod: CodingAuthMethod;
+  purpose?: "coding" | "support";
+  apiKey?: string;
+}): Promise<LiveAgentConnection> {
+  return apiRequest<LiveAgentConnection>(
+    "/api/agent-connections",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        label: input.label.trim(),
+        provider: input.provider,
+        authMethod: input.authMethod,
+        purpose: input.purpose ?? "coding",
+        ...(input.apiKey?.trim() ? { apiKey: input.apiKey.trim() } : {}),
+      }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function updateLiveAgentConnection(input: {
+  workspaceId: string;
+  connectionId: string;
+  label?: string;
+  automationConsent?: boolean;
+}): Promise<LiveAgentConnection> {
+  return apiRequest<LiveAgentConnection>(
+    `/api/agent-connections/${input.connectionId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...(input.label !== undefined ? { label: input.label.trim() } : {}),
+        ...(input.automationConsent !== undefined
+          ? { automationConsent: input.automationConsent }
+          : {}),
+      }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function revokeLiveAgentConnection(input: {
+  workspaceId: string;
+  connectionId: string;
+}): Promise<void> {
+  await apiRequest<void>(
+    `/api/agent-connections/${input.connectionId}`,
+    { method: "DELETE" },
+    input.workspaceId,
+  );
+}
+
+export async function verifyLiveAgentConnection(input: {
+  workspaceId: string;
+  connectionId: string;
+}): Promise<LiveAgentConnection> {
+  return apiRequest<LiveAgentConnection>(
+    `/api/agent-connections/${input.connectionId}/verify`,
+    { method: "POST" },
+    input.workspaceId,
+  );
+}
+
+export async function refreshLiveAgentModels(input: {
+  workspaceId: string;
+  connectionId: string;
+}): Promise<LiveAgentConnection["catalog"]> {
+  return apiRequest<LiveAgentConnection["catalog"]>(
+    `/api/agent-connections/${input.connectionId}/models?refresh=true`,
+    {},
+    input.workspaceId,
+  );
+}
+
+export type LiveAgentLoginJob = {
+  id: string;
+  connectionId?: string;
+  provider: CodingAgentProvider;
+  status: string;
+  url?: string;
+  code?: string;
+  expiresAt: string;
+  errorCode?: string;
+};
+
+export async function startLiveAgentLogin(input: {
+  workspaceId: string;
+  provider: "openai" | "google";
+  label: string;
+}): Promise<LiveAgentLoginJob> {
+  return apiRequest<LiveAgentLoginJob>(
+    "/api/agent-connections/login",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        provider: input.provider,
+        label: input.label.trim(),
+      }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function pollLiveAgentLogin(input: {
+  workspaceId: string;
+  jobId: string;
+}): Promise<LiveAgentLoginJob> {
+  return apiRequest<LiveAgentLoginJob>(
+    `/api/agent-connections/login/${input.jobId}`,
+    {},
+    input.workspaceId,
+  );
+}
+
+export async function cancelLiveAgentLogin(input: {
+  workspaceId: string;
+  jobId: string;
+}): Promise<LiveAgentLoginJob> {
+  return apiRequest<LiveAgentLoginJob>(
+    `/api/agent-connections/login/${input.jobId}/cancel`,
+    { method: "POST" },
+    input.workspaceId,
+  );
+}
+
+export async function listLiveAgentRoutingPolicies(input: {
+  workspaceId: string;
+  repositoryId?: string;
+}): Promise<LiveStageRoutingPolicy[]> {
+  const query = input.repositoryId
+    ? `?repositoryId=${encodeURIComponent(input.repositoryId)}`
+    : "";
+  const result = await apiRequest<{ data: LiveStageRoutingPolicy[] }>(
+    `/api/agent-routing-policies${query}`,
+    {},
+    input.workspaceId,
+  );
+  return result.data ?? [];
+}
+
+export async function saveLiveAgentRoutingPolicy(input: {
+  workspaceId: string;
+  policy: LiveStageRoutingPolicy;
+}): Promise<LiveStageRoutingPolicy> {
+  return apiRequest<LiveStageRoutingPolicy>(
+    "/api/agent-routing-policies",
+    { method: "PUT", body: JSON.stringify(input.policy) },
     input.workspaceId,
   );
 }

@@ -32,6 +32,11 @@ import {
   type OpenAiCodexOptions,
   type OpenAiCodexResult,
 } from "./codex-openai.js";
+import type {
+  CodingStage,
+  EffectiveRunConfig,
+  ResearchArtifact,
+} from "./coding-control-plane.js";
 
 const execFileAsync = promisify(execFile);
 const maxOutputBytes = 160_000;
@@ -42,7 +47,11 @@ const defaultRunTimeoutMs = 1_200_000;
 const maxWorkspaceFileBytes = 300_000;
 const ignoredNames = new Set([".git", "node_modules", "dist", "coverage"]);
 
-export type CodexRunMode = "investigate" | "propose_fix" | "implement_fix";
+export type CodexRunMode =
+  | "investigate"
+  | "propose_fix"
+  | "implement_fix"
+  | CodingStage;
 export type CodexRunStatus =
   | "queued"
   | "running"
@@ -58,6 +67,24 @@ export interface CodexRunRecord {
   issueId: string;
   repositoryId?: string;
   mode: CodexRunMode;
+  stage?: CodingStage;
+  parentRunId?: string;
+  researchArtifactId?: string;
+  connectionId?: string;
+  provider?: string;
+  requestedModel?: string;
+  realModel?: string;
+  effort?: string;
+  authMethod?: "api_key" | "subscription";
+  requestedConfig?: Record<string, unknown>;
+  effectiveConfig?: EffectiveRunConfig;
+  usage?: Record<string, unknown>;
+  cache?: Record<string, unknown>;
+  costAmountUsd?: number;
+  costStatus?: string;
+  durationMs?: number;
+  quota?: Record<string, unknown>;
+  attempts?: CodexRunAttemptRecord[];
   status: CodexRunStatus;
   progress: number;
   branchName?: string;
@@ -70,12 +97,56 @@ export interface CodexRunRecord {
   updatedAt: string;
 }
 
+export interface CodexRunAttemptRecord {
+  id?: string;
+  runId: string;
+  attemptNumber: number;
+  stage: CodingStage;
+  connectionId?: string;
+  provider?: string;
+  requestedModel?: string;
+  realModel?: string;
+  effort?: string;
+  authMethod?: "api_key" | "subscription";
+  status: "queued" | "running" | "completed" | "failed" | "canceled";
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  totalTokens?: number;
+  cache?: Record<string, unknown>;
+  quota?: Record<string, unknown>;
+  costAmountUsd?: number;
+  costStatus?: string;
+  durationMs?: number;
+  errorCategory?: string;
+  errorMessage?: string;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
 export interface CreateCodexRunInput {
   id?: string;
   workspaceId: string;
   issueId: string;
   repositoryId?: string;
   mode: CodexRunMode;
+  stage?: CodingStage;
+  parentRunId?: string;
+  researchArtifactId?: string;
+  connectionId?: string;
+  provider?: string;
+  requestedModel?: string;
+  realModel?: string;
+  effort?: string;
+  authMethod?: "api_key" | "subscription";
+  requestedConfig?: Record<string, unknown>;
+  effectiveConfig?: EffectiveRunConfig;
+  usage?: Record<string, unknown>;
+  cache?: Record<string, unknown>;
+  costAmountUsd?: number;
+  costStatus?: string;
+  durationMs?: number;
+  quota?: Record<string, unknown>;
   branchName?: string;
   createdByUserId?: string;
 }
@@ -86,8 +157,37 @@ export interface UpdateCodexRunInput {
   branchName?: string;
   commitSha?: string;
   result?: Record<string, unknown>;
+  stage?: CodingStage;
+  researchArtifactId?: string;
+  connectionId?: string;
+  provider?: string;
+  requestedModel?: string;
+  realModel?: string;
+  effort?: string;
+  authMethod?: "api_key" | "subscription";
+  requestedConfig?: Record<string, unknown>;
+  effectiveConfig?: EffectiveRunConfig;
+  usage?: Record<string, unknown>;
+  cache?: Record<string, unknown>;
+  costAmountUsd?: number;
+  costStatus?: string;
+  durationMs?: number;
+  quota?: Record<string, unknown>;
   startedAt?: string;
   finishedAt?: string;
+}
+
+export interface CreateCodexRunAttemptInput {
+  runId: string;
+  workspaceId: string;
+  attemptNumber: number;
+  stage: CodingStage;
+  connectionId?: string;
+  provider?: string;
+  requestedModel?: string;
+  realModel?: string;
+  effort?: string;
+  authMethod?: "api_key" | "subscription";
 }
 
 export interface CodexRunStore {
@@ -97,11 +197,37 @@ export interface CodexRunStore {
     patch: UpdateCodexRunInput,
   ): Promise<CodexRunRecord | void>;
   appendEvent(runId: string, input: CodexRunEventInput): Promise<CodexRunEvent>;
+  saveResearchArtifact?(artifact: ResearchArtifact): Promise<ResearchArtifact>;
+  getResearchArtifact?(
+    artifactId: string,
+    workspaceId?: string,
+  ): Promise<ResearchArtifact | null>;
+  createAttempt?(input: CreateCodexRunAttemptInput): Promise<void>;
+  updateAttempt?(
+    runId: string,
+    attemptNumber: number,
+    patch: Record<string, unknown>,
+  ): Promise<void>;
+  listAttempts?(
+    runId: string,
+    workspaceId?: string,
+  ): Promise<CodexRunAttemptRecord[]>;
 }
 
 export class InMemoryCodexRunStore implements CodexRunStore {
   readonly runs = new Map<string, CodexRunRecord>();
   readonly events: CodexRunEvent[] = [];
+  readonly attempts = new Map<string, Record<string, unknown>>();
+
+  async listAttempts(runId: string): Promise<CodexRunAttemptRecord[]> {
+    return [...this.attempts.values()]
+      .filter((attempt) => attempt.runId === runId)
+      .sort(
+        (left, right) =>
+          Number(left.attemptNumber ?? 0) - Number(right.attemptNumber ?? 0),
+      )
+      .map((attempt) => attempt as unknown as CodexRunAttemptRecord);
+  }
 
   async createRun(input: CreateCodexRunInput): Promise<CodexRunRecord> {
     const now = new Date().toISOString();
@@ -111,6 +237,33 @@ export class InMemoryCodexRunStore implements CodexRunStore {
       issueId: input.issueId,
       repositoryId: input.repositoryId,
       mode: input.mode,
+      ...(input.stage ? { stage: input.stage } : {}),
+      ...(input.parentRunId ? { parentRunId: input.parentRunId } : {}),
+      ...(input.researchArtifactId
+        ? { researchArtifactId: input.researchArtifactId }
+        : {}),
+      ...(input.connectionId ? { connectionId: input.connectionId } : {}),
+      ...(input.provider ? { provider: input.provider } : {}),
+      ...(input.requestedModel ? { requestedModel: input.requestedModel } : {}),
+      ...(input.realModel ? { realModel: input.realModel } : {}),
+      ...(input.effort ? { effort: input.effort } : {}),
+      ...(input.authMethod ? { authMethod: input.authMethod } : {}),
+      ...(input.requestedConfig
+        ? { requestedConfig: input.requestedConfig }
+        : {}),
+      ...(input.effectiveConfig
+        ? { effectiveConfig: input.effectiveConfig }
+        : {}),
+      ...(input.usage ? { usage: input.usage } : {}),
+      ...(input.cache ? { cache: input.cache } : {}),
+      ...(input.costAmountUsd !== undefined
+        ? { costAmountUsd: input.costAmountUsd }
+        : {}),
+      ...(input.costStatus ? { costStatus: input.costStatus } : {}),
+      ...(input.durationMs !== undefined
+        ? { durationMs: input.durationMs }
+        : {}),
+      ...(input.quota ? { quota: input.quota } : {}),
       status: "queued",
       progress: 0,
       branchName: input.branchName,
@@ -148,6 +301,37 @@ export class InMemoryCodexRunStore implements CodexRunStore {
     };
     this.events.push(event);
     return event;
+  }
+
+  readonly researchArtifacts = new Map<string, ResearchArtifact>();
+
+  async saveResearchArtifact(
+    artifact: ResearchArtifact,
+  ): Promise<ResearchArtifact> {
+    this.researchArtifacts.set(artifact.contentHash, artifact);
+    return artifact;
+  }
+
+  async getResearchArtifact(
+    artifactId: string,
+  ): Promise<ResearchArtifact | null> {
+    return this.researchArtifacts.get(artifactId) ?? null;
+  }
+
+  async createAttempt(input: CreateCodexRunAttemptInput): Promise<void> {
+    this.attempts.set(`${input.runId}:${input.attemptNumber}`, {
+      ...input,
+      status: "queued",
+    });
+  }
+
+  async updateAttempt(
+    runId: string,
+    attemptNumber: number,
+    patch: Record<string, unknown>,
+  ): Promise<void> {
+    const key = `${runId}:${attemptNumber}`;
+    this.attempts.set(key, { ...(this.attempts.get(key) ?? {}), ...patch });
   }
 }
 
@@ -952,6 +1136,14 @@ export interface RunCodexInput {
   issueIdentifier: string;
   issueTitle: string;
   mode: CodexRunMode;
+  stage?: CodingStage;
+  researchArtifactId?: string;
+  researchArtifact?: ResearchArtifact;
+  requestedConfig?: Record<string, unknown>;
+  effectiveConfig?: EffectiveRunConfig;
+  caseId?: string;
+  ticketRevision?: string;
+  baseSha?: string;
   repoRoot: string;
   tools?: readonly SafeTool[];
   store: CodexRunStore;

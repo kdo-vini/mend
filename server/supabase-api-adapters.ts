@@ -45,6 +45,12 @@ import {
   type AgentCredentialTask,
   type AgentProvider,
   type AgentCredentialRecord,
+  type AgentConnectionCreateInput,
+  type AgentConnectionPatchInput,
+  type AgentLoginJob,
+  type AgentLoginStartInput,
+  type AgentRoutingPolicyInput,
+  type CodingControlPlanePort,
 } from "./contracts/api-ports.js";
 import {
   type KanbanIssuePort,
@@ -112,6 +118,7 @@ import { createDokployDeploymentFromEnv } from "./deployment.js";
 import {
   redactSecrets,
   type CodexRunStore,
+  type CreateCodexRunAttemptInput,
   type CreateCodexRunInput,
   type SafeTool,
   type UpdateCodexRunInput,
@@ -160,6 +167,27 @@ import {
   type McpConnectionRecord,
 } from "./mcp.js";
 import {
+  type AgentConnection,
+  type CatalogSnapshot,
+  type CodingStage,
+  type ResearchArtifact,
+  type StageRoutingPolicy,
+  type StageRoutingPolicyOverride,
+  legacyModeForStage,
+  resolveEffectiveRunConfig,
+  snapshotRoutingPolicy,
+} from "./coding-control-plane.js";
+import {
+  catalogProviderFor,
+  type CatalogSecret,
+  type CodingCatalogProvider,
+} from "./coding-agent-catalog.js";
+import {
+  cancelSubscriptionLogin,
+  pollSubscriptionLogin,
+  startSubscriptionLogin,
+} from "./coding-agent-auth.js";
+import {
   decryptConnectionSecret,
   encryptConnectionSecret,
 } from "./connection-crypto.js";
@@ -176,6 +204,7 @@ import {
   repositoryDbPayload,
   rpcRow,
   row,
+  runAttempt,
   rows,
   run,
   str,
@@ -223,6 +252,7 @@ export interface SupabaseApiAdapterOptions {
   aiProvider?: SupportAiProvider;
   codexService?: CodexService;
   jobStore?: JobStore<WhatsmiauMessageJobPayload>;
+  codingCatalogProvider?: CodingCatalogProvider;
 }
 
 export type SupabaseApiPortDependencies = {
@@ -234,6 +264,7 @@ export type SupabaseApiPortDependencies = {
   knowledge: KnowledgePort;
   repositories: RepositoryPort;
   agentCredentials: AgentCredentialPort;
+  codingControlPlane: CodingControlPlanePort;
   githubConnections: GitHubConnectionPort;
   codingRuns: CodingRunPort;
   googleConnections: GoogleConnectionPort;
@@ -2673,8 +2704,701 @@ export class SupabaseAgentCredentialAdapter implements AgentCredentialPort {
   }
 }
 
+export class SupabaseCodingControlPlaneAdapter
+  implements CodingControlPlanePort
+{
+  constructor(
+    private readonly privilegedClient: AnySupabaseClient,
+    private readonly catalogProviderFactory: (
+      provider: AgentProvider,
+    ) => CodingCatalogProvider = catalogProviderFor,
+  ) {}
+
+  async resolveConnectionSecret(
+    workspaceId: string,
+    connectionId: string,
+  ): Promise<{ apiKey?: string; bundle?: Record<string, string> } | null> {
+    if (!(await this.getConnection(connectionId, workspaceId))) return null;
+    const secret = await this.secret(connectionId);
+    if (!secret) return null;
+    const bundle = secret.bundle
+      ? Object.fromEntries(
+          Object.entries(secret.bundle).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string",
+          ),
+        )
+      : undefined;
+    return {
+      ...(secret.apiKey ? { apiKey: secret.apiKey } : {}),
+      ...(bundle && Object.keys(bundle).length ? { bundle } : {}),
+    };
+  }
+
+  private connection(value: Record<string, unknown>): AgentConnection {
+    const catalogValue = value.catalog_json;
+    const catalog =
+      catalogValue &&
+      typeof catalogValue === "object" &&
+      !Array.isArray(catalogValue)
+        ? (catalogValue as CatalogSnapshot)
+        : undefined;
+    return {
+      id: str(value.id),
+      workspaceId: str(value.workspace_id),
+      ...(value.owner_user_id ? { ownerUserId: str(value.owner_user_id) } : {}),
+      label: str(value.label),
+      provider: str(value.provider) as AgentProvider,
+      authMethod: str(value.auth_method) as "api_key" | "subscription",
+      purpose:
+        str(value.purpose, "coding") === "support" ? "support" : "coding",
+      status: str(value.status, "pending") as AgentConnection["status"],
+      automationConsent: value.automation_consent === true,
+      ...(value.consent_updated_at
+        ? { consentUpdatedAt: str(value.consent_updated_at) }
+        : {}),
+      ...(value.cli_version ? { cliVersion: str(value.cli_version) } : {}),
+      ...(value.last_validated_at
+        ? { lastValidatedAt: str(value.last_validated_at) }
+        : {}),
+      quota: row(value.quota_json),
+      catalog,
+      metadata: row(value.metadata_json),
+      createdAt: str(value.created_at),
+      updatedAt: str(value.updated_at),
+    };
+  }
+
+  private async getConnection(
+    connectionId: string,
+    workspaceId: string,
+  ): Promise<AgentConnection | null> {
+    const result = await this.privilegedClient
+      .from("agent_connections")
+      .select("*")
+      .eq("id", connectionId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    const data = checked("agent_connections.get", result);
+    return data ? this.connection(row(data)) : null;
+  }
+
+  private async secret(
+    connectionId: string,
+  ): Promise<CatalogSecret | undefined> {
+    const result = await this.privilegedClient
+      .from("agent_connection_secrets")
+      .select("encrypted_bundle")
+      .eq("connection_id", connectionId)
+      .maybeSingle();
+    const data = checked("agent_connections.secret", result);
+    if (!data) return undefined;
+    const decrypted = decryptConnectionSecret(
+      str(row(data).encrypted_bundle),
+      connectionEncryptionKey(),
+    );
+    try {
+      const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+      if (typeof parsed.apiKey === "string") return { apiKey: parsed.apiKey };
+      return { bundle: parsed };
+    } catch {
+      return { apiKey: decrypted };
+    }
+  }
+
+  private async listWorkspaceConnections(
+    workspaceId: string,
+  ): Promise<AgentConnection[]> {
+    const result = await this.privilegedClient
+      .from("agent_connections")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("updated_at", { ascending: false });
+    return rows(checked("agent_connections.workspace_list", result)).map(
+      (value) => this.connection(row(value)),
+    );
+  }
+
+  async listConnections(context: RequestContext): Promise<AgentConnection[]> {
+    const connections = await this.listWorkspaceConnections(
+      context.workspaceId,
+    );
+    return context.role === "owner" || context.role === "admin"
+      ? connections
+      : connections.filter(
+          (connection) => connection.ownerUserId === context.userId,
+        );
+  }
+
+  async createConnection(
+    context: RequestContext,
+    input: AgentConnectionCreateInput,
+  ): Promise<AgentConnection> {
+    if (input.authMethod === "subscription")
+      throw new Error("subscription_connection_requires_login");
+    if (!input.apiKey?.trim()) throw new Error("agent_api_key_required");
+    const result = await this.privilegedClient
+      .from("agent_connections")
+      .insert({
+        workspace_id: context.workspaceId,
+        owner_user_id: context.userId,
+        label: input.label.trim(),
+        purpose: input.purpose ?? "coding",
+        provider: input.provider,
+        auth_method: input.authMethod,
+        status: "connected",
+        metadata_json: input.metadata ?? {},
+      })
+      .select("*")
+      .single();
+    const created = this.connection(
+      row(checked("agent_connections.create", result)),
+    );
+    const secret = await this.privilegedClient
+      .from("agent_connection_secrets")
+      .insert({
+        connection_id: created.id,
+        encrypted_bundle: encryptConnectionSecret(
+          JSON.stringify({ apiKey: input.apiKey.trim() }),
+          connectionEncryptionKey(),
+        ),
+      });
+    if (secret.error) {
+      await this.privilegedClient
+        .from("agent_connections")
+        .delete()
+        .eq("id", created.id);
+      throw new Error(`agent_connection_secret:${secret.error.message}`);
+    }
+    return created;
+  }
+
+  async updateConnection(
+    context: RequestContext,
+    connectionId: string,
+    input: AgentConnectionPatchInput,
+  ): Promise<AgentConnection | null> {
+    const current = await this.getConnection(connectionId, context.workspaceId);
+    if (!current) return null;
+    if (
+      current.ownerUserId !== context.userId &&
+      context.role !== "owner" &&
+      context.role !== "admin"
+    )
+      throw new Error("agent_connection_forbidden");
+    if (
+      input.automationConsent !== undefined &&
+      current.ownerUserId !== context.userId &&
+      context.role !== "owner"
+    )
+      throw new Error("agent_subscription_consent_owner_only");
+    const result = await this.privilegedClient
+      .from("agent_connections")
+      .update({
+        ...(input.label !== undefined ? { label: input.label.trim() } : {}),
+        ...(input.automationConsent !== undefined
+          ? {
+              automation_consent: input.automationConsent,
+              consent_updated_at: new Date().toISOString(),
+            }
+          : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connectionId)
+      .eq("workspace_id", context.workspaceId)
+      .select("*")
+      .maybeSingle();
+    const data = checked("agent_connections.update", result);
+    return data ? this.connection(row(data)) : null;
+  }
+
+  async removeConnection(
+    context: RequestContext,
+    connectionId: string,
+  ): Promise<boolean> {
+    const current = await this.getConnection(connectionId, context.workspaceId);
+    if (!current) return false;
+    if (
+      current.ownerUserId !== context.userId &&
+      context.role !== "owner" &&
+      context.role !== "admin"
+    )
+      throw new Error("agent_connection_forbidden");
+    const result = await this.privilegedClient
+      .from("agent_connections")
+      .update({
+        status: "revoked",
+        automation_consent: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connectionId)
+      .eq("workspace_id", context.workspaceId)
+      .select("id");
+    const removed =
+      rows(checked("agent_connections.revoke", result)).length > 0;
+    if (removed)
+      await this.privilegedClient
+        .from("agent_connection_secrets")
+        .delete()
+        .eq("connection_id", connectionId);
+    return removed;
+  }
+
+  async listModels(
+    context: RequestContext,
+    connectionId: string,
+    refresh = false,
+  ): Promise<CatalogSnapshot | null> {
+    const connection = await this.getConnection(
+      connectionId,
+      context.workspaceId,
+    );
+    if (!connection) return null;
+    if (connection.status === "revoked")
+      throw new Error("agent_connection_revoked");
+    const current = connection.catalog;
+    if (!refresh && current && Date.parse(current.expiresAt) > Date.now())
+      return current;
+    let catalog: CatalogSnapshot;
+    try {
+      catalog = await this.catalogProviderFactory(connection.provider).list(
+        connection,
+        await this.secret(connection.id),
+      );
+    } catch (error) {
+      await this.privilegedClient
+        .from("agent_connections")
+        .update({
+          status: "error",
+          metadata_json: {
+            ...(connection.metadata ?? {}),
+            lastCatalogError: redactSecrets(
+              String(error instanceof Error ? error.message : error),
+            )
+              .replace(/\r?\n/g, " ")
+              .slice(0, 200),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", connectionId)
+        .eq("workspace_id", context.workspaceId);
+      throw new Error("agent_catalog_refresh_failed");
+    }
+    await this.privilegedClient
+      .from("agent_connections")
+      .update({
+        status: "connected",
+        cli_version: catalog.cliVersion,
+        catalog_json: catalog,
+        catalog_source: catalog.source,
+        catalog_expires_at: catalog.expiresAt,
+        last_validated_at: catalog.lastVerifiedAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connectionId)
+      .eq("workspace_id", context.workspaceId);
+    return catalog;
+  }
+
+  async verifyConnection(
+    context: RequestContext,
+    connectionId: string,
+  ): Promise<AgentConnection | null> {
+    const current = await this.getConnection(connectionId, context.workspaceId);
+    if (!current) return null;
+    try {
+      await this.listModels(context, connectionId, true);
+    } catch (error) {
+      await this.privilegedClient
+        .from("agent_connections")
+        .update({
+          status: "error",
+          metadata_json: {
+            ...(current.metadata ?? {}),
+            lastVerificationError: redactSecrets(
+              String(error instanceof Error ? error.message : error),
+            )
+              .replace(/\r?\n/g, " ")
+              .slice(0, 200),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", connectionId)
+        .eq("workspace_id", context.workspaceId);
+    }
+    return this.getConnection(connectionId, context.workspaceId);
+  }
+
+  private loginJob(value: Record<string, unknown>): AgentLoginJob {
+    return {
+      id: str(value.id),
+      ...(value.connection_id
+        ? { connectionId: str(value.connection_id) }
+        : {}),
+      provider: str(value.provider) as AgentProvider,
+      status: str(value.status) as AgentLoginJob["status"],
+      ...(value.url ? { url: str(value.url) } : {}),
+      ...(value.code ? { code: str(value.code) } : {}),
+      expiresAt: str(value.expires_at),
+      ...(value.error_code ? { errorCode: str(value.error_code) } : {}),
+    };
+  }
+
+  async startLogin(
+    context: RequestContext,
+    input: AgentLoginStartInput,
+  ): Promise<AgentLoginJob> {
+    if (input.provider !== "openai")
+      throw new Error("google_subscription_login_requires_interactive_runner");
+    const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+    const connectionResult = await this.privilegedClient
+      .from("agent_connections")
+      .insert({
+        workspace_id: context.workspaceId,
+        owner_user_id: context.userId,
+        label: input.label.trim(),
+        purpose: "coding",
+        provider: input.provider,
+        auth_method: "subscription",
+        status: "pending",
+      })
+      .select("id")
+      .single();
+    const connectionId = str(
+      row(checked("agent_connections.login_connection", connectionResult)).id,
+    );
+    const result = await this.privilegedClient
+      .from("agent_connection_auth_jobs")
+      .insert({
+        connection_id: connectionId,
+        workspace_id: context.workspaceId,
+        user_id: context.userId,
+        provider: input.provider,
+        auth_method: "subscription",
+        status: "pending",
+        expires_at: expiresAt,
+      })
+      .select("*")
+      .single();
+    const job = this.loginJob(
+      row(checked("agent_connections.login_job", result)),
+    );
+    try {
+      const challenge = await startSubscriptionLogin(
+        job.id,
+        input.provider,
+        async (login) => {
+          const update: Record<string, unknown> = {
+            status: login.status,
+            ...(login.challenge.url ? { url: login.challenge.url } : {}),
+            ...(login.challenge.code ? { code: login.challenge.code } : {}),
+            ...(login.errorCode ? { error_code: login.errorCode } : {}),
+            updated_at: new Date().toISOString(),
+          };
+          await this.privilegedClient
+            .from("agent_connection_auth_jobs")
+            .update(update)
+            .eq("id", job.id);
+          if (login.status === "completed" && login.bundle) {
+            await this.privilegedClient
+              .from("agent_connection_secrets")
+              .upsert({
+                connection_id: connectionId,
+                encrypted_bundle: encryptConnectionSecret(
+                  JSON.stringify(login.bundle),
+                  connectionEncryptionKey(),
+                ),
+                updated_at: new Date().toISOString(),
+              });
+            await this.privilegedClient
+              .from("agent_connections")
+              .update({
+                status: "connected",
+                automation_consent: false,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", connectionId);
+          } else if (login.status === "failed" || login.status === "expired") {
+            await this.privilegedClient
+              .from("agent_connections")
+              .update({
+                status: login.status === "expired" ? "expired" : "error",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", connectionId);
+          }
+        },
+      );
+      const updated = await this.privilegedClient
+        .from("agent_connection_auth_jobs")
+        .update({
+          status: "awaiting_user",
+          ...(challenge.url ? { url: challenge.url } : {}),
+          ...(challenge.code ? { code: challenge.code } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", job.id)
+        .select("*")
+        .single();
+      return this.loginJob(
+        row(checked("agent_connections.login_challenge", updated)),
+      );
+    } catch (error) {
+      await this.privilegedClient
+        .from("agent_connection_auth_jobs")
+        .update({
+          status: "failed",
+          error_code: String(
+            error instanceof Error ? error.message : error,
+          ).slice(0, 120),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", job.id);
+      await this.privilegedClient
+        .from("agent_connections")
+        .update({ status: "error", updated_at: new Date().toISOString() })
+        .eq("id", connectionId);
+      const failed = await this.privilegedClient
+        .from("agent_connection_auth_jobs")
+        .select("*")
+        .eq("id", job.id)
+        .single();
+      return this.loginJob(
+        row(checked("agent_connections.login_failed", failed)),
+      );
+    }
+  }
+
+  async pollLogin(
+    context: RequestContext,
+    jobId: string,
+  ): Promise<AgentLoginJob | null> {
+    const active = pollSubscriptionLogin(jobId);
+    if (active) {
+      const current = await this.privilegedClient
+        .from("agent_connection_auth_jobs")
+        .select("*")
+        .eq("id", jobId)
+        .eq("workspace_id", context.workspaceId)
+        .maybeSingle();
+      const data = checked("agent_connections.login_poll", current);
+      if (!data) return null;
+      return {
+        ...this.loginJob(row(data)),
+        status: active.status,
+        ...(active.challenge.url ? { url: active.challenge.url } : {}),
+        ...(active.challenge.code ? { code: active.challenge.code } : {}),
+        ...(active.errorCode ? { errorCode: active.errorCode } : {}),
+      };
+    }
+    const result = await this.privilegedClient
+      .from("agent_connection_auth_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const data = checked("agent_connections.login_poll_db", result);
+    if (!data) return null;
+    const job = this.loginJob(row(data));
+    return Date.parse(job.expiresAt) <= Date.now() &&
+      ["pending", "awaiting_user"].includes(job.status)
+      ? { ...job, status: "expired", errorCode: "login_expired" }
+      : job;
+  }
+
+  async cancelLogin(
+    context: RequestContext,
+    jobId: string,
+  ): Promise<AgentLoginJob | null> {
+    await cancelSubscriptionLogin(jobId);
+    const result = await this.privilegedClient
+      .from("agent_connection_auth_jobs")
+      .update({ status: "canceled", updated_at: new Date().toISOString() })
+      .eq("id", jobId)
+      .eq("workspace_id", context.workspaceId)
+      .select("*")
+      .maybeSingle();
+    const data = checked("agent_connections.login_cancel", result);
+    return data ? this.loginJob(row(data)) : null;
+  }
+
+  private policy(value: Record<string, unknown>): StageRoutingPolicy {
+    const fallback = Array.isArray(value.fallback_connection_ids_json)
+      ? value.fallback_connection_ids_json.filter(
+          (item): item is string => typeof item === "string",
+        )
+      : [];
+    return {
+      stage: str(value.stage) as CodingStage,
+      ...(value.connection_id
+        ? { connectionId: str(value.connection_id) }
+        : {}),
+      ...(value.model ? { model: str(value.model) } : {}),
+      ...(value.effort ? { effort: str(value.effort) } : {}),
+      budget: row(value.budget_json),
+      fallbackEnabled: value.fallback_enabled === true,
+      fallbackConnectionIds: fallback,
+      preset: str(value.preset, "Custom") as StageRoutingPolicy["preset"],
+      ...(value.repository_id
+        ? { repositoryId: str(value.repository_id) }
+        : {}),
+      snapshot: row(value.snapshot_json),
+    };
+  }
+
+  async getPolicies(
+    context: RequestContext,
+    repositoryId?: string,
+  ): Promise<StageRoutingPolicy[]> {
+    let request = this.privilegedClient
+      .from("agent_routing_policies")
+      .select("*")
+      .eq("workspace_id", context.workspaceId);
+    if (repositoryId)
+      request = request.or(
+        `repository_id.is.null,repository_id.eq.${repositoryId}`,
+      );
+    const result = await request.order("stage", { ascending: true });
+    return rows(checked("agent_routing_policies.list", result)).map((value) =>
+      this.policy(row(value)),
+    );
+  }
+
+  async putPolicy(
+    context: RequestContext,
+    input: AgentRoutingPolicyInput,
+  ): Promise<StageRoutingPolicy> {
+    if (input.connectionId) {
+      const connection = await this.getConnection(
+        input.connectionId,
+        context.workspaceId,
+      );
+      if (!connection) throw new Error("agent_connection_not_found");
+    }
+    for (const fallbackId of input.fallbackConnectionIds ?? []) {
+      if (!(await this.getConnection(fallbackId, context.workspaceId)))
+        throw new Error(`agent_fallback_connection_not_found:${fallbackId}`);
+    }
+    let existingRequest = this.privilegedClient
+      .from("agent_routing_policies")
+      .select("id")
+      .eq("workspace_id", context.workspaceId)
+      .eq("stage", input.stage);
+    existingRequest = input.repositoryId
+      ? existingRequest.eq("repository_id", input.repositoryId)
+      : existingRequest.is("repository_id", null);
+    const existing = await existingRequest.maybeSingle();
+    const existingData = checked("agent_routing_policies.existing", existing);
+    const payload = {
+      workspace_id: context.workspaceId,
+      repository_id: input.repositoryId ?? null,
+      stage: input.stage,
+      connection_id: input.connectionId ?? null,
+      model: input.model?.trim() || null,
+      effort: input.effort?.trim() || null,
+      budget_json: input.budget ?? {},
+      fallback_enabled: input.fallbackEnabled === true,
+      fallback_connection_ids_json: input.fallbackConnectionIds ?? [],
+      preset: input.preset ?? "Custom",
+      snapshot_json: snapshotRoutingPolicy({
+        stage: input.stage,
+        ...(input.repositoryId ? { repositoryId: input.repositoryId } : {}),
+        ...(input.connectionId ? { connectionId: input.connectionId } : {}),
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.effort ? { effort: input.effort } : {}),
+        budget: input.budget,
+        fallbackEnabled: input.fallbackEnabled,
+        fallbackConnectionIds: input.fallbackConnectionIds,
+        preset: input.preset ?? "Custom",
+      }),
+      created_by_user_id: context.userId,
+      updated_at: new Date().toISOString(),
+    };
+    const result = existingData
+      ? await this.privilegedClient
+          .from("agent_routing_policies")
+          .update(payload)
+          .eq("id", str(row(existingData).id))
+          .select("*")
+          .single()
+      : await this.privilegedClient
+          .from("agent_routing_policies")
+          .insert(payload)
+          .select("*")
+          .single();
+    return this.policy(row(checked("agent_routing_policies.save", result)));
+  }
+
+  async resolveRunConfig(input: {
+    context: RequestContext;
+    stage: CodingStage;
+    repositoryId?: string;
+    override?: StageRoutingPolicyOverride;
+    automation: boolean;
+  }) {
+    const policies = await this.getPolicies(input.context, input.repositoryId);
+    const repositoryPolicy = policies.find(
+      (policy) =>
+        policy.stage === input.stage &&
+        input.repositoryId &&
+        policy.repositoryId === input.repositoryId,
+    );
+    const workspacePolicy = policies.find(
+      (policy) => policy.stage === input.stage && !policy.repositoryId,
+    );
+    const connections = await this.listWorkspaceConnections(
+      input.context.workspaceId,
+    );
+    if (input.context.role !== "owner" && input.context.role !== "admin") {
+      const selectedIds = [
+        input.override?.connectionId,
+        ...(input.override?.fallbackConnectionIds ?? []),
+      ].filter((id): id is string => Boolean(id));
+      if (
+        selectedIds.some(
+          (id) =>
+            connections.find((connection) => connection.id === id)
+              ?.ownerUserId !== input.context.userId,
+        )
+      )
+        throw new Error("agent_connection_forbidden");
+    }
+    return resolveEffectiveRunConfig({
+      stage: input.stage,
+      override: input.override,
+      repositoryPolicy,
+      workspacePolicy,
+      connections: Object.fromEntries(
+        connections.map((connection) => [connection.id, connection]),
+      ),
+      catalogs: Object.fromEntries(
+        connections.map((connection) => [connection.id, connection.catalog]),
+      ),
+      automation: input.automation,
+    });
+  }
+}
+
 export class SupabaseCodexRunStore implements CodexRunStore {
-  constructor(private readonly client: AnySupabaseClient) {}
+  constructor(
+    private readonly client: AnySupabaseClient,
+    private readonly privilegedClient: AnySupabaseClient = client,
+  ) {}
+
+  async getRunWithAttempts(id: string, workspaceId: string) {
+    const result = await this.client
+      .from("agent_runs")
+      .select("*, agent_run_attempts(*)")
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    const data = checked("agent_runs.get_with_attempts", result);
+    if (!data) return null;
+    const value = row(data);
+    const mapped = run(value);
+    const attempts = rows(value.agent_run_attempts).map(runAttempt);
+    if (attempts.length) mapped.attempts = attempts;
+    return mapped;
+  }
 
   async createRun(input: CreateCodexRunInput) {
     if (input.id) {
@@ -2690,6 +3414,37 @@ export class SupabaseCodexRunStore implements CodexRunStore {
           .update({
             repository_id: input.repositoryId ?? null,
             mode: input.mode,
+            ...(input.stage ? { stage: input.stage } : {}),
+            ...(input.parentRunId ? { parent_run_id: input.parentRunId } : {}),
+            ...(input.researchArtifactId
+              ? { research_artifact_id: input.researchArtifactId }
+              : {}),
+            ...(input.connectionId
+              ? { connection_id: input.connectionId }
+              : {}),
+            ...(input.provider ? { provider: input.provider } : {}),
+            ...(input.requestedModel
+              ? { requested_model: input.requestedModel }
+              : {}),
+            ...(input.realModel ? { real_model: input.realModel } : {}),
+            ...(input.effort ? { effort: input.effort } : {}),
+            ...(input.authMethod ? { billing_method: input.authMethod } : {}),
+            ...(input.requestedConfig
+              ? { requested_config_json: input.requestedConfig }
+              : {}),
+            ...(input.effectiveConfig
+              ? { effective_config_json: input.effectiveConfig }
+              : {}),
+            ...(input.usage ? { usage_json: input.usage } : {}),
+            ...(input.cache ? { cache_json: input.cache } : {}),
+            ...(input.costAmountUsd !== undefined
+              ? { cost_amount_usd: input.costAmountUsd }
+              : {}),
+            ...(input.costStatus ? { cost_status: input.costStatus } : {}),
+            ...(input.durationMs !== undefined
+              ? { duration_ms: input.durationMs }
+              : {}),
+            ...(input.quota ? { quota_json: input.quota } : {}),
             branch_name: input.branchName ?? null,
             created_by_user_id: input.createdByUserId ?? null,
           })
@@ -2707,6 +3462,35 @@ export class SupabaseCodexRunStore implements CodexRunStore {
         issue_id: input.issueId,
         repository_id: input.repositoryId ?? null,
         mode: input.mode,
+        ...(input.stage ? { stage: input.stage } : {}),
+        ...(input.parentRunId ? { parent_run_id: input.parentRunId } : {}),
+        ...(input.researchArtifactId
+          ? { research_artifact_id: input.researchArtifactId }
+          : {}),
+        ...(input.connectionId ? { connection_id: input.connectionId } : {}),
+        ...(input.provider ? { provider: input.provider } : {}),
+        ...(input.requestedModel
+          ? { requested_model: input.requestedModel }
+          : {}),
+        ...(input.realModel ? { real_model: input.realModel } : {}),
+        ...(input.effort ? { effort: input.effort } : {}),
+        ...(input.authMethod ? { billing_method: input.authMethod } : {}),
+        ...(input.requestedConfig
+          ? { requested_config_json: input.requestedConfig }
+          : {}),
+        ...(input.effectiveConfig
+          ? { effective_config_json: input.effectiveConfig }
+          : {}),
+        ...(input.usage ? { usage_json: input.usage } : {}),
+        ...(input.cache ? { cache_json: input.cache } : {}),
+        ...(input.costAmountUsd !== undefined
+          ? { cost_amount_usd: input.costAmountUsd }
+          : {}),
+        ...(input.costStatus ? { cost_status: input.costStatus } : {}),
+        ...(input.durationMs !== undefined
+          ? { duration_ms: input.durationMs }
+          : {}),
+        ...(input.quota ? { quota_json: input.quota } : {}),
         status: "queued",
         progress: 0,
         branch_name: input.branchName ?? null,
@@ -2749,6 +3533,42 @@ export class SupabaseCodexRunStore implements CodexRunStore {
           ? { commit_sha: input.commitSha }
           : {}),
         ...(input.result !== undefined ? { result_json: input.result } : {}),
+        ...(input.stage !== undefined ? { stage: input.stage } : {}),
+        ...(input.researchArtifactId !== undefined
+          ? { research_artifact_id: input.researchArtifactId }
+          : {}),
+        ...(input.connectionId !== undefined
+          ? { connection_id: input.connectionId }
+          : {}),
+        ...(input.provider !== undefined ? { provider: input.provider } : {}),
+        ...(input.requestedModel !== undefined
+          ? { requested_model: input.requestedModel }
+          : {}),
+        ...(input.realModel !== undefined
+          ? { real_model: input.realModel }
+          : {}),
+        ...(input.effort !== undefined ? { effort: input.effort } : {}),
+        ...(input.authMethod !== undefined
+          ? { billing_method: input.authMethod }
+          : {}),
+        ...(input.requestedConfig !== undefined
+          ? { requested_config_json: input.requestedConfig }
+          : {}),
+        ...(input.effectiveConfig !== undefined
+          ? { effective_config_json: input.effectiveConfig }
+          : {}),
+        ...(input.usage !== undefined ? { usage_json: input.usage } : {}),
+        ...(input.cache !== undefined ? { cache_json: input.cache } : {}),
+        ...(input.costAmountUsd !== undefined
+          ? { cost_amount_usd: input.costAmountUsd }
+          : {}),
+        ...(input.costStatus !== undefined
+          ? { cost_status: input.costStatus }
+          : {}),
+        ...(input.durationMs !== undefined
+          ? { duration_ms: input.durationMs }
+          : {}),
+        ...(input.quota !== undefined ? { quota_json: input.quota } : {}),
         ...(input.startedAt !== undefined
           ? { started_at: input.startedAt }
           : {}),
@@ -2790,6 +3610,87 @@ export class SupabaseCodexRunStore implements CodexRunStore {
       createdAt: str(value.created_at),
     };
   }
+
+  async saveResearchArtifact(
+    artifact: ResearchArtifact,
+  ): Promise<ResearchArtifact> {
+    const result = await this.privilegedClient
+      .from("agent_research_artifacts")
+      .upsert(
+        {
+          ...(artifact.id ? { id: artifact.id } : {}),
+          workspace_id: artifact.workspaceId,
+          case_id: artifact.caseId,
+          issue_id: artifact.issueId,
+          ticket_revision: artifact.ticketRevision,
+          base_sha: artifact.baseSha,
+          content_hash: artifact.contentHash,
+          status: artifact.status,
+          artifact_json: artifact,
+          created_by_user_id: null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "workspace_id,case_id,ticket_revision,base_sha" },
+      )
+      .select("id, artifact_json")
+      .single();
+    const value = row(checked("agent_research_artifacts.save", result));
+    const stored = row(value.artifact_json) as unknown as ResearchArtifact;
+    return { ...stored, id: str(value.id) };
+  }
+
+  async getResearchArtifact(
+    artifactId: string,
+    workspaceId?: string,
+  ): Promise<ResearchArtifact | null> {
+    let request = this.privilegedClient
+      .from("agent_research_artifacts")
+      .select("id, workspace_id, artifact_json")
+      .eq("id", artifactId);
+    if (workspaceId) request = request.eq("workspace_id", workspaceId);
+    const result = await request.maybeSingle();
+    const data = checked("agent_research_artifacts.get", result);
+    if (!data) return null;
+    const value = row(data);
+    return {
+      ...(row(value.artifact_json) as unknown as ResearchArtifact),
+      id: str(value.id),
+    };
+  }
+
+  async createAttempt(input: CreateCodexRunAttemptInput): Promise<void> {
+    const result = await this.privilegedClient
+      .from("agent_run_attempts")
+      .insert({
+        run_id: input.runId,
+        workspace_id: input.workspaceId,
+        attempt_number: input.attemptNumber,
+        stage: input.stage,
+        connection_id: input.connectionId ?? null,
+        provider: input.provider ?? null,
+        requested_model: input.requestedModel ?? null,
+        real_model: input.realModel ?? null,
+        effort: input.effort ?? null,
+        auth_method: input.authMethod ?? null,
+        status: "queued",
+      });
+    if (result.error)
+      throw new Error(`agent_run_attempt.create:${result.error.message}`);
+  }
+
+  async updateAttempt(
+    runId: string,
+    attemptNumber: number,
+    patch: Record<string, unknown>,
+  ): Promise<void> {
+    const result = await this.privilegedClient
+      .from("agent_run_attempts")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("run_id", runId)
+      .eq("attempt_number", attemptNumber);
+    if (result.error)
+      throw new Error(`agent_run_attempt.update:${result.error.message}`);
+  }
 }
 
 export class SupabaseCodingRunAdapter implements CodingRunPort {
@@ -2803,6 +3704,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     codexService?: CodexService,
     private readonly privilegedClient: AnySupabaseClient = client,
     private readonly jobStore?: JobStore<WhatsmiauMessageJobPayload>,
+    private readonly controlPlane?: CodingControlPlanePort,
   ) {
     this.bugLoop = new SupabaseBugLoopStore(privilegedClient as never);
     this.codex =
@@ -2811,13 +3713,19 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
         repositories,
         runs: store,
         deployment: createDokployDeploymentFromEnv(),
+        ...(controlPlane
+          ? {
+              agentConnectionSecretResolver:
+                controlPlane.resolveConnectionSecret.bind(controlPlane),
+            }
+          : {}),
       });
   }
 
   async list(context: RequestContext, query: CodingRunListQuery) {
     let request = this.client
       .from("agent_runs")
-      .select("*")
+      .select("*, agent_run_attempts(*)")
       .eq("workspace_id", context.workspaceId);
     if (query.issueId) request = request.eq("issue_id", query.issueId);
     if (query.status) request = request.eq("status", query.status);
@@ -2825,7 +3733,12 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     const result = await request
       .order("created_at", { ascending: false })
       .limit(query.limit);
-    return rows(checked("agent_runs.list", result)).map(run);
+    return rows(checked("agent_runs.list", result)).map((value) => {
+      const mapped = run(value);
+      const attempts = rows(value.agent_run_attempts).map(runAttempt);
+      if (attempts.length) mapped.attempts = attempts;
+      return mapped;
+    });
   }
 
   async create(
@@ -2850,15 +3763,70 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       ))
     )
       throw new Error("repository_not_found");
+    const stage: CodingStage =
+      input.stage ??
+      (input.mode === "implement_fix"
+        ? "implement"
+        : input.mode === "propose_fix"
+          ? "research"
+          : "research");
+    const requestedMode = input.mode ?? legacyModeForStage(stage);
+    let effectiveConfig;
+    let researchArtifact: ResearchArtifact | undefined;
+    let caseId: string | undefined;
+    if (input.stage) {
+      if (!this.controlPlane)
+        throw new Error("coding_control_plane_unavailable");
+      if (stage === "implement" && !input.researchArtifactId)
+        throw new Error("research_artifact_required");
+      if (input.researchArtifactId) {
+        const artifactResult = await this.privilegedClient
+          .from("agent_research_artifacts")
+          .select("id, workspace_id, artifact_json")
+          .eq("id", input.researchArtifactId)
+          .eq("workspace_id", context.workspaceId)
+          .maybeSingle();
+        const artifactData = checked(
+          "agent_research_artifacts.run",
+          artifactResult,
+        );
+        if (!artifactData) throw new Error("research_artifact_not_found");
+        const artifactRow = row(artifactData);
+        researchArtifact = {
+          ...(row(artifactRow.artifact_json) as unknown as ResearchArtifact),
+          id: str(artifactRow.id),
+        };
+        if (
+          researchArtifact.status !== "current" ||
+          researchArtifact.ticketRevision !== str(issue.updated_at)
+        )
+          throw new Error("research_artifact_stale");
+      }
+      effectiveConfig = await this.controlPlane.resolveRunConfig({
+        context,
+        stage,
+        repositoryId: input.repositoryId,
+        override: input.routeOverride,
+        automation: false,
+      });
+      const caseResult = await this.privilegedClient
+        .from("bug_cases")
+        .select("id")
+        .eq("workspace_id", context.workspaceId)
+        .eq("issue_id", str(issue.id))
+        .maybeSingle();
+      const caseData = checked("bug_cases.run_case", caseResult);
+      caseId = caseData ? str(row(caseData).id) : undefined;
+    }
     const policy = await this.workspacePolicy(context.workspaceId);
     if (!policy.allowedIntegrations.includes("agent"))
       throw new CodexServiceError(
         "Agent execution is disabled by the workspace AI integration policy",
       );
     const action =
-      input.mode === "investigate"
+      requestedMode === "investigate"
         ? "investigate"
-        : input.mode === "propose_fix"
+        : requestedMode === "propose_fix"
           ? "propose_fix"
           : "implement_fix";
     if (!policy.allowedActions.includes(action))
@@ -2876,13 +3844,33 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       kind: "command",
       name: name as AllowedCommand,
     }));
+    const requestedConfig = input.stage
+      ? input.routeOverride
+        ? { ...input.routeOverride }
+        : { stage, source: "inherited" }
+      : undefined;
     const runId = crypto.randomUUID();
     const queued = await this.store.createRun({
       id: runId,
       workspaceId: context.workspaceId,
       issueId: str(issue.id),
       repositoryId: input.repositoryId,
-      mode: input.mode,
+      mode: requestedMode,
+      ...(input.stage ? { stage } : {}),
+      ...(input.researchArtifactId
+        ? { researchArtifactId: input.researchArtifactId }
+        : {}),
+      ...(effectiveConfig
+        ? {
+            connectionId: effectiveConfig.connectionId,
+            provider: effectiveConfig.provider,
+            requestedModel: effectiveConfig.model,
+            effort: effectiveConfig.effort,
+            authMethod: effectiveConfig.authMethod,
+            requestedConfig,
+            effectiveConfig,
+          }
+        : {}),
       createdByUserId: context.userId,
     });
     const request = {
@@ -2902,7 +3890,19 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       repositoryId: input.repositoryId,
       issueIdentifier: identifier,
       issueTitle: str(issue.title),
-      mode: input.mode,
+      mode: requestedMode,
+      ...(input.stage ? { codingStage: stage } : {}),
+      ...(input.researchArtifactId
+        ? { researchArtifactId: input.researchArtifactId }
+        : {}),
+      ...(researchArtifact ? { researchArtifact } : {}),
+      ...(requestedConfig ? { requestedConfig } : {}),
+      ...(effectiveConfig ? { effectiveConfig } : {}),
+      ...(caseId ? { caseId } : {}),
+      ticketRevision: str(issue.updated_at),
+      ...(effectiveConfig
+        ? { maxRuntimeMs: effectiveConfig.budget.maxRuntimeMs }
+        : {}),
       context: agentContext,
       tools,
       createdByUserId: context.userId,
@@ -2929,7 +3929,19 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
           repositoryId: input.repositoryId,
           issueIdentifier: identifier,
           issueTitle: str(issue.title),
-          mode: input.mode,
+          mode: requestedMode,
+          ...(input.stage ? { stage } : {}),
+          ...(input.researchArtifactId
+            ? { researchArtifactId: input.researchArtifactId }
+            : {}),
+          ...(researchArtifact ? { researchArtifact } : {}),
+          ...(requestedConfig ? { requestedConfig } : {}),
+          ...(effectiveConfig ? { effectiveConfig } : {}),
+          ...(caseId ? { caseId } : {}),
+          ticketRevision: str(issue.updated_at),
+          ...(effectiveConfig
+            ? { maxRuntimeMs: effectiveConfig.budget.maxRuntimeMs }
+            : {}),
           context: agentContext,
           tools,
           createdByUserId: context.userId,
@@ -2953,19 +3965,23 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     if (failedCaseRow && str(failedCaseRow.id)) {
       const bugCaseId = str(failedCaseRow.id);
       const retryStage: BugLoopStage =
-        input.mode === "investigate" ? "investigation" : "fix";
+        requestedMode === "investigate" ? "investigation" : "fix";
       await this.bugLoop.advance({
         workspaceId: context.workspaceId,
         bugCaseId,
         stage: retryStage,
         status: "active",
         eventType: "coding_run.retry",
-        message: `A new ${input.mode} run was started after the previous attempt failed.`,
+        message: `A new ${requestedMode} run was started after the previous attempt failed.`,
         idempotencyKey: `agent-run-retry:${runId}`,
         ...(retryStage === "investigation"
           ? { investigationRunId: runId }
           : { fixRunId: runId }),
-        metadata: { runId, mode: input.mode },
+        metadata: {
+          runId,
+          mode: requestedMode,
+          ...(input.stage ? { codingStage: stage } : {}),
+        },
       });
     }
     return persisted ?? queued;
@@ -3059,7 +4075,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
     };
   }
   async get(context: RequestContext, id: string) {
-    return this.store.getRunScoped(id, context.workspaceId);
+    return this.store.getRunWithAttempts(id, context.workspaceId);
   }
   private async scoped(context: RequestContext, id: string) {
     return this.store.getRunScoped(id, context.workspaceId);
@@ -4204,6 +5220,12 @@ export function createSupabaseApiAdapters(
     options.jobStore as unknown as import("./media-pipeline.js").MediaJobEnqueuer,
   );
   const agentCredentials = new SupabaseAgentCredentialAdapter(privilegedClient);
+  const codingControlPlane = new SupabaseCodingControlPlaneAdapter(
+    privilegedClient,
+    options.codingCatalogProvider
+      ? () => options.codingCatalogProvider as CodingCatalogProvider
+      : catalogProviderFor,
+  );
   const conversations = new SupabaseConversationAdapter(
     client,
     provider,
@@ -4226,7 +5248,7 @@ export function createSupabaseApiAdapters(
     client,
     privilegedClient,
   );
-  const store = new SupabaseCodexRunStore(client);
+  const store = new SupabaseCodexRunStore(client, privilegedClient);
   const codingRuns = new SupabaseCodingRunAdapter(
     client,
     repositories,
@@ -4234,6 +5256,7 @@ export function createSupabaseApiAdapters(
     options.codexService,
     privilegedClient,
     options.jobStore,
+    codingControlPlane,
   );
   const googleConnections = new SupabaseGoogleConnectionAdapter(
     client,
@@ -4252,6 +5275,7 @@ export function createSupabaseApiAdapters(
     knowledge,
     repositories,
     agentCredentials,
+    codingControlPlane,
     githubConnections,
     codingRuns,
     googleConnections,

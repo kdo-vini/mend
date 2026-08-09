@@ -71,6 +71,8 @@ export interface WorkspaceAiPolicy {
   bugAutoFixEnabled: boolean;
   bugAutoDeployEnabled: boolean;
   mcpFailurePolicy: "review" | "generic_reply" | "retry_then_review";
+  codingRoutingV2Enabled?: boolean;
+  codingSubscriptionAuthEnabled?: boolean;
 }
 
 export const DEFAULT_AI_ROUTE_MAP: AiRouteMap = {
@@ -221,6 +223,11 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
       raw.mcp_failure_policy === "retry_then_review"
         ? raw.mcp_failure_policy
         : "review",
+    codingRoutingV2Enabled:
+      raw.coding_routing_v2 === true || raw.codingRoutingV2Enabled === true,
+    codingSubscriptionAuthEnabled:
+      raw.coding_subscription_auth === true ||
+      raw.codingSubscriptionAuthEnabled === true,
   };
 }
 
@@ -246,5 +253,7 @@ export function workspaceAiPolicyJson(
     bug_auto_fix_enabled: policy.bugAutoFixEnabled,
     bug_auto_deploy_enabled: policy.bugAutoDeployEnabled,
     mcp_failure_policy: policy.mcpFailurePolicy,
+    coding_routing_v2: policy.codingRoutingV2Enabled === true,
+    coding_subscription_auth: policy.codingSubscriptionAuthEnabled === true,
   };
 }

@@ -1,6 +1,7 @@
 export const codexRunEventTypes = [
   "run_queued",
   "run_started",
+  "run_fallback",
   "sandbox_ready",
   "tool_started",
   "tool_completed",

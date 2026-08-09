@@ -32,6 +32,7 @@ import { registerGoogleConnectionRoutes } from "./routes/google-connection-route
 import { registerMcpConnectionRoutes } from "./routes/mcp-connection-routes.js";
 import { registerGitHubConnectionRoutes } from "./routes/github-connection-routes.js";
 import { registerAgentCredentialRoutes } from "./routes/agent-credential-routes.js";
+import { registerCodingControlPlaneRoutes } from "./routes/coding-control-plane-routes.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -80,6 +81,66 @@ function asyncRoute(
   return (request, response, next) => {
     void handler(request, response, next).catch(next);
   };
+}
+
+function codingControlPlaneApiError(error: unknown): {
+  status: number;
+  code: string;
+  message: string;
+} | null {
+  const raw = error instanceof Error ? error.message : String(error);
+  const code = raw.split(":", 1)[0] ?? "coding_control_plane_error";
+  if (/^research_artifact_(required|not_found|stale)$/.test(code))
+    return {
+      status: 409,
+      code,
+      message:
+        code === "research_artifact_stale"
+          ? "The research artifact is stale for this issue revision or repository base."
+          : "A current research artifact is required for this implementation.",
+    };
+  if (
+    /^(agent_catalog_|agent_model_|agent_effort_|agent_route_|agent_connection_|agent_fallback_)/.test(
+      code,
+    )
+  )
+    return {
+      status: 409,
+      code,
+      message: "The selected coding route is unavailable or not verified.",
+    };
+  if (
+    /^agent_subscription_(automation_not_consented|bundle_missing)/.test(code)
+  )
+    return {
+      status: 403,
+      code,
+      message:
+        "This subscription is not authorized for the requested automation.",
+    };
+  if (
+    /^(agent_api_key_required|agent_api_key_missing|agent_connection_secret_missing)/.test(
+      code,
+    )
+  )
+    return {
+      status: 422,
+      code,
+      message: "The selected coding connection has no usable credential.",
+    };
+  if (/^agent_budget_/.test(code))
+    return {
+      status: 409,
+      code,
+      message: "The coding stage budget was exceeded.",
+    };
+  if (/^google_subscription_login_requires_interactive_runner$/.test(code))
+    return {
+      status: 409,
+      code,
+      message: "Google subscription login is not available on this runner yet.",
+    };
+  return null;
 }
 
 function sensitiveKey(key: string): boolean {
@@ -448,6 +509,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerGitHubConnectionRoutes(routeContext);
   registerCodingRunRoutes(routeContext);
   registerAgentCredentialRoutes(routeContext);
+  registerCodingControlPlaneRoutes(routeContext);
   registerGoogleConnectionRoutes(routeContext);
   registerMcpConnectionRoutes(routeContext);
 
@@ -487,6 +549,11 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
       if (githubError)
         return send(response, githubError.status, {
           error: { code: githubError.code, message: githubError.message },
+        });
+      const codingError = codingControlPlaneApiError(error);
+      if (codingError)
+        return send(response, codingError.status, {
+          error: { code: codingError.code, message: codingError.message },
         });
       const workspaceError = workspaceApiError(error);
       if (workspaceError)

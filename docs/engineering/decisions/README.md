@@ -11,6 +11,7 @@ consistentes entre backend, frontend, banco, workers e operação.
 | [ADR-004](ADR-004-mcp-evidence-automation.md)      | Evidência MCP participa do gate de automação           | accepted |
 | [ADR-005](ADR-005-mcp-failure-policies.md)         | Falhas MCP seguem política explícita                   | accepted |
 | [ADR-006](ADR-006-durable-bug-loop-cli-github.md)  | Loop de bug durável com agentes CLI e GitHub           | accepted |
+| [ADR-007](ADR-007-coding-control-plane-v2.md)      | Control plane por etapa e artefato de pesquisa         | accepted |
 
 Novas decisões devem copiar o [template de ADR](../templates/ADR.md), receber o
 próximo número e ser adicionadas a esta tabela.

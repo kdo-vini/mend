@@ -18,12 +18,14 @@ import {
   Rocket,
   SearchCheck,
   ShieldCheck,
+  Wrench,
   X,
 } from "lucide-react";
 import type { CodingRun } from "../../../types";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { SectionTitle, StatusRun } from "../../../shared/ui/DataDisplay";
+import { canImplementProposedFix } from "../run-actions";
 
 const stageOrder = [
   "signal",
@@ -106,6 +108,22 @@ function BugLoopOverview({ run }: { run: CodingRun }) {
                 : t("loop.providerFallback"))}
             {run.providerVersion ? ` ${run.providerVersion}` : ""}
           </span>
+          {run.codingStage && (
+            <span className="run-case-status active">{run.codingStage}</span>
+          )}
+          {run.requestedModel && (
+            <span className="run-provider-tag">
+              model: {run.requestedModel}
+            </span>
+          )}
+          {run.effort && (
+            <span className="run-provider-tag">effort: {run.effort}</span>
+          )}
+          {run.authMethod && (
+            <span className="run-provider-tag">
+              {run.authMethod === "subscription" ? "subscription" : "API key"}
+            </span>
+          )}
           {run.caseStatus && (
             <span className={`run-case-status ${run.caseStatus}`}>
               {t(`loop.caseStatus.${run.caseStatus}`)}
@@ -258,7 +276,15 @@ export function RunsPage({
 }: {
   runs: CodingRun[];
   onOpenIssue: (id: string) => void;
-  onStartRun: (id: string) => void;
+  onStartRun: (
+    id: string,
+    mode?: CodingRun["mode"],
+    repositoryId?: string,
+    options?: {
+      stage?: "research" | "implement" | "review" | "verify";
+      researchArtifactId?: string;
+    },
+  ) => void;
   onUpdateRun: (
     runId: string,
     action:
@@ -277,6 +303,9 @@ export function RunsPage({
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimer = useRef<number | null>(null);
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
+  const canImplementProposal = selectedRun
+    ? canImplementProposedFix(selectedRun)
+    : false;
 
   useEffect(
     () => () => {
@@ -408,7 +437,7 @@ export function RunsPage({
                   >
                     {t("actions.cancel")}
                   </button>
-                ) : (
+                ) : canImplementProposal ? null : (
                   <button
                     className="button button-primary"
                     type="button"
@@ -420,6 +449,30 @@ export function RunsPage({
               </div>
             </div>
             <BugLoopOverview run={selectedRun} />
+            {canImplementProposal && (
+              <div className="run-review-actions run-implement-actions">
+                <span>{t("actions.implementDescription")}</span>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() =>
+                    onStartRun(
+                      selectedRun.issueId,
+                      "Implement fix",
+                      selectedRun.repositoryId,
+                      selectedRun.researchArtifactId
+                        ? {
+                            stage: "implement",
+                            researchArtifactId: selectedRun.researchArtifactId,
+                          }
+                        : undefined,
+                    )
+                  }
+                >
+                  <Wrench size={14} /> {t("actions.implement")}
+                </button>
+              </div>
+            )}
             <div
               className="progress-line"
               role="progressbar"
@@ -456,7 +509,41 @@ export function RunsPage({
                   <GitBranch size={13} /> <strong>{selectedRun.branch}</strong>
                 </span>
               )}
+              {selectedRun.realModel && (
+                <span>
+                  <strong>{selectedRun.realModel}</strong> model used
+                </span>
+              )}
+              {selectedRun.usage?.totalTokens !== undefined && (
+                <span>
+                  <strong>{selectedRun.usage.totalTokens}</strong> tokens
+                </span>
+              )}
+              {selectedRun.usage?.cost && (
+                <span>
+                  <strong>
+                    {selectedRun.usage.cost.amountUsd === undefined
+                      ? selectedRun.usage.cost.method
+                      : `$${selectedRun.usage.cost.amountUsd.toFixed(4)}`}
+                  </strong>{" "}
+                  cost
+                </span>
+              )}
             </div>
+            {selectedRun.attempts && selectedRun.attempts.length > 0 && (
+              <div className="run-attempts" aria-label="Coding attempts">
+                {selectedRun.attempts.map((attempt) => (
+                  <span key={attempt.attemptNumber}>
+                    #{attempt.attemptNumber} {attempt.provider ?? "provider"}
+                    {attempt.requestedModel
+                      ? " · " + attempt.requestedModel
+                      : ""}{" "}
+                    · {attempt.status}
+                    {attempt.errorCategory ? " · " + attempt.errorCategory : ""}
+                  </span>
+                ))}
+              </div>
+            )}
             {selectedRun.status === "completed" &&
               selectedRun.mode === "Implement fix" && (
                 <div className="run-review-actions">

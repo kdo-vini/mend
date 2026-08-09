@@ -80,6 +80,12 @@ const runModeMap: Record<string, CodingRun["mode"]> = {
   propose_fix: "Propose fix",
   implement_fix: "Implement fix",
 };
+const codingStageValues = new Set([
+  "research",
+  "implement",
+  "review",
+  "verify",
+]);
 const stageOrder: BugLoopStage[] = [
   "signal",
   "suspicion",
@@ -375,7 +381,7 @@ export function toUiRun(
   );
   const deployment = objectValue(loop.deployment ?? result.deployment);
   const providerValue = String(
-    loop.provider ?? agent.provider ?? result.provider ?? "",
+    record.provider ?? loop.provider ?? agent.provider ?? result.provider ?? "",
   ).toLowerCase();
   const provider = ["openai", "anthropic", "google", "verboo"].includes(
     providerValue,
@@ -433,15 +439,164 @@ export function toUiRun(
           output: String(check.output ?? ""),
         }))
     : [];
+  const storedUsage = objectValue(record.usage_json);
+  const reportedUsage = objectValue(result.usage);
+  const usageValue = { ...storedUsage, ...reportedUsage };
+  const usageCost = objectValue(usageValue.cost);
+  const costMethodValue = String(
+    usageCost.method ?? record.cost_status ?? "unknown",
+  );
+  const costMethod = [
+    "included_in_subscription",
+    "reported",
+    "calculated",
+    "unknown",
+  ].includes(costMethodValue)
+    ? (costMethodValue as NonNullable<
+        NonNullable<CodingRun["usage"]>["cost"]
+      >["method"])
+    : "unknown";
+  const usage =
+    Object.keys(usageValue).length || record.cost_status
+      ? {
+          ...(usageValue.inputTokens !== undefined ||
+          usageValue.input_tokens !== undefined
+            ? {
+                inputTokens: Number(
+                  usageValue.inputTokens ?? usageValue.input_tokens ?? 0,
+                ),
+              }
+            : {}),
+          ...(usageValue.outputTokens !== undefined ||
+          usageValue.output_tokens !== undefined
+            ? {
+                outputTokens: Number(
+                  usageValue.outputTokens ?? usageValue.output_tokens ?? 0,
+                ),
+              }
+            : {}),
+          ...(usageValue.cachedInputTokens !== undefined ||
+          usageValue.cached_input_tokens !== undefined
+            ? {
+                cachedInputTokens: Number(
+                  usageValue.cachedInputTokens ??
+                    usageValue.cached_input_tokens ??
+                    0,
+                ),
+              }
+            : {}),
+          ...(usageValue.totalTokens !== undefined ||
+          usageValue.total_tokens !== undefined
+            ? {
+                totalTokens: Number(
+                  usageValue.totalTokens ?? usageValue.total_tokens ?? 0,
+                ),
+              }
+            : {}),
+          ...(usageValue.cache && typeof usageValue.cache === "object"
+            ? { cache: objectValue(usageValue.cache) }
+            : {}),
+          cost: {
+            method: costMethod,
+            ...(usageCost.amountUsd !== undefined ||
+            (record.cost_amount_usd !== null &&
+              record.cost_amount_usd !== undefined)
+              ? {
+                  amountUsd: Number(
+                    usageCost.amountUsd ?? record.cost_amount_usd ?? 0,
+                  ),
+                }
+              : {}),
+          },
+        }
+      : undefined;
+  const codingStageValue = String(
+    record.stage ?? result.codingStage ?? result.coding_stage ?? "",
+  );
+  const codingStage = codingStageValues.has(codingStageValue)
+    ? (codingStageValue as CodingRun["codingStage"])
+    : undefined;
   const started = Date.parse(record.started_at ?? record.created_at);
   const finished = record.finished_at ? Date.parse(record.finished_at) : NaN;
   const durationSeconds =
     Number.isFinite(started) && Number.isFinite(finished)
       ? Math.max(0, Math.round((finished - started) / 1000))
       : null;
+  const attemptRows = Array.isArray(
+    (record as unknown as Record<string, unknown>).agent_run_attempts,
+  )
+    ? ((record as unknown as Record<string, unknown>)
+        .agent_run_attempts as unknown[])
+    : [];
+  const attempts = attemptRows
+    .map((value) => objectValue(value))
+    .filter((value) => Number.isFinite(Number(value.attempt_number)))
+    .map((value) => ({
+      attemptNumber: Number(value.attempt_number),
+      ...(typeof value.provider === "string" &&
+      ["openai", "anthropic", "google", "verboo"].includes(value.provider)
+        ? { provider: value.provider as CodingAgentProvider }
+        : {}),
+      ...(typeof value.requested_model === "string"
+        ? { requestedModel: value.requested_model }
+        : {}),
+      ...(typeof value.real_model === "string"
+        ? { realModel: value.real_model }
+        : {}),
+      ...(typeof value.effort === "string" ? { effort: value.effort } : {}),
+      ...(value.auth_method === "api_key" ||
+      value.auth_method === "subscription"
+        ? { authMethod: value.auth_method as "api_key" | "subscription" }
+        : {}),
+      status: String(value.status ?? "queued") as NonNullable<
+        CodingRun["attempts"]
+      >[number]["status"],
+      ...(value.total_tokens !== null && value.total_tokens !== undefined
+        ? { totalTokens: Number(value.total_tokens) }
+        : {}),
+      ...(value.cost_amount_usd !== null && value.cost_amount_usd !== undefined
+        ? { costAmountUsd: Number(value.cost_amount_usd) }
+        : {}),
+      ...(typeof value.cost_status === "string"
+        ? { costStatus: value.cost_status }
+        : {}),
+      ...(typeof value.error_category === "string"
+        ? { errorCategory: value.error_category }
+        : {}),
+      ...(typeof value.error_message === "string"
+        ? { errorMessage: value.error_message }
+        : {}),
+    }));
   return {
     id: record.id,
     issueId: record.issue_id,
+    repositoryId: record.repository_id ?? undefined,
+    codingStage,
+    parentRunId: record.parent_run_id ?? undefined,
+    researchArtifactId:
+      record.research_artifact_id ??
+      (typeof result.researchArtifactId === "string"
+        ? result.researchArtifactId
+        : undefined),
+    connectionId: record.connection_id ?? undefined,
+    requestedModel:
+      record.requested_model ??
+      (typeof result.requestedModel === "string"
+        ? result.requestedModel
+        : undefined),
+    realModel:
+      record.real_model ??
+      (typeof result.realModel === "string" ? result.realModel : undefined),
+    effort:
+      record.effort ??
+      (typeof result.effort === "string" ? result.effort : undefined),
+    authMethod:
+      record.billing_method === "api_key" ||
+      record.billing_method === "subscription"
+        ? record.billing_method
+        : undefined,
+    usage,
+    ...(attempts.length ? { attempts } : {}),
     issueIdentifier: String(
       issueIdentifier ??
         result.issueIdentifier ??

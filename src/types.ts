@@ -141,6 +141,7 @@ export interface Issue {
 export interface CodingRun {
   id: string;
   issueId: string;
+  repositoryId?: string;
   issueIdentifier: string;
   mode: "Investigate" | "Propose fix" | "Implement fix";
   status:
@@ -189,6 +190,44 @@ export interface CodingRun {
   healthStatus?: string;
   customerResponseStatus?: string;
   caseOnly?: boolean;
+  codingStage?: "research" | "implement" | "review" | "verify";
+  parentRunId?: string;
+  researchArtifactId?: string;
+  connectionId?: string;
+  requestedModel?: string;
+  realModel?: string;
+  effort?: string;
+  authMethod?: "api_key" | "subscription";
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cachedInputTokens?: number;
+    totalTokens?: number;
+    quota?: Record<string, unknown>;
+    cache?: Record<string, unknown>;
+    cost?: {
+      method:
+        | "included_in_subscription"
+        | "reported"
+        | "calculated"
+        | "unknown";
+      amountUsd?: number;
+    };
+  };
+  attempts?: Array<{
+    attemptNumber: number;
+    provider?: CodingAgentProvider;
+    requestedModel?: string;
+    realModel?: string;
+    effort?: string;
+    authMethod?: "api_key" | "subscription";
+    status: "queued" | "running" | "completed" | "failed" | "canceled";
+    totalTokens?: number;
+    costAmountUsd?: number;
+    costStatus?: string;
+    errorCategory?: string;
+    errorMessage?: string;
+  }>;
   events: RunEvent[];
 }
 

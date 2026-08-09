@@ -7,6 +7,7 @@ import {
 } from "../issue-service.js";
 import { validateRemoteMediaUrl } from "../media.js";
 import { supportFlowSchema } from "../../src/shared/support-flow.js";
+import { authMethods, codingStages } from "../coding-control-plane.js";
 
 export const workspaceRoleSchema = z.enum([
   "owner",
@@ -364,7 +365,22 @@ export const codingRunListQuerySchema = z
 export const codingRunCreateSchema = z
   .object({
     repositoryId: uuid.optional(),
-    mode: z.enum(["investigate", "propose_fix", "implement_fix"]),
+    mode: z.enum(["investigate", "propose_fix", "implement_fix"]).optional(),
+    stage: z.enum(codingStages).optional(),
+    researchArtifactId: uuid.optional(),
+    routeOverride: z
+      .object({
+        stage: z.enum(codingStages),
+        connectionId: uuid.optional(),
+        model: z.string().trim().min(1).max(160).optional(),
+        effort: z.string().trim().min(1).max(80).optional(),
+        budget: z.record(z.unknown()).optional(),
+        fallbackEnabled: z.boolean().optional(),
+        fallbackConnectionIds: z.array(uuid).max(5).optional(),
+        preset: z.enum(["Economy", "Balanced", "Quality", "Custom"]).optional(),
+      })
+      .strict()
+      .optional(),
     branchBase: z.string().trim().min(1).max(160).default("main"),
     instructions: z.string().trim().max(20_000).optional(),
     allowChanges: z.boolean().default(false),
@@ -372,6 +388,103 @@ export const codingRunCreateSchema = z
       .array(z.enum(allowedCommands))
       .max(allowedCommands.length)
       .default([]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.mode && !value.stage)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["stage"],
+        message: "stage is required for a V2 run",
+      });
+    if (
+      value.routeOverride &&
+      value.stage &&
+      value.routeOverride.stage !== value.stage
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["routeOverride", "stage"],
+        message: "routeOverride.stage must match stage",
+      });
+    if (
+      value.researchArtifactId &&
+      value.stage !== "implement" &&
+      value.mode !== "implement_fix"
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["researchArtifactId"],
+        message: "researchArtifactId is only valid for implement runs",
+      });
+  });
+
+export const agentConnectionProviderSchema = z.enum([
+  "openai",
+  "anthropic",
+  "google",
+  "verboo",
+]);
+export const agentConnectionCreateSchema = z
+  .object({
+    label: z.string().trim().min(1).max(160),
+    provider: agentConnectionProviderSchema,
+    authMethod: z.enum(authMethods),
+    purpose: z.enum(["coding", "support"]).default("coding"),
+    apiKey: z.string().trim().min(1).max(500).optional(),
+    metadata: z.record(z.unknown()).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.authMethod === "api_key" && !value.apiKey)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["apiKey"],
+        message: "apiKey is required for API key connections",
+      });
+    if (value.authMethod === "subscription" && value.apiKey)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["apiKey"],
+        message: "subscription credentials must use the official login flow",
+      });
+    if (value.authMethod === "subscription" && value.provider === "anthropic")
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["authMethod"],
+        message:
+          "Claude.ai subscriptions are not available on the hosted runner",
+      });
+  });
+export const agentConnectionPatchSchema = z
+  .object({
+    label: z.string().trim().min(1).max(160).optional(),
+    automationConsent: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) => Object.keys(value).length > 0,
+    "At least one field is required",
+  );
+export const agentConnectionParamSchema = z.object({ id: uuid }).strict();
+export const agentLoginStartSchema = z
+  .object({
+    provider: z.enum(["openai", "google"]),
+    label: z.string().trim().min(1).max(160),
+  })
+  .strict();
+export const agentLoginJobParamSchema = z.object({ jobId: uuid }).strict();
+export const agentRoutingPolicySchema = z
+  .object({
+    repositoryId: uuid.optional(),
+    stage: z.enum(codingStages),
+    connectionId: uuid.optional(),
+    model: z.string().trim().min(1).max(160).optional(),
+    effort: z.string().trim().min(1).max(80).optional(),
+    budget: z.record(z.unknown()).optional(),
+    fallbackEnabled: z.boolean().optional(),
+    fallbackConnectionIds: z.array(uuid).max(5).optional(),
+    preset: z.enum(["Economy", "Balanced", "Quality", "Custom"]).optional(),
   })
   .strict();
 

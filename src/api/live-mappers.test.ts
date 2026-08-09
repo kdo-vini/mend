@@ -295,6 +295,7 @@ describe("live Agent run mapper", () => {
 
     expect(toUiRun(record, [], "MEND-1")).toMatchObject({
       issueIdentifier: "MEND-1",
+      repositoryId: "repository-1",
       status: "completed",
       summary: "The regression reproduces in the checkout path.",
       files: ["src/fix.ts"],

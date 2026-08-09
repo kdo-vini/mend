@@ -1,5 +1,10 @@
 import type { CodexContextInput, StartCodexRunInput } from "./codex-service.js";
 import type { SafeTool } from "./codex.js";
+import type {
+  CodingStage,
+  EffectiveRunConfig,
+  ResearchArtifact,
+} from "./coding-control-plane.js";
 
 export const AGENT_RUN_REQUESTED_JOB_TYPE = "mend.agent_run_requested";
 
@@ -23,6 +28,13 @@ export interface AgentRunRequestedJobPayload {
   issueIdentifier: string;
   issueTitle: string;
   mode: StartCodexRunInput["mode"];
+  codingStage?: CodingStage;
+  researchArtifactId?: string;
+  researchArtifact?: ResearchArtifact;
+  requestedConfig?: Record<string, unknown>;
+  effectiveConfig?: EffectiveRunConfig;
+  caseId?: string;
+  ticketRevision?: string;
   context: CodexContextInput;
   tools: readonly SafeTool[];
   createdByUserId?: string;

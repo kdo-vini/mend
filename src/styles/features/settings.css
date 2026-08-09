@@ -905,3 +905,126 @@
   padding-top: 8px;
   resize: vertical;
 }
+
+.coding-control-plane,
+.coding-routing-matrix {
+  gap: 16px;
+}
+
+.coding-control-plane > .settings-section-header,
+.coding-routing-matrix > .settings-section-header {
+  align-items: flex-start;
+}
+
+.coding-control-plane > .settings-section-header > svg {
+  color: var(--accent);
+}
+
+.coding-login-challenge {
+  align-items: flex-start;
+}
+
+.coding-login-challenge > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.coding-login-challenge strong,
+.coding-login-challenge span {
+  flex-basis: 100%;
+}
+
+.coding-login-challenge a {
+  color: var(--accent);
+}
+
+.coding-login-challenge code {
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink-soft);
+}
+
+.coding-connection-list,
+.coding-policy-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.coding-connection-row,
+.coding-policy-row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 86%, var(--accent) 14%);
+}
+
+.coding-connection-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.coding-connection-row p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.coding-consent,
+.coding-fallback-toggle {
+  display: inline-flex;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--muted) !important;
+  font-size: 10px !important;
+}
+
+.coding-consent input,
+.coding-fallback-toggle input {
+  min-height: auto;
+  accent-color: var(--accent);
+}
+
+.coding-policy-row {
+  grid-template-columns:
+    72px minmax(140px, 1fr) minmax(140px, 1fr) minmax(130px, 1fr)
+    auto auto;
+}
+
+.coding-policy-row > strong {
+  color: var(--ink-soft);
+  text-transform: capitalize;
+  font-size: 11px;
+}
+
+.coding-policy-row .settings-field-help {
+  min-width: 130px;
+}
+
+.coding-fallback-select {
+  min-height: 54px;
+  max-width: 180px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+@media (max-width: 920px) {
+  .coding-connection-row,
+  .coding-policy-row {
+    grid-template-columns: 1fr;
+  }
+
+  .coding-connection-row .repository-row-trailing {
+    justify-content: flex-start;
+  }
+}

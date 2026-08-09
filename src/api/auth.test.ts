@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createWorkspace, signInWithGoogle } from "./auth";
+import { createWorkspace, signInWithGoogle, signUpWithPassword } from "./auth";
 import type { MendSupabaseClient } from "../lib/supabase";
 
 const workspace = {
@@ -15,6 +15,30 @@ const workspace = {
 };
 
 describe("workspace auth helpers", () => {
+  it("sends confirmed signups back to the explicit sign-in route", async () => {
+    const signUp = vi.fn(async () => ({
+      data: { user: null, session: null },
+      error: null,
+    }));
+    const client = {
+      auth: { signUp },
+    } as unknown as MendSupabaseClient;
+
+    await expect(
+      signUpWithPassword(
+        " owner@example.com ",
+        "password-123",
+        "https://mend.test/?auth=1",
+        client,
+      ),
+    ).resolves.toMatchObject({ data: { session: null } });
+    expect(signUp).toHaveBeenCalledWith({
+      email: "owner@example.com",
+      password: "password-123",
+      options: { emailRedirectTo: "https://mend.test/?auth=1" },
+    });
+  });
+
   it("starts Google OAuth with the app redirect URL", async () => {
     const signInWithOAuth = vi.fn(async () => ({
       data: { provider: "google", url: "https://accounts.google.com" },

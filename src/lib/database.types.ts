@@ -87,53 +87,104 @@ export type Database = {
       agent_runs: {
         Row: {
           branch_name: string | null
+          billing_method?: string | null
+          cache_json?: Json
           commit_sha: string | null
+          connection_id?: string | null
           created_at: string
           created_by_user_id: string | null
+          cost_amount_usd?: number | null
+          cost_status?: string | null
+          duration_ms?: number | null
+          effort?: string | null
           finished_at: string | null
           id: string
           issue_id: string
           mode: string
+          parent_run_id?: string | null
           progress: number
+          provider?: string | null
           repository_id: string | null
+          requested_config_json?: Json
+          requested_model?: string | null
+          research_artifact_id?: string | null
+          real_model?: string
           result_json: Json
+          stage?: string
           started_at: string | null
           status: string
           updated_at: string
+          usage_json?: Json
+          effective_config_json?: Json
+          quota_json?: Json
           workspace_id: string
         }
         Insert: {
           branch_name?: string | null
+          billing_method?: string | null
+          cache_json?: Json
           commit_sha?: string | null
+          connection_id?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          cost_amount_usd?: number | null
+          cost_status?: string | null
+          duration_ms?: number | null
+          effort?: string | null
           finished_at?: string | null
           id?: string
           issue_id: string
           mode: string
+          parent_run_id?: string | null
           progress?: number
+          provider?: string | null
           repository_id?: string | null
+          requested_config_json?: Json
+          requested_model?: string | null
+          research_artifact_id?: string | null
+          real_model?: string
           result_json?: Json
+          stage?: string
           started_at?: string | null
           status?: string
           updated_at?: string
+          usage_json?: Json
+          effective_config_json?: Json
+          quota_json?: Json
           workspace_id: string
         }
         Update: {
           branch_name?: string | null
+          billing_method?: string | null
+          cache_json?: Json
           commit_sha?: string | null
+          connection_id?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          cost_amount_usd?: number | null
+          cost_status?: string | null
+          duration_ms?: number | null
+          effort?: string | null
           finished_at?: string | null
           id?: string
           issue_id?: string
           mode?: string
+          parent_run_id?: string | null
           progress?: number
+          provider?: string | null
           repository_id?: string | null
+          requested_config_json?: Json
+          requested_model?: string | null
+          research_artifact_id?: string | null
+          real_model?: string
           result_json?: Json
+          stage?: string
           started_at?: string | null
           status?: string
           updated_at?: string
+          usage_json?: Json
+          effective_config_json?: Json
+          quota_json?: Json
           workspace_id?: string
         }
         Relationships: [

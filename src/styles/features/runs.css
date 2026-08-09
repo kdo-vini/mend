@@ -435,6 +435,20 @@
   color: var(--ink-soft);
   font-weight: 500;
 }
+.run-attempts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.run-attempts span {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
 .run-review-actions {
   display: flex;
   align-items: center;
@@ -453,6 +467,9 @@
 }
 .run-failure-actions {
   border-color: color-mix(in oklch, var(--danger) 30%, var(--line));
+}
+.run-implement-actions {
+  border-color: color-mix(in oklch, var(--accent) 35%, var(--line));
 }
 .run-notify-actions {
   border-color: color-mix(in oklch, var(--signal) 30%, var(--line));
@@ -615,6 +632,16 @@
 }
 
 @media (max-width: 760px) {
+  .run-review-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .run-review-actions .button {
+    justify-content: center;
+    width: 100%;
+  }
+
   .run-loop-heading {
     align-items: flex-start;
     flex-direction: column;

@@ -25,7 +25,15 @@ import type { CodexDeploymentPort } from "./deployment.js";
 import { createDokployDeploymentFromEnv } from "./deployment.js";
 import { createCodingAgentRunExecutor } from "./coding-agent-executor.js";
 import type { CodingAgentName } from "./coding-agent-cli.js";
-import type { AgentCredentialResolver } from "./coding-agent-executor.js";
+import type {
+  AgentConnectionSecretResolver,
+  AgentCredentialResolver,
+} from "./coding-agent-executor.js";
+import type {
+  CodingStage,
+  EffectiveRunConfig,
+  ResearchArtifact,
+} from "./coding-control-plane.js";
 import {
   collectGitHubPublishFiles,
   createGitHubControlPlaneFromEnv,
@@ -147,6 +155,7 @@ export interface CodexServicePorts {
   context?: CodexContextPort;
   execute?: CodexRunExecutor;
   agentCredentialResolver?: AgentCredentialResolver;
+  agentConnectionSecretResolver?: AgentConnectionSecretResolver;
   eventSink?: CodexEventSink;
   cancellation?: CodexCancellationRegistry;
   openAi?: OpenAiCodexOptions & {
@@ -167,6 +176,13 @@ export interface StartCodexRunInput {
   issueIdentifier: string;
   issueTitle: string;
   mode: RunCodexInput["mode"];
+  stage?: CodingStage;
+  researchArtifactId?: string;
+  researchArtifact?: ResearchArtifact;
+  requestedConfig?: Record<string, unknown>;
+  effectiveConfig?: EffectiveRunConfig;
+  caseId?: string;
+  ticketRevision?: string;
   context: CodexContextInput;
   tools?: readonly SafeTool[];
   createdByUserId?: string;
@@ -480,6 +496,7 @@ export class CodexService {
         ports.repositories,
         undefined,
         ports.agentCredentialResolver,
+        ports.agentConnectionSecretResolver,
       );
     this.cancellation = ports.cancellation ?? new CodexCancellationRegistry();
     this.github =
@@ -616,6 +633,34 @@ export class CodexService {
         return next;
       },
       appendEvent: (runId, event) => this.ports.runs.appendEvent(runId, event),
+      ...(this.ports.runs.saveResearchArtifact
+        ? {
+            saveResearchArtifact: (artifact: ResearchArtifact) =>
+              this.ports.runs.saveResearchArtifact!(artifact),
+          }
+        : {}),
+      ...(this.ports.runs.getResearchArtifact
+        ? {
+            getResearchArtifact: (artifactId: string, workspaceId?: string) =>
+              this.ports.runs.getResearchArtifact!(artifactId, workspaceId),
+          }
+        : {}),
+      ...(this.ports.runs.createAttempt
+        ? {
+            createAttempt: (
+              attempt: import("./codex.js").CreateCodexRunAttemptInput,
+            ) => this.ports.runs.createAttempt!(attempt),
+          }
+        : {}),
+      ...(this.ports.runs.updateAttempt
+        ? {
+            updateAttempt: (
+              runId: string,
+              attemptNumber: number,
+              patch: Record<string, unknown>,
+            ) => this.ports.runs.updateAttempt!(runId, attemptNumber, patch),
+          }
+        : {}),
     };
     const runnerInput: RunCodexInput = {
       workspaceId,
@@ -625,6 +670,21 @@ export class CodexService {
       issueIdentifier: nonEmpty(input.issueIdentifier, "issueIdentifier"),
       issueTitle: nonEmpty(input.issueTitle, "issueTitle"),
       mode: input.mode,
+      ...(input.stage ? { stage: input.stage } : {}),
+      ...(input.researchArtifactId
+        ? { researchArtifactId: input.researchArtifactId }
+        : {}),
+      ...(input.researchArtifact
+        ? { researchArtifact: input.researchArtifact }
+        : {}),
+      ...(input.requestedConfig
+        ? { requestedConfig: input.requestedConfig }
+        : {}),
+      ...(input.effectiveConfig
+        ? { effectiveConfig: input.effectiveConfig }
+        : {}),
+      ...(input.caseId ? { caseId: input.caseId } : {}),
+      ...(input.ticketRevision ? { ticketRevision: input.ticketRevision } : {}),
       repoRoot: repository.root,
       tools,
       store,

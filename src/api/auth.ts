@@ -66,6 +66,19 @@ export function signInWithPassword(
   });
 }
 
+export function signUpWithPassword(
+  email: string,
+  password: string,
+  redirectTo?: string,
+  client?: MendSupabaseClient,
+) {
+  return clientOrDefault(client).auth.signUp({
+    email: email.trim(),
+    password,
+    ...(redirectTo ? { options: { emailRedirectTo: redirectTo } } : {}),
+  });
+}
+
 export function signInWithGoogle(
   redirectTo?: string,
   client?: MendSupabaseClient,

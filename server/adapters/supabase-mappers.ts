@@ -1,4 +1,8 @@
-import type { CodexRunRecord } from "../codex.js";
+import {
+  redactSecrets,
+  type CodexRunAttemptRecord,
+  type CodexRunRecord,
+} from "../codex.js";
 import type { RepositoryConfig } from "../codex-service.js";
 import type { IssueCreateInput, IssuePatchInput } from "../issue-service.js";
 import type {
@@ -317,6 +321,54 @@ export function run(rowValue: Row): CodexRunRecord {
       ? { repositoryId: String(rowValue.repository_id) }
       : {}),
     mode: str(rowValue.mode, "investigate") as CodexRunRecord["mode"],
+    ...(rowValue.stage
+      ? { stage: String(rowValue.stage) as CodexRunRecord["stage"] }
+      : {}),
+    ...(rowValue.parent_run_id
+      ? { parentRunId: String(rowValue.parent_run_id) }
+      : {}),
+    ...(rowValue.research_artifact_id
+      ? { researchArtifactId: String(rowValue.research_artifact_id) }
+      : {}),
+    ...(rowValue.connection_id
+      ? { connectionId: String(rowValue.connection_id) }
+      : {}),
+    ...(rowValue.provider ? { provider: String(rowValue.provider) } : {}),
+    ...(rowValue.requested_model
+      ? { requestedModel: String(rowValue.requested_model) }
+      : {}),
+    ...(rowValue.real_model ? { realModel: String(rowValue.real_model) } : {}),
+    ...(rowValue.effort ? { effort: String(rowValue.effort) } : {}),
+    ...(rowValue.billing_method
+      ? {
+          authMethod: String(
+            rowValue.billing_method,
+          ) as CodexRunRecord["authMethod"],
+        }
+      : {}),
+    ...(rowValue.requested_config_json
+      ? { requestedConfig: row(rowValue.requested_config_json) }
+      : {}),
+    ...(rowValue.effective_config_json
+      ? {
+          effectiveConfig: row(
+            rowValue.effective_config_json,
+          ) as unknown as CodexRunRecord["effectiveConfig"],
+        }
+      : {}),
+    ...(rowValue.usage_json ? { usage: row(rowValue.usage_json) } : {}),
+    ...(rowValue.cache_json ? { cache: row(rowValue.cache_json) } : {}),
+    ...(rowValue.cost_amount_usd !== null &&
+    rowValue.cost_amount_usd !== undefined
+      ? { costAmountUsd: Number(rowValue.cost_amount_usd) }
+      : {}),
+    ...(rowValue.cost_status
+      ? { costStatus: String(rowValue.cost_status) }
+      : {}),
+    ...(rowValue.duration_ms !== null && rowValue.duration_ms !== undefined
+      ? { durationMs: Number(rowValue.duration_ms) }
+      : {}),
+    ...(rowValue.quota_json ? { quota: row(rowValue.quota_json) } : {}),
     status: str(rowValue.status, "queued") as CodexRunRecord["status"],
     progress: num(rowValue.progress),
     ...(rowValue.branch_name
@@ -333,6 +385,63 @@ export function run(rowValue: Row): CodexRunRecord {
       : {}),
     createdAt: str(rowValue.created_at),
     updatedAt: str(rowValue.updated_at),
+  };
+}
+
+export function runAttempt(rowValue: Row): CodexRunAttemptRecord {
+  return {
+    ...(rowValue.id ? { id: str(rowValue.id) } : {}),
+    runId: str(rowValue.run_id),
+    attemptNumber: num(rowValue.attempt_number),
+    stage: str(rowValue.stage) as CodexRunAttemptRecord["stage"],
+    ...(rowValue.connection_id
+      ? { connectionId: str(rowValue.connection_id) }
+      : {}),
+    ...(rowValue.provider ? { provider: str(rowValue.provider) } : {}),
+    ...(rowValue.requested_model
+      ? { requestedModel: str(rowValue.requested_model) }
+      : {}),
+    ...(rowValue.real_model ? { realModel: str(rowValue.real_model) } : {}),
+    ...(rowValue.effort ? { effort: str(rowValue.effort) } : {}),
+    ...(rowValue.auth_method
+      ? {
+          authMethod: str(
+            rowValue.auth_method,
+          ) as CodexRunAttemptRecord["authMethod"],
+        }
+      : {}),
+    status: str(rowValue.status, "queued") as CodexRunAttemptRecord["status"],
+    ...(rowValue.input_tokens !== null && rowValue.input_tokens !== undefined
+      ? { inputTokens: num(rowValue.input_tokens) }
+      : {}),
+    ...(rowValue.output_tokens !== null && rowValue.output_tokens !== undefined
+      ? { outputTokens: num(rowValue.output_tokens) }
+      : {}),
+    ...(rowValue.cached_input_tokens !== null &&
+    rowValue.cached_input_tokens !== undefined
+      ? { cachedInputTokens: num(rowValue.cached_input_tokens) }
+      : {}),
+    ...(rowValue.total_tokens !== null && rowValue.total_tokens !== undefined
+      ? { totalTokens: num(rowValue.total_tokens) }
+      : {}),
+    ...(rowValue.cache_json ? { cache: row(rowValue.cache_json) } : {}),
+    ...(rowValue.quota_json ? { quota: row(rowValue.quota_json) } : {}),
+    ...(rowValue.cost_amount_usd !== null &&
+    rowValue.cost_amount_usd !== undefined
+      ? { costAmountUsd: Number(rowValue.cost_amount_usd) }
+      : {}),
+    ...(rowValue.cost_status ? { costStatus: str(rowValue.cost_status) } : {}),
+    ...(rowValue.duration_ms !== null && rowValue.duration_ms !== undefined
+      ? { durationMs: num(rowValue.duration_ms) }
+      : {}),
+    ...(rowValue.error_category
+      ? { errorCategory: str(rowValue.error_category) }
+      : {}),
+    ...(rowValue.error_message
+      ? { errorMessage: redactSecrets(str(rowValue.error_message)) }
+      : {}),
+    ...(rowValue.started_at ? { startedAt: str(rowValue.started_at) } : {}),
+    ...(rowValue.finished_at ? { finishedAt: str(rowValue.finished_at) } : {}),
   };
 }
 

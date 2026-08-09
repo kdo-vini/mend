@@ -5,7 +5,9 @@ import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import {
   acceptWorkspaceInvitation,
+  sendMagicLink as sendMagicLinkRequest,
   signInWithGoogle as startGoogleSignIn,
+  signUpWithPassword,
   updatePassword,
 } from "../api/auth";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
@@ -34,6 +36,32 @@ const explicitDemoMode =
   (new URLSearchParams(window.location.search).get("demo") === "1" ||
     window.sessionStorage.getItem("mend.demo") === "1");
 
+const authCallbackKeys = [
+  "access_token",
+  "refresh_token",
+  "code",
+  "error",
+  "error_code",
+  "error_description",
+  "token_hash",
+  "type",
+] as const;
+
+function authRedirectUrl() {
+  if (typeof window === "undefined") return undefined;
+  return new URL("/?auth=1", window.location.origin).toString();
+}
+
+function hasAuthCallback() {
+  if (typeof window === "undefined") return false;
+  const url = new URL(window.location.href);
+  if (url.hash === "#") return true;
+  const hashParams = new URLSearchParams(url.hash.slice(1));
+  return authCallbackKeys.some(
+    (key) => url.searchParams.has(key) || hashParams.has(key),
+  );
+}
+
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
@@ -56,13 +84,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("invitation")
       : null;
-  const publicLanding =
-    typeof window !== "undefined" &&
-    window.location.pathname === "/" &&
-    new URLSearchParams(window.location.search).get("auth") !== "1";
   const authRequested =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("auth") === "1";
+  const authCallbackPresent = hasAuthCallback();
+  const authRouteRequested = authRequested || authCallbackPresent;
+  const publicLanding =
+    typeof window !== "undefined" &&
+    window.location.pathname === "/" &&
+    !authRouteRequested;
 
   useEffect(() => {
     const syncStoredLanguage = () =>
@@ -119,7 +149,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // The explicit auth route must show the sign-in form even if Supabase's
   // session probe is slow or unavailable. The probe still runs in the
   // background and will swap in the workspace when it finds a session.
-  if (loading && !authRequested)
+  if (loading && !authRouteRequested)
     return (
       <AuthShell title={t("loadingTitle")} message={t("checkingSession")} />
     );
@@ -162,7 +192,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
               email: email.trim(),
               password,
             })
-          : await supabase.auth.signUp({ email: email.trim(), password });
+          : await signUpWithPassword(
+              email,
+              password,
+              authRedirectUrl(),
+              supabase,
+            );
       if (result.error) setError(t("authError"));
       else if (authMode === "sign-up" && !result.data.session)
         setNotice(t("checkInboxConfirm"));
@@ -179,10 +214,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setNotice(null);
     setAuthAction("google");
     try {
-      const result = await startGoogleSignIn(
-        typeof window === "undefined" ? undefined : window.location.origin,
-        supabase,
-      );
+      const result = await startGoogleSignIn(authRedirectUrl(), supabase);
       if (result.error) {
         setError(t("googleSignInError"));
         setAuthAction(null);
@@ -199,7 +231,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return;
     }
     setError(null);
-    const result = await supabase.auth.signInWithOtp({ email: email.trim() });
+    const result = await sendMagicLinkRequest(
+      email,
+      authRedirectUrl(),
+      supabase,
+    );
     if (result.error) setError(t("authError"));
     else setNotice(t("magicLinkSent"));
   };

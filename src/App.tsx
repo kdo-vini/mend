@@ -241,6 +241,31 @@ function App() {
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const [editIssueId, setEditIssueId] = useState<string | null>(null);
   const [runDialogIssueId, setRunDialogIssueId] = useState<string | null>(null);
+  const [runDialogInitialMode, setRunDialogInitialMode] =
+    useState<CodingRun["mode"]>("Propose fix");
+  const [runDialogRepositoryId, setRunDialogRepositoryId] = useState<
+    string | undefined
+  >();
+  const [runDialogStage, setRunDialogStage] = useState<
+    "research" | "implement" | "review" | "verify" | undefined
+  >();
+  const [runDialogResearchArtifactId, setRunDialogResearchArtifactId] =
+    useState<string | undefined>();
+  const openRunDialog = (
+    issueId: string,
+    mode: CodingRun["mode"] = "Propose fix",
+    repositoryId?: string,
+    options?: {
+      stage?: "research" | "implement" | "review" | "verify";
+      researchArtifactId?: string;
+    },
+  ) => {
+    setRunDialogInitialMode(mode);
+    setRunDialogRepositoryId(repositoryId);
+    setRunDialogStage(options?.stage);
+    setRunDialogResearchArtifactId(options?.researchArtifactId);
+    setRunDialogIssueId(issueId);
+  };
   const { confirm: requestConfirmation, confirmationDialog } =
     useConfirmation();
   const handleProfileWorkspaceUpdated = useCallback(
@@ -826,7 +851,12 @@ function App() {
   const startRun = (
     issueId: string,
     mode: CodingRun["mode"],
-    options?: { repositoryId?: string; instructions?: string },
+    options?: {
+      repositoryId?: string;
+      instructions?: string;
+      stage?: "research" | "implement" | "review" | "verify";
+      researchArtifactId?: string;
+    },
   ) => {
     const issue = issues.find((item) => item.id === issueId);
     if (!issue) return;
@@ -836,6 +866,11 @@ function App() {
         issueId,
         issueIdentifier: issue.identifier,
         mode,
+        ...(options?.stage
+          ? { stage: options.stage }
+          : mode === "Implement fix"
+            ? {}
+            : { stage: "research" as const }),
         ...options,
       })
         .then(() => {
@@ -1097,7 +1132,7 @@ function App() {
                     );
                     window.dispatchEvent(new PopStateEvent("popstate"));
                   }}
-                  onStartRun={setRunDialogIssueId}
+                  onStartRun={openRunDialog}
                   onEditIssue={setEditIssueId}
                   onDeleteIssue={(issueId) => void deleteIssue(issueId)}
                   onUpdateIssue={updateIssue}
@@ -1109,7 +1144,7 @@ function App() {
                   <FeatureRunsPage
                     runs={runs}
                     onOpenIssue={setInspectorIssueId}
-                    onStartRun={setRunDialogIssueId}
+                    onStartRun={openRunDialog}
                     onUpdateRun={updateRun}
                     onRefresh={() => setLiveDataRetry((current) => current + 1)}
                   />
@@ -1187,7 +1222,7 @@ function App() {
             window.history.pushState({}, "", `/issues/${identifier}`);
             window.dispatchEvent(new PopStateEvent("popstate"));
           }}
-          onStartRun={setRunDialogIssueId}
+          onStartRun={openRunDialog}
           onUpdateIssue={updateIssue}
         />
       )}
@@ -1215,7 +1250,7 @@ function App() {
             window.history.pushState({}, "", `/issues/${identifier}`);
             window.dispatchEvent(new PopStateEvent("popstate"));
           }}
-          onStartRun={setRunDialogIssueId}
+          onStartRun={openRunDialog}
           onSwitchWorkspace={(nextWorkspaceId) => {
             const workspace = workspaceOptions.find(
               (item) => item.id === nextWorkspaceId,
@@ -1251,6 +1286,10 @@ function App() {
           issue={issues.find((item) => item.id === runDialogIssueId)}
           workspaceId={workspaceId}
           liveMode={!demoMode}
+          initialMode={runDialogInitialMode}
+          initialRepositoryId={runDialogRepositoryId}
+          initialStage={runDialogStage}
+          initialResearchArtifactId={runDialogResearchArtifactId}
           onClose={() => setRunDialogIssueId(null)}
           onStart={startRun}
         />

@@ -8,6 +8,16 @@ import type {
 } from "../kanban-service.js";
 import type { GoogleConnectionPort } from "../google-calendar.js";
 import type { McpConnectionPort } from "../mcp.js";
+import type {
+  AgentConnection,
+  AuthMethod,
+  CatalogSnapshot,
+  CodingProvider,
+  CodingStage,
+  EffectiveRunConfig,
+  StageRoutingPolicy,
+  StageRoutingPolicyOverride,
+} from "../coding-control-plane.js";
 
 export type WorkspaceRole = "owner" | "admin" | "agent" | "viewer";
 export type WorkspaceInvitationRole = Exclude<WorkspaceRole, "owner">;
@@ -367,6 +377,111 @@ export interface AgentCredentialPort {
   ): Promise<{ apiKey: string; config: Record<string, unknown> } | null>;
 }
 
+export interface AgentConnectionCreateInput {
+  label: string;
+  provider: CodingProvider;
+  authMethod: AuthMethod;
+  purpose?: "coding" | "support";
+  apiKey?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AgentConnectionPatchInput {
+  label?: string;
+  automationConsent?: boolean;
+}
+
+export interface AgentLoginStartInput {
+  provider: Exclude<CodingProvider, "anthropic" | "verboo">;
+  label: string;
+}
+
+export interface AgentLoginJob {
+  id: string;
+  connectionId?: string;
+  provider: CodingProvider;
+  status:
+    | "pending"
+    | "awaiting_user"
+    | "completed"
+    | "failed"
+    | "canceled"
+    | "expired";
+  url?: string;
+  code?: string;
+  expiresAt: string;
+  errorCode?: string;
+}
+
+export interface AgentRoutingPolicyInput {
+  repositoryId?: string;
+  stage: CodingStage;
+  connectionId?: string;
+  model?: string;
+  effort?: string;
+  budget?: Record<string, unknown>;
+  fallbackEnabled?: boolean;
+  fallbackConnectionIds?: string[];
+  preset?: "Economy" | "Balanced" | "Quality" | "Custom";
+}
+
+export interface CodingControlPlanePort {
+  resolveConnectionSecret(
+    workspaceId: string,
+    connectionId: string,
+  ): Promise<{ apiKey?: string; bundle?: Record<string, string> } | null>;
+  listConnections(context: RequestContext): Promise<AgentConnection[]>;
+  createConnection(
+    context: RequestContext,
+    input: AgentConnectionCreateInput,
+  ): Promise<AgentConnection>;
+  updateConnection(
+    context: RequestContext,
+    connectionId: string,
+    input: AgentConnectionPatchInput,
+  ): Promise<AgentConnection | null>;
+  removeConnection(
+    context: RequestContext,
+    connectionId: string,
+  ): Promise<boolean>;
+  verifyConnection(
+    context: RequestContext,
+    connectionId: string,
+  ): Promise<AgentConnection | null>;
+  listModels(
+    context: RequestContext,
+    connectionId: string,
+    refresh?: boolean,
+  ): Promise<CatalogSnapshot | null>;
+  startLogin(
+    context: RequestContext,
+    input: AgentLoginStartInput,
+  ): Promise<AgentLoginJob>;
+  pollLogin(
+    context: RequestContext,
+    jobId: string,
+  ): Promise<AgentLoginJob | null>;
+  cancelLogin(
+    context: RequestContext,
+    jobId: string,
+  ): Promise<AgentLoginJob | null>;
+  getPolicies(
+    context: RequestContext,
+    repositoryId?: string,
+  ): Promise<StageRoutingPolicy[]>;
+  putPolicy(
+    context: RequestContext,
+    input: AgentRoutingPolicyInput,
+  ): Promise<StageRoutingPolicy>;
+  resolveRunConfig(input: {
+    context: RequestContext;
+    stage: CodingStage;
+    repositoryId?: string;
+    override?: StageRoutingPolicyOverride;
+    automation: boolean;
+  }): Promise<EffectiveRunConfig>;
+}
+
 export interface CodingRunListQuery {
   issueId?: string;
   status?:
@@ -383,7 +498,10 @@ export interface CodingRunListQuery {
 
 export interface CodingRunCreateInput {
   repositoryId?: string;
-  mode: "investigate" | "propose_fix" | "implement_fix";
+  mode?: "investigate" | "propose_fix" | "implement_fix";
+  stage?: CodingStage;
+  researchArtifactId?: string;
+  routeOverride?: StageRoutingPolicyOverride;
   branchBase: string;
   instructions?: string;
   allowChanges: boolean;
@@ -435,6 +553,7 @@ export interface ApiRouterDependencies {
   knowledge: KnowledgePort;
   repositories: RepositoryPort;
   agentCredentials: AgentCredentialPort;
+  codingControlPlane?: CodingControlPlanePort;
   githubConnections: GitHubConnectionPort;
   codingRuns: CodingRunPort;
   googleConnections: GoogleConnectionPort;

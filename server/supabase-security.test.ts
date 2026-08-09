@@ -26,6 +26,12 @@ const codingRunDedupeMigrationPath = fileURLToPath(
     import.meta.url,
   ),
 );
+const codingControlPlaneMigrationPath = fileURLToPath(
+  new URL(
+    "../supabase/migrations/20260809155022_coding_control_plane_v2.sql",
+    import.meta.url,
+  ),
+);
 
 describe("Supabase security migration contract", () => {
   it("keeps privileged implementations private and public RPCs invoker-only", async () => {
@@ -116,5 +122,28 @@ describe("Supabase security migration contract", () => {
     expect(sql).toContain("coding_runs_active_issue_mode_idx");
     expect(sql).toContain("where status in ('queued', 'running')");
     expect(sql).toContain("duplicate_active_coding_run_reconciled");
+  });
+
+  it("keeps Coding Control Plane secrets private and legacy model data honest", async () => {
+    const sql = await readFile(codingControlPlaneMigrationPath, "utf8");
+    for (const table of [
+      "agent_connections",
+      "agent_connection_secrets",
+      "agent_connection_auth_jobs",
+      "agent_routing_policies",
+      "agent_research_artifacts",
+      "agent_run_attempts",
+    ]) {
+      expect(sql).toContain(`create table public.${table}`);
+      expect(sql).toContain(
+        `alter table public.${table} enable row level security`,
+      );
+    }
+    expect(sql).toContain(
+      "revoke all on public.agent_connection_secrets from public, anon, authenticated;",
+    );
+    expect(sql).toContain("default 'unknown_legacy'");
+    expect(sql).toContain("coding_routing_v2");
+    expect(sql).toContain("coding_subscription_auth");
   });
 });

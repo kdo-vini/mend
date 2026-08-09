@@ -31,6 +31,23 @@ test("explicit auth link renders the sign-in form while the session probe runs",
   await expect(page.getByText("Loading secure workspace")).not.toBeVisible();
 });
 
+test("auth callback hashes stay in the sign-in flow instead of opening the landing", async ({
+  page,
+}) => {
+  await page.goto(
+    "/#access_token=e2e-token&refresh_token=e2e-refresh&type=signup",
+  );
+
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Mend" }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".marketing-page").getByRole("heading", {
+      name: "Stay close to the customer without leaving the product.",
+    }),
+  ).toHaveCount(0);
+});
+
 test("uses the explicit Portuguese interface choice after reload", async ({
   page,
 }, testInfo) => {

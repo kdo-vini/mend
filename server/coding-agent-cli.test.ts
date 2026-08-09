@@ -194,6 +194,44 @@ describe("coding agent CLI boundary", () => {
     }
   });
 
+  it("finishes verify deterministically when allowlisted checks pass", async () => {
+    const repo = await mkdtemp(path.join(os.tmpdir(), "mend-verify-test-"));
+    let agentCalled = false;
+    try {
+      await writeFile(
+        path.join(repo, "package.json"),
+        JSON.stringify({ scripts: { test: 'node -e "process.exit(0)"' } }),
+        "utf8",
+      );
+      const cli = new CodingAgentCli(
+        async () => {
+          agentCalled = true;
+          throw new Error("verify should not invoke the provider");
+        },
+        async () => ({ command: "claude", argsPrefix: [] }),
+      );
+      const result = await cli.run({
+        provider: "anthropic",
+        mode: "propose_fix",
+        stage: "verify",
+        repoRoot: repo,
+        prompt: "Interpret the verification state.",
+        checks: ["test"],
+      });
+      expect(agentCalled).toBe(false);
+      expect(result.realModel).toBe("deterministic_checks");
+      expect(result.metadata).toMatchObject({
+        verification: "deterministic_checks",
+        checksPassed: true,
+      });
+      expect(result.checks).toEqual([
+        expect.objectContaining({ name: "test", passed: true }),
+      ]);
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
   it("honors pre-cancellation without spawning a process", async () => {
     const controller = new AbortController();
     controller.abort();

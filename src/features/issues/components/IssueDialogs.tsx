@@ -580,20 +580,33 @@ export function RunAgentDialog({
   issue,
   workspaceId,
   liveMode,
+  initialMode = "Propose fix",
+  initialRepositoryId,
+  initialStage,
+  initialResearchArtifactId,
   onClose,
   onStart,
 }: {
   issue?: Issue;
   workspaceId: string | null;
   liveMode: boolean;
+  initialMode?: CodingRun["mode"];
+  initialRepositoryId?: string;
+  initialStage?: "research" | "implement" | "review" | "verify";
+  initialResearchArtifactId?: string;
   onClose: () => void;
   onStart: (
     issueId: string,
     mode: CodingRun["mode"],
-    options?: { repositoryId?: string; instructions?: string },
+    options?: {
+      repositoryId?: string;
+      instructions?: string;
+      stage?: "research" | "implement" | "review" | "verify";
+      researchArtifactId?: string;
+    },
   ) => void;
 }) {
-  const [mode, setMode] = useState<CodingRun["mode"]>("Propose fix");
+  const [mode, setMode] = useState<CodingRun["mode"]>(initialMode);
   const [repositoryId, setRepositoryId] = useState("");
   const [repositories, setRepositories] = useState<LiveRepository[]>([]);
   const [instructions, setInstructions] = useState("");
@@ -606,13 +619,19 @@ export function RunAgentDialog({
     void listLiveRepositories(workspaceId)
       .then((items) => {
         setRepositories(items);
-        setRepositoryId(items[0]?.id ?? "");
+        setRepositoryId(
+          items.find((item) => item.id === initialRepositoryId)?.id ??
+            items[0]?.id ??
+            "",
+        );
       })
       .catch(() => setRepositories([]))
       .finally(() => setLoadingRepositories(false));
-  }, [liveMode, workspaceId]);
+  }, [initialRepositoryId, liveMode, workspaceId]);
   if (!issue) return null;
-  const canStart = !liveMode || Boolean(repositoryId);
+  const canStart =
+    (!liveMode || Boolean(repositoryId)) &&
+    (initialStage !== "implement" || Boolean(initialResearchArtifactId));
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -652,6 +671,7 @@ export function RunAgentDialog({
                 (item) => ({ value: item, label: item }),
               )}
               onChange={(value) => setMode(value as CodingRun["mode"])}
+              disabled={Boolean(initialResearchArtifactId)}
             />
           </label>
           <label>
@@ -688,6 +708,15 @@ export function RunAgentDialog({
               </span>
             </div>
           )}
+          {initialStage === "implement" && initialResearchArtifactId && (
+            <div className="modal-note">
+              <ShieldCheck size={14} />
+              <span>
+                This implementation is linked to the current research artifact{" "}
+                <code>{initialResearchArtifactId}</code>.
+              </span>
+            </div>
+          )}
           <label>
             Additional instructions
             <textarea
@@ -721,6 +750,10 @@ export function RunAgentDialog({
               onStart(issue.id, mode, {
                 repositoryId: repositoryId || undefined,
                 instructions: instructions.trim() || undefined,
+                ...(initialStage ? { stage: initialStage } : {}),
+                ...(initialResearchArtifactId
+                  ? { researchArtifactId: initialResearchArtifactId }
+                  : {}),
               })
             }
           >

@@ -52,6 +52,20 @@ import {
   saveLiveAgentCredential,
   removeLiveAgentCredential,
   type LiveAgentCredential,
+  listLiveAgentConnections,
+  createLiveAgentConnection,
+  updateLiveAgentConnection,
+  revokeLiveAgentConnection,
+  verifyLiveAgentConnection,
+  refreshLiveAgentModels,
+  startLiveAgentLogin,
+  pollLiveAgentLogin,
+  cancelLiveAgentLogin,
+  listLiveAgentRoutingPolicies,
+  saveLiveAgentRoutingPolicy,
+  type LiveAgentConnection,
+  type LiveAgentLoginJob,
+  type LiveStageRoutingPolicy,
   startLiveGoogleOAuth,
   disconnectLiveGoogleConnection,
   createLiveMcpConnection,
@@ -233,6 +247,22 @@ export function SettingsPage({
   const [agentCredentials, setAgentCredentials] = useState<
     LiveAgentCredential[]
   >([]);
+  const [codingConnections, setCodingConnections] = useState<
+    LiveAgentConnection[]
+  >([]);
+  const [codingPolicies, setCodingPolicies] = useState<
+    LiveStageRoutingPolicy[]
+  >([]);
+  const [codingConnectionLabel, setCodingConnectionLabel] = useState("");
+  const [codingConnectionProvider, setCodingConnectionProvider] =
+    useState<CodingAgentProvider>("openai");
+  const [codingConnectionAuthMethod, setCodingConnectionAuthMethod] = useState<
+    "api_key" | "subscription"
+  >("api_key");
+  const [codingConnectionKey, setCodingConnectionKey] = useState("");
+  const [codingSaving, setCodingSaving] = useState(false);
+  const [codingLoginJob, setCodingLoginJob] =
+    useState<LiveAgentLoginJob | null>(null);
   const [credentialTask, setCredentialTask] = useState<"support" | "agent">(
     "agent",
   );
@@ -466,6 +496,52 @@ export function SettingsPage({
       .catch(() => setAgentCredentials([]));
   }, [activeTab, workspaceId]);
 
+  useEffect(() => {
+    if (activeTab !== "repositories" || !workspaceId) return;
+    void Promise.all([
+      listLiveAgentConnections(workspaceId),
+      listLiveAgentRoutingPolicies({ workspaceId }),
+    ])
+      .then(([connections, policies]) => {
+        setCodingConnections(connections);
+        setCodingPolicies(policies);
+      })
+      .catch(() => {
+        setCodingConnections([]);
+        setCodingPolicies([]);
+      });
+  }, [activeTab, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || !codingLoginJob) return;
+    if (!["pending", "awaiting_user"].includes(codingLoginJob.status)) return;
+    let stopped = false;
+    const timer = window.setInterval(() => {
+      void pollLiveAgentLogin({
+        workspaceId,
+        jobId: codingLoginJob.id,
+      })
+        .then((job) => {
+          if (stopped) return;
+          setCodingLoginJob(job);
+          if (!["pending", "awaiting_user"].includes(job.status)) {
+            window.clearInterval(timer);
+            if (job.status === "completed") {
+              onToast("Subscription connected");
+              void listLiveAgentConnections(workspaceId).then(
+                setCodingConnections,
+              );
+            }
+          }
+        })
+        .catch(() => undefined);
+    }, 2_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [codingLoginJob, onToast, workspaceId]);
+
   const saveCredential = async () => {
     if (!workspaceId || !credentialKey.trim()) return;
     setCredentialSaving(true);
@@ -521,6 +597,218 @@ export function SettingsPage({
       );
     } finally {
       setCredentialSaving(false);
+    }
+  };
+
+  const saveCodingConnection = async () => {
+    if (!workspaceId || !codingConnectionLabel.trim()) return;
+    if (
+      codingConnectionAuthMethod === "api_key" &&
+      !codingConnectionKey.trim()
+    ) {
+      onToast("An API key is required for an API-key connection.");
+      return;
+    }
+    if (codingConnectionAuthMethod === "subscription") {
+      if (codingConnectionProvider === "google") {
+        onToast(
+          "Gemini subscription login is unavailable on this headless runner yet; use a Gemini API key.",
+        );
+        return;
+      }
+      if (codingConnectionProvider === "anthropic") {
+        onToast(
+          "Claude.ai login is unavailable on Mend hosted runners for compliance reasons; use an Anthropic API key.",
+        );
+        return;
+      }
+      try {
+        const job = await startLiveAgentLogin({
+          workspaceId,
+          provider: "openai",
+          label: codingConnectionLabel,
+        });
+        setCodingLoginJob(job);
+        onToast("Subscription login started");
+      } catch (reason) {
+        onToast(
+          reason instanceof Error ? reason.message : "Login could not start.",
+        );
+      }
+      return;
+    }
+    setCodingSaving(true);
+    try {
+      const connection = await createLiveAgentConnection({
+        workspaceId,
+        label: codingConnectionLabel,
+        provider: codingConnectionProvider,
+        authMethod: "api_key",
+        apiKey: codingConnectionKey,
+      });
+      setCodingConnections((current) => [connection, ...current]);
+      setCodingConnectionKey("");
+      onToast("Coding API key saved securely");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Connection could not be saved.",
+      );
+    } finally {
+      setCodingSaving(false);
+    }
+  };
+
+  const updateCodingConsent = async (
+    connection: LiveAgentConnection,
+    automationConsent: boolean,
+  ) => {
+    if (!workspaceId) return;
+    try {
+      const updated = await updateLiveAgentConnection({
+        workspaceId,
+        connectionId: connection.id,
+        automationConsent,
+      });
+      setCodingConnections((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Consent could not be updated.",
+      );
+    }
+  };
+
+  const refreshCodingConnection = async (connection: LiveAgentConnection) => {
+    if (!workspaceId) return;
+    setCodingSaving(true);
+    try {
+      const updated = await verifyLiveAgentConnection({
+        workspaceId,
+        connectionId: connection.id,
+      });
+      setCodingConnections((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      onToast(
+        updated.status === "connected"
+          ? "Coding connection verified"
+          : "Coding connection needs attention",
+      );
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Connection verification failed.",
+      );
+    } finally {
+      setCodingSaving(false);
+    }
+  };
+
+  const refreshCodingCatalog = async (connection: LiveAgentConnection) => {
+    if (!workspaceId) return;
+    setCodingSaving(true);
+    try {
+      const catalog = await refreshLiveAgentModels({
+        workspaceId,
+        connectionId: connection.id,
+      });
+      setCodingConnections((current) =>
+        current.map((item) =>
+          item.id === connection.id
+            ? { ...item, catalog, status: "connected" }
+            : item,
+        ),
+      );
+      onToast("Model catalog refreshed");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Model catalog is unavailable.",
+      );
+    } finally {
+      setCodingSaving(false);
+    }
+  };
+
+  const revokeCodingConnection = async (connection: LiveAgentConnection) => {
+    if (!workspaceId) return;
+    if (
+      !(await onConfirm({
+        title: "Revoke coding connection?",
+        description:
+          "This disables the connection for future runs and removes its server-side secret.",
+        confirmLabel: "Revoke connection",
+        destructive: true,
+      }))
+    )
+      return;
+    try {
+      await revokeLiveAgentConnection({
+        workspaceId,
+        connectionId: connection.id,
+      });
+      setCodingConnections((current) =>
+        current.map((item) =>
+          item.id === connection.id
+            ? { ...item, status: "revoked", automationConsent: false }
+            : item,
+        ),
+      );
+      onToast("Coding connection revoked");
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Connection could not be revoked.",
+      );
+    }
+  };
+
+  const codingPolicyFor = (stage: LiveStageRoutingPolicy["stage"]) =>
+    codingPolicies.find((policy) => policy.stage === stage) ?? {
+      stage,
+      preset: "Custom" as const,
+    };
+
+  const updateCodingPolicy = (
+    stage: LiveStageRoutingPolicy["stage"],
+    patch: Partial<LiveStageRoutingPolicy>,
+  ) => {
+    setCodingPolicies((current) => {
+      const existing = current.find((policy) => policy.stage === stage) ?? {
+        stage,
+        preset: "Custom" as const,
+      };
+      const next = { ...existing, ...patch, stage };
+      return [...current.filter((policy) => policy.stage !== stage), next];
+    });
+  };
+
+  const saveCodingPolicy = async (stage: LiveStageRoutingPolicy["stage"]) => {
+    if (!workspaceId) return;
+    try {
+      const saved = await saveLiveAgentRoutingPolicy({
+        workspaceId,
+        policy: codingPolicyFor(stage),
+      });
+      setCodingPolicies((current) => [
+        ...current.filter((policy) => policy.stage !== stage),
+        saved,
+      ]);
+      onToast(`${stage} routing policy saved`);
+    } catch (reason) {
+      onToast(
+        reason instanceof Error
+          ? reason.message
+          : "Routing policy could not be saved.",
+      );
     }
   };
 
@@ -2790,6 +3078,385 @@ export function SettingsPage({
                       ))}
                     </div>
                   )}
+                </div>
+                <div className="settings-section settings-section-inset coding-control-plane">
+                  <div className="settings-section-header">
+                    <div>
+                      <h3>Coding connections</h3>
+                      <p>
+                        Connect provider API keys or your personal OpenAI/Gemini
+                        subscription. Subscription use in automations requires
+                        separate owner consent.
+                      </p>
+                    </div>
+                    <Bot size={18} aria-hidden="true" />
+                  </div>
+                  <div className="settings-form-grid">
+                    <label>
+                      Connection label
+                      <input
+                        value={codingConnectionLabel}
+                        onChange={(event) =>
+                          setCodingConnectionLabel(event.target.value)
+                        }
+                        placeholder="Research Claude API"
+                      />
+                    </label>
+                    <label>
+                      Provider
+                      <Select
+                        value={codingConnectionProvider}
+                        options={[
+                          { value: "openai", label: "OpenAI / Codex" },
+                          { value: "anthropic", label: "Anthropic / Claude" },
+                          { value: "google", label: "Google / Gemini" },
+                          { value: "verboo", label: "Verboo" },
+                        ]}
+                        onChange={(value) =>
+                          setCodingConnectionProvider(
+                            value as CodingAgentProvider,
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      Authentication
+                      <Select
+                        value={codingConnectionAuthMethod}
+                        options={[
+                          { value: "api_key", label: "API key" },
+                          {
+                            value: "subscription",
+                            label: "Personal subscription",
+                            disabled:
+                              codingConnectionProvider === "anthropic" ||
+                              codingConnectionProvider === "google",
+                          },
+                        ]}
+                        onChange={(value) =>
+                          setCodingConnectionAuthMethod(
+                            value as "api_key" | "subscription",
+                          )
+                        }
+                      />
+                    </label>
+                    {codingConnectionAuthMethod === "api_key" && (
+                      <label className="settings-form-wide">
+                        API key
+                        <input
+                          type="password"
+                          value={codingConnectionKey}
+                          autoComplete="new-password"
+                          placeholder="Stored encrypted and never returned"
+                          onChange={(event) =>
+                            setCodingConnectionKey(event.target.value)
+                          }
+                        />
+                      </label>
+                    )}
+                  </div>
+                  {codingConnectionAuthMethod === "subscription" && (
+                    <p className="settings-field-help">
+                      OpenAI uses the official Codex device-auth flow. Gemini
+                      subscription login is disabled until this headless runner
+                      can complete the official interactive flow. Claude.ai
+                      login is disabled because Mend hosted runners cannot
+                      intermediate Pro/Max credentials.
+                    </p>
+                  )}
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    disabled={
+                      codingSaving ||
+                      !workspaceId ||
+                      !codingConnectionLabel.trim() ||
+                      (codingConnectionAuthMethod === "api_key" &&
+                        !codingConnectionKey.trim())
+                    }
+                    onClick={() => void saveCodingConnection()}
+                  >
+                    <Save size={14} />
+                    {codingConnectionAuthMethod === "subscription"
+                      ? "Start official login"
+                      : "Save coding connection"}
+                  </button>
+                  {codingLoginJob && (
+                    <div className="inline-empty coding-login-challenge">
+                      <Info size={15} />
+                      <div>
+                        <strong>Complete the provider login</strong>
+                        {codingLoginJob.url && (
+                          <a
+                            href={codingLoginJob.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open official login
+                          </a>
+                        )}
+                        {codingLoginJob.code && (
+                          <code>{codingLoginJob.code}</code>
+                        )}
+                        <span>
+                          Status: {codingLoginJob.status}
+                          {codingLoginJob.errorCode
+                            ? ` · ${codingLoginJob.errorCode}`
+                            : ""}
+                        </span>
+                        {![
+                          "completed",
+                          "failed",
+                          "canceled",
+                          "expired",
+                        ].includes(codingLoginJob.status) && (
+                          <button
+                            className="text-button danger"
+                            type="button"
+                            onClick={() =>
+                              workspaceId &&
+                              void cancelLiveAgentLogin({
+                                workspaceId,
+                                jobId: codingLoginJob.id,
+                              }).then(setCodingLoginJob)
+                            }
+                          >
+                            Cancel login
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="coding-connection-list">
+                    {codingConnections.map((connection) => (
+                      <div
+                        className="coding-connection-row"
+                        key={connection.id}
+                      >
+                        <div>
+                          <strong>{connection.label}</strong>
+                          <p>
+                            {agentProviderLabel(connection.provider)} ·{" "}
+                            {connection.authMethod === "subscription"
+                              ? "personal subscription"
+                              : "API key"}
+                            {connection.catalog
+                              ? ` · catalog verified ${new Date(
+                                  connection.catalog.lastVerifiedAt,
+                                ).toLocaleString()}`
+                              : " · catalog not verified"}
+                          </p>
+                          {connection.authMethod === "subscription" && (
+                            <label className="coding-consent">
+                              <input
+                                type="checkbox"
+                                checked={connection.automationConsent}
+                                onChange={(event) =>
+                                  void updateCodingConsent(
+                                    connection,
+                                    event.target.checked,
+                                  )
+                                }
+                              />
+                              Allow this subscription in automations
+                            </label>
+                          )}
+                        </div>
+                        <div className="repository-row-trailing">
+                          <span
+                            className={`connection-pill ${connection.status}`}
+                          >
+                            {connection.status}
+                          </span>
+                          <button
+                            className="text-button"
+                            type="button"
+                            disabled={codingSaving}
+                            onClick={() =>
+                              void refreshCodingCatalog(connection)
+                            }
+                          >
+                            <RefreshCw size={13} /> Catalog
+                          </button>
+                          <button
+                            className="text-button"
+                            type="button"
+                            disabled={codingSaving}
+                            onClick={() =>
+                              void refreshCodingConnection(connection)
+                            }
+                          >
+                            Verify
+                          </button>
+                          <button
+                            className="text-button danger"
+                            type="button"
+                            disabled={
+                              codingSaving || connection.status === "revoked"
+                            }
+                            onClick={() =>
+                              void revokeCodingConnection(connection)
+                            }
+                          >
+                            Revoke
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {!codingConnections.length && (
+                      <div className="inline-empty">
+                        <Bot size={15} />
+                        <span>No coding connections configured yet.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="settings-section settings-section-inset coding-routing-matrix">
+                  <div className="settings-section-header">
+                    <div>
+                      <h3>Routing by coding stage</h3>
+                      <p>
+                        Policies resolve as run override, repository, then
+                        workspace. A model must come from a verified catalog;
+                        fallback is opt-in and explicit.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="coding-policy-table">
+                    {(
+                      ["research", "implement", "review", "verify"] as const
+                    ).map((stage) => {
+                      const policy = codingPolicyFor(stage);
+                      const connection = codingConnections.find(
+                        (item) => item.id === policy.connectionId,
+                      );
+                      const models = connection?.catalog?.models ?? [];
+                      const selectedModel = models.find(
+                        (model) => model.id === policy.model,
+                      );
+                      const efforts = selectedModel?.efforts ?? [];
+                      return (
+                        <div className="coding-policy-row" key={stage}>
+                          <strong>{stage}</strong>
+                          <Select
+                            ariaLabel={`${stage} connection`}
+                            value={policy.connectionId ?? ""}
+                            options={[
+                              { value: "", label: "Select connection" },
+                              ...codingConnections.map((item) => ({
+                                value: item.id,
+                                label: `${item.label} · ${agentProviderLabel(item.provider)}`,
+                                disabled: item.status !== "connected",
+                              })),
+                            ]}
+                            onChange={(value) =>
+                              updateCodingPolicy(stage, {
+                                connectionId: value || undefined,
+                                model: undefined,
+                                effort: undefined,
+                              })
+                            }
+                          />
+                          <Select
+                            ariaLabel={`${stage} model`}
+                            value={policy.model ?? ""}
+                            options={
+                              models.length
+                                ? models.map((model) => ({
+                                    value: model.id,
+                                    label: model.label ?? model.id,
+                                  }))
+                                : [
+                                    {
+                                      value: "",
+                                      label: "Refresh verified catalog",
+                                      disabled: true,
+                                    },
+                                  ]
+                            }
+                            disabled={!models.length}
+                            onChange={(value) =>
+                              updateCodingPolicy(stage, {
+                                model: value || undefined,
+                                effort: undefined,
+                              })
+                            }
+                          />
+                          {efforts.length ? (
+                            <Select
+                              ariaLabel={`${stage} effort`}
+                              value={policy.effort ?? ""}
+                              options={[
+                                { value: "", label: "Default effort" },
+                                ...efforts.map((effort) => ({
+                                  value: effort,
+                                  label: effort,
+                                })),
+                              ]}
+                              onChange={(value) =>
+                                updateCodingPolicy(stage, {
+                                  effort: value || undefined,
+                                })
+                              }
+                            />
+                          ) : (
+                            <span className="settings-field-help">
+                              No effort capability
+                            </span>
+                          )}
+                          <label className="coding-fallback-toggle">
+                            <input
+                              type="checkbox"
+                              checked={policy.fallbackEnabled === true}
+                              onChange={(event) =>
+                                updateCodingPolicy(stage, {
+                                  fallbackEnabled: event.target.checked,
+                                })
+                              }
+                            />
+                            fallback
+                          </label>
+                          {policy.fallbackEnabled && (
+                            <select
+                              className="coding-fallback-select"
+                              multiple
+                              aria-label={`${stage} fallback connections`}
+                              value={policy.fallbackConnectionIds ?? []}
+                              onChange={(event) =>
+                                updateCodingPolicy(stage, {
+                                  fallbackConnectionIds: Array.from(
+                                    event.target.selectedOptions,
+                                    (option) => option.value,
+                                  ),
+                                })
+                              }
+                            >
+                              {codingConnections
+                                .filter(
+                                  (item) => item.id !== policy.connectionId,
+                                )
+                                .map((item) => (
+                                  <option
+                                    key={item.id}
+                                    value={item.id}
+                                    disabled={item.status !== "connected"}
+                                  >
+                                    {item.label}
+                                  </option>
+                                ))}
+                            </select>
+                          )}
+                          <button
+                            className="button button-ghost button-small"
+                            type="button"
+                            onClick={() => void saveCodingPolicy(stage)}
+                          >
+                            <Save size={13} /> Save
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
                 {repositoriesLoading ? (
                   <LoadingState label="Loading repositories..." />

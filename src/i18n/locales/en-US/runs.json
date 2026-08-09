@@ -6,6 +6,8 @@
     "openIssue": "Open issue",
     "cancel": "Cancel run",
     "runAgain": "Run again",
+    "implementDescription": "The proposal is confirmed. Start a write-enabled run to generate the patch and checks.",
+    "implement": "Implement fix",
     "reviewDescription": "Review the diff and checks. Approval creates the local commit; publication is a separate action.",
     "reject": "Reject result",
     "approve": "Approve local commit",

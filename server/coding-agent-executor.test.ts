@@ -3,6 +3,7 @@ import { InMemoryCodexRunStore, type RunCodexInput } from "./codex.js";
 import type { CodexContext } from "./codex-service.js";
 import type { CodingAgentCli } from "./coding-agent-cli.js";
 import { createCodingAgentRunExecutor } from "./coding-agent-executor.js";
+import type { EffectiveRunConfig } from "./coding-control-plane.js";
 
 const context: CodexContext = {
   issue: { id: "issue-1", identifier: "MEND-1", title: "Checkout fails" },
@@ -123,5 +124,105 @@ describe("coding agent run executor", () => {
       "Read-only coding agent changed",
     );
     expect([...store.runs.values()][0]?.status).toBe("failed");
+  });
+
+  it("uses only an explicit fallback after a recoverable capacity error", async () => {
+    const store = new InMemoryCodexRunStore();
+    let calls = 0;
+    const effectiveConfig: EffectiveRunConfig = {
+      stage: "implement",
+      connectionId: "connection-primary",
+      provider: "anthropic",
+      authMethod: "api_key",
+      model: "claude-primary",
+      budget: {
+        maxRuntimeMs: 60_000,
+        maxOutputTokens: 1_000,
+        maxRepairs: 1,
+      },
+      fallbackEnabled: true,
+      fallbackConnectionIds: ["connection-fallback"],
+      fallbacks: [
+        {
+          connectionId: "connection-fallback",
+          provider: "google",
+          authMethod: "api_key",
+          model: "gemini-fallback",
+        },
+      ],
+      preset: "Custom",
+      policySource: "override",
+      resolvedAt: "2026-08-09T00:00:00.000Z",
+      snapshot: {},
+    };
+    const run = vi.fn(async (input: { provider: string; model?: string }) => {
+      calls += 1;
+      if (calls === 1) throw new Error("429 rate limit exceeded");
+      return {
+        provider: input.provider as "google",
+        version: "0.1.0",
+        requestedModel: input.model,
+        realModel: "gemini-2.5-pro",
+        report: {
+          verdict: "confirmed" as const,
+          summary: "The fix is ready.",
+          recommendedAction: "fix" as const,
+          evidence: [],
+        },
+        patch: { files: [], patch: "", truncated: false },
+        checks: [],
+        metadata: {},
+      };
+    });
+    const execute = createCodingAgentRunExecutor(
+      {
+        getRepository: async () => ({
+          agentProvider: "anthropic",
+          executionPlane: "dokploy",
+        }),
+      },
+      { run } as unknown as CodingAgentCli,
+      undefined,
+      async (_workspaceId, connectionId) =>
+        connectionId === "connection-primary"
+          ? { apiKey: "primary" }
+          : { apiKey: "fallback" },
+    );
+
+    const result = await execute(
+      {
+        ...input(store),
+        mode: "implement_fix",
+        stage: "implement",
+        effectiveConfig,
+        requestedConfig: { stage: "implement" },
+      },
+      context,
+    );
+
+    expect(calls).toBe(2);
+    expect(run).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        provider: "google",
+        model: "gemini-fallback",
+      }),
+    );
+    expect(result.run).toMatchObject({
+      provider: "google",
+      realModel: "gemini-2.5-pro",
+    });
+    expect([...store.attempts.values()]).toEqual([
+      expect.objectContaining({
+        attemptNumber: 1,
+        status: "failed",
+        error_category: "capacity",
+      }),
+      expect.objectContaining({
+        attemptNumber: 2,
+        status: "completed",
+        real_model: "gemini-2.5-pro",
+      }),
+    ]);
   });
 });

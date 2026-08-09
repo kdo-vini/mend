@@ -23,7 +23,10 @@ import { SupabaseJobStore } from "./persistence.js";
 import { authenticateRequest } from "./auth.js";
 import { createApiRouter } from "./api-router.js";
 import type { AuthAdapter } from "./contracts/api-ports.js";
-import { createSupabaseApiAdapters } from "./supabase-api-adapters.js";
+import {
+  createSupabaseApiAdapters,
+  SupabaseCodingControlPlaneAdapter,
+} from "./supabase-api-adapters.js";
 import { createSupabaseLiveWorker, type LiveWorker } from "./live-worker.js";
 import { getVapidPublicKey } from "./push.js";
 import { readGoogleOAuthConfig } from "./google-calendar.js";
@@ -550,6 +553,9 @@ if (workerSupabase && processRole === "runner") {
     agentRunRunner: async (payload: AgentRunRequestedJobPayload) => {
       const repositories = new SupabaseRepositoryAdapter(workerSupabase);
       const store = new SupabaseCodexRunStore(workerSupabase);
+      const codingControlPlane = new SupabaseCodingControlPlaneAdapter(
+        workerSupabase,
+      );
       const existing = await store.getRun(payload.runId);
       if (
         existing &&
@@ -564,6 +570,8 @@ if (workerSupabase && processRole === "runner") {
         agentCredentialResolver: async (workspaceId, provider) =>
           (await agentCredentials.resolve(workspaceId, "agent", provider))
             ?.apiKey ?? null,
+        agentConnectionSecretResolver:
+          codingControlPlane.resolveConnectionSecret.bind(codingControlPlane),
       });
       try {
         const handle = await service.start({
@@ -574,6 +582,23 @@ if (workerSupabase && processRole === "runner") {
           issueIdentifier: payload.issueIdentifier,
           issueTitle: payload.issueTitle,
           mode: payload.mode,
+          ...(payload.codingStage ? { stage: payload.codingStage } : {}),
+          ...(payload.researchArtifactId
+            ? { researchArtifactId: payload.researchArtifactId }
+            : {}),
+          ...(payload.researchArtifact
+            ? { researchArtifact: payload.researchArtifact }
+            : {}),
+          ...(payload.requestedConfig
+            ? { requestedConfig: payload.requestedConfig }
+            : {}),
+          ...(payload.effectiveConfig
+            ? { effectiveConfig: payload.effectiveConfig }
+            : {}),
+          ...(payload.caseId ? { caseId: payload.caseId } : {}),
+          ...(payload.ticketRevision
+            ? { ticketRevision: payload.ticketRevision }
+            : {}),
           context: payload.context,
           tools: payload.tools,
           ...(payload.createdByUserId

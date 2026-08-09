@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
   mkdtemp,
+  mkdir,
   lstat,
   readFile,
   realpath,
@@ -13,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import type { AllowedCommand } from "../src/core.js";
+import type { CodingStage, ResearchArtifact } from "./coding-control-plane.js";
 import {
   CodexAbortError,
   CodexTimeoutError,
@@ -66,6 +68,18 @@ export interface CodingAgentReport {
   rootCause?: string;
   recommendedAction: "notify_only" | "propose_fix" | "fix";
   evidence: CodingAgentEvidence[];
+  proposal?: {
+    summary: string;
+    changes: string[];
+    risks?: string[];
+  };
+  reproduction?: {
+    steps: string[];
+    observed?: string;
+    expected?: string;
+  };
+  acceptanceCriteria?: string[];
+  files?: Array<{ path: string; lines?: string; reason?: string }>;
 }
 
 export interface CodingAgentCheckResult {
@@ -82,6 +96,10 @@ export interface CodingAgentRunResult {
   patch: WorkspaceDiff;
   checks: CodingAgentCheckResult[];
   metadata: Record<string, string | number | boolean>;
+  requestedModel?: string;
+  realModel?: string;
+  effort?: string;
+  usage?: Record<string, unknown>;
   publishFiles?: Array<{
     path: string;
     status: "added" | "modified" | "deleted";
@@ -96,11 +114,17 @@ export interface RunCodingAgentInput {
   repoRoot: string;
   prompt: string;
   model?: string;
+  effort?: string;
+  maxOutputTokens?: number;
+  stage?: CodingStage;
+  researchArtifact?: ResearchArtifact;
   checks?: readonly AllowedCommand[];
   timeoutMs?: number;
   signal?: AbortSignal;
   /** Injected only into the child process for this run; never persisted. */
   apiKey?: string;
+  /** Base64-encoded allowlisted auth files materialized only in the run home. */
+  authBundle?: Record<string, string>;
 }
 
 export interface CodingAgentHealth {
@@ -227,6 +251,38 @@ const AgentReportSchema = z
           .strict(),
       )
       .max(30),
+    proposal: z
+      .object({
+        summary: z.string().trim().min(1).max(8_000),
+        changes: z.array(z.string().trim().min(1).max(2_000)).max(30),
+        risks: z.array(z.string().trim().min(1).max(2_000)).max(30).optional(),
+      })
+      .strict()
+      .optional(),
+    reproduction: z
+      .object({
+        steps: z.array(z.string().trim().min(1).max(2_000)).max(30),
+        observed: z.string().trim().max(4_000).optional(),
+        expected: z.string().trim().max(4_000).optional(),
+      })
+      .strict()
+      .optional(),
+    acceptanceCriteria: z
+      .array(z.string().trim().min(1).max(2_000))
+      .max(30)
+      .optional(),
+    files: z
+      .array(
+        z
+          .object({
+            path: z.string().trim().min(1).max(500),
+            lines: z.string().trim().max(120).optional(),
+            reason: z.string().trim().max(2_000).optional(),
+          })
+          .strict(),
+      )
+      .max(100)
+      .optional(),
   })
   .strict();
 
@@ -258,6 +314,40 @@ export const codingAgentReportJsonSchema = {
           detail: { type: ["string", "null"] },
         },
         required: ["kind", "label", "detail"],
+      },
+    },
+    proposal: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        summary: { type: "string" },
+        changes: { type: "array", items: { type: "string" } },
+        risks: { type: "array", items: { type: "string" } },
+      },
+      required: ["summary", "changes"],
+    },
+    reproduction: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        steps: { type: "array", items: { type: "string" } },
+        observed: { type: "string" },
+        expected: { type: "string" },
+      },
+      required: ["steps"],
+    },
+    acceptanceCriteria: { type: "array", items: { type: "string" } },
+    files: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          path: { type: "string" },
+          lines: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["path"],
       },
     },
   },
@@ -353,6 +443,7 @@ function codingAgentEnvironment(
   env.USERPROFILE = homeDirectory;
   env.APPDATA = path.join(homeDirectory, "AppData", "Roaming");
   env.LOCALAPPDATA = path.join(homeDirectory, "AppData", "Local");
+  env.CODEX_HOME = path.join(homeDirectory, ".codex");
   env.MEND_AGENT_HOME = path.join(homeDirectory, ".mend-agent");
   env.CLAUDE_CONFIG_DIR = path.join(homeDirectory, ".claude");
   env.GEMINI_CLI_HOME = path.join(homeDirectory, ".gemini");
@@ -377,6 +468,44 @@ function codingAgentEnvironment(
   return env;
 }
 
+const allowlistedAuthFiles = new Set([
+  ".codex/auth.json",
+  ".codex/auth.json.enc",
+  ".gemini/oauth_creds.json",
+]);
+
+export async function materializeCodingAuthBundle(
+  homeDirectory: string,
+  bundle: Record<string, string> | undefined,
+): Promise<void> {
+  if (!bundle) return;
+  for (const [relativeName, encoded] of Object.entries(bundle)) {
+    const normalized = relativeName.replaceAll("\\", "/").replace(/^\.\//, "");
+    if (!allowlistedAuthFiles.has(normalized))
+      throw new Error(`coding_auth_file_not_allowlisted:${normalized}`);
+    const absolute = path.resolve(homeDirectory, normalized);
+    const relative = path.relative(homeDirectory, absolute);
+    if (
+      relative === ".." ||
+      relative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relative)
+    )
+      throw new Error("coding_auth_file_outside_run_home");
+    const directory = path.dirname(absolute);
+    await mkdir(directory, { recursive: true });
+    await writeFile(absolute, Buffer.from(encoded, "base64"), { mode: 0o600 });
+  }
+}
+
+function effectiveMode(
+  input: Pick<RunCodingAgentInput, "mode" | "stage">,
+): CodingAgentMode {
+  if (input.stage === "implement") return "implement_fix";
+  if (input.stage === "review" || input.stage === "verify")
+    return "propose_fix";
+  return input.mode;
+}
+
 function modeTools(mode: CodingAgentMode): string {
   return mode === "implement_fix"
     ? "Read,Glob,Grep,Edit,Write"
@@ -388,7 +517,14 @@ export function buildCodingAgentInvocation(
   executable: CodingAgentExecutable,
   input: Pick<
     RunCodingAgentInput,
-    "mode" | "model" | "timeoutMs" | "signal" | "apiKey"
+    | "mode"
+    | "stage"
+    | "model"
+    | "effort"
+    | "maxOutputTokens"
+    | "timeoutMs"
+    | "signal"
+    | "apiKey"
   > & {
     workspace: string;
     prompt: string;
@@ -396,12 +532,18 @@ export function buildCodingAgentInvocation(
   paths: AgentPaths,
 ): CodingAgentInvocation {
   const model = boundedModel(input.model);
+  const mode = effectiveMode(input);
+  const effort = boundedModel(input.effort);
+  const maxOutputTokens =
+    input.maxOutputTokens === undefined
+      ? undefined
+      : Math.min(128_000, Math.max(256, Math.round(input.maxOutputTokens)));
   const args: string[] = [];
   if (provider === "openai") {
     const sandboxMode =
       process.env.MEND_CODEX_SANDBOX_MODE === "external"
         ? "danger-full-access"
-        : input.mode === "implement_fix"
+        : mode === "implement_fix"
           ? "workspace-write"
           : "read-only";
     args.push(
@@ -424,6 +566,9 @@ export function buildCodingAgentInvocation(
       paths.result,
     );
     if (model) args.push("--model", model);
+    if (effort) args.push("-c", `model_reasoning_effort=${effort}`);
+    if (maxOutputTokens)
+      args.push("-c", `model_max_output_tokens=${maxOutputTokens}`);
     args.push("-");
   } else if (provider === "google") {
     args.push(
@@ -434,7 +579,7 @@ export function buildCodingAgentInvocation(
       "--sandbox",
       "--skip-trust",
       "--approval-mode",
-      input.mode === "implement_fix" ? "auto_edit" : "plan",
+      mode === "implement_fix" ? "auto_edit" : "plan",
     );
     if (model) args.push("--model", model);
   } else {
@@ -446,11 +591,14 @@ export function buildCodingAgentInvocation(
       JSON.stringify(codingAgentReportJsonSchema),
       "--no-session-persistence",
       "--permission-mode",
-      input.mode === "implement_fix" ? "acceptEdits" : "plan",
-      `--tools=${modeTools(input.mode)}`,
-      `--allowed-tools=${modeTools(input.mode)}`,
+      mode === "implement_fix" ? "acceptEdits" : "plan",
+      `--tools=${modeTools(mode)}`,
+      `--allowed-tools=${modeTools(mode)}`,
     );
     if (model) args.push("--model", model);
+    if (effort) args.push("--effort", effort);
+    if (maxOutputTokens)
+      args.push("--max-output-tokens", String(maxOutputTokens));
   }
   return {
     ...executable,
@@ -674,21 +822,49 @@ export function normalizeCodingAgentReport(raw: string): CodingAgentReport {
 function outputMetadata(
   raw: string,
 ): Record<string, string | number | boolean> {
-  const parsed = parseJson(raw);
-  if (!parsed || typeof parsed !== "object") return {};
-  const record = parsed as Record<string, unknown>;
   const output: Record<string, string | number | boolean> = {};
-  for (const key of [
-    "session_id",
-    "duration_ms",
-    "duration_api_ms",
-    "num_turns",
-    "total_cost_usd",
-  ]) {
-    if (["string", "number", "boolean"].includes(typeof record[key]))
-      output[key] = record[key] as string | number | boolean;
-  }
+  const records = [parseJson(raw), ...raw.split(/\r?\n/).map(parseJson)];
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    const record = value as Record<string, unknown>;
+    for (const key of [
+      "session_id",
+      "duration_ms",
+      "duration_api_ms",
+      "num_turns",
+      "total_cost_usd",
+      "model",
+      "model_id",
+      "input_tokens",
+      "output_tokens",
+      "cached_input_tokens",
+      "total_tokens",
+    ]) {
+      if (["string", "number", "boolean"].includes(typeof record[key]))
+        output[key] = record[key] as string | number | boolean;
+    }
+    for (const nested of Object.values(record)) visit(nested);
+  };
+  records.forEach(visit);
   return output;
+}
+
+async function runChecks(
+  checks: readonly AllowedCommand[],
+  workspace: string,
+  signal?: AbortSignal,
+): Promise<CodingAgentCheckResult[]> {
+  const results: CodingAgentCheckResult[] = [];
+  for (const check of checks) {
+    const result = await runAllowedCommand(check, workspace, 120_000, signal);
+    results.push({
+      name: check,
+      exitCode: result.exitCode,
+      output: result.output,
+      passed: result.exitCode === 0,
+    });
+  }
+  return results;
 }
 
 async function readAgentOutput(
@@ -772,16 +948,8 @@ export class CodingAgentCli {
       throw new Error(
         "Only lint, test and build are allowed as coding agent checks",
       );
-    const executable = await this.resolveExecutable(input.provider);
-    let version: string;
-    try {
-      version = await this.version(input.provider, executable, input.apiKey);
-    } catch (error) {
-      throw new CodingAgentCliError(
-        redactSecrets(error instanceof Error ? error.message : String(error)),
-        input.provider,
-      );
-    }
+    let executable: CodingAgentExecutable | undefined;
+    let version = "deterministic_checks";
     const before = await snapshotWorkspace(repoRoot);
     const workspace = await createIsolatedWorkspace(repoRoot, input.provider);
     const stateRoot = await mkdtemp(
@@ -792,15 +960,68 @@ export class CodingAgentCli {
       result: path.join(stateRoot, "report.json"),
     };
     try {
+      const verificationChecks =
+        input.stage === "verify"
+          ? await runChecks(checks, workspace, input.signal)
+          : undefined;
+      const checksPassed =
+        Boolean(verificationChecks?.length) &&
+        verificationChecks?.every((check) => check.passed) === true;
+      if (checksPassed) {
+        const report: CodingAgentReport = {
+          verdict: "confirmed",
+          summary:
+            "Deterministic verification checks passed; no LLM was needed.",
+          recommendedAction: "notify_only",
+          evidence: verificationChecks.map((check) => ({
+            kind: "test",
+            label: `${check.name} passed`,
+            detail: check.output.slice(-4_000),
+          })),
+        };
+        return {
+          provider: input.provider,
+          version,
+          report,
+          patch: await getWorkspaceDiff(repoRoot, workspace, before),
+          checks: verificationChecks,
+          metadata: {
+            verification: "deterministic_checks",
+            checksPassed: true,
+          },
+          ...(input.model ? { requestedModel: input.model } : {}),
+          realModel: "deterministic_checks",
+          ...(input.effort ? { effort: input.effort } : {}),
+          usage: { execution: "deterministic_checks" },
+          publishFiles: [],
+        };
+      }
+      executable = await this.resolveExecutable(input.provider);
+      try {
+        version = await this.version(input.provider, executable, input.apiKey);
+      } catch (error) {
+        throw new CodingAgentCliError(
+          redactSecrets(error instanceof Error ? error.message : String(error)),
+          input.provider,
+        );
+      }
       await writeFile(
         paths.schema,
         JSON.stringify(codingAgentReportJsonSchema),
         "utf8",
       );
+      await materializeCodingAuthBundle(stateRoot, input.authBundle);
+      const agentPrompt = verificationChecks
+        ? [
+            input.prompt,
+            "Deterministic verification checks ran before this review. Interpret these logs only; do not rerun repository-wide research:",
+            JSON.stringify(verificationChecks),
+          ].join("\n\n")
+        : input.prompt;
       const invocation = buildCodingAgentInvocation(
         input.provider,
         executable,
-        { ...input, workspace },
+        { ...input, workspace, prompt: agentPrompt },
         paths,
       );
       const processResult = await this.runner(invocation);
@@ -816,21 +1037,13 @@ export class CodingAgentCli {
         );
       const raw = await readAgentOutput(input.provider, processResult, paths);
       const report = normalizeCodingAgentReport(raw);
-      const checkResults: CodingAgentCheckResult[] = [];
-      for (const check of checks) {
-        const result = await runAllowedCommand(
-          check,
-          workspace,
-          120_000,
-          input.signal,
-        );
-        checkResults.push({
-          name: check,
-          exitCode: result.exitCode,
-          output: result.output,
-          passed: result.exitCode === 0,
-        });
-      }
+      const metadata = {
+        ...outputMetadata(processResult.stdout),
+        ...outputMetadata(raw),
+      };
+      const checkResults =
+        verificationChecks ??
+        (await runChecks(checks, workspace, input.signal));
       const patch = await getWorkspaceDiff(repoRoot, workspace, before);
       const publishFiles = await Promise.all(
         patch.files.map(async (file) => {
@@ -868,7 +1081,15 @@ export class CodingAgentCli {
         report,
         patch,
         checks: checkResults,
-        metadata: outputMetadata(processResult.stdout),
+        metadata,
+        ...(input.model ? { requestedModel: input.model } : {}),
+        ...(typeof metadata.model === "string"
+          ? { realModel: String(metadata.model) }
+          : typeof metadata.model_id === "string"
+            ? { realModel: String(metadata.model_id) }
+            : {}),
+        ...(input.effort ? { effort: input.effort } : {}),
+        usage: metadata,
         publishFiles,
       };
     } finally {

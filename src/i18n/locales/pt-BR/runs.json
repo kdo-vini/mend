@@ -6,6 +6,8 @@
     "openIssue": "Abrir issue",
     "cancel": "Cancelar execução",
     "runAgain": "Executar novamente",
+    "implementDescription": "A proposta foi confirmada. Inicie uma execução com escrita para gerar o patch e os checks.",
+    "implement": "Implementar correção",
     "reviewDescription": "Revise o diff e os checks. A aprovação cria o commit local; a publicação é uma ação separada.",
     "reject": "Rejeitar resultado",
     "approve": "Aprovar commit local",
