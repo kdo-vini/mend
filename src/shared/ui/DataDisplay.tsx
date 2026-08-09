@@ -189,17 +189,19 @@ export function StatusPill({ status }: { status: IssueStatus }) {
 export function StatusRun({ status }: { status: CodingRun["status"] }) {
   const { t } = useTranslation("common");
   const label =
-    status === "Completed"
-      ? t("data.runStatus.completed")
-      : status === "Running"
-        ? t("data.runStatus.running")
-        : status === "Failed"
-          ? t("data.runStatus.failed")
-          : status === "Canceled"
-            ? t("data.runStatus.canceled")
-            : status === "Approved"
-              ? t("data.runStatus.approved")
-              : t("data.runStatus.rejected");
+    status === "queued"
+      ? t("data.runStatus.queued")
+      : status === "completed"
+        ? t("data.runStatus.completed")
+        : status === "running"
+          ? t("data.runStatus.running")
+          : status === "failed"
+            ? t("data.runStatus.failed")
+            : status === "canceled"
+              ? t("data.runStatus.canceled")
+              : status === "approved"
+                ? t("data.runStatus.approved")
+                : t("data.runStatus.rejected");
   return (
     <span className={`run-status-text ${status.toLowerCase()}`}>
       <span />

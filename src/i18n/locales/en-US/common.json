@@ -146,6 +146,7 @@
       "canceled": "Canceled"
     },
     "runStatus": {
+      "queued": "Queued",
       "completed": "Completed",
       "running": "Running",
       "failed": "Failed",

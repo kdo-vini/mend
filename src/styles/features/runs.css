@@ -76,6 +76,9 @@
   box-shadow: 0 0 0 4px var(--accent-wash);
   animation: pulse 1.8s infinite;
 }
+.run-status-dot.queued {
+  background: var(--warning);
+}
 .run-status-dot.completed {
   background: var(--success);
 }
@@ -103,6 +106,12 @@
 }
 .run-status-text.running > span {
   background: var(--accent);
+}
+.run-status-text.queued {
+  color: var(--warning);
+}
+.run-status-text.queued > span {
+  background: var(--warning);
 }
 .run-status-text.completed {
   color: var(--success);

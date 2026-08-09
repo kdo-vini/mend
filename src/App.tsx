@@ -857,7 +857,7 @@ function App() {
       issueId,
       issueIdentifier: issue.identifier,
       mode,
-      status: "Running",
+      status: "queued",
       progress: 8,
       startedAt: "Just now",
       duration: "00:00",
@@ -896,16 +896,16 @@ function App() {
   ) => {
     const nextStatus: CodingRun["status"] =
       action === "cancel"
-        ? "Canceled"
+        ? "canceled"
         : action === "approve"
-          ? "Approved"
+          ? "approved"
           : action === "publish"
-            ? "Approved"
+            ? "approved"
             : action === "merge"
-              ? "Approved"
+              ? "approved"
               : action === "deploy" || action === "health"
-                ? "Approved"
-                : "Rejected";
+                ? "approved"
+                : "rejected";
     const successMessage =
       action === "cancel"
         ? "Engineering run canceled"

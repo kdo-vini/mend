@@ -47,6 +47,7 @@ describe("workspace realtime subscriptions", () => {
 
     expect(channel.on).toHaveBeenCalledTimes(workspaceRealtimeTables.length);
     expect(workspaceRealtimeTables).toContain("messages");
+    expect(workspaceRealtimeTables).toContain("agent_runs");
     expect(workspaceRealtimeTables).toContain("knowledge_articles");
     expect(workspaceRealtimeTables).toContain("contacts");
     expect(workspaceRealtimeTables).toContain("issue_messages");

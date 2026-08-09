@@ -80,15 +80,6 @@ const runModeMap: Record<string, CodingRun["mode"]> = {
   propose_fix: "Propose fix",
   implement_fix: "Implement fix",
 };
-const runStatusMap: Record<string, CodingRun["status"]> = {
-  queued: "Running",
-  running: "Running",
-  completed: "Completed",
-  failed: "Failed",
-  canceled: "Canceled",
-  approved: "Approved",
-  rejected: "Rejected",
-};
 const stageOrder: BugLoopStage[] = [
   "signal",
   "suspicion",
@@ -446,7 +437,9 @@ export function toUiRun(
         record.issue_id.slice(0, 8).toUpperCase(),
     ),
     mode: fallback(record.mode, runModeMap, "Investigate"),
-    status: fallback(record.status, runStatusMap, "Running"),
+    // agent_runs has a database check constraint for these literals. Keep the
+    // value unchanged here so the UI never reports a different persisted state.
+    status: record.status as CodingRun["status"],
     progress: record.progress,
     startedAt: displayTime(record.started_at ?? record.created_at),
     duration:
@@ -657,12 +650,12 @@ export function toUiBugCase(
   const stageIndex = Math.max(0, stageOrder.indexOf(stage));
   const status: CodingRun["status"] =
     record.status === "completed"
-      ? "Completed"
+      ? "completed"
       : record.status === "failed"
-        ? "Failed"
+        ? "failed"
         : record.status === "canceled"
-          ? "Canceled"
-          : "Running";
+          ? "canceled"
+          : "running";
   const latestEvent = events
     .filter((event) => event.bug_case_id === record.id)
     .at(-1);

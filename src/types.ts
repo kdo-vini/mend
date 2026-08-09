@@ -144,12 +144,13 @@ export interface CodingRun {
   issueIdentifier: string;
   mode: "Investigate" | "Propose fix" | "Implement fix";
   status:
-    | "Completed"
-    | "Running"
-    | "Failed"
-    | "Canceled"
-    | "Approved"
-    | "Rejected";
+    | "queued"
+    | "running"
+    | "completed"
+    | "failed"
+    | "canceled"
+    | "approved"
+    | "rejected";
   progress: number;
   startedAt: string;
   duration: string;

@@ -146,6 +146,7 @@
       "canceled": "Cancelado"
     },
     "runStatus": {
+      "queued": "Na fila",
       "completed": "Concluída",
       "running": "Em execução",
       "failed": "Falhou",

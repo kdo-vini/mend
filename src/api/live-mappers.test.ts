@@ -286,12 +286,43 @@ describe("live Agent run mapper", () => {
 
     expect(toUiRun(record, [], "MEND-1")).toMatchObject({
       issueIdentifier: "MEND-1",
+      status: "completed",
       summary: "The regression reproduces in the checkout path.",
       files: ["src/fix.ts"],
       diff: "diff --git a/src/fix.ts b/src/fix.ts",
       checks: [{ name: "test", exitCode: 0, output: "passed" }],
       duration: "01:05",
     });
+  });
+
+  it.each([
+    "queued",
+    "running",
+    "completed",
+    "failed",
+    "canceled",
+    "approved",
+    "rejected",
+  ])("preserves the persisted %s status", (status) => {
+    const record = {
+      id: `run-${status}`,
+      workspace_id: "workspace-1",
+      issue_id: "issue-1",
+      repository_id: null,
+      mode: "propose_fix",
+      status,
+      progress: 0,
+      branch_name: null,
+      commit_sha: null,
+      result_json: {},
+      started_at: null,
+      finished_at: null,
+      created_by_user_id: "user-1",
+      created_at: "2026-08-03T20:00:00.000Z",
+      updated_at: "2026-08-03T20:00:00.000Z",
+    } satisfies CodingRunRecord;
+
+    expect(toUiRun(record).status).toBe(status);
   });
 
   it("keeps a bug case visible before its first coding run", () => {

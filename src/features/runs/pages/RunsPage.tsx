@@ -63,7 +63,7 @@ const loopMilestones = [
 function BugLoopOverview({ run }: { run: CodingRun }) {
   const { t } = useTranslation("runs");
   const isFailed =
-    run.status === "Failed" ||
+    run.status === "failed" ||
     run.stage === "failed" ||
     run.caseStatus === "failed";
   const failureEvent = [...run.events]
@@ -76,7 +76,7 @@ function BugLoopOverview({ run }: { run: CodingRun }) {
   const fallbackStage =
     run.mode === "Investigate"
       ? "investigation"
-      : run.status === "Completed" || run.status === "Approved"
+      : run.status === "completed" || run.status === "approved"
         ? "verification"
         : "fix";
   const stage =
@@ -399,7 +399,8 @@ export function RunsPage({
                   >
                     <Bot size={15} /> {t("loop.startInvestigation")}
                   </button>
-                ) : selectedRun.status === "Running" ? (
+                ) : selectedRun.status === "queued" ||
+                  selectedRun.status === "running" ? (
                   <button
                     className="button button-danger"
                     type="button"
@@ -456,7 +457,7 @@ export function RunsPage({
                 </span>
               )}
             </div>
-            {selectedRun.status === "Completed" &&
+            {selectedRun.status === "completed" &&
               selectedRun.mode === "Implement fix" && (
                 <div className="run-review-actions">
                   <span>{t("actions.reviewDescription")}</span>
@@ -480,7 +481,7 @@ export function RunsPage({
                   </button>
                 </div>
               )}
-            {selectedRun.status === "Failed" && (
+            {selectedRun.status === "failed" && (
               <div className="run-review-actions run-failure-actions">
                 <span>{t("failure.retryDescription")}</span>
                 <button
@@ -497,7 +498,7 @@ export function RunsPage({
                 <span>{t("actions.notifyDescription")}</span>
               </div>
             )}
-            {selectedRun.status === "Approved" &&
+            {selectedRun.status === "approved" &&
               selectedRun.branch &&
               !selectedRun.published && (
                 <div className="run-review-actions">
@@ -511,7 +512,7 @@ export function RunsPage({
                   </button>
                 </div>
               )}
-            {selectedRun.status === "Approved" &&
+            {selectedRun.status === "approved" &&
               selectedRun.published &&
               selectedRun.pullRequest &&
               !selectedRun.mergeSha && (
@@ -526,7 +527,7 @@ export function RunsPage({
                   </button>
                 </div>
               )}
-            {selectedRun.status === "Approved" &&
+            {selectedRun.status === "approved" &&
               selectedRun.published &&
               (!selectedRun.pullRequest || selectedRun.mergeSha) &&
               !selectedRun.deployed && (
@@ -541,7 +542,7 @@ export function RunsPage({
                   </button>
                 </div>
               )}
-            {selectedRun.status === "Approved" &&
+            {selectedRun.status === "approved" &&
               selectedRun.deployed &&
               selectedRun.healthStatus !== "healthy" && (
                 <div className="run-review-actions">
