@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -59,6 +59,12 @@ import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { useConversationScroll } from "../hooks/useConversationScroll";
+import {
+  formatMessageTime,
+  getMessageDayKey,
+  getMessageDayLabel,
+} from "../message-dates";
+import { ScrollArea } from "../../../components/ui/scroll-area";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PriorityDot, StatusPill } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
@@ -212,6 +218,7 @@ export function InboxPage({
   assigneeLabel: (value: string) => string;
 }) {
   const { t } = useTranslation("inbox");
+  const messageDayNow = new Date();
   const location = useLocation();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All conversations");
@@ -444,6 +451,7 @@ export function InboxPage({
       sender: t("ui.you"),
       text: text.trim(),
       time: t("ui.now"),
+      createdAt: new Date().toISOString(),
       type: "text",
       status: "sending",
     };
@@ -548,6 +556,7 @@ export function InboxPage({
           sender: "You",
           text: input.caption ?? "",
           time: "now",
+          createdAt: new Date().toISOString(),
           type: input.messageType,
           status: "sending" as const,
           mediaBatchId: batchId,
@@ -1156,7 +1165,11 @@ export function InboxPage({
               </button>
             ))}
           </div>
-          <div className="conversation-list">
+          <ScrollArea
+            className="conversation-list"
+            viewportClassName="conversation-list-viewport"
+            type="always"
+          >
             {filtered.map((conversation) => (
               <ConversationRow
                 key={conversation.id}
@@ -1187,7 +1200,7 @@ export function InboxPage({
                 }
               />
             )}
-          </div>
+          </ScrollArea>
         </section>
         <section className="conversation-panel">
           <button
@@ -1244,40 +1257,68 @@ export function InboxPage({
             )}
           </div>
           <div className="message-canvas-shell">
-            <div className="message-canvas" ref={messageCanvasRef}>
-              <div className="day-divider">
-                <span>{t("ui.today")}</span>
-              </div>
+            <ScrollArea
+              className="message-canvas-scroll-area"
+              viewportClassName="message-canvas"
+              viewportRef={messageCanvasRef}
+              type="always"
+            >
               {selected.messages.length ? (
-                selected.messages.map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    senderName={
-                      message.senderUserId
-                        ? senderNames[message.senderUserId]
-                        : undefined
-                    }
-                    actionPending={messageActionId === message.id}
-                    reactionPending={reactionPendingId === message.id}
-                    onDelete={() => void deleteMessage(message)}
-                    onEditFailed={() => editFailedMessage(message)}
-                    onCancelFailed={() => cancelFailedMessage(message)}
-                    onRetryFailed={() => void retryFailedMessage(message)}
-                    onCopy={async () => {
-                      if (!message.text) return;
-                      try {
-                        await navigator.clipboard.writeText(message.text);
-                        onToast(t("toasts.messageCopied"));
-                      } catch {
-                        onToast(t("errors.copyMessage"));
-                      }
-                    }}
-                    onReact={(reaction) =>
-                      void reactToMessage(message, reaction)
-                    }
-                  />
-                ))
+                selected.messages.map((message, index) => {
+                  const dayKey = getMessageDayKey(message.createdAt);
+                  const previousDayKey = getMessageDayKey(
+                    selected.messages[index - 1]?.createdAt,
+                  );
+                  const dayLabel = getMessageDayLabel(
+                    message.createdAt,
+                    messageDayNow,
+                  );
+                  const showDayDivider = dayKey
+                    ? dayKey !== previousDayKey
+                    : index === 0;
+                  const dayText =
+                    dayLabel?.kind === "today"
+                      ? t("ui.today")
+                      : dayLabel?.kind === "yesterday"
+                        ? t("ui.yesterday")
+                        : (dayLabel?.value ?? t("ui.today"));
+
+                  return (
+                    <Fragment key={message.id}>
+                      {showDayDivider && (
+                        <div className="day-divider">
+                          <span>{dayText}</span>
+                        </div>
+                      )}
+                      <MessageBubble
+                        message={message}
+                        senderName={
+                          message.senderUserId
+                            ? senderNames[message.senderUserId]
+                            : undefined
+                        }
+                        actionPending={messageActionId === message.id}
+                        reactionPending={reactionPendingId === message.id}
+                        onDelete={() => void deleteMessage(message)}
+                        onEditFailed={() => editFailedMessage(message)}
+                        onCancelFailed={() => cancelFailedMessage(message)}
+                        onRetryFailed={() => void retryFailedMessage(message)}
+                        onCopy={async () => {
+                          if (!message.text) return;
+                          try {
+                            await navigator.clipboard.writeText(message.text);
+                            onToast(t("toasts.messageCopied"));
+                          } catch {
+                            onToast(t("errors.copyMessage"));
+                          }
+                        }}
+                        onReact={(reaction) =>
+                          void reactToMessage(message, reaction)
+                        }
+                      />
+                    </Fragment>
+                  );
+                })
               ) : (
                 <EmptyState
                   title={t("ui.noMessages")}
@@ -1306,7 +1347,7 @@ export function InboxPage({
                   <ChevronRight size={15} />
                 </button>
               )}
-            </div>
+            </ScrollArea>
             {showScrollDown && (
               <button
                 className="scroll-down-cta"
@@ -1906,7 +1947,8 @@ function MessageBubble({
             <Sparkles size={11} /> {t("ui.aiGenerated")}
           </span>
         )}
-        {senderName || message.sender} · {message.time}
+        {senderName || message.sender} ·{" "}
+        {formatMessageTime(message.createdAt, message.time)}
       </div>
       <div className="message-content-row">
         <div className="message-bubble-wrap">

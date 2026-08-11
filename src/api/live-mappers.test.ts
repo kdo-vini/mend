@@ -56,6 +56,7 @@ describe("live message mapper", () => {
       url: "https://cdn.example.com/screenshot.png",
       sizeBytes: 1024,
     });
+    expect(message.createdAt).toBe(baseMessage.created_at);
     expect(message.quotedMessageId).toBe("message-0");
     expect(message.deleted).toBe(false);
 

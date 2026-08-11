@@ -170,6 +170,7 @@ export function toUiMessage(
           : "Mend operator"),
     text: record.text ?? record.caption ?? "",
     time: displayTime(record.created_at),
+    createdAt: record.created_at,
     type: messageType,
     status:
       record.provider_status === "read"

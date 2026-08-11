@@ -21,6 +21,7 @@
     "tryDifferent": "Try a different search or clear the current filter.",
     "clearFilters": "Clear filters",
     "today": "Today",
+    "yesterday": "Yesterday",
     "noMessages": "No messages yet",
     "firstMessage": "The first customer message will appear here.",
     "focusSearch": "Focus conversation search",

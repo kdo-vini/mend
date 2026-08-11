@@ -45,6 +45,7 @@ export interface Message {
   sender: string;
   text: string;
   time: string;
+  createdAt?: string;
   type: MessageType;
   status?: "sending" | "sent" | "delivered" | "read" | "failed";
   aiGenerated?: boolean;
