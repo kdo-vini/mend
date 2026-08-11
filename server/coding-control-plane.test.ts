@@ -33,7 +33,7 @@ const catalog = (connectionId = "connection-a"): CatalogSnapshot => ({
   models: [{ id: "gpt-5-codex", efforts: ["low", "high"] }],
   source: "cli",
   lastVerifiedAt: "2026-08-09T00:00:00.000Z",
-  expiresAt: "2026-08-10T00:00:00.000Z",
+  expiresAt: "2099-01-01T00:00:00.000Z",
 });
 
 describe("coding control plane", () => {

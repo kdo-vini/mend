@@ -9,8 +9,12 @@ const now = new Date("2026-08-11T15:00:00-03:00");
 
 describe("inbox message dates", () => {
   it("groups timestamps by the local calendar day", () => {
-    expect(getMessageDayKey("2026-08-11T09:30:00-03:00")).toBe("2026-8-11");
-    expect(getMessageDayKey("2026-08-10T23:59:00-03:00")).toBe("2026-8-10");
+    expect(
+      getMessageDayKey("2026-08-11T09:30:00-03:00", "America/Sao_Paulo"),
+    ).toBe("2026-8-11");
+    expect(
+      getMessageDayKey("2026-08-10T23:59:00-03:00", "America/Sao_Paulo"),
+    ).toBe("2026-8-10");
   });
 
   it("labels today, yesterday and older messages", () => {
