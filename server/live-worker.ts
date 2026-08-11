@@ -104,6 +104,16 @@ interface ProcessInboundMessageJobPayload {
   persisted: InboxMessageRecord;
 }
 
+const DEFAULT_INBOUND_DEBOUNCE_MS = 1_500;
+
+type ConversationHistoryMessage = {
+  id: string;
+  direction: string;
+  text: string | null;
+  caption: string | null;
+  createdAt?: string | null;
+};
+
 export interface LiveWorkerSendAiReplyInput {
   binding: LiveChannelBinding;
   conversationId: string;
@@ -279,6 +289,8 @@ export interface LiveWorkerOptions {
   onIssueReady?: (issue: LiveWorkerIssue) => Promise<void> | void;
   onUnmappedMessage?: (input: LiveWorkerUnmappedMessage) => void;
   pollIntervalMs?: number;
+  /** Delay inbound automation so consecutive customer messages can be grouped. */
+  inboundDebounceMs?: number;
   workerId?: string;
 }
 
@@ -305,6 +317,7 @@ export class LiveWorker {
   private readonly pollIntervalMs: number;
   private readonly options: LiveWorkerOptions;
   private readonly workerId: string;
+  private readonly inboundDebounceMs: number;
   private readonly stageJobStore: JobStore<LiveWorkerJobPayload>;
   private loopPromise: Promise<void> | null = null;
   private stopRequested = false;
@@ -316,6 +329,10 @@ export class LiveWorker {
       options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
     );
     this.workerId = options.workerId ?? `mend-worker-${process.pid}`;
+    this.inboundDebounceMs = Math.max(
+      0,
+      options.inboundDebounceMs ?? DEFAULT_INBOUND_DEBOUNCE_MS,
+    );
     // The webhook adapter is intentionally kept as the public ingress
     // contract. Internally the store also carries the durable processing-stage
     // payload; both shapes live in the same service-role jobs table.
@@ -550,6 +567,11 @@ export class LiveWorker {
       },
       dedupeKey: `mend:process-inbound:${binding.channelConnectionId}:${persisted.id}`,
       maxAttempts: job.maxAttempts,
+      ...(this.inboundDebounceMs > 0
+        ? {
+            availableAt: new Date(Date.now() + this.inboundDebounceMs),
+          }
+        : {}),
     });
     await this.markWebhookEvent(job.id, "queued", persisted.id);
   }
@@ -750,7 +772,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   async process(
     input: LiveWorkerAutomationInput,
   ): Promise<LiveWorkerAutomationResult | void> {
-    const current = await this.currentState(input);
+    let current = await this.currentState(input);
     if (current?.lastTriagedMessageId === input.persisted.id) {
       return;
     }
@@ -759,6 +781,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       await this.markMessageCheckpoint(input);
       return;
     }
+    input = await this.batchPendingInboundMessages(input);
+    current = await this.currentState(input);
+    if (current?.lastTriagedMessageId === input.persisted.id) return;
+    if (current?.automationState === "human_paused") return;
     const modePolicy = await this.aiMode(input);
     if (modePolicy.mode === "off") return;
     const provider = await this.providerFor(input.binding.workspaceId);
@@ -1955,26 +1981,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       : this.provider;
   }
 
-  private async conversationHistory(input: LiveWorkerAutomationInput): Promise<
-    Array<{
-      id: string;
-      direction: string;
-      text: string | null;
-      caption: string | null;
-    }>
-  > {
-    const result = await this.client
-      .from("messages")
-      .select("id, direction, text, caption, created_at")
-      .eq("workspace_id", input.binding.workspaceId)
-      .eq("conversation_id", input.persisted.conversationId)
-      .eq("is_deleted", false)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (result.error)
-      throw new Error(`supabase:messages:ai_context:${result.error.message}`);
-
-    const history = [...(result.data ?? [])].reverse();
+  private async conversationHistory(
+    input: LiveWorkerAutomationInput,
+  ): Promise<ConversationHistoryMessage[]> {
+    const history = await this.loadConversationHistory(input);
     const targetIndex = history.findIndex(
       (message) => message.id === input.persisted.id,
     );
@@ -1993,6 +2003,81 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         caption: null,
       },
     ];
+  }
+
+  private async loadConversationHistory(
+    input: LiveWorkerAutomationInput,
+  ): Promise<ConversationHistoryMessage[]> {
+    const result = await this.client
+      .from("messages")
+      .select("id, direction, text, caption, created_at")
+      .eq("workspace_id", input.binding.workspaceId)
+      .eq("conversation_id", input.persisted.conversationId)
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (result.error)
+      throw new Error(`supabase:messages:ai_context:${result.error.message}`);
+
+    return [...(result.data ?? [])].reverse().map((message) => ({
+      id: String(message.id),
+      direction: String(message.direction),
+      text: message.text ?? null,
+      caption: message.caption ?? null,
+      createdAt: message.created_at ?? null,
+    }));
+  }
+
+  private async batchPendingInboundMessages(
+    input: LiveWorkerAutomationInput,
+  ): Promise<LiveWorkerAutomationInput> {
+    const history = await this.loadConversationHistory(input);
+    const targetIndex = history.findIndex(
+      (message) => message.id === input.persisted.id,
+    );
+    if (targetIndex < 0) return input;
+
+    const cutoff = input.job.availableAt.getTime();
+    let lastInboundIndex = targetIndex;
+    for (let index = targetIndex + 1; index < history.length; index += 1) {
+      const message = history[index];
+      const createdAt = message.createdAt
+        ? Date.parse(message.createdAt)
+        : Number.NaN;
+      if (Number.isFinite(createdAt) && createdAt > cutoff) break;
+      if (message.direction === "outbound") break;
+      if (message.direction === "inbound") lastInboundIndex = index;
+    }
+    if (lastInboundIndex === targetIndex) return input;
+
+    const inboundMessages = history
+      .slice(targetIndex, lastInboundIndex + 1)
+      .filter((message) => message.direction === "inbound");
+    const combinedText = inboundMessages
+      .map((message) => (message.text || message.caption || "").trim())
+      .filter(Boolean)
+      .join("\n");
+    const latest = history[lastInboundIndex];
+    if (!combinedText || !latest) return input;
+
+    const whatsappKeyPrefix = `whatsapp:${input.binding.channelConnectionId}:`;
+    const idempotencyKey = input.idempotencyKey.startsWith(whatsappKeyPrefix)
+      ? `${whatsappKeyPrefix}${latest.id}`
+      : `${input.idempotencyKey}:batch:${latest.id}`;
+    return {
+      ...input,
+      idempotencyKey,
+      message: {
+        ...input.message,
+        text: combinedText,
+        caption: undefined,
+        interactionId: undefined,
+      },
+      persisted: {
+        ...input.persisted,
+        id: latest.id,
+      },
+    };
   }
 
   private async loadMcpConnections(
@@ -2280,6 +2365,7 @@ export interface CreateSupabaseLiveWorkerOptions {
   agentRunRunner?: LiveWorkerOptions["agentRunRunner"];
   agentCredentials?: AgentCredentialPort;
   pollIntervalMs?: number;
+  inboundDebounceMs?: number;
   workerId?: string;
 }
 
@@ -2495,6 +2581,9 @@ export function createSupabaseLiveWorker(
       : {}),
     ...(options.pollIntervalMs !== undefined
       ? { pollIntervalMs: options.pollIntervalMs }
+      : {}),
+    ...(options.inboundDebounceMs !== undefined
+      ? { inboundDebounceMs: options.inboundDebounceMs }
       : {}),
     ...(options.workerId ? { workerId: options.workerId } : {}),
   });

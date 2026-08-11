@@ -384,6 +384,7 @@ describe("live Whatsmiau worker", () => {
     const automation = new IdempotentAutomation();
     const worker = new LiveWorker({
       jobStore: store,
+      inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
       inbox,
       knowledge,
@@ -400,12 +401,33 @@ describe("live Whatsmiau worker", () => {
     expect(knowledge.calls).toBe(1);
   });
 
+  it("delays inbound automation jobs for the batching window", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const worker = new LiveWorker({
+      jobStore: store,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      automation: { process: vi.fn(async () => undefined) },
+    });
+    await enqueue(store, "batch-window");
+
+    expect(await worker.poll()).toBe(true);
+    const stage = (await store.list()).find(
+      (job) => job.type === "mend.process_inbound_message",
+    );
+    expect(stage?.status).toBe("queued");
+    expect(
+      (stage?.availableAt.getTime() ?? 0) - (stage?.createdAt.getTime() ?? 0),
+    ).toBeGreaterThanOrEqual(1_300);
+  });
+
   it("acks an event without a channel mapping and never guesses a workspace", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const inbox = new FakeInbox();
     const unmapped: string[] = [];
     const worker = new LiveWorker({
       jobStore: store,
+      inboundDebounceMs: 0,
       channelResolver: new FakeResolver(null),
       inbox,
       onUnmappedMessage: (input) =>
@@ -425,6 +447,7 @@ describe("live Whatsmiau worker", () => {
     const inbox = new FakeInbox();
     const worker = new LiveWorker({
       jobStore: store,
+      inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
       inbox,
       groupDirectory: {
@@ -461,6 +484,7 @@ describe("live Whatsmiau worker", () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const worker = new LiveWorker({
       jobStore: store,
+      inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
       inbox: new FakeInbox([new Error("database temporarily unavailable")]),
     });
@@ -480,6 +504,7 @@ describe("live Whatsmiau worker", () => {
     const drafts: string[] = [];
     const worker = new LiveWorker({
       jobStore: store,
+      inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
       inbox: new FakeInbox(),
       automation: new ResultAutomation(),
@@ -502,6 +527,7 @@ describe("live Whatsmiau worker", () => {
     const automation = new SendStageAutomation();
     const worker = new LiveWorker({
       jobStore: store,
+      inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
       inbox: new FakeInbox(),
       automation,
@@ -525,6 +551,7 @@ describe("live Whatsmiau worker", () => {
     let processed = 0;
     const worker = new LiveWorker({
       jobStore: store,
+      inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
       inbox: new FakeInbox(),
       automation: {
@@ -916,18 +943,21 @@ describe("live Whatsmiau worker", () => {
         direction: "inbound",
         text: "Esta mensagem chegou enquanto a IA processava.",
         caption: null,
+        created_at: new Date(Date.now() + 5_000).toISOString(),
       },
       {
         id: "message-unknown",
         direction: "inbound",
         text: "Como funciona a integração de estoque?",
         caption: null,
+        created_at: new Date(Date.now() - 1_000).toISOString(),
       },
       {
         id: "message-context",
         direction: "outbound",
         text: "Nosso estoque é sincronizado pelo ERP.",
         caption: null,
+        created_at: new Date(Date.now() - 2_000).toISOString(),
       },
     ];
     const draftReply = vi.fn(
@@ -997,5 +1027,84 @@ describe("live Whatsmiau worker", () => {
       '"reply_target":{"id":"message-unknown","direction":"inbound"',
     );
     expect(draftReply.mock.calls[0]?.[0]).not.toContain("message-later");
+  });
+
+  it("batches consecutive inbound messages into one AI reply", async () => {
+    const client = new FakeSupabaseHandoff();
+    const triageInput = vi.fn();
+    const draftReply = vi.fn(
+      async () => "Perfeito, vou considerar as duas mensagens.",
+    );
+    client.messages = [
+      {
+        id: "message-second",
+        direction: "inbound",
+        text: "Obrigada",
+        caption: null,
+        created_at: new Date(Date.now() - 100).toISOString(),
+      },
+      {
+        id: "message-first",
+        direction: "inbound",
+        text: "Vou fazer o teste agora",
+        caption: null,
+        created_at: new Date(Date.now() - 200).toISOString(),
+      },
+    ];
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply,
+      triage: vi.fn(async (input) => {
+        triageInput(input);
+        return JSON.stringify({
+          intent: "question",
+          priority: "low",
+          confidence: 0.98,
+          summary: "Customer confirms a test and thanks the team",
+          unsafe: false,
+        });
+      }),
+    };
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+    );
+    const result = await automation.process({
+      binding,
+      idempotencyKey: "whatsapp:channel-1:message-first",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "unused-batch",
+      ),
+      knowledge: [],
+      message: { ...message, text: "Vou fazer o teste agora" },
+      persisted: {
+        id: "message-first",
+        workspaceId: binding.workspaceId,
+        conversationId: "conversation-batch",
+        contactId: "contact-1",
+        providerMessageId: message.providerMessageId,
+        direction: "inbound",
+        messageType: "text",
+        unreadCount: 2,
+        inserted: true,
+      },
+    });
+
+    expect(result).toMatchObject({
+      draft: {
+        messageId: "message-second",
+        idempotencyKey: "whatsapp:channel-1:message-second",
+      },
+    });
+    expect(triageInput).toHaveBeenCalledWith(
+      expect.stringContaining("Vou fazer o teste agora\nObrigada"),
+    );
+    expect(draftReply).toHaveBeenCalledTimes(1);
+    expect(draftReply.mock.calls[0]?.[0]).toContain(
+      '"reply_target":{"id":"message-second","direction":"inbound"',
+    );
+    expect(draftReply.mock.calls[0]?.[0]).toContain("Vou fazer o teste agora");
+    expect(draftReply.mock.calls[0]?.[0]).toContain("Obrigada");
   });
 });
