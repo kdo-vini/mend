@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type WheelEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Archive,
   ArrowLeft,
@@ -6,6 +13,7 @@ import {
   CheckCheck,
   CircleDot,
   Copy,
+  ChevronLeft,
   Ellipsis,
   FileText,
   Filter,
@@ -24,6 +32,8 @@ import {
   UserRound,
   X,
   Zap,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -66,6 +76,12 @@ import {
 } from "../message-dates";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "../../../components/ui/dialog";
+import { Button } from "../../../components/ui/button";
 import { PriorityDot, StatusPill } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
@@ -93,6 +109,14 @@ interface ComposerMediaInput {
   fileName?: string;
   caption?: string;
   onProgress?: (percent: number) => void;
+}
+
+interface LightboxMedia {
+  id: string;
+  type: "image" | "video";
+  url: string;
+  name: string;
+  meta: string;
 }
 
 const uuidPattern =
@@ -247,6 +271,8 @@ export function InboxPage({
   const failedMediaRetryInputsRef = useRef(
     new Map<string, ComposerMediaInput>(),
   );
+  const failedMediaRefreshIdsRef = useRef(new Set<string>());
+  const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null);
   const [conversationDeleting, setConversationDeleting] = useState(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -255,6 +281,26 @@ export function InboxPage({
   const selected =
     conversations.find((item) => item.id === selectedConversationId) ??
     conversations[0];
+  const lightboxMedia = useMemo<LightboxMedia[]>(
+    () =>
+      selected?.messages.flatMap((message) => {
+        if (
+          (message.type !== "image" && message.type !== "video") ||
+          !message.attachment?.url
+        )
+          return [];
+        return [
+          {
+            id: message.id,
+            type: message.type,
+            url: message.attachment.url,
+            name: message.attachment.name,
+            meta: message.attachment.meta,
+          },
+        ];
+      }) ?? [],
+    [selected],
+  );
   const messageSignature = selected?.messages
     .map((message) => message.id)
     .join("|");
@@ -310,6 +356,30 @@ export function InboxPage({
   useEffect(() => {
     setAiDetailsOpen(shouldShowConversationAiDetails());
   }, [selected?.id]);
+
+  useEffect(() => {
+    setMediaViewerIndex(null);
+  }, [selected?.id]);
+
+  useEffect(() => {
+    if (mediaViewerIndex === null || lightboxMedia.length < 2) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMediaViewerIndex(null);
+      if (event.key === "ArrowLeft")
+        setMediaViewerIndex(
+          (current) =>
+            (current === null ? 0 : current - 1 + lightboxMedia.length) %
+            lightboxMedia.length,
+        );
+      if (event.key === "ArrowRight")
+        setMediaViewerIndex(
+          (current) =>
+            (current === null ? 0 : current + 1) % lightboxMedia.length,
+        );
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [lightboxMedia.length, mediaViewerIndex]);
 
   useEffect(() => {
     if (dismissedAiCardsByScope[aiCardStorageKey]) return;
@@ -377,6 +447,29 @@ export function InboxPage({
         signature,
       ),
     }));
+  };
+  const refreshFailedMedia = (messageId: string) => {
+    if (
+      !workspaceId ||
+      failedMediaRefreshIdsRef.current.has(messageId) ||
+      !selected
+    )
+      return;
+    failedMediaRefreshIdsRef.current.add(messageId);
+    void loadLiveConversationSnapshot(workspaceId, selected.id)
+      .then((snapshot) => {
+        if (snapshot)
+          setConversations((current) =>
+            mergeConversationSnapshot(current, snapshot),
+          );
+      })
+      .catch(() => {
+        // Keep the existing attachment fallback when a refresh is unavailable.
+      });
+  };
+  const openMediaViewer = (messageId: string) => {
+    const index = lightboxMedia.findIndex((media) => media.id === messageId);
+    if (index >= 0) setMediaViewerIndex(index);
   };
   const filterItems = [
     "All conversations",
@@ -1303,6 +1396,8 @@ export function InboxPage({
                         onEditFailed={() => editFailedMessage(message)}
                         onCancelFailed={() => cancelFailedMessage(message)}
                         onRetryFailed={() => void retryFailedMessage(message)}
+                        onMediaError={() => refreshFailedMedia(message.id)}
+                        onOpenMedia={() => openMediaViewer(message.id)}
                         onCopy={async () => {
                           if (!message.text) return;
                           try {
@@ -1394,7 +1489,215 @@ export function InboxPage({
           />
         </section>
       </div>
+      <MediaLightbox
+        items={lightboxMedia}
+        index={mediaViewerIndex}
+        onIndexChange={setMediaViewerIndex}
+        onClose={() => setMediaViewerIndex(null)}
+      />
     </div>
+  );
+}
+
+function MediaLightbox({
+  items,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  items: LightboxMedia[];
+  index: number | null;
+  onIndexChange: (index: number) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation("inbox");
+  const current = index === null ? undefined : items[index];
+  const [zoom, setZoom] = useState(1);
+  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
+  useEffect(() => {
+    setZoom(1);
+    setZoomOffset({ x: 0, y: 0 });
+  }, [current?.id]);
+
+  const handleStageWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY === 0) return;
+    event.preventDefault();
+
+    const media = event.currentTarget.querySelector<HTMLElement>("img, video");
+    if (!media || media.offsetWidth === 0 || media.offsetHeight === 0) return;
+
+    const nextZoom = Math.min(
+      3,
+      Math.max(1, zoom * (event.deltaY < 0 ? 1.15 : 0.87)),
+    );
+    if (nextZoom === zoom) return;
+
+    const rect = media.getBoundingClientRect();
+    const pointerX = Math.min(Math.max(event.clientX, rect.left), rect.right);
+    const pointerY = Math.min(Math.max(event.clientY, rect.top), rect.bottom);
+    const layoutLeft =
+      rect.left - zoomOffset.x + ((zoom - 1) * media.offsetWidth) / 2;
+    const layoutTop =
+      rect.top - zoomOffset.y + ((zoom - 1) * media.offsetHeight) / 2;
+    const localX = (pointerX - rect.left) / zoom;
+    const localY = (pointerY - rect.top) / zoom;
+    const nextOffset =
+      nextZoom === 1
+        ? { x: 0, y: 0 }
+        : {
+            x:
+              pointerX -
+              nextZoom * localX -
+              layoutLeft +
+              ((nextZoom - 1) * media.offsetWidth) / 2,
+            y:
+              pointerY -
+              nextZoom * localY -
+              layoutTop +
+              ((nextZoom - 1) * media.offsetHeight) / 2,
+          };
+
+    setZoomOffset(nextOffset);
+    setZoom(nextZoom);
+  };
+
+  if (!current || index === null) return null;
+  const hasPrevious = items.length > 1;
+  const previousIndex = (index - 1 + items.length) % items.length;
+  const nextIndex = (index + 1) % items.length;
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="media-lightbox-dialog" showCloseButton={false}>
+        <DialogTitle className="sr-only">{t("ui.mediaViewer")}</DialogTitle>
+        <div className="media-lightbox-header">
+          <div className="media-lightbox-heading">
+            <span className="media-lightbox-kicker">
+              {current.type === "image"
+                ? t("ui.image").toUpperCase()
+                : t("ui.video").toUpperCase()}
+            </span>
+            <span className="media-lightbox-counter" aria-live="polite">
+              {index + 1} / {items.length}
+            </span>
+          </div>
+          <div
+            className="media-lightbox-tools"
+            aria-label={t("ui.zoomControls")}
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="media-lightbox-control"
+              aria-label={t("ui.zoomOut")}
+              disabled={zoom <= 1}
+              onClick={() => {
+                setZoom((value) => Math.max(1, value - 0.25));
+              }}
+            >
+              <ZoomOut />
+            </Button>
+            <button
+              type="button"
+              className="media-lightbox-zoom-reset"
+              aria-label={t("ui.resetZoom")}
+              onClick={() => {
+                setZoom(1);
+                setZoomOffset({ x: 0, y: 0 });
+              }}
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="media-lightbox-control"
+              aria-label={t("ui.zoomIn")}
+              disabled={zoom >= 3}
+              onClick={() => setZoom((value) => Math.min(3, value + 0.25))}
+            >
+              <ZoomIn />
+            </Button>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="media-lightbox-close"
+            aria-label={t("ui.closeMediaViewer")}
+            onClick={onClose}
+          >
+            <X />
+          </Button>
+        </div>
+        <div
+          className="media-lightbox-stage"
+          data-zoom={zoom}
+          onWheel={handleStageWheel}
+          aria-label={t("ui.zoomControls")}
+        >
+          <div className="media-lightbox-media-frame">
+            {current.type === "image" ? (
+              <img
+                src={current.url}
+                alt={current.name}
+                style={{
+                  transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoom})`,
+                  transformOrigin: "center",
+                }}
+              />
+            ) : (
+              <video
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                src={current.url}
+                style={{
+                  transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoom})`,
+                  transformOrigin: "center",
+                }}
+              />
+            )}
+          </div>
+        </div>
+        <div className="media-lightbox-footer">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="media-lightbox-nav"
+            aria-label={t("ui.previousMedia")}
+            disabled={!hasPrevious}
+            onClick={() => onIndexChange(previousIndex)}
+          >
+            <ChevronLeft />
+          </Button>
+          <div className="media-lightbox-caption">
+            <strong>{current.name}</strong>
+            <span>{current.meta}</span>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="media-lightbox-nav"
+            aria-label={t("ui.nextMedia")}
+            disabled={!hasPrevious}
+            onClick={() => onIndexChange(nextIndex)}
+          >
+            <ChevronRight />
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1899,6 +2202,8 @@ function MessageBubble({
   onEditFailed,
   onCancelFailed,
   onRetryFailed,
+  onMediaError,
+  onOpenMedia,
   onCopy,
   onReact,
 }: {
@@ -1910,6 +2215,8 @@ function MessageBubble({
   onEditFailed: () => void;
   onCancelFailed: () => void;
   onRetryFailed: () => void;
+  onMediaError: () => void;
+  onOpenMedia: () => void;
   onCopy: () => void;
   onReact: (reaction: string) => void;
 }) {
@@ -1980,24 +2287,55 @@ function MessageBubble({
           ) : message.type === "text" ? (
             <div className="message-bubble">{message.text}</div>
           ) : message.type === "image" && attachmentUrl ? (
-            <div className="message-bubble media-bubble">
+            <button
+              className="message-bubble media-bubble media-preview-trigger"
+              type="button"
+              aria-label={t("ui.openMediaViewer")}
+              onClick={onOpenMedia}
+            >
               <img
                 src={attachmentUrl}
                 alt={message.attachment?.name ?? "WhatsApp image"}
+                onError={onMediaError}
               />
               {message.text && <span>{message.text}</span>}
-            </div>
+            </button>
           ) : message.type === "video" && attachmentUrl ? (
-            <div className="message-bubble media-bubble">
-              <video controls preload="metadata" src={attachmentUrl}>
-                <track kind="captions" />
-              </video>
+            <button
+              className="message-bubble media-bubble media-preview-trigger"
+              type="button"
+              aria-label={t("ui.openMediaViewer")}
+              onClick={onOpenMedia}
+            >
+              <video
+                preload="metadata"
+                muted
+                playsInline
+                src={attachmentUrl}
+                onError={onMediaError}
+              />
               {message.text && <span>{message.text}</span>}
-            </div>
+            </button>
           ) : message.type === "audio" && attachmentUrl ? (
             <div className="message-bubble media-bubble">
-              <audio controls preload="metadata" src={attachmentUrl} />
+              <audio
+                controls
+                preload="metadata"
+                src={attachmentUrl}
+                onError={onMediaError}
+              />
               {message.text && <span>{message.text}</span>}
+              {!message.text &&
+                message.transcriptionStatus === "processing" && (
+                  <span className="media-transcript-status">
+                    {t("ui.transcriptionProcessing")}
+                  </span>
+                )}
+              {!message.text && message.transcriptionStatus === "failed" && (
+                <span className="media-transcript-status failed">
+                  {t("ui.transcriptionUnavailable")}
+                </span>
+              )}
             </div>
           ) : (
             <a

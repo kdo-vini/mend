@@ -16,6 +16,7 @@ import {
   type NormalizedMessageType,
   type NormalizedWhatsmiauMessage,
 } from "./whatsmiau.js";
+import { redactJobError } from "./jobs.js";
 import type { AudioTranscriber } from "./providers.js";
 
 export type InboxActorType = "contact" | "user" | "ai" | "system";
@@ -54,6 +55,17 @@ export interface InboxMessageRecord {
   providerStatus?: string | null;
   isDeleted?: boolean;
   transcript?: string;
+}
+
+export interface StoredAudioMessage {
+  id: string;
+  workspaceId: string;
+  direction: "inbound" | "outbound";
+  messageType: NormalizedMessageType;
+  text?: string | null;
+  mediaStoragePath?: string | null;
+  mimeType?: string | null;
+  fileName?: string | null;
 }
 
 export interface PersistMessageOptions {
@@ -202,6 +214,16 @@ export interface InboxPort {
     workspaceId: string;
     messageId: string;
     text: string;
+  }): Promise<void>;
+  getStoredAudioMessage?(input: {
+    workspaceId: string;
+    messageId: string;
+  }): Promise<StoredAudioMessage | null>;
+  setMessageTranscriptionStatus?(input: {
+    workspaceId: string;
+    messageId: string;
+    status: "processing" | "ready" | "failed";
+    errorCode?: string;
   }): Promise<void>;
   linkIssueMessage(input: {
     workspaceId: string;
@@ -568,6 +590,33 @@ export class SupabaseInboxPort implements InboxPort {
     };
   }
 
+  async getStoredAudioMessage(input: {
+    workspaceId: string;
+    messageId: string;
+  }): Promise<StoredAudioMessage | null> {
+    const result = await this.client
+      .from("messages")
+      .select(
+        "id, workspace_id, direction, message_type, text, media_storage_path, mime_type, file_name",
+      )
+      .eq("workspace_id", input.workspaceId)
+      .eq("id", input.messageId)
+      .maybeSingle();
+    if (result.error)
+      throw new Error(`supabase:messages:audio:${result.error.message}`);
+    if (!result.data) return null;
+    return {
+      id: String(result.data.id),
+      workspaceId: String(result.data.workspace_id),
+      direction: result.data.direction === "outbound" ? "outbound" : "inbound",
+      messageType: result.data.message_type as NormalizedMessageType,
+      text: result.data.text,
+      mediaStoragePath: result.data.media_storage_path,
+      mimeType: result.data.mime_type,
+      fileName: result.data.file_name,
+    };
+  }
+
   async setConversationState(
     input: Parameters<InboxPort["setConversationState"]>[0],
   ): Promise<ConversationStateRecord> {
@@ -646,6 +695,25 @@ export class SupabaseInboxPort implements InboxPort {
       .eq("id", input.messageId)
       .eq("workspace_id", input.workspaceId);
     if (error) throw new Error(`supabase:messages_text:${error.message}`);
+  }
+
+  async setMessageTranscriptionStatus(input: {
+    workspaceId: string;
+    messageId: string;
+    status: "processing" | "ready" | "failed";
+    errorCode?: string;
+  }): Promise<void> {
+    const { error } = await this.client
+      .from("messages")
+      .update({
+        transcription_status: input.status,
+        transcription_error_code: input.errorCode ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("workspace_id", input.workspaceId)
+      .eq("id", input.messageId);
+    if (error)
+      throw new Error(`supabase:messages_transcription:${error.message}`);
   }
 
   async linkIssueMessage(
@@ -750,6 +818,125 @@ export class InboxService {
       ...context,
       workspaceId: safeWorkspacePart(context.workspaceId, "workspace_id"),
     };
+  }
+
+  private async setTranscriptionStatus(input: {
+    workspaceId: string;
+    messageId: string;
+    status: "processing" | "ready" | "failed";
+    errorCode?: string;
+  }): Promise<void> {
+    try {
+      await this.port.setMessageTranscriptionStatus?.(input);
+    } catch (error) {
+      console.warn("[mend-inbox] audio transcription status update failed", {
+        messageId: input.messageId,
+        error: redactJobError(error),
+      });
+    }
+  }
+
+  private async transcribeAudioMedia(
+    context: InboxContext,
+    messageId: string,
+    media: ValidatedMedia,
+  ): Promise<string> {
+    if (!this.options.transcriber)
+      throw new Error("audio_transcriber_unavailable");
+    if (!this.port.setMessageText)
+      throw new Error("audio_transcription_persistence_unavailable");
+
+    await this.setTranscriptionStatus({
+      workspaceId: context.workspaceId,
+      messageId,
+      status: "processing",
+    });
+    try {
+      const transcript = (
+        await this.options.transcriber.transcribe({
+          data: media.data,
+          mimeType: media.mimeType,
+          fileName: media.fileName,
+        })
+      ).trim();
+      if (!transcript) throw new Error("audio_transcription_empty");
+      await this.port.setMessageText({
+        workspaceId: context.workspaceId,
+        messageId,
+        text: transcript,
+      });
+      await this.setTranscriptionStatus({
+        workspaceId: context.workspaceId,
+        messageId,
+        status: "ready",
+      });
+      return transcript;
+    } catch (error) {
+      await this.setTranscriptionStatus({
+        workspaceId: context.workspaceId,
+        messageId,
+        status: "failed",
+        errorCode: "audio_transcription_failed",
+      });
+      console.warn("[mend-inbox] audio transcription failed", {
+        messageId,
+        error: redactJobError(error),
+      });
+      throw error;
+    }
+  }
+
+  async retranscribeStoredAudio(
+    contextInput: InboxContext,
+    messageId: string,
+  ): Promise<string> {
+    const context = this.context(contextInput);
+    const stored = await this.port.getStoredAudioMessage?.({
+      workspaceId: context.workspaceId,
+      messageId,
+    });
+    if (!stored) throw new Error("audio_message_not_found");
+    if (stored.direction !== "inbound" || stored.messageType !== "audio")
+      throw new Error("audio_message_not_transcribable");
+    if (stored.text?.trim()) {
+      await this.setTranscriptionStatus({
+        workspaceId: context.workspaceId,
+        messageId,
+        status: "ready",
+      });
+      return stored.text.trim();
+    }
+    if (!stored.mediaStoragePath) throw new Error("audio_storage_missing");
+    if (!this.options.mediaStorage?.download)
+      throw new Error("audio_storage_download_unavailable");
+
+    let media: ValidatedMedia;
+    try {
+      const fileName =
+        stored.fileName && /\.[a-z0-9]{2,8}$/i.test(stored.fileName)
+          ? stored.fileName
+          : "audio.ogg";
+      media = await this.options.mediaStorage.download(
+        stored.mediaStoragePath,
+        {
+          mimeType: stored.mimeType ?? "audio/ogg",
+          fileName,
+        },
+      );
+    } catch (error) {
+      await this.setTranscriptionStatus({
+        workspaceId: context.workspaceId,
+        messageId,
+        status: "failed",
+        errorCode: "audio_media_unavailable",
+      });
+      console.warn("[mend-inbox] audio transcription media unavailable", {
+        messageId,
+        error: redactJobError(error),
+      });
+      throw error;
+    }
+    return this.transcribeAudioMedia(context, messageId, media);
   }
 
   async persistNormalizedMessage(
@@ -910,18 +1097,14 @@ export class InboxService {
           this.options.transcriber
         ) {
           try {
-            transcript = await this.options.transcriber.transcribe({
-              data: playbackMedia.data,
-              mimeType: playbackMedia.mimeType,
-              fileName: playbackMedia.fileName,
-            });
-            await this.port.setMessageText?.({
-              workspaceId: context.workspaceId,
-              messageId: result.id,
-              text: transcript,
-            });
+            transcript = await this.transcribeAudioMedia(
+              context,
+              result.id,
+              playbackMedia,
+            );
           } catch {
-            // Audio playback remains useful when transcription is unavailable.
+            // Audio playback remains useful when transcription is unavailable;
+            // the status and a redacted diagnostic are persisted above.
           }
         }
       } catch {

@@ -44,6 +44,10 @@ type FakeMessage = {
   aiGenerated?: boolean;
   remoteUrl?: string;
   text?: string;
+  mimeType?: string;
+  fileName?: string;
+  transcriptionStatus?: "processing" | "ready" | "failed";
+  transcriptionErrorCode?: string;
 };
 
 class FakeInboxPort implements InboxPort {
@@ -126,6 +130,8 @@ class FakeInboxPort implements InboxPort {
       ...(input.mediaRemoteUrl ? { remoteUrl: input.mediaRemoteUrl } : {}),
       ...(input.aiGenerated ? { aiGenerated: true } : {}),
       ...(input.text ? { text: input.text } : {}),
+      ...(input.mimeType ? { mimeType: input.mimeType } : {}),
+      ...(input.fileName ? { fileName: input.fileName } : {}),
     });
     if (input.direction === "inbound") {
       conversation.unreadCount += 1;
@@ -270,6 +276,44 @@ class FakeInboxPort implements InboxPort {
     );
     if (!message) throw new Error("message_not_found");
     message.text = input.text;
+  }
+
+  async getStoredAudioMessage(input: {
+    workspaceId: string;
+    messageId: string;
+  }) {
+    const message = [...this.messages.values()].find(
+      (candidate) =>
+        candidate.id === input.messageId &&
+        candidate.workspaceId === input.workspaceId,
+    );
+    if (!message) return null;
+    return {
+      id: message.id,
+      workspaceId: message.workspaceId,
+      direction: message.direction,
+      messageType: message.messageType as InboxMessageRecord["messageType"],
+      text: message.text,
+      mediaStoragePath: message.storagePath,
+      mimeType: message.mimeType,
+      fileName: message.fileName,
+    };
+  }
+
+  async setMessageTranscriptionStatus(input: {
+    workspaceId: string;
+    messageId: string;
+    status: "processing" | "ready" | "failed";
+    errorCode?: string;
+  }) {
+    const message = [...this.messages.values()].find(
+      (candidate) =>
+        candidate.id === input.messageId &&
+        candidate.workspaceId === input.workspaceId,
+    );
+    if (!message) throw new Error("message_not_found");
+    message.transcriptionStatus = input.status;
+    message.transcriptionErrorCode = input.errorCode;
   }
 
   async createEvidence(input: Parameters<InboxPort["createEvidence"]>[0]) {
@@ -501,6 +545,52 @@ describe("InboxService and WhatsAppService", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it("retranscribes an existing stored inbound audio and persists its status", async () => {
+    const port = new FakeInboxPort();
+    const storage = new InMemoryMediaStorage();
+    const storagePath = `${workspaceId}/${conversationId}/audio.ogg`;
+    await storage.upload(storagePath, {
+      data: new Uint8Array([1, 2, 3]),
+      mimeType: "audio/ogg",
+      fileName: "audio.ogg",
+      size: 3,
+    });
+    const message = await port.ingestMessage({
+      workspaceId,
+      channelConnectionId: channelId,
+      phoneNumber: "5511999999999",
+      providerMessageId: "wamid-existing-audio",
+      direction: "inbound",
+      senderType: "contact",
+      messageType: "audio",
+      mediaStoragePath: storagePath,
+      mimeType: "audio/ogg",
+      fileName: "audio.ogg",
+      actorType: "system",
+      timelineKey: "whatsapp:existing-audio",
+      metadata: {},
+    });
+    const transcriber = {
+      transcribe: vi.fn(async () => "Transcrição recuperada"),
+    };
+    const inbox = new InboxService(port, {
+      mediaStorage: storage,
+      transcriber,
+    });
+
+    await expect(
+      inbox.retranscribeStoredAudio({ workspaceId }, message.id),
+    ).resolves.toBe("Transcrição recuperada");
+    expect(transcriber.transcribe).toHaveBeenCalledWith(
+      expect.objectContaining({ mimeType: "audio/ogg", fileName: "audio.ogg" }),
+    );
+    const stored = [...port.messages.values()].find(
+      (candidate) => candidate.id === message.id,
+    );
+    expect(stored?.text).toBe("Transcrição recuperada");
+    expect(stored?.transcriptionStatus).toBe("ready");
   });
 
   it("supports read, unread, snooze and resolve transitions with workspace scoping", async () => {

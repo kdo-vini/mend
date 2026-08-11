@@ -191,6 +191,13 @@ export function toUiMessage(
         : record.message_type === "text"
           ? undefined
           : "ready",
+    transcriptionStatus:
+      record.transcription_status === "processing" ||
+      record.transcription_status === "ready" ||
+      record.transcription_status === "failed"
+        ? record.transcription_status
+        : undefined,
+    transcriptionErrorCode: record.transcription_error_code ?? undefined,
     mediaAssetId: record.media_asset_id ?? undefined,
     mediaBatchId: record.media_batch_id ?? undefined,
     attachment:

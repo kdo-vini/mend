@@ -31,6 +31,8 @@ const baseMessage: MessageRecord = {
   media_error_code: null,
   media_status: "none",
   media_remote_url: "https://cdn.example.com/screenshot.png",
+  transcription_error_code: null,
+  transcription_status: null,
   origin: "whatsapp",
   mime_type: "image/png",
   file_name: "screenshot.png",

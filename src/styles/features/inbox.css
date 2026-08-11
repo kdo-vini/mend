@@ -730,6 +730,19 @@
   overflow: hidden;
   max-width: min(420px, 70vw);
 }
+.media-preview-trigger {
+  width: min(420px, 70vw);
+  padding: 9px 11px;
+  cursor: zoom-in;
+  text-align: left;
+}
+.media-preview-trigger:hover {
+  border-color: var(--line-strong);
+}
+.media-preview-trigger:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
 .media-bubble img,
 .media-bubble video {
   display: block;
@@ -741,6 +754,180 @@
 }
 .media-bubble audio {
   width: min(330px, 64vw);
+}
+.media-transcript-status {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.media-transcript-status.failed {
+  color: var(--warning);
+}
+.media-lightbox-dialog {
+  display: flex;
+  flex-direction: column;
+  width: calc(100vw - var(--space-6));
+  max-width: 1400px;
+  height: calc(100vh - var(--space-6));
+  max-height: 920px;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--bg);
+}
+.media-lightbox-header,
+.media-lightbox-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--control-height);
+}
+.media-lightbox-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.media-lightbox-kicker {
+  color: var(--accent-soft);
+  font:
+    11px "DM Mono",
+    monospace;
+  letter-spacing: 0.08em;
+}
+.media-lightbox-counter {
+  color: var(--muted);
+  font:
+    11px "DM Mono",
+    monospace;
+}
+.media-lightbox-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  margin-right: var(--space-3);
+}
+.media-lightbox-close,
+.media-lightbox-nav,
+.media-lightbox-control {
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+}
+.media-lightbox-close:hover:not(:disabled),
+.media-lightbox-close:focus-visible,
+.media-lightbox-nav:hover:not(:disabled),
+.media-lightbox-nav:focus-visible,
+.media-lightbox-control:hover:not(:disabled),
+.media-lightbox-control:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--ink);
+}
+.media-lightbox-close:focus-visible,
+.media-lightbox-nav:focus-visible,
+.media-lightbox-control:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+.media-lightbox-close:disabled,
+.media-lightbox-nav:disabled,
+.media-lightbox-control:disabled {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.media-lightbox-zoom-reset {
+  min-width: 42px;
+  padding: 4px var(--space-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font:
+    11px "DM Mono",
+    monospace;
+  font-weight: 600;
+}
+.media-lightbox-zoom-reset:hover,
+.media-lightbox-zoom-reset:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--ink);
+}
+.media-lightbox-zoom-reset:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+.media-lightbox-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.media-lightbox-media-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.media-lightbox-stage img,
+.media-lightbox-stage video {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  transition: transform var(--duration-fast) var(--ease);
+}
+.media-lightbox-stage video {
+  background: var(--bg);
+}
+.media-lightbox-caption {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  padding: 0 var(--space-3);
+  text-align: center;
+}
+.media-lightbox-caption strong,
+.media-lightbox-caption span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-lightbox-caption strong {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+.media-lightbox-caption span {
+  color: var(--muted-2);
+  font:
+    10px "DM Mono",
+    monospace;
+}
+@media (max-width: 650px) {
+  .media-lightbox-dialog {
+    width: calc(100vw - var(--space-4));
+    height: calc(100vh - var(--space-4));
+    padding: var(--space-3);
+  }
 }
 .message-row.outbound .message-bubble {
   border-color: oklch(0.7 0.15 258 / 0.25);

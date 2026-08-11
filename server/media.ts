@@ -44,6 +44,10 @@ export interface EncryptedWhatsAppMediaReference extends RemoteMediaReference {
 
 export interface MediaStorage {
   upload(path: string, media: ValidatedMedia): Promise<void>;
+  download(
+    path: string,
+    options?: { mimeType?: string; fileName?: string },
+  ): Promise<ValidatedMedia>;
   createSignedUrl(path: string, expiresInSeconds?: number): Promise<string>;
 }
 
@@ -537,6 +541,24 @@ export class SupabaseMediaStorage implements MediaStorage {
     if (error) throw new Error(`media_upload_failed:${error.message}`);
   }
 
+  async download(
+    path: string,
+    options: { mimeType?: string; fileName?: string } = {},
+  ) {
+    assertStoragePath(path);
+    const result = await this.client.storage.from(this.bucket).download(path);
+    if (result.error || !result.data)
+      throw new Error(
+        `media_download_failed:${result.error?.message ?? "empty"}`,
+      );
+    const data = new Uint8Array(await result.data.arrayBuffer());
+    return validateMedia(
+      data,
+      options.mimeType ?? "audio/ogg",
+      options.fileName ?? "audio.ogg",
+    );
+  }
+
   async createSignedUrl(path: string, expiresInSeconds = 900) {
     assertStoragePath(path);
     const expires = Math.min(Math.max(60, expiresInSeconds), 86_400);
@@ -558,6 +580,14 @@ export class InMemoryMediaStorage implements MediaStorage {
     assertStoragePath(path);
     this.files.set(path, media);
   }
+
+  async download(path: string) {
+    assertStoragePath(path);
+    const media = this.files.get(path);
+    if (!media) throw new Error("media_not_found");
+    return media;
+  }
+
   async createSignedUrl(path: string, expiresInSeconds = 900) {
     assertStoragePath(path);
     if (!this.files.has(path)) throw new Error("media_not_found");

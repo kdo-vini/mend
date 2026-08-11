@@ -2106,6 +2106,8 @@ export type Database = {
           sender_type: string
           sent_by_user_id: string | null
           text: string | null
+          transcription_error_code: string | null
+          transcription_status: string | null
           updated_at: string
           workspace_id: string
         }
@@ -2139,6 +2141,8 @@ export type Database = {
           sender_type: string
           sent_by_user_id?: string | null
           text?: string | null
+          transcription_error_code?: string | null
+          transcription_status?: string | null
           updated_at?: string
           workspace_id: string
         }
@@ -2172,6 +2176,8 @@ export type Database = {
           sender_type?: string
           sent_by_user_id?: string | null
           text?: string | null
+          transcription_error_code?: string | null
+          transcription_status?: string | null
           updated_at?: string
           workspace_id?: string
         }

@@ -17,7 +17,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "transcribe:audio": "node --env-file=.env --import tsx/esm server/transcribe-audio-backfill.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

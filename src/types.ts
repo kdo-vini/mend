@@ -50,6 +50,8 @@ export interface Message {
   status?: "sending" | "sent" | "delivered" | "read" | "failed";
   aiGenerated?: boolean;
   mediaStatus?: "processing" | "ready" | "failed" | "unsupported";
+  transcriptionStatus?: "processing" | "ready" | "failed";
+  transcriptionErrorCode?: string;
   mediaAssetId?: string;
   mediaBatchId?: string;
   attachment?: {
