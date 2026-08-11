@@ -1,4 +1,9 @@
-import { createHash } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  createDecipheriv,
+  timingSafeEqual,
+} from "node:crypto";
 import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { isIP } from "node:net";
@@ -28,6 +33,13 @@ export interface RemoteMediaReference {
   url: string;
   mimeType?: string;
   fileName?: string;
+}
+
+export interface EncryptedWhatsAppMediaReference extends RemoteMediaReference {
+  mediaType: "image" | "video" | "audio" | "document";
+  mediaKey: string;
+  fileSha256?: string;
+  fileEncSha256?: string;
 }
 
 export interface MediaStorage {
@@ -127,6 +139,173 @@ export function validateRemoteMediaUrl(value: string): URL {
   if (url.protocol !== "https:" || url.username || url.password || privateHost)
     throw new Error("media_url_must_be_public_https");
   return url;
+}
+
+function isWhatsAppMediaHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "whatsapp.net" || host.endsWith(".whatsapp.net");
+}
+
+export function validateWhatsAppMediaUrl(value: string): URL {
+  const url = new URL(value);
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    !isWhatsAppMediaHost(url.hostname)
+  )
+    throw new Error("whatsapp_media_url_invalid");
+  return url;
+}
+
+const binaryValue = (value: unknown): Buffer | undefined => {
+  if (typeof value === "string" && value.trim()) {
+    const encoded = value.replace(/^data:;base64,/, "");
+    return Buffer.from(encoded, "base64");
+  }
+  if (Array.isArray(value) && value.every((item) => Number.isInteger(item)))
+    return Buffer.from(value as number[]);
+  const record =
+    value !== null && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  if (record && Array.isArray(record.data)) return binaryValue(record.data);
+  return undefined;
+};
+
+const stringField = (...values: unknown[]): string | undefined =>
+  values.find(
+    (value): value is string =>
+      typeof value === "string" && Boolean(value.trim()),
+  );
+
+const recordValue = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+function unwrapMediaMessage(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  for (const wrapper of [
+    "ephemeralMessage",
+    "viewOnceMessage",
+    "viewOnceMessageV2",
+    "viewOnceMessageV2Extension",
+  ]) {
+    const nested = recordValue(value[wrapper]);
+    if (Object.keys(nested).length > 0)
+      return unwrapMediaMessage(recordValue(nested.message ?? nested));
+  }
+  return value;
+}
+
+/** Extracts Baileys' encrypted media reference from the persisted webhook payload. */
+export function extractEncryptedWhatsAppMedia(
+  raw: unknown,
+  mediaType: string,
+): EncryptedWhatsAppMediaReference | undefined {
+  if (!["image", "video", "audio", "document"].includes(mediaType))
+    return undefined;
+  const message = unwrapMediaMessage(recordValue(recordValue(raw).message));
+  const content = recordValue(message[`${mediaType}Message`]);
+  const key = binaryValue(content.mediaKey);
+  if (!key || key.byteLength !== 32) return undefined;
+  const directPath = stringField(content.directPath);
+  const url = stringField(content.url, content.mediaUrl);
+  const mediaUrl =
+    url ??
+    (directPath?.startsWith("/")
+      ? `https://mmg.whatsapp.net${directPath}`
+      : undefined);
+  if (!mediaUrl) return undefined;
+  try {
+    validateWhatsAppMediaUrl(mediaUrl);
+  } catch {
+    return undefined;
+  }
+  return {
+    url: new URL(mediaUrl).toString(),
+    mediaKey: key.toString("base64"),
+    mediaType: mediaType as EncryptedWhatsAppMediaReference["mediaType"],
+    ...(stringField(content.mimetype, content.mimeType)
+      ? { mimeType: stringField(content.mimetype, content.mimeType) }
+      : {}),
+    ...(stringField(content.fileName, content.filename)
+      ? { fileName: stringField(content.fileName, content.filename) }
+      : {}),
+    ...(stringField(content.fileSha256)
+      ? { fileSha256: stringField(content.fileSha256) }
+      : {}),
+    ...(stringField(content.fileEncSha256)
+      ? { fileEncSha256: stringField(content.fileEncSha256) }
+      : {}),
+  };
+}
+
+function hkdfSha256(input: Buffer, length: number, info: string): Buffer {
+  const prk = createHmac("sha256", Buffer.alloc(32)).update(input).digest();
+  let previous: Uint8Array = new Uint8Array();
+  let output: Uint8Array = new Uint8Array();
+  for (let index = 1; output.length < length; index += 1) {
+    previous = createHmac("sha256", prk)
+      .update(
+        Buffer.concat([
+          Buffer.from(previous),
+          Buffer.from(info),
+          Buffer.from([index]),
+        ]),
+      )
+      .digest();
+    output = Buffer.concat([Buffer.from(output), previous]);
+  }
+  return Buffer.from(output.subarray(0, length));
+}
+
+function matchesDigest(data: Buffer, expected: string | undefined): boolean {
+  if (!expected) return true;
+  const digest = binaryValue(expected);
+  return Boolean(
+    digest &&
+      digest.byteLength === 32 &&
+      timingSafeEqual(createHash("sha256").update(data).digest(), digest),
+  );
+}
+
+export function decryptWhatsAppMedia(
+  encryptedData: Uint8Array,
+  reference: Pick<
+    EncryptedWhatsAppMediaReference,
+    "mediaKey" | "mediaType" | "fileSha256" | "fileEncSha256"
+  >,
+): Uint8Array {
+  const mediaKey = binaryValue(reference.mediaKey);
+  if (!mediaKey || mediaKey.byteLength !== 32)
+    throw new Error("whatsapp_media_key_invalid");
+  const encrypted = Buffer.from(encryptedData);
+  if (encrypted.byteLength <= 10 || (encrypted.byteLength - 10) % 16 !== 0)
+    throw new Error("whatsapp_media_ciphertext_invalid");
+  if (!matchesDigest(encrypted, reference.fileEncSha256))
+    throw new Error("whatsapp_media_encrypted_hash_mismatch");
+  const info = `WhatsApp ${reference.mediaType[0].toUpperCase()}${reference.mediaType.slice(1)} Keys`;
+  const expanded = hkdfSha256(mediaKey, 112, info);
+  const iv = expanded.subarray(0, 16);
+  const cipherKey = expanded.subarray(16, 48);
+  const macKey = expanded.subarray(48, 80);
+  const ciphertext = encrypted.subarray(0, -10);
+  const actualMac = encrypted.subarray(-10);
+  const expectedMac = createHmac("sha256", macKey)
+    .update(iv)
+    .update(ciphertext)
+    .digest()
+    .subarray(0, 10);
+  if (!timingSafeEqual(actualMac, expectedMac))
+    throw new Error("whatsapp_media_mac_mismatch");
+  const decipher = createDecipheriv("aes-256-cbc", cipherKey, iv);
+  const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  if (!matchesDigest(plain, reference.fileSha256))
+    throw new Error("whatsapp_media_hash_mismatch");
+  return plain;
 }
 
 function decodeDataUrl(value: string): { mimeType: string; data: Uint8Array } {
@@ -255,6 +434,57 @@ export async function fetchRemoteMedia(
     return validateMedia(
       data,
       responseMime,
+      reference.fileName ?? "file",
+      limits,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function fetchWhatsAppMedia(
+  reference: EncryptedWhatsAppMediaReference,
+  limits: MediaLimits = {},
+  timeoutMs = 15_000,
+): Promise<ValidatedMedia> {
+  const url = validateWhatsAppMediaUrl(reference.url);
+  if (!reference.mimeType) throw new Error("whatsapp_media_mime_type_required");
+  const maxBytes = mediaMaxBytesForMime(reference.mimeType, limits.maxBytes);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      redirect: "error",
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`media_fetch_failed:${response.status}`);
+    if (!response.body) throw new Error("media_response_empty");
+    const contentLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > maxBytes + 26)
+      throw new Error("media_size_limit_exceeded");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      total += chunk.value.byteLength;
+      if (total > maxBytes + 26) {
+        await reader.cancel();
+        throw new Error("media_size_limit_exceeded");
+      }
+      chunks.push(chunk.value);
+    }
+    const encrypted = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      encrypted.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const plain = decryptWhatsAppMedia(encrypted, reference);
+    return validateMedia(
+      plain,
+      reference.mimeType,
       reference.fileName ?? "file",
       limits,
     );

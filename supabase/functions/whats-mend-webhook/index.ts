@@ -70,7 +70,16 @@ function publicMediaUrl(...values: unknown[]): string | undefined {
     if (!candidate) continue;
     try {
       const url = new URL(candidate);
-      if (url.protocol !== "https:" || url.pathname.endsWith(".enc")) continue;
+      const host = url.hostname.toLowerCase();
+      if (
+        url.protocol !== "https:" ||
+        url.username ||
+        url.password ||
+        host === "whatsapp.net" ||
+        host.endsWith(".whatsapp.net") ||
+        url.pathname.toLowerCase().endsWith(".enc")
+      )
+        continue;
       return url.toString();
     } catch {
       // Try the next provider media field.

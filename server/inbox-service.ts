@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildMediaStoragePath,
+  extractEncryptedWhatsAppMedia,
   fetchRemoteMedia,
+  fetchWhatsAppMedia,
   normalizeAudioForPlayback,
   parseMediaInput,
   type MediaStorage,
@@ -761,6 +763,9 @@ export class InboxService {
       channelConnectionId,
       "channel_connection_id",
     );
+    const encryptedWhatsAppMedia = message.mediaUrl
+      ? undefined
+      : extractEncryptedWhatsAppMedia(message.raw, message.messageType);
     if (
       options.mediaStoragePath &&
       !options.mediaStoragePath.startsWith(`${context.workspaceId}/`)
@@ -853,7 +858,7 @@ export class InboxService {
         participantName: participantName.slice(0, 240),
       });
 
-    if (result.inserted && message.mediaUrl)
+    if (result.inserted && (message.mediaUrl || encryptedWhatsAppMedia))
       await this.port.setMessageMediaStatus?.({
         workspaceId: context.workspaceId,
         messageId: result.id,
@@ -865,18 +870,22 @@ export class InboxService {
     if (
       result.inserted &&
       !options.mediaStoragePath &&
-      message.mediaUrl &&
+      (message.mediaUrl || encryptedWhatsAppMedia) &&
       this.options.mediaStorage
     ) {
       try {
-        const media = await fetchRemoteMedia(
-          {
-            url: message.mediaUrl,
-            mimeType: message.mimeType,
-            fileName: message.fileName,
-          },
-          { maxBytes: this.options.mediaMaxBytes },
-        );
+        const media = encryptedWhatsAppMedia
+          ? await fetchWhatsAppMedia(encryptedWhatsAppMedia, {
+              maxBytes: this.options.mediaMaxBytes,
+            })
+          : await fetchRemoteMedia(
+              {
+                url: message.mediaUrl!,
+                mimeType: message.mimeType,
+                fileName: message.fileName,
+              },
+              { maxBytes: this.options.mediaMaxBytes },
+            );
         const playbackMedia =
           message.messageType === "audio"
             ? await normalizeAudioForPlayback(media)

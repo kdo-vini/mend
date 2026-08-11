@@ -109,6 +109,28 @@ describe("Whatsmiau normalization", () => {
     );
   });
 
+  it("does not expose WhatsApp CDN ciphertext as a browser media URL", () => {
+    const [message] = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        key: {
+          id: "image-1",
+          remoteJid: "5511999999999@s.whatsapp.net",
+        },
+        message: {
+          imageMessage: {
+            mimetype: "image/jpeg",
+            url: "https://mmg.whatsapp.net/image",
+            mediaKey: Buffer.alloc(32).toString("base64"),
+          },
+        },
+      },
+    });
+
+    expect(message.mediaUrl).toBeUndefined();
+  });
+
   it("creates a stable id when the provider omits an id", () => {
     const payload = {
       event: "messages.upsert",
