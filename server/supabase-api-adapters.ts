@@ -4,9 +4,11 @@ import {
   discoverOAuthServerInfo,
   exchangeAuthorization,
   refreshAuthorization,
+  registerClient,
   startAuthorization,
 } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
+  AuthorizationServerMetadata,
   OAuthClientInformationMixed,
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
@@ -5287,6 +5289,11 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
     const clientInformation = await this.oauthClientInformation(
       connectionId,
       redirectUrl,
+      {
+        authorizationServerUrl: info.authorizationServerUrl,
+        metadata: info.authorizationServerMetadata,
+        scope: info.resourceMetadata?.scopes_supported?.join(" "),
+      },
     );
     const state = crypto.randomBytes(24).toString("base64url");
     const started = await startAuthorization(info.authorizationServerUrl, {
@@ -5548,6 +5555,11 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
   private async oauthClientInformation(
     connectionId: string,
     redirectUrl: string,
+    registration?: {
+      authorizationServerUrl: string;
+      metadata?: AuthorizationServerMetadata;
+      scope?: string;
+    },
   ): Promise<OAuthClientInformationMixed> {
     const result = await this.privilegedClient
       .from("mcp_connection_secrets")
@@ -5562,10 +5574,7 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
             rowValue.client_id_encrypted,
             connectionEncryptionKey(),
           )
-        : new URL(
-            "/api/mcp/oauth/client-metadata.json",
-            redirectUrl,
-          ).toString();
+        : undefined;
     const clientSecret =
       typeof rowValue.client_secret_encrypted === "string"
         ? decryptMcpSecret(
@@ -5573,6 +5582,45 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
             connectionEncryptionKey(),
           )
         : undefined;
+    if (!clientId) {
+      if (!registration)
+        throw new McpConnectionError(
+          409,
+          "mcp_oauth_client_missing",
+          "MCP OAuth client registration is missing. Start authorization again.",
+        );
+      const registered = await registerClient(
+        registration.authorizationServerUrl,
+        {
+          metadata: registration.metadata,
+          scope: registration.scope,
+          clientMetadata: {
+            client_name: "Mend workspace MCP connector",
+            redirect_uris: [redirectUrl],
+            grant_types: ["authorization_code", "refresh_token"],
+            response_types: ["code"],
+            token_endpoint_auth_method: "client_secret_basic",
+          },
+        },
+      );
+      await this.privilegedClient.from("mcp_connection_secrets").upsert({
+        connection_id: connectionId,
+        client_id_encrypted: encryptMcpSecret(
+          registered.client_id,
+          connectionEncryptionKey(),
+        ),
+        ...(registered.client_secret
+          ? {
+              client_secret_encrypted: encryptMcpSecret(
+                registered.client_secret,
+                connectionEncryptionKey(),
+              ),
+            }
+          : {}),
+        updated_at: new Date().toISOString(),
+      });
+      return registered;
+    }
     return {
       client_id: clientId,
       ...(clientSecret ? { client_secret: clientSecret } : {}),

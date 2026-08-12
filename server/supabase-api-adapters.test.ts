@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createSupabaseApiAdapters,
   SupabaseCodingRunAdapter,
+  SupabaseMcpConnectionAdapter,
   type WhatsmiauProviderPort,
 } from "./supabase-api-adapters.js";
 import type {
@@ -10,6 +11,7 @@ import type {
   SubscriptionLoginResult,
 } from "./coding-agent-auth.js";
 import { issueCreateSchema } from "./issue-service.js";
+import { decryptMcpSecret } from "./mcp.js";
 
 type Row = Record<string, unknown>;
 type Result = { data: unknown; error: { message: string } | null };
@@ -270,6 +272,90 @@ function adapters(
 }
 
 describe("Supabase API adapters", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.stubEnv("CONNECTION_ENCRYPTION_KEY", "test-key");
+  });
+
+  it("registers a dynamic OAuth client before starting Supabase authorization", async () => {
+    const connectionId = "55555555-5555-4555-8555-555555555555";
+    const redirectUri = "https://mend.test/api/mcp/connections/oauth/callback";
+    const client = new FakeClient({
+      mcp_connections: [
+        {
+          id: connectionId,
+          workspace_id: workspaceId,
+          name: "Supabase project",
+          server_url:
+            "https://mcp.supabase.com/mcp?project_ref=abcdefghijklmnopqrst&read_only=true&features=database",
+          auth_mode: "oauth",
+          status: "pending",
+          tools_json: [],
+          allowed_tool_names_json: [],
+          write_modes_json: [],
+        },
+      ],
+      mcp_connection_secrets: [],
+      mcp_oauth_states: [],
+      audit_log: [],
+    });
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("oauth-protected-resource"))
+        return Response.json({
+          resource:
+            "https://mcp.supabase.com/mcp?project_ref=abcdefghijklmnopqrst&read_only=true&features=database",
+          authorization_servers: ["https://api.supabase.com"],
+          scopes_supported: ["database:read"],
+        });
+      if (url.includes("oauth-authorization-server"))
+        return Response.json({
+          issuer: "https://api.supabase.com",
+          authorization_endpoint: "https://api.supabase.com/v1/oauth/authorize",
+          token_endpoint: "https://api.supabase.com/v1/oauth/token",
+          registration_endpoint:
+            "https://api.supabase.com/platform/oauth/apps/register",
+          response_types_supported: ["code"],
+          grant_types_supported: ["authorization_code", "refresh_token"],
+          token_endpoint_auth_methods_supported: ["client_secret_basic"],
+          code_challenge_methods_supported: ["S256"],
+        });
+      if (url.endsWith("/platform/oauth/apps/register")) {
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          redirect_uris: [redirectUri],
+          token_endpoint_auth_method: "client_secret_basic",
+          scope: "database:read",
+        });
+        return Response.json({
+          client_id: "66666666-6666-4666-8666-666666666666",
+          client_secret: "registered-secret",
+          redirect_uris: [redirectUri],
+          token_endpoint_auth_method: "client_secret_basic",
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("APP_BASE_URL", "https://mend.test");
+
+    const result = await new SupabaseMcpConnectionAdapter(
+      client as never,
+      client as never,
+    ).startOAuth({ workspaceId, userId }, connectionId);
+
+    expect(new URL(result.oauthUrl).searchParams.get("client_id")).toBe(
+      "66666666-6666-4666-8666-666666666666",
+    );
+    const secret = client.rows.get("mcp_connection_secrets")?.[0];
+    expect(
+      decryptMcpSecret(String(secret?.client_id_encrypted), "test-key"),
+    ).toBe("66666666-6666-4666-8666-666666666666");
+    expect(
+      decryptMcpSecret(String(secret?.client_secret_encrypted), "test-key"),
+    ).toBe("registered-secret");
+  });
+
   it("creates a durable bug case before queuing a direct research run", async () => {
     const issueId = "55555555-5555-4555-8555-555555555555";
     const client = new FakeClient({
