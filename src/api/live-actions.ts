@@ -1993,9 +1993,28 @@ export async function saveLiveAgentRoutingPolicy(input: {
   workspaceId: string;
   policy: LiveStageRoutingPolicy;
 }): Promise<LiveStageRoutingPolicy> {
+  const policy = {
+    ...(input.policy.repositoryId
+      ? { repositoryId: input.policy.repositoryId }
+      : {}),
+    stage: input.policy.stage,
+    ...(input.policy.connectionId
+      ? { connectionId: input.policy.connectionId }
+      : {}),
+    ...(input.policy.model ? { model: input.policy.model } : {}),
+    ...(input.policy.effort ? { effort: input.policy.effort } : {}),
+    ...(input.policy.budget ? { budget: input.policy.budget } : {}),
+    ...(input.policy.fallbackEnabled !== undefined
+      ? { fallbackEnabled: input.policy.fallbackEnabled }
+      : {}),
+    ...(input.policy.fallbackConnectionIds
+      ? { fallbackConnectionIds: input.policy.fallbackConnectionIds }
+      : {}),
+    preset: input.policy.preset,
+  };
   return apiRequest<LiveStageRoutingPolicy>(
     "/api/agent-routing-policies",
-    { method: "PUT", body: JSON.stringify(input.policy) },
+    { method: "PUT", body: JSON.stringify(policy) },
     input.workspaceId,
   );
 }

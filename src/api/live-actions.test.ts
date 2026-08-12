@@ -20,6 +20,8 @@ import {
   startLiveGitHubWorkspaceSetup,
   updateLiveRepository,
   updateLiveAgentRun,
+  saveLiveAgentRoutingPolicy,
+  type LiveStageRoutingPolicy,
 } from "./live-actions";
 
 describe("live Agent run actions", () => {
@@ -49,6 +51,41 @@ describe("live Agent run actions", () => {
 });
 
 describe("repository execution settings", () => {
+  it("does not send server-only routing snapshot fields back to the strict API", async () => {
+    apiRequest.mockResolvedValueOnce({ stage: "research", preset: "Custom" });
+
+    await saveLiveAgentRoutingPolicy({
+      workspaceId: "workspace-1",
+      policy: {
+        stage: "research",
+        connectionId: "connection-1",
+        model: "gpt-5.6-terra",
+        budget: {},
+        fallbackEnabled: false,
+        fallbackConnectionIds: [],
+        preset: "Custom",
+        snapshot: { internal: true },
+      } as LiveStageRoutingPolicy & { snapshot: Record<string, unknown> },
+    });
+
+    expect(apiRequest).toHaveBeenCalledWith(
+      "/api/agent-routing-policies",
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          stage: "research",
+          connectionId: "connection-1",
+          model: "gpt-5.6-terra",
+          budget: {},
+          fallbackEnabled: false,
+          fallbackConnectionIds: [],
+          preset: "Custom",
+        }),
+      },
+      "workspace-1",
+    );
+  });
+
   it("sends the selected Agent provider and GitHub target", async () => {
     apiRequest.mockResolvedValueOnce({
       id: "repo-1",
