@@ -66,12 +66,17 @@ export async function prepareSubscriptionLoginHome(): Promise<string> {
   return homeDirectory;
 }
 
-function challengeFromOutput(
+export function challengeFromOutput(
   output: string,
   expiresAt: string,
 ): SubscriptionLoginChallenge {
-  const url = output.match(/https?:\/\/[^\s)]+/i)?.[0];
-  const code = output.match(/\b[A-Z0-9]{4}(?:-[A-Z0-9]{4}){1,3}\b/)?.[0];
+  const ansiEscapePattern = new RegExp(
+    `${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`,
+    "g",
+  );
+  const plainOutput = output.replace(ansiEscapePattern, "");
+  const url = plainOutput.match(/https?:\/\/[^\s)]+/i)?.[0];
+  const code = plainOutput.match(/\b[A-Z0-9]{4}(?:-[A-Z0-9]{4}){1,3}\b/)?.[0];
   return { expiresAt, ...(url ? { url } : {}), ...(code ? { code } : {}) };
 }
 

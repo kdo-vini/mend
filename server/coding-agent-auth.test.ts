@@ -2,9 +2,25 @@ import { stat, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { prepareSubscriptionLoginHome } from "./coding-agent-auth.js";
+import {
+  challengeFromOutput,
+  prepareSubscriptionLoginHome,
+} from "./coding-agent-auth.js";
 
 describe("coding agent subscription auth", () => {
+  it("extracts an ANSI-colored Codex device challenge", () => {
+    expect(
+      challengeFromOutput(
+        "Open \u001b[36mhttps://auth.openai.com/codex/device\u001b[0m and enter \u001b[1mABCD-EFGH\u001b[0m",
+        "2026-08-12T02:00:00.000Z",
+      ),
+    ).toEqual({
+      url: "https://auth.openai.com/codex/device",
+      code: "ABCD-EFGH",
+      expiresAt: "2026-08-12T02:00:00.000Z",
+    });
+  });
+
   it("prepares the Codex home outside the system temp directory", async () => {
     const homeDirectory = await prepareSubscriptionLoginHome();
     try {
