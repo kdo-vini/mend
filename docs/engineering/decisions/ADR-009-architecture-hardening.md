@@ -31,6 +31,10 @@ Mend remains a PostgreSQL-backed modular monolith and adopts these invariants:
 7. Append-only workflow facts are the source for Impact metrics. Founder
    intervention and policy-required human touch are distinct. Runner
    heartbeats participate in readiness.
+8. Supabase implementations are owned by business-focused modules under
+   `server/adapters/supabase/`; worker integrations are owned under
+   `server/workers/`. The legacy entrypoints remain small composition and
+   compatibility facades, preserving one deployable modular monolith.
 
 ## Consequences
 
@@ -42,6 +46,9 @@ Mend remains a PostgreSQL-backed modular monolith and adopts these invariants:
   answers stay subject to the evidence threshold and workspace policy.
 - The operation ledger makes non-transactional provider retries recoverable
   without adding a distributed queue or service.
+- Domain changes can be reviewed and tested without navigating the complete
+  persistence or worker implementation. Existing imports and runtime assembly
+  remain backward-compatible.
 
 ## Rejected alternatives
 

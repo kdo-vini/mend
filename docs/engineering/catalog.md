@@ -26,7 +26,7 @@ Antes de escrever código novo:
 | `connectionEncryptionKey`                                                  | `server/mcp.ts`                                                 | Resolver e validar a chave de criptografia no backend. Nunca chamar essa lógica no navegador.                                                                                                                                                                                       |
 | `mcpConnectionRecordFromRow`                                               | `server/mcp.ts`                                                 | Converter uma linha sanitizada de `mcp_connections` para o contrato de domínio. Worker e adapters devem reutilizar o mapper.                                                                                                                                                        |
 | Supabase MCP URL scope                                                     | `server/mcp.ts`                                                 | Usar `buildSupabaseMcpServerUrl` / `parseSupabaseMcpServerUrl` para conexões oficiais do Supabase sempre com `project_ref` obrigatório e grupos allowlisted. Não montar query params do Supabase na UI nem aceitar modo account-wide no preset.                                     |
-| `SupabaseMcpConnectionAdapter.runtimeList` / OAuth DCR                     | `server/supabase-api-adapters.ts`                               | Carregar conexões MCP prontas para o worker e registrar clientes OAuth dinamicamente pelo `registration_endpoint`, persistindo client ID/secret criptografados. Workers não devem consultar ou descriptografar `mcp_connection_secrets` diretamente.                                |
+| `SupabaseMcpConnectionAdapter.runtimeList` / OAuth DCR                     | `server/adapters/supabase/mcp.ts`                               | Carregar conexões MCP prontas para o worker e registrar clientes OAuth dinamicamente pelo `registration_endpoint`, persistindo client ID/secret criptografados. Workers não devem consultar ou descriptografar `mcp_connection_secrets` diretamente.                                |
 | `normalizePhoneNumber`                                                     | `server/whatsmiau.ts`                                           | Normalizar telefone antes de procurar o contato em qualquer MCP ou integração de atendimento.                                                                                                                                                                                       |
 | `apiRequest`                                                               | `src/api/transport.ts`                                          | Toda chamada HTTP autenticada do navegador. Componentes não devem montar `fetch` próprio.                                                                                                                                                                                           |
 | `consumeAuthAttempt` / `AUTH_RATE_LIMIT_POLICY`                            | `src/shared/auth-rate-limit.ts`                                 | Barreira local de UX para login e cadastro por senha. Não substitui o limite autoritativo do Supabase Auth; reutilize a mesma política para evitar contadores divergentes.                                                                                                          |
@@ -40,9 +40,9 @@ Antes de escrever código novo:
 | `SupabaseBugLoopStore`                                                     | `server/bug-loop.ts`                                            | Criar, deduplicar e avançar casos de bug duráveis. Worker e rotas não devem escrever `bug_cases` ou `bug_case_events` diretamente.                                                                                                                                                  |
 | `CodingAgentCli`                                                           | `server/coding-agent-cli.ts`                                    | Executar ChatGPT, Claude, Gemini ou Verboo pelo registro fechado de adapters. Não aceitar executável, argv ou template de comando da UI ou do banco.                                                                                                                                |
 | `resolveEffectiveRunConfig` / `ResearchArtifact` / `assertRunContinuation` | `server/coding-control-plane.ts`                                | Resolver precedência de rota, validar catálogo/capabilities, congelar a configuração da run, content-addressar a pesquisa e validar transições Investigate → Propose/Implement e Propose → Implement. Implementações devem referenciar o artefato; não duplicar pesquisa repo-wide. |
-| `SupabaseCodingControlPlaneAdapter`                                        | `server/supabase-api-adapters.ts`                               | Persistir conexões, segredos service-role, catálogos, políticas por etapa, jobs de login e tentativas. Rotas não devem consultar as tabelas V2 diretamente.                                                                                                                         |
+| `SupabaseCodingControlPlaneAdapter`                                        | `server/adapters/supabase/coding-control-plane.ts`              | Persistir conexões, segredos service-role, catálogos, políticas por etapa, jobs de login e tentativas. Rotas não devem consultar as tabelas V2 diretamente.                                                                                                                         |
 | `GitHubControlPlane` / `GitHubAppTokenProvider`                            | `server/github-control-plane.ts`                                | Toda escrita GitHub usa token curto e escopado da instalação. Tokens não entram no ambiente do agente e chamadas REST não devem ser duplicadas fora deste limite.                                                                                                                   |
-| `SupabaseGitHubConnectionAdapter`                                          | `server/supabase-api-adapters.ts`                               | A instalação GitHub pertence ao workspace; o adapter valida o state one-shot, lista repositórios da instalação e só expõe owner/repositórios sanitizados ao navegador.                                                                                                              |
+| `SupabaseGitHubConnectionAdapter`                                          | `server/adapters/supabase/repositories.ts`                      | A instalação GitHub pertence ao workspace; o adapter valida o state one-shot, lista repositórios da instalação e só expõe owner/repositórios sanitizados ao navegador.                                                                                                              |
 
 Aliases antigos, como `encryptGoogleToken` e `decryptGoogleToken`, existem
 somente para compatibilidade com chamadas legadas. Código novo deve usar os
@@ -76,8 +76,9 @@ Supabase remoto pela configuração de Auth/Management API. Não use o
 ### Ports and adapters
 
 Contratos de integração ficam em `server/contracts/` ou no módulo de domínio
-da integração. A implementação Supabase fica em
-`server/supabase-api-adapters.ts`. Rotas recebem a porta por
+da integração. Implementações Supabase ficam em `server/adapters/supabase/`,
+separadas por capacidade; `server/supabase-api-adapters.ts` apenas preserva os
+exports públicos e compõe as dependências. Rotas recebem a porta por
 `ApiRouterDependencies`; elas não consultam Supabase diretamente.
 
 Fluxo esperado:
@@ -174,9 +175,12 @@ ser automaticamente repetida.
   atividade recente, nunca o payload ou identificador do job.
 
 Novos adapters ou processors desses domínios devem ir para `server/adapters/`
-ou `server/workers/`. `server/supabase-api-adapters.ts` e
-`server/live-worker.ts` permanecem compositores de compatibilidade durante a
-extração por domínio, sem criar serviços distribuídos.
+ou `server/workers/`. Os adapters Supabase são agrupados por acesso,
+mensageria, issues, planejamento, repositórios, credenciais, coding runs,
+control plane, Google e MCP. O worker separa resolução de canal, conhecimento,
+automação, inicialização Codex e utilitários internos. Os arquivos
+`server/supabase-api-adapters.ts` e `server/live-worker.ts` são somente
+compositores e fachadas de compatibilidade, sem criar serviços distribuídos.
 
 ## Checklist para uma mudança nova
 
