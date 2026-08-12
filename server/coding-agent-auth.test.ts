@@ -21,6 +21,18 @@ describe("coding agent subscription auth", () => {
     });
   });
 
+  it("extracts the current Codex four-by-five device code", () => {
+    expect(
+      challengeFromOutput(
+        "Enter this one-time code\n   \u001b[94mABCD-EFGHI\u001b[0m",
+        "2026-08-11T22:40:00.000Z",
+      ),
+    ).toEqual({
+      code: "ABCD-EFGHI",
+      expiresAt: "2026-08-11T22:40:00.000Z",
+    });
+  });
+
   it("prepares the Codex home outside the system temp directory", async () => {
     const homeDirectory = await prepareSubscriptionLoginHome();
     try {
