@@ -61,6 +61,24 @@
     "itemsCount_other": "{{count}} itens",
     "personalTaskDate": "Tarefa pessoal · {{date}}",
     "nothingDue": "Nada vence hoje. Adicione uma tarefa pelo cabeçalho.",
-    "filterColumn": "Filtrar coluna {{column}}"
+    "filterColumn": "Filtrar coluna {{column}}",
+    "noDueDate": "Sem prazo"
+  },
+  "errors": {
+    "personalLoad": "Não foi possível carregar o planejamento pessoal.",
+    "offlineUpdatePlan": "Você está offline. Reconecte-se para atualizar seu planejamento.",
+    "taskMove": "Não foi possível mover a tarefa.",
+    "offlineMoveWork": "Você está offline. Reconecte-se para mover o trabalho.",
+    "issueMove": "Não foi possível mover o chamado.",
+    "offlineAddTask": "Você está offline. Reconecte-se para adicionar uma tarefa.",
+    "taskCreate": "Não foi possível criar a tarefa.",
+    "offlineAddEvent": "Você está offline. Reconecte-se para adicionar um evento.",
+    "eventCreate": "Não foi possível criar o evento.",
+    "offlineChangePlan": "Você está offline. Reconecte-se para alterar seu planejamento.",
+    "taskDelete": "Não foi possível excluir a tarefa.",
+    "offlineDueDate": "Você está offline. Reconecte-se para alterar o prazo.",
+    "taskDueDate": "Não foi possível atualizar o prazo da tarefa.",
+    "offlineAgenda": "Você está offline. Reconecte-se para alterar sua agenda.",
+    "eventDelete": "Não foi possível excluir o evento."
   }
 }

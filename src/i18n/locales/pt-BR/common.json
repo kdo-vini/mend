@@ -25,6 +25,7 @@
     "loading": "Carregando…",
     "saving": "Salvando…",
     "unknownTime": "Horário desconhecido",
+    "justNow": "Agora mesmo",
     "allCaughtUp": "Tudo em dia",
     "loadingInbox": "Carregando caixa de entrada…",
     "loadingIssues": "Carregando chamados…",
@@ -110,6 +111,7 @@
     "agentRunStartedDetail": "Execução enfileirada com um contexto limpo do repositório."
   },
   "toasts": {
+    "nativeNotificationsEnabled": "Notificações nativas ativadas",
     "liveDataUnavailable": "Dados ao vivo indisponíveis: {{message}}",
     "issueCreatedLive": "Chamado criado no espaço de trabalho ao vivo",
     "issueCreated": "{{identifier}} criado",
@@ -123,7 +125,9 @@
     "agentRunCanceled": "Execução do Agent cancelada",
     "agentResultApproved": "Resultado do Agent aprovado e commit local criado",
     "agentBranchPublished": "Branch do Agent publicada",
+    "agentPullRequestMerged": "Pull request do Agent integrada",
     "agentDeploymentStarted": "Deploy do Agent iniciado",
+    "agentHealthChecked": "Saúde do deploy verificada",
     "agentResultRejected": "Resultado do Agent rejeitado",
     "demoNoSession": "O modo de demonstração não tem uma sessão conectada",
     "workspaceSwitched": "Trocado para {{name}}"

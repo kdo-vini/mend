@@ -10,6 +10,7 @@ import type {
   OAuthClientInformationMixed,
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { buildSupabaseMcpServerUrl } from "./mcp.js";
 import {
   type ChannelPort,
   type ChannelCreateInput,
@@ -156,6 +157,7 @@ import {
   encryptMcpSecret,
   McpConnectionError,
   mcpConnectionRecordFromRow,
+  parseSupabaseMcpServerUrl,
   sanitizeMcpError,
   validateMcpHeaders,
   validateMcpServerUrl,
@@ -4965,12 +4967,43 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
     );
   }
 
+  async runtimeList(context: { workspaceId: string }) {
+    const connections = await this.list(context);
+    const runtime: import("./mcp.js").McpRuntimeConnection[] = [];
+    for (const connection of connections) {
+      if (
+        connection.status !== "connected" ||
+        !connection.allowedToolNames.length
+      )
+        continue;
+      runtime.push({
+        ...connection,
+        headers: await this.headersFor(connection.id, connection.authMode),
+      });
+    }
+    return runtime;
+  }
+
   async create(
     context: { workspaceId: string; userId: string },
     input: McpConnectionInput,
   ) {
-    const serverUrl = validateMcpServerUrl(input.serverUrl);
-    const authMode = input.authMode ?? "none";
+    const serverUrl = validateMcpServerUrl(
+      input.provider === "supabase" && input.supabase
+        ? buildSupabaseMcpServerUrl(input.supabase)
+        : input.serverUrl,
+    );
+    if (
+      new URL(serverUrl).hostname.toLowerCase() === "mcp.supabase.com" &&
+      !parseSupabaseMcpServerUrl(serverUrl)
+    )
+      throw new McpConnectionError(
+        400,
+        "supabase_mcp_scope_required",
+        "Supabase MCP connections must be scoped to one project and an explicit feature allowlist.",
+      );
+    const authMode =
+      input.provider === "supabase" ? "oauth" : (input.authMode ?? "none");
     if (!["none", "headers", "oauth"].includes(authMode))
       throw new McpConnectionError(
         400,

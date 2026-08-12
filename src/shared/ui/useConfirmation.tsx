@@ -6,6 +6,8 @@ import {
   type ConfirmOptions,
 } from "./ConfirmDialog";
 
+// i18n-exempt: this primitive receives translated dialog copy from callers.
+
 export function useConfirmation() {
   const [request, setRequest] = useState<ConfirmationRequest | null>(null);
   const resolverRef = useRef<((confirmed: boolean) => void) | null>(null);

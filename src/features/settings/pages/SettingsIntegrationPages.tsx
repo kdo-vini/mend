@@ -32,9 +32,11 @@ import {
   disconnectLiveMcpConnection,
   listLiveMcpConnections,
   startLiveMcpOAuth,
+  supabaseMcpFeatures,
   testLiveMcpConnection,
   updateLiveMcpConnection,
   type McpConnection,
+  type SupabaseMcpFeature,
 } from "../api";
 import {
   SettingsError,
@@ -69,6 +71,12 @@ export function SettingsIntegrationsPage() {
             icon={<span className="integration-letter">G</span>}
             title="Google Calendar"
             description={t("v2.integrations.googleDescription")}
+          />
+          <IntegrationLink
+            to="/settings/integrations/mcp"
+            icon={<span className="integration-letter">S</span>}
+            title="Supabase"
+            description={t("v2.integrations.supabaseDescription")}
           />
           <IntegrationLink
             to="/settings/integrations/mcp"
@@ -519,11 +527,18 @@ export function SettingsMcpPage({
 }) {
   const { t } = useTranslation("settings");
   const [connections, setConnections] = useState<McpConnection[]>([]);
+  const [provider, setProvider] =
+    useState<McpConnection["provider"]>("supabase");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
   const [authMode, setAuthMode] = useState<McpConnection["authMode"]>("none");
   const [headers, setHeaders] = useState("{}");
+  const [supabaseProjectRef, setSupabaseProjectRef] = useState("");
+  const [supabaseReadOnly, setSupabaseReadOnly] = useState(true);
+  const [supabaseFeatures, setSupabaseFeatures] = useState<
+    SupabaseMcpFeature[]
+  >(["database", "debugging", "docs"]);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -545,27 +560,63 @@ export function SettingsMcpPage({
   }, [t, workspaceId]);
   useEffect(() => void load(), [load]);
   const create = async () => {
-    if (!workspaceId || !name.trim() || !url.trim()) return;
+    if (
+      !workspaceId ||
+      (provider === "custom" && (!name.trim() || !url.trim())) ||
+      (provider === "supabase" &&
+        (!supabaseProjectRef.trim() || !supabaseFeatures.length))
+    )
+      return;
+    if (
+      provider === "supabase" &&
+      !supabaseReadOnly &&
+      !(await onConfirm({
+        title: t("v2.integrations.confirmDatabaseWritesTitle"),
+        description: t("v2.integrations.confirmDatabaseWritesDescription"),
+        confirmLabel: t("v2.integrations.allowDatabaseWrites"),
+        destructive: true,
+      }))
+    )
+      return;
     setAction("create");
     setError(null);
     try {
-      const parsed = JSON.parse(headers);
+      const parsed = provider === "custom" ? JSON.parse(headers) : {};
       if (
+        provider === "custom" &&
         authMode === "headers" &&
         (!parsed || Array.isArray(parsed) || typeof parsed !== "object")
       )
         throw new Error(t("v2.integrations.errors.headers"));
       await createLiveMcpConnection(workspaceId, {
-        name,
-        description,
-        serverUrl: url,
-        authMode,
-        headers: authMode === "headers" ? parsed : undefined,
+        name:
+          provider === "supabase"
+            ? `Supabase ${supabaseProjectRef.trim()}`
+            : name,
+        description:
+          provider === "supabase"
+            ? `Supabase project ${supabaseProjectRef.trim()}`
+            : description,
+        serverUrl:
+          provider === "supabase" ? "https://mcp.supabase.com/mcp" : url,
+        authMode: provider === "supabase" ? "oauth" : authMode,
+        headers:
+          provider === "custom" && authMode === "headers" ? parsed : undefined,
+        provider,
+        supabase:
+          provider === "supabase"
+            ? {
+                projectRef: supabaseProjectRef.trim(),
+                readOnly: supabaseReadOnly,
+                features: supabaseFeatures,
+              }
+            : undefined,
       });
       setName("");
       setDescription("");
       setUrl("");
       setHeaders("{}");
+      setSupabaseProjectRef("");
       await load();
       onToast(t("v2.integrations.connectedToast"));
     } catch (reason) {
@@ -653,63 +704,145 @@ export function SettingsMcpPage({
           >
             <div className="settings-v2-form-grid">
               <label>
-                {t("v2.integrations.pluginName")}
-                <input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Zelo workspace"
-                />
-              </label>
-              <label>
-                {t("v2.integrations.purpose")}
-                <input
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  placeholder="Find customers and account status"
-                />
-              </label>
-              <label>
-                {t("v2.integrations.serverUrl")}
-                <input
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  placeholder="https://mcp.example.com"
-                  inputMode="url"
-                />
-              </label>
-              <label>
-                {t("v2.integrations.authentication")}
+                {t("v2.integrations.pluginType")}
                 <Select
-                  value={authMode}
+                  value={provider}
                   onChange={(value) =>
-                    setAuthMode(value as McpConnection["authMode"])
+                    setProvider(value as McpConnection["provider"])
                   }
                   options={[
-                    { value: "none", label: t("v2.integrations.none") },
                     {
-                      value: "headers",
-                      label: t("v2.integrations.secretHeaders"),
+                      value: "supabase",
+                      label: t("v2.integrations.supabase"),
                     },
-                    { value: "oauth", label: t("v2.integrations.oauth") },
+                    {
+                      value: "custom",
+                      label: t("v2.integrations.customMcp"),
+                    },
                   ]}
                 />
               </label>
-              {authMode === "headers" && (
-                <label className="settings-form-wide">
-                  {t("v2.integrations.secretHeaders")}
-                  <textarea
-                    rows={3}
-                    value={headers}
-                    onChange={(event) => setHeaders(event.target.value)}
-                  />
-                </label>
+              {provider === "supabase" ? (
+                <>
+                  <label>
+                    {t("v2.integrations.supabaseProjectRef")}
+                    <input
+                      value={supabaseProjectRef}
+                      onChange={(event) =>
+                        setSupabaseProjectRef(event.target.value)
+                      }
+                      placeholder="abcdefghijklmnopqrst"
+                      autoCapitalize="none"
+                    />
+                  </label>
+                  <fieldset className="settings-v2-mcp-scope settings-form-wide">
+                    <legend>{t("v2.integrations.supabaseCapabilities")}</legend>
+                    <p>{t("v2.integrations.supabaseCapabilitiesHelp")}</p>
+                    <div className="settings-v2-mcp-tools">
+                      {supabaseMcpFeatures.map((feature) => (
+                        <label key={feature}>
+                          <input
+                            type="checkbox"
+                            checked={supabaseFeatures.includes(feature)}
+                            onChange={(event) =>
+                              setSupabaseFeatures((current) =>
+                                event.target.checked
+                                  ? [...new Set([...current, feature])]
+                                  : current.filter((item) => item !== feature),
+                              )
+                            }
+                          />
+                          {t(`v2.integrations.supabaseFeatures.${feature}`)}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <label className="settings-v2-checkbox-field settings-form-wide">
+                    <input
+                      type="checkbox"
+                      checked={supabaseReadOnly}
+                      onChange={(event) =>
+                        setSupabaseReadOnly(event.target.checked)
+                      }
+                    />
+                    <span>
+                      <strong>{t("v2.integrations.supabaseReadOnly")}</strong>
+                      <small>
+                        {t("v2.integrations.supabaseReadOnlyDescription")}
+                      </small>
+                    </span>
+                  </label>
+                  <div className="settings-v2-callout settings-form-wide">
+                    <p>{t("v2.integrations.supabaseSecurityNote")}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <label>
+                    {t("v2.integrations.pluginName")}
+                    <input
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      placeholder="Zelo workspace"
+                    />
+                  </label>
+                  <label>
+                    {t("v2.integrations.purpose")}
+                    <input
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      placeholder="Find customers and account status"
+                    />
+                  </label>
+                  <label>
+                    {t("v2.integrations.serverUrl")}
+                    <input
+                      value={url}
+                      onChange={(event) => setUrl(event.target.value)}
+                      placeholder="https://mcp.example.com"
+                      inputMode="url"
+                    />
+                  </label>
+                  <label>
+                    {t("v2.integrations.authentication")}
+                    <Select
+                      value={authMode}
+                      onChange={(value) =>
+                        setAuthMode(value as McpConnection["authMode"])
+                      }
+                      options={[
+                        { value: "none", label: t("v2.integrations.none") },
+                        {
+                          value: "headers",
+                          label: t("v2.integrations.secretHeaders"),
+                        },
+                        { value: "oauth", label: t("v2.integrations.oauth") },
+                      ]}
+                    />
+                  </label>
+                  {authMode === "headers" && (
+                    <label className="settings-form-wide">
+                      {t("v2.integrations.secretHeaders")}
+                      <textarea
+                        rows={3}
+                        value={headers}
+                        onChange={(event) => setHeaders(event.target.value)}
+                      />
+                    </label>
+                  )}
+                </>
               )}
             </div>
             <button
               className="button button-primary"
               type="button"
               onClick={() => void create()}
-              disabled={action === "create" || !name.trim() || !url.trim()}
+              disabled={
+                action === "create" ||
+                (provider === "custom"
+                  ? !name.trim() || !url.trim()
+                  : !supabaseProjectRef.trim() || !supabaseFeatures.length)
+              }
             >
               <Plus size={14} /> {t("v2.integrations.addPlugin")}
             </button>
@@ -767,6 +900,7 @@ export function SettingsMcpPage({
                         .finally(() => setAction(null));
                     }}
                     onUpdate={update}
+                    onConfirm={onConfirm}
                     onDisconnect={() => void disconnect(connection)}
                   />
                 ))}
@@ -785,6 +919,7 @@ function McpRow({
   onTest,
   onOAuth,
   onUpdate,
+  onConfirm,
   onDisconnect,
 }: {
   connection: McpConnection;
@@ -797,12 +932,17 @@ function McpRow({
       McpConnection,
       "name" | "description" | "allowedToolNames" | "writeModes"
     >,
-  ) => void;
+  ) => Promise<void>;
+  onConfirm: Confirm;
   onDisconnect: () => void;
 }) {
   const { t } = useTranslation("settings");
   const [enabled, setEnabled] = useState(new Set(connection.allowedToolNames));
   const [writeModes, setWriteModes] = useState(connection.writeModes);
+  useEffect(() => {
+    setEnabled(new Set(connection.allowedToolNames));
+    setWriteModes(connection.writeModes);
+  }, [connection.allowedToolNames, connection.writeModes]);
   const save = (nextEnabled = enabled, nextModes = writeModes) =>
     onUpdate(connection, {
       name: connection.name,
@@ -810,6 +950,27 @@ function McpRow({
       allowedToolNames: [...nextEnabled],
       writeModes: nextModes,
     });
+  const setAccess = async (
+    nextEnabled: Set<string>,
+    nextModes: Array<"draft" | "safe_auto">,
+  ) => {
+    const addsWriteAccess = nextModes.some(
+      (mode) => !connection.writeModes.includes(mode),
+    );
+    if (
+      addsWriteAccess &&
+      !(await onConfirm({
+        title: t("v2.integrations.confirmAllowWritesTitle"),
+        description: t("v2.integrations.confirmAllowWritesDescription"),
+        confirmLabel: t("v2.integrations.allowWrites"),
+        destructive: true,
+      }))
+    )
+      return;
+    setEnabled(nextEnabled);
+    setWriteModes(nextModes);
+    await save(nextEnabled, nextModes);
+  };
   return (
     <div className="settings-v2-row settings-v2-row-stack">
       <div className="settings-v2-row-main">
@@ -820,6 +981,17 @@ function McpRow({
             defaultValue: connection.status,
           })}
         </span>
+        {connection.supabaseScope && (
+          <small>
+            {t("v2.integrations.supabaseScopeSummary", {
+              projectRef: connection.supabaseScope.projectRef,
+              count: connection.supabaseScope.features.length,
+              access: connection.supabaseScope.readOnly
+                ? t("v2.integrations.databaseReadOnly")
+                : t("v2.integrations.databaseWriteEnabled"),
+            })}
+          </small>
+        )}
         {connection.lastError && (
           <small role="alert">{connection.lastError}</small>
         )}
@@ -834,8 +1006,7 @@ function McpRow({
                   const next = new Set(enabled);
                   if (event.target.checked) next.add(tool.name);
                   else next.delete(tool.name);
-                  setEnabled(next);
-                  void save(next);
+                  void setAccess(next, writeModes);
                 }}
               />
               {tool.name}{" "}
@@ -856,8 +1027,7 @@ function McpRow({
                   : value === "none"
                     ? ([] as const)
                     : [value as "draft" | "safe_auto"];
-              setWriteModes([...next]);
-              void save(enabled, [...next]);
+              void setAccess(enabled, [...next]);
             }}
             options={[
               { value: "none", label: t("v2.integrations.none") },
@@ -876,6 +1046,37 @@ function McpRow({
             ]}
           />
         </label>
+        {connection.tools.length > 0 && (
+          <div className="settings-v2-inline-actions">
+            <button
+              className="button button-secondary button-small"
+              type="button"
+              disabled={action === connection.id}
+              onClick={() =>
+                void setAccess(
+                  new Set(connection.tools.map((tool) => tool.name)),
+                  writeModes,
+                )
+              }
+            >
+              {t("v2.integrations.allowAllTools")}
+            </button>
+            <button
+              className="button button-danger button-small"
+              type="button"
+              disabled={action === connection.id}
+              onClick={() =>
+                void setAccess(
+                  new Set(connection.tools.map((tool) => tool.name)),
+                  ["draft", "safe_auto"],
+                )
+              }
+            >
+              {t("v2.integrations.allowAllAutonomous")}
+            </button>
+          </div>
+        )}
+        <small>{t("v2.integrations.autonomyPolicyNote")}</small>
       </div>
       <div className="settings-v2-row-actions">
         {connection.authMode === "oauth" &&

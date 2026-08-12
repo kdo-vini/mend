@@ -25,7 +25,12 @@
     "complete": "concluído",
     "filesChanged": "arquivos alterados",
     "runtime": "tempo de execução",
-    "localCommit": "commit local"
+    "localCommit": "commit local",
+    "modelUsed": "modelo usado",
+    "tokens": "tokens",
+    "cost": "custo",
+    "attempts": "Tentativas de codificaÃ§Ã£o",
+    "provider": "provedor"
   },
   "failure": {
     "title": "A execução falhou",
@@ -114,6 +119,10 @@
       "duplicate": "Duplicado",
       "needs_human": "Precisa de revisão humana"
     },
+    "model": "modelo: {{model}}",
+    "effort": "esforço: {{effort}}",
+    "subscription": "assinatura",
+    "apiKey": "chave de API",
     "decisions": {
       "pending": "Pendente",
       "notify": "Notificar uma pessoa",

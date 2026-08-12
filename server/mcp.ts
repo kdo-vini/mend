@@ -14,6 +14,23 @@ export type McpConnectionStatus =
   | "error"
   | "disconnected";
 export type McpAiMode = "draft" | "safe_auto";
+export type McpProvider = "custom" | "supabase";
+export const supabaseMcpFeatures = [
+  "docs",
+  "database",
+  "debugging",
+  "development",
+  "functions",
+  "branching",
+  "storage",
+] as const;
+export type SupabaseMcpFeature = (typeof supabaseMcpFeatures)[number];
+
+export interface SupabaseMcpScope {
+  projectRef: string;
+  readOnly: boolean;
+  features: SupabaseMcpFeature[];
+}
 
 export interface McpToolRecord {
   name: string;
@@ -28,6 +45,8 @@ export interface McpConnectionRecord {
   name: string;
   description: string;
   serverUrl: string;
+  provider: McpProvider;
+  supabaseScope: SupabaseMcpScope | null;
   authMode: McpAuthMode;
   status: McpConnectionStatus;
   tools: McpToolRecord[];
@@ -51,6 +70,8 @@ export interface McpConnectionInput {
   headers?: Record<string, string>;
   clientId?: string;
   clientSecret?: string;
+  provider?: McpProvider;
+  supabase?: SupabaseMcpScope;
 }
 
 export interface McpConnectionPatch {
@@ -71,12 +92,16 @@ export function mcpConnectionRecordFromRow(
 ): McpConnectionRecord {
   const authMode = row.auth_mode;
   const status = row.status;
+  const serverUrl = String(row.server_url ?? "");
+  const supabaseScope = parseSupabaseMcpServerUrl(serverUrl);
   return {
     id: String(row.id ?? ""),
     workspaceId: String(row.workspace_id ?? ""),
     name: String(row.name ?? ""),
     description: typeof row.description === "string" ? row.description : "",
-    serverUrl: String(row.server_url ?? ""),
+    serverUrl,
+    provider: supabaseScope ? "supabase" : "custom",
+    supabaseScope,
     authMode:
       authMode === "headers" || authMode === "oauth" ? authMode : "none",
     status:
@@ -103,8 +128,81 @@ export function mcpConnectionRecordFromRow(
   };
 }
 
+export function buildSupabaseMcpServerUrl(scope: SupabaseMcpScope): string {
+  const projectRef = scope.projectRef.trim().toLowerCase();
+  if (!/^[a-z0-9]{6,64}$/.test(projectRef))
+    throw new McpConnectionError(
+      400,
+      "supabase_project_ref_invalid",
+      "Supabase project ref is invalid.",
+    );
+  const features = [...new Set(scope.features)].filter(
+    (feature): feature is SupabaseMcpFeature =>
+      supabaseMcpFeatures.includes(feature as SupabaseMcpFeature),
+  );
+  if (!features.length || features.length !== new Set(scope.features).size)
+    throw new McpConnectionError(
+      400,
+      "supabase_mcp_features_invalid",
+      "Choose at least one supported Supabase feature group.",
+    );
+  const url = new URL("https://mcp.supabase.com/mcp");
+  url.searchParams.set("project_ref", projectRef);
+  if (scope.readOnly) url.searchParams.set("read_only", "true");
+  url.searchParams.set("features", features.join(","));
+  return url.toString();
+}
+
+export function parseSupabaseMcpServerUrl(
+  value: string,
+): SupabaseMcpScope | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.hostname.toLowerCase() !== "mcp.supabase.com" ||
+    url.pathname.replace(/\/$/, "") !== "/mcp"
+  )
+    return null;
+  const allowedParameters = new Set(["project_ref", "read_only", "features"]);
+  for (const key of url.searchParams.keys()) {
+    if (
+      !allowedParameters.has(key) ||
+      url.searchParams.getAll(key).length !== 1
+    )
+      return null;
+  }
+  const readOnlyValue = url.searchParams.get("read_only");
+  if (readOnlyValue !== null && readOnlyValue !== "true") return null;
+  const projectRef = url.searchParams.get("project_ref")?.trim() ?? "";
+  if (!/^[a-z0-9]{6,64}$/.test(projectRef)) return null;
+  const requestedFeatures = (url.searchParams.get("features") ?? "")
+    .split(",")
+    .filter(Boolean);
+  if (
+    requestedFeatures.some(
+      (feature) => !supabaseMcpFeatures.includes(feature as SupabaseMcpFeature),
+    )
+  )
+    return null;
+  const features = requestedFeatures as SupabaseMcpFeature[];
+  if (!features.length) return null;
+  return {
+    projectRef,
+    readOnly: readOnlyValue === "true",
+    features: [...new Set(features)],
+  };
+}
+
 export interface McpConnectionPort {
   list(context: { workspaceId: string }): Promise<McpConnectionRecord[]>;
+  runtimeList(context: {
+    workspaceId: string;
+  }): Promise<McpRuntimeConnection[]>;
   create(
     context: { workspaceId: string; userId: string },
     input: McpConnectionInput,

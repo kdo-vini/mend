@@ -148,8 +148,8 @@ function addDays(date: string, days: number) {
   return `${year}-${month}-${day}`;
 }
 
-function dateLabel(value: string | null | undefined) {
-  if (!value) return "No due date";
+function dateLabel(value: string | null | undefined, noDueDate: string) {
+  if (!value) return noDueDate;
   return new Intl.DateTimeFormat(currentInterfaceLanguage(), {
     month: "short",
     day: "numeric",
@@ -341,14 +341,12 @@ export function KanbanPage({
       setEvents(nextEvents);
     } catch (cause) {
       setError(
-        cause instanceof Error
-          ? cause.message
-          : "Personal planning could not be loaded.",
+        cause instanceof Error ? cause.message : t("errors.personalLoad"),
       );
     } finally {
       setLoading(false);
     }
-  }, [demoMode, range, workspaceId]);
+  }, [demoMode, range, t, workspaceId]);
 
   useEffect(() => {
     void refreshPersonal();
@@ -392,7 +390,7 @@ export function KanbanPage({
     status: PersonalTaskStatus,
   ) => {
     if (!online) {
-      onToast("You are offline. Reconnect to update your plan.");
+      onToast(t("errors.offlineUpdatePlan"));
       return;
     }
     const previous = task;
@@ -410,9 +408,7 @@ export function KanbanPage({
       setTasks((current) =>
         current.map((item) => (item.id === task.id ? previous : item)),
       );
-      onToast(
-        cause instanceof Error ? cause.message : "Task could not be moved.",
-      );
+      onToast(cause instanceof Error ? cause.message : t("errors.taskMove"));
     }
   };
 
@@ -423,7 +419,7 @@ export function KanbanPage({
     afterId?: string | null,
   ) => {
     if (!online) {
-      onToast("You are offline. Reconnect to move work.");
+      onToast(t("errors.offlineMoveWork"));
       return;
     }
     const previousStatus = issue.status;
@@ -448,15 +444,13 @@ export function KanbanPage({
         ...current,
         [issue.id]: { status: previousStatus },
       }));
-      onToast(
-        cause instanceof Error ? cause.message : "Issue could not be moved.",
-      );
+      onToast(cause instanceof Error ? cause.message : t("errors.issueMove"));
     }
   };
 
   const createTask = async () => {
     if (!online) {
-      onToast("You are offline. Reconnect to add a task.");
+      onToast(t("errors.offlineAddTask"));
       return;
     }
     if (!taskTitle.trim()) return;
@@ -484,15 +478,13 @@ export function KanbanPage({
       });
       setTasks((current) => [...current, task]);
     } catch (cause) {
-      onToast(
-        cause instanceof Error ? cause.message : "Task could not be created.",
-      );
+      onToast(cause instanceof Error ? cause.message : t("errors.taskCreate"));
     }
   };
 
   const focusTaskInput = () => {
     if (!online) {
-      onToast("You are offline. Reconnect to add a task.");
+      onToast(t("errors.offlineAddTask"));
       return;
     }
     taskInputRef.current?.focus();
@@ -501,7 +493,7 @@ export function KanbanPage({
   const createEvent = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!online) {
-      onToast("You are offline. Reconnect to add an event.");
+      onToast(t("errors.offlineAddEvent"));
       return;
     }
     if (!eventTitle.trim()) return;
@@ -530,15 +522,13 @@ export function KanbanPage({
       setEventTitle("");
       setEventLocation("");
     } catch (cause) {
-      onToast(
-        cause instanceof Error ? cause.message : "Event could not be created.",
-      );
+      onToast(cause instanceof Error ? cause.message : t("errors.eventCreate"));
     }
   };
 
   const removeTask = async (task: PersonalTask) => {
     if (!online) {
-      onToast("You are offline. Reconnect to change your plan.");
+      onToast(t("errors.offlineChangePlan"));
       return;
     }
     setTasks((current) => current.filter((item) => item.id !== task.id));
@@ -548,7 +538,7 @@ export function KanbanPage({
       } catch (cause) {
         setTasks((current) => [...current, task]);
         onToast(
-          cause instanceof Error ? cause.message : "Task could not be deleted.",
+          cause instanceof Error ? cause.message : t("errors.taskDelete"),
         );
       }
     }
@@ -556,7 +546,7 @@ export function KanbanPage({
 
   const setTaskDueDate = async (task: PersonalTask, dueOn: string) => {
     if (!online) {
-      onToast("You are offline. Reconnect to change the due date.");
+      onToast(t("errors.offlineDueDate"));
       return;
     }
     const previous = task.dueOn;
@@ -576,17 +566,13 @@ export function KanbanPage({
           item.id === task.id ? { ...item, dueOn: previous } : item,
         ),
       );
-      onToast(
-        cause instanceof Error
-          ? cause.message
-          : "Task due date could not be updated.",
-      );
+      onToast(cause instanceof Error ? cause.message : t("errors.taskDueDate"));
     }
   };
 
   const removeEvent = async (event: PersonalEvent) => {
     if (!online) {
-      onToast("You are offline. Reconnect to change your agenda.");
+      onToast(t("errors.offlineAgenda"));
       return;
     }
     setEvents((current) => current.filter((item) => item.id !== event.id));
@@ -596,9 +582,7 @@ export function KanbanPage({
       } catch (cause) {
         setEvents((current) => [...current, event]);
         onToast(
-          cause instanceof Error
-            ? cause.message
-            : "Event could not be deleted.",
+          cause instanceof Error ? cause.message : t("errors.eventDelete"),
         );
       }
     }
@@ -606,7 +590,7 @@ export function KanbanPage({
 
   const setIssueDueDate = (issue: Issue, dueOn: string) => {
     if (!online) {
-      onToast("You are offline. Reconnect to change the due date.");
+      onToast(t("errors.offlineDueDate"));
       return;
     }
     onUpdateIssue(issue.id, { dueOn });
@@ -1328,7 +1312,7 @@ function TaskCard({
         {task.title}
       </button>
       <div className="kanban-card-meta">
-        <span>{dateLabel(task.dueOn)}</span>
+        <span>{dateLabel(task.dueOn, t("ui.noDueDate"))}</span>
         {task.completedAt && (
           <span className="success-copy">
             <Check size={12} /> {t("ui.completed")}
@@ -1428,7 +1412,9 @@ function MobileAgenda({
               <span>
                 <strong>{task.title}</strong>
                 <small>
-                  {t("ui.personalTaskDate", { date: dateLabel(task.dueOn) })}
+                  {t("ui.personalTaskDate", {
+                    date: dateLabel(task.dueOn, t("ui.noDueDate")),
+                  })}
                 </small>
               </span>
               <ChevronDown size={14} />
@@ -1458,7 +1444,8 @@ function MobileAgenda({
               <span>
                 <strong>{issue.title}</strong>
                 <small>
-                  {issue.identifier} · {dateLabel(issue.dueOn)}
+                  {issue.identifier} ·{" "}
+                  {dateLabel(issue.dueOn, t("ui.noDueDate"))}
                 </small>
               </span>
               <ChevronDown size={14} />

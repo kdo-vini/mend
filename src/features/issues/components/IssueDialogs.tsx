@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   BookOpen,
   CircleDot,
@@ -66,35 +67,41 @@ export function CommandPalette({
   onSwitchWorkspace: (workspaceId: string) => void;
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation("issues");
   const [query, setQuery] = useState("");
   const actions = [
     {
-      label: "Open inbox",
+      label: t("command.openInbox"),
       hint: "G then I",
       icon: InboxIcon,
       action: () => navigate("/inbox"),
     },
     {
-      label: "Browse issues",
+      label: t("command.browseIssues"),
       hint: "G then X",
       icon: CircleDot,
       action: () => navigate("/issues"),
     },
-    { label: "Create new issue", hint: "C", icon: Plus, action: onNewIssue },
     {
-      label: "View engineering runs",
+      label: t("command.createIssue"),
+      hint: "C",
+      icon: Plus,
+      action: onNewIssue,
+    },
+    {
+      label: t("command.viewRuns"),
       hint: "G then R",
       icon: TerminalSquare,
       action: () => navigate("/agent-runs"),
     },
     {
-      label: "Open knowledge",
+      label: t("command.openKnowledge"),
       hint: "G then K",
       icon: BookOpen,
       action: () => navigate("/knowledge"),
     },
     {
-      label: "Open settings",
+      label: t("command.openSettings"),
       hint: "",
       icon: SettingsIcon,
       action: () => navigate("/settings"),
@@ -111,7 +118,7 @@ export function CommandPalette({
           )
           .slice(0, 6)
           .map((conversation) => ({
-            label: `Conversation: ${conversation.name}`,
+            label: `${t("detail.linkedConversation")}: ${conversation.name}`,
             hint: "WhatsApp",
             icon: MessageCircle,
             action: () => onOpenConversation(conversation.id),
@@ -126,7 +133,7 @@ export function CommandPalette({
           .flatMap((issue) => [
             {
               label: `${issue.identifier}: ${issue.title}`,
-              hint: "Issue",
+              hint: t("detail.internal"),
               icon: CircleDot,
               action: () => onOpenIssue(issue.identifier),
             },
@@ -134,8 +141,8 @@ export function CommandPalette({
             normalizedQuery.includes("run")
               ? [
                   {
-                    label: `Run coding agent for ${issue.identifier}`,
-                    hint: "Start",
+                    label: `${t("detail.runAgent")} ${issue.identifier}`,
+                    hint: t("command.startRun"),
                     icon: TerminalSquare,
                     action: () => onStartRun(issue.id),
                   },
@@ -152,8 +159,8 @@ export function CommandPalette({
           )
           .slice(0, 4)
           .map((workspace) => ({
-            label: `Switch workspace: ${workspace.name}`,
-            hint: "Workspace",
+            label: `${t("command.openSettings")}: ${workspace.name}`,
+            hint: t("detail.source"),
             icon: UsersRound,
             action: () => onSwitchWorkspace(workspace.id),
           })),
@@ -185,19 +192,17 @@ export function CommandPalette({
           <input
             id="command-palette-title"
             autoFocus
-            aria-label="Search actions"
+            aria-label={t("command.searchActions")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={selectFirst}
-            placeholder="Search actions or jump to…"
+            placeholder={t("command.searchPlaceholder")}
           />
-          <kbd>ESC</kbd>
+          <kbd>{t("command.escape")}</kbd>
         </div>
         <div className="palette-group">
           <span className="palette-label">
-            {normalizedQuery
-              ? "Actions and workspace results"
-              : "Quick actions"}
+            {normalizedQuery ? t("command.results") : t("command.quickActions")}
           </span>
           {filteredActions.length ? (
             filteredActions.map(({ label, hint, icon: Icon, action }) => (
@@ -216,21 +221,21 @@ export function CommandPalette({
             ))
           ) : (
             <EmptyState
-              title="No matching actions"
-              description="Try a different command."
+              title={t("command.noMatching")}
+              description={t("command.tryDifferent")}
               search
             />
           )}
         </div>
         <div className="palette-footer">
           <span>
-            <Command size={13} /> Navigate
+            <Command size={13} /> {t("command.navigate")}
           </span>
           <span>
-            <CornerDownRight size={13} /> Select
+            <CornerDownRight size={13} /> {t("command.select")}
           </span>
           <span>
-            <Keyboard size={13} /> Shortcuts
+            <Keyboard size={13} /> {t("command.shortcuts")}
           </span>
         </div>
       </div>
@@ -252,6 +257,7 @@ export function CreateIssueDialog({
     conversationId?: string;
   }) => void;
 }) {
+  const { t } = useTranslation("issues");
   const [title, setTitle] = useState("");
   const [type, setType] = useState<IssueType>("Task");
   const [priority, setPriority] = useState<Priority>("Medium");
@@ -260,7 +266,7 @@ export function CreateIssueDialog({
   const submit = () => {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
-      setError("Add a short title so the team knows what needs attention.");
+      setError(t("dialogs.createTitleError"));
       return;
     }
     onCreate({
@@ -281,21 +287,21 @@ export function CreateIssueDialog({
       >
         <div className="modal-header">
           <div>
-            <span className="page-kicker">New work item</span>
-            <h2 id="create-issue-title">Create issue</h2>
+            <span className="page-kicker">{t("dialogs.newWorkItem")}</span>
+            <h2 id="create-issue-title">{t("dialogs.createIssue")}</h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close create issue dialog"
+            aria-label={t("dialogs.closeCreate")}
           >
             <X size={17} />
           </button>
         </div>
         <div className="modal-body">
           <label>
-            Title
+            {t("dialogs.title")}
             <input
               autoFocus
               required
@@ -307,7 +313,7 @@ export function CreateIssueDialog({
                 setTitle(event.target.value);
                 if (event.target.value.trim()) setError("");
               }}
-              placeholder="What needs to be done?"
+              placeholder={t("dialogs.createTitlePlaceholder")}
             />
             {error && (
               <span className="field-error" id="create-issue-error">
@@ -317,7 +323,7 @@ export function CreateIssueDialog({
           </label>
           <div className="form-row">
             <label>
-              Type
+              {t("dialogs.type")}
               <Select
                 value={type}
                 options={[
@@ -335,7 +341,7 @@ export function CreateIssueDialog({
               />
             </label>
             <label>
-              Priority
+              {t("dialogs.priority")}
               <Select
                 value={priority}
                 options={["Urgent", "High", "Medium", "Low", "No priority"].map(
@@ -346,11 +352,11 @@ export function CreateIssueDialog({
             </label>
           </div>
           <label>
-            Link conversation{" "}
+            {t("dialogs.linkConversation")}{" "}
             <Select
               value={conversationId}
               options={[
-                { value: "", label: "Internal issue" },
+                { value: "", label: t("dialogs.internalIssue") },
                 ...conversations.map((conversation) => ({
                   value: conversation.id,
                   label: `${conversation.name} · ${conversation.lastMessage.slice(0, 42)}`,
@@ -361,10 +367,7 @@ export function CreateIssueDialog({
           </label>
           <div className="modal-note">
             <Info size={14} />
-            <span>
-              Issues stay inside Techne. No external ticket tracker is
-              connected.
-            </span>
+            <span>{t("dialogs.internalNote")}</span>
           </div>
         </div>
         <div className="modal-footer">
@@ -373,7 +376,7 @@ export function CreateIssueDialog({
             type="button"
             onClick={onClose}
           >
-            Cancel
+            {t("common:actions.cancel")}
           </button>
           <button
             className="button button-primary"
@@ -381,7 +384,7 @@ export function CreateIssueDialog({
             disabled={!title.trim()}
             onClick={submit}
           >
-            Create issue
+            {t("dialogs.createIssue")}
           </button>
         </div>
       </div>
@@ -411,6 +414,7 @@ export function EditIssueDialog({
     >,
   ) => void;
 }) {
+  const { t } = useTranslation("issues");
   const [title, setTitle] = useState(issue?.title ?? "");
   const [type, setType] = useState<IssueType>(issue?.type ?? "Task");
   const [priority, setPriority] = useState<Priority>(
@@ -426,7 +430,7 @@ export function EditIssueDialog({
   const submit = () => {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
-      setError("Add a short title so the issue remains actionable.");
+      setError(t("dialogs.editTitleError"));
       return;
     }
     onSave({
@@ -452,20 +456,20 @@ export function EditIssueDialog({
         <div className="modal-header">
           <div>
             <span className="page-kicker">{issue.identifier}</span>
-            <h2 id="edit-issue-title">Edit issue</h2>
+            <h2 id="edit-issue-title">{t("dialogs.editIssue")}</h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close edit issue dialog"
+            aria-label={t("dialogs.closeEdit")}
           >
             <X size={17} />
           </button>
         </div>
         <div className="modal-body">
           <label>
-            Title
+            {t("dialogs.title")}
             <input
               autoFocus
               required
@@ -481,7 +485,7 @@ export function EditIssueDialog({
           </label>
           <div className="form-row">
             <label>
-              Type
+              {t("dialogs.type")}
               <Select
                 value={type}
                 options={[
@@ -499,7 +503,7 @@ export function EditIssueDialog({
               />
             </label>
             <label>
-              Priority
+              {t("dialogs.priority")}
               <Select
                 value={priority}
                 options={["Urgent", "High", "Medium", "Low", "No priority"].map(
@@ -510,7 +514,7 @@ export function EditIssueDialog({
             </label>
           </div>
           <label>
-            Status
+            {t("dialogs.status")}
             <Select
               value={status}
               options={[
@@ -526,7 +530,7 @@ export function EditIssueDialog({
             />
           </label>
           <label>
-            Assignee
+            {t("dialogs.assignee")}
             <Select
               value={assignee}
               options={assigneeOptions}
@@ -534,22 +538,22 @@ export function EditIssueDialog({
             />
           </label>
           <label>
-            Summary
+            {t("dialogs.summary")}
             <textarea
               maxLength={20000}
               value={summary}
               onChange={(event) => setSummary(event.target.value)}
-              placeholder="What is happening?"
+              placeholder={t("dialogs.summaryPlaceholder")}
               rows={4}
             />
           </label>
           <label>
-            Impact
+            {t("dialogs.impact")}
             <textarea
               maxLength={20000}
               value={impact}
               onChange={(event) => setImpact(event.target.value)}
-              placeholder="Who or what is affected?"
+              placeholder={t("dialogs.impactPlaceholder")}
               rows={3}
             />
           </label>
@@ -560,7 +564,7 @@ export function EditIssueDialog({
             type="button"
             onClick={onClose}
           >
-            Cancel
+            {t("common:actions.cancel")}
           </button>
           <button
             className="button button-primary"
@@ -568,7 +572,7 @@ export function EditIssueDialog({
             disabled={!title.trim()}
             onClick={submit}
           >
-            <Save size={14} /> Save changes
+            <Save size={14} /> {t("dialogs.saveChanges")}
           </button>
         </div>
       </div>
@@ -606,6 +610,7 @@ export function RunAgentDialog({
     },
   ) => void;
 }) {
+  const { t } = useTranslation("issues");
   const [mode, setMode] = useState<CodingRun["mode"]>(initialMode);
   const [repositoryId, setRepositoryId] = useState("");
   const [repositories, setRepositories] = useState<LiveRepository[]>([]);
@@ -643,14 +648,16 @@ export function RunAgentDialog({
       >
         <div className="modal-header">
           <div>
-            <span className="page-kicker">Agent runner</span>
-            <h2 id="run-agent-title">Run on {issue.identifier}</h2>
+            <span className="page-kicker">{t("dialogs.agentRepository")}</span>
+            <h2 id="run-agent-title">
+              {t("dialogs.runOn", { identifier: issue.identifier })}
+            </h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close engineering run dialog"
+            aria-label={t("dialogs.closeRun")}
           >
             <X size={17} />
           </button>
@@ -664,7 +671,7 @@ export function RunAgentDialog({
             </div>
           </div>
           <label>
-            Mode
+            {t("dialogs.mode")}
             <Select
               value={mode}
               options={["Investigate", "Propose fix", "Implement fix"].map(
@@ -675,23 +682,28 @@ export function RunAgentDialog({
             />
           </label>
           <label>
-            Repository
+            {t("dialogs.repository")}
             <Select
-              ariaLabel="Agent repository"
+              ariaLabel={t("dialogs.agentRepository")}
               value={repositoryId}
               options={[
                 ...(!liveMode
-                  ? [{ value: "demo-repository", label: "Demo repository" }]
+                  ? [
+                      {
+                        value: "demo-repository",
+                        label: t("dialogs.demoRepository"),
+                      },
+                    ]
                   : []),
                 ...(liveMode && !repositories.length
-                  ? [{ value: "", label: "No repository configured" }]
+                  ? [{ value: "", label: t("dialogs.noRepository") }]
                   : []),
                 ...repositories.map((repository) => ({
                   value: repository.id,
                   label: `${repository.name} · ${agentProviderLabel(repository.agentProvider)} · ${
                     repository.githubOwner && repository.githubRepo
                       ? `${repository.githubOwner}/${repository.githubRepo}`
-                      : "GitHub repository"
+                      : t("dialogs.repository")
                   }`,
                 })),
               ]}
@@ -702,36 +714,33 @@ export function RunAgentDialog({
           {liveMode && !loadingRepositories && !repositories.length && (
             <div className="inline-empty">
               <GitBranch size={15} />
-              <span>
-                Configure a repository and CLI agent in Settings before starting
-                a run.
-              </span>
+              <span>{t("dialogs.repositoryRequired")}</span>
             </div>
           )}
           {initialStage === "implement" && initialResearchArtifactId && (
             <div className="modal-note">
               <ShieldCheck size={14} />
               <span>
-                This implementation is linked to the current research artifact{" "}
+                {t("dialogs.researchLinked", {
+                  defaultValue:
+                    "This implementation is linked to the current research artifact",
+                })}{" "}
                 <code>{initialResearchArtifactId}</code>.
               </span>
             </div>
           )}
           <label>
-            Additional instructions
+            {t("dialogs.additionalInstructions")}
             <textarea
-              aria-label="Additional run instructions"
+              aria-label={t("dialogs.additionalInstructions")}
               value={instructions}
               onChange={(event) => setInstructions(event.target.value)}
-              placeholder="Optional acceptance criteria or context…"
+              placeholder={t("dialogs.instructionsPlaceholder")}
             />
           </label>
           <div className="modal-note">
             <ShieldCheck size={14} />
-            <span>
-              Secrets are excluded. Push, merge, deploy and unrestricted shell
-              are disabled.
-            </span>
+            <span>{t("dialogs.safetyNote")}</span>
           </div>
         </div>
         <div className="modal-footer">
@@ -740,7 +749,7 @@ export function RunAgentDialog({
             type="button"
             onClick={onClose}
           >
-            Cancel
+            {t("common:actions.cancel")}
           </button>
           <button
             className="button button-primary"
@@ -757,7 +766,7 @@ export function RunAgentDialog({
               })
             }
           >
-            <TerminalSquare size={15} /> Start run
+            <TerminalSquare size={15} /> {t("dialogs.startRun")}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
   ArrowUp,
@@ -84,6 +85,7 @@ export function IssueDetailPage({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation("issues");
   const identifier = location.pathname.split("/").pop();
   const issue =
     issues.find((item) => item.identifier === identifier) ?? issues[0];
@@ -154,7 +156,7 @@ export function IssueDetailPage({
           onToast(
             error instanceof Error
               ? error.message
-              : "Issue history could not be loaded.",
+              : t("detail.historyLoadError"),
           );
       })
       .finally(() => {
@@ -163,20 +165,20 @@ export function IssueDetailPage({
     return () => {
       active = false;
     };
-  }, [issue?.identifier, liveMode, onToast, workspaceId]);
+  }, [issue?.identifier, liveMode, onToast, t, workspaceId]);
   if (!issue)
     return (
       <div className="page">
         <EmptyState
-          title="Issue not found"
-          description="This issue may have been removed or is not available in the current workspace."
+          title={t("detail.notFound")}
+          description={t("detail.notFoundDescription")}
           action={
             <button
               className="button button-ghost"
               type="button"
               onClick={() => navigate("/issues")}
             >
-              <ArrowLeft size={14} /> Back to issues
+              <ArrowLeft size={14} /> {t("detail.backToIssues")}
             </button>
           }
         />
@@ -202,14 +204,14 @@ export function IssueDetailPage({
         {
           id: `comment-${Date.now()}`,
           body: comment.trim(),
-          createdAt: "Just now",
+          createdAt: t("common:states.justNow"),
         },
       ]);
       setComment("");
-      onToast("Comment added");
+      onToast(t("detail.commentAdded"));
     } catch (error) {
       onToast(
-        error instanceof Error ? error.message : "Comment could not be added.",
+        error instanceof Error ? error.message : t("detail.commentError"),
       );
     } finally {
       setSavingActivity(false);
@@ -233,16 +235,16 @@ export function IssueDetailPage({
         ...current,
         {
           id: `evidence-${Date.now()}`,
-          label: evidenceLabel.trim() || "Evidence",
+          label: evidenceLabel.trim() || t("detail.evidence"),
           body: evidenceBody.trim(),
-          createdAt: "Just now",
+          createdAt: t("common:states.justNow"),
         },
       ]);
       setEvidenceBody("");
-      onToast("Evidence linked to issue");
+      onToast(t("detail.evidenceAdded"));
     } catch (error) {
       onToast(
-        error instanceof Error ? error.message : "Evidence could not be added.",
+        error instanceof Error ? error.message : t("detail.evidenceError"),
       );
     } finally {
       setSavingActivity(false);
@@ -261,7 +263,7 @@ export function IssueDetailPage({
         type="button"
         onClick={() => navigate("/issues")}
       >
-        <ArrowLeft size={14} /> Back to issues
+        <ArrowLeft size={14} /> {t("detail.backToIssues")}
       </button>
       <PageHeader
         eyebrow={`${issue.identifier} · ${issue.source.toLowerCase()}`}
@@ -289,17 +291,17 @@ export function IssueDetailPage({
               }}
             >
               {issue.status === "Done"
-                ? "Reopen"
+                ? t("detail.reopen")
                 : issue.conversationId
-                  ? "Resolve & notify"
-                  : "Resolve"}
+                  ? t("detail.resolveAndNotify")
+                  : t("detail.resolve")}
             </button>
             <button
               className="button button-primary"
               type="button"
               onClick={() => onStartRun(issue.id)}
             >
-              <TerminalSquare size={15} /> Run coding agent
+              <TerminalSquare size={15} /> {t("detail.runAgent")}
             </button>
             <ActionMenu label={issue.identifier}>
               <button
@@ -307,7 +309,7 @@ export function IssueDetailPage({
                 role="menuitem"
                 onClick={() => onEditIssue(issue.id)}
               >
-                <PenLine size={14} /> Edit issue
+                <PenLine size={14} /> {t("ui.edit")}
               </button>
               <button
                 className="danger"
@@ -315,7 +317,7 @@ export function IssueDetailPage({
                 role="menuitem"
                 onClick={() => onDeleteIssue(issue.id)}
               >
-                <Trash2 size={14} /> Delete issue
+                <Trash2 size={14} /> {t("ui.delete")}
               </button>
             </ActionMenu>
           </>
@@ -324,9 +326,9 @@ export function IssueDetailPage({
       <div className="issue-detail-grid">
         <div className="issue-main-column">
           <div className="detail-properties">
-            <Property label="Status">
+            <Property label={t("detail.status")}>
               <InlineSelect
-                label="Status"
+                label={t("detail.status")}
                 value={issue.status}
                 options={[
                   "Triage",
@@ -345,9 +347,9 @@ export function IssueDetailPage({
                 }
               />
             </Property>
-            <Property label="Priority">
+            <Property label={t("detail.priority")}>
               <InlineSelect
-                label="Priority"
+                label={t("detail.priority")}
                 value={issue.priority}
                 options={["Urgent", "High", "Medium", "Low", "No priority"]}
                 renderValue={(value) => (
@@ -358,9 +360,9 @@ export function IssueDetailPage({
                 }
               />
             </Property>
-            <Property label="Type">
+            <Property label={t("detail.type")}>
               <InlineSelect
-                label="Type"
+                label={t("detail.type")}
                 value={issue.type}
                 options={[
                   "Production Bug",
@@ -383,9 +385,9 @@ export function IssueDetailPage({
                 }
               />
             </Property>
-            <Property label="Assignee">
+            <Property label={t("detail.assignee")}>
               <InlineSelect
-                label="Assignee"
+                label={t("detail.assignee")}
                 value={issue.assignee}
                 options={assigneeOptions}
                 renderValue={(value) => (
@@ -398,25 +400,26 @@ export function IssueDetailPage({
                 }
               />
             </Property>
-            <Property label="Customer">
+            <Property label={t("detail.customer")}>
               <span className="plain-value">
-                <UsersRound size={14} /> {issue.customer ?? "Internal issue"}
+                <UsersRound size={14} />{" "}
+                {issue.customer ?? t("detail.internalIssue")}
               </span>
             </Property>
           </div>
           <section className="detail-section">
-            <SectionTitle title="Summary" />
+            <SectionTitle title={t("detail.summary")} />
             <InlineText
-              label="Issue summary"
+              label={t("detail.issueSummary")}
               value={issue.summary}
               onSave={(value) => onUpdateIssue(issue.id, { summary: value })}
             />
             <div className="impact-note">
               <Info size={15} />
               <span>
-                <strong>Impact</strong>
+                <strong>{t("detail.impact")}</strong>
                 <InlineText
-                  label="Issue impact"
+                  label={t("detail.issueImpact")}
                   value={issue.impact}
                   onSave={(value) => onUpdateIssue(issue.id, { impact: value })}
                 />
@@ -424,25 +427,27 @@ export function IssueDetailPage({
             </div>
           </section>
           <section className="detail-section">
-            <SectionTitle title="Activity" />
+            <SectionTitle title={t("detail.activity")} />
             <div className="comment-box">
-              <div className="avatar avatar-small avatar-violet">OP</div>
+              <div className="avatar avatar-small avatar-violet">
+                {t("detail.operatorInitials")}
+              </div>
               <div>
                 <textarea
-                  aria-label="Internal comment"
+                  aria-label={t("detail.internalComment")}
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
-                  placeholder="Leave an internal comment…"
+                  placeholder={t("detail.commentPlaceholder")}
                 />
                 <div className="comment-actions">
-                  <span>Markdown supported</span>
+                  <span>{t("detail.markdownSupported")}</span>
                   <button
                     className="button button-primary button-small"
                     type="button"
                     disabled={savingActivity || !comment.trim()}
                     onClick={() => void addComment()}
                   >
-                    Comment
+                    {t("detail.comment")}
                   </button>
                 </div>
               </div>
@@ -451,16 +456,16 @@ export function IssueDetailPage({
               icon={<CircleDot size={14} />}
               title={
                 issue.source === "Conversation"
-                  ? "Issue created from conversation"
-                  : "Issue created in workspace"
+                  ? t("detail.createdFromConversation")
+                  : t("detail.createdInWorkspace")
               }
-              detail={`${issue.customer ?? "Internal workspace"} · ${issue.createdAt}`}
+              detail={`${issue.customer ?? t("detail.internalIssue")} · ${issue.createdAt}`}
             />
             {comments.map((item) => (
               <ActivityItem
                 key={item.id}
                 icon={<MessageCircle size={14} />}
-                title="Internal comment"
+                title={t("detail.internalComment")}
                 detail={`${item.body} · ${item.createdAt}`}
               />
             ))}
@@ -472,22 +477,24 @@ export function IssueDetailPage({
                 detail={item.createdAt}
               />
             ))}
-            {historyLoading && <LoadingState label="Loading issue activity…" />}
+            {historyLoading && (
+              <LoadingState label={t("detail.loadingActivity")} />
+            )}
           </section>
           <section className="detail-section">
-            <SectionTitle title="Evidence" />
+            <SectionTitle title={t("detail.evidenceTitle")} />
             <div className="evidence-form">
               <input
-                aria-label="Evidence label"
+                aria-label={t("detail.evidenceLabel")}
                 value={evidenceLabel}
                 onChange={(event) => setEvidenceLabel(event.target.value)}
-                placeholder="Evidence label"
+                placeholder={t("detail.evidenceLabel")}
               />
               <textarea
-                aria-label="Evidence text"
+                aria-label={t("detail.evidenceText")}
                 value={evidenceBody}
                 onChange={(event) => setEvidenceBody(event.target.value)}
-                placeholder="Paste the relevant customer message, log excerpt or reproduction note…"
+                placeholder={t("detail.evidencePlaceholder")}
               />
               <button
                 className="button button-ghost button-small"
@@ -497,7 +504,7 @@ export function IssueDetailPage({
                 }
                 onClick={() => void addEvidence()}
               >
-                <FileText size={13} /> Add evidence
+                <FileText size={13} /> {t("detail.addEvidence")}
               </button>
             </div>
             {evidenceItems.length > 0 && (
@@ -517,8 +524,8 @@ export function IssueDetailPage({
           </section>
           <section className="detail-section">
             <SectionTitle
-              title="Engineering runs"
-              action={issueRuns.length ? "View all" : undefined}
+              title={t("detail.agentRuns")}
+              action={issueRuns.length ? t("detail.viewAll") : undefined}
             />
             {issueRuns.length ? (
               issueRuns.map((run) => (
@@ -531,13 +538,13 @@ export function IssueDetailPage({
             ) : (
               <div className="inline-empty">
                 <TerminalSquare size={18} />
-                <span>No engineering runs yet.</span>
+                <span>{t("detail.noRuns")}</span>
                 <button
                   className="text-button"
                   type="button"
                   onClick={() => onStartRun(issue.id)}
                 >
-                  Start one
+                  {t("detail.startOne")}
                 </button>
               </div>
             )}
@@ -545,7 +552,9 @@ export function IssueDetailPage({
         </div>
         <aside className="issue-side-column">
           <div className="side-block">
-            <div className="side-block-title">Linked conversation</div>
+            <div className="side-block-title">
+              {t("detail.linkedConversation")}
+            </div>
             {issue.customer && (
               <button
                 className="linked-conversation"
@@ -564,7 +573,11 @@ export function IssueDetailPage({
                 <div>
                   <strong>{issue.customer}</strong>
                   <small>
-                    WhatsApp · {issue.conversationId ? "open" : "internal"}
+                    {t("detail.whatsappState", {
+                      state: issue.conversationId
+                        ? t("detail.open")
+                        : t("detail.internal"),
+                    })}
                   </small>
                 </div>
                 <ChevronRight size={15} />
@@ -572,7 +585,7 @@ export function IssueDetailPage({
             )}
           </div>
           <div className="side-block">
-            <div className="side-block-title">Labels</div>
+            <div className="side-block-title">{t("detail.labels")}</div>
             <div className="labels-cloud">
               {issue.labels.length ? (
                 issue.labels.map((label) => (
@@ -581,23 +594,23 @@ export function IssueDetailPage({
                   </span>
                 ))
               ) : (
-                <span className="muted-copy">No labels</span>
+                <span className="muted-copy">{t("detail.noLabels")}</span>
               )}
             </div>
             <div className="label-editor">
               <input
-                aria-label="New issue label"
+                aria-label={t("detail.newLabel")}
                 value={labelDraft}
                 onChange={(event) => setLabelDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") addLabel();
                 }}
-                placeholder="Add a label"
+                placeholder={t("detail.addLabelPlaceholder")}
               />
               <button
                 className="icon-button subtle"
                 type="button"
-                aria-label="Add issue label"
+                aria-label={t("detail.addLabel")}
                 onClick={addLabel}
               >
                 <Plus size={14} />
@@ -605,16 +618,16 @@ export function IssueDetailPage({
             </div>
           </div>
           <div className="side-block">
-            <div className="side-block-title">Details</div>
+            <div className="side-block-title">{t("detail.details")}</div>
             <div className="detail-list">
               <span>
-                Created <b>{issue.createdAt}</b>
+                {t("detail.created")} <b>{issue.createdAt}</b>
               </span>
               <span>
-                Updated <b>{issue.updatedAt}</b>
+                {t("detail.updated")} <b>{issue.updatedAt}</b>
               </span>
               <span>
-                Source <b>{issue.source}</b>
+                {t("detail.source")} <b>{issue.source}</b>
               </span>
             </div>
           </div>
@@ -635,13 +648,17 @@ export function IssueDetailPage({
           >
             <div className="modal-header">
               <div>
-                <span className="page-kicker">Customer update</span>
-                <h2 id="resolution-title">Resolve {issue.identifier}</h2>
+                <span className="page-kicker">
+                  {t("detail.customerUpdate")}
+                </span>
+                <h2 id="resolution-title">
+                  {t("detail.resolveTitle", { identifier: issue.identifier })}
+                </h2>
               </div>
               <button
                 className="icon-button"
                 type="button"
-                aria-label="Close resolution dialog"
+                aria-label={t("detail.closeResolution")}
                 onClick={() => setResolutionOpen(false)}
               >
                 <X size={17} />
@@ -649,7 +666,7 @@ export function IssueDetailPage({
             </div>
             <div className="modal-body">
               <label>
-                Resolution message
+                {t("detail.resolutionMessage")}
                 <textarea
                   autoFocus
                   value={resolutionMessage}
@@ -659,10 +676,7 @@ export function IssueDetailPage({
               </label>
               <div className="modal-note">
                 <Send size={14} />
-                <span>
-                  This sends one WhatsApp message, marks the issue Done and
-                  resolves the conversation.
-                </span>
+                <span>{t("detail.resolutionDescription")}</span>
               </div>
             </div>
             <div className="modal-footer">
@@ -671,7 +685,7 @@ export function IssueDetailPage({
                 type="button"
                 onClick={() => setResolutionOpen(false)}
               >
-                Cancel
+                {t("common:actions.cancel")}
               </button>
               <button
                 className="button button-primary"
@@ -688,7 +702,9 @@ export function IssueDetailPage({
                 }}
               >
                 <Send size={14} />
-                {resolutionSaving ? "Sending…" : "Resolve and send"}
+                {resolutionSaving
+                  ? t("detail.sending")
+                  : t("detail.resolveAndSend")}
               </button>
             </div>
           </div>
@@ -714,6 +730,7 @@ export function IssueInspector({
   onStartRun: (id: string) => void;
   onUpdateIssue: (id: string, patch: Partial<Issue>) => void;
 }) {
+  const { t } = useTranslation("issues");
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (issue) closeButtonRef.current?.focus();
@@ -730,7 +747,7 @@ export function IssueInspector({
       >
         <div className="inspector-header">
           <div>
-            <span className="page-kicker">Issue inspector</span>
+            <span className="page-kicker">{t("detail.inspector")}</span>
             <h2 id="issue-inspector-title">{issue.identifier}</h2>
           </div>
           <button
@@ -738,7 +755,7 @@ export function IssueInspector({
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="Close issue inspector"
+            aria-label={t("detail.closeInspector")}
           >
             <X size={17} />
           </button>
@@ -747,7 +764,7 @@ export function IssueInspector({
           <h3>{issue.title}</h3>
           <div className="inspector-props">
             <InlineSelect
-              label="Status"
+              label={t("detail.status")}
               value={issue.status}
               options={[
                 "Triage",
@@ -766,7 +783,7 @@ export function IssueInspector({
               }
             />
             <InlineSelect
-              label="Priority"
+              label={t("detail.priority")}
               value={issue.priority}
               options={["Urgent", "High", "Medium", "Low", "No priority"]}
               renderValue={(value) => (
@@ -786,7 +803,7 @@ export function IssueInspector({
               onChange={(value) => onUpdateIssue(issue.id, { assignee: value })}
             />
             <InlineSelect
-              label="Type"
+              label={t("detail.type")}
               value={issue.type}
               options={[
                 "Production Bug",
@@ -808,23 +825,23 @@ export function IssueInspector({
             />
           </div>
           <section className="inspector-section">
-            <SectionTitle title="Summary" />
+            <SectionTitle title={t("detail.summary")} />
             <InlineText
-              label="Issue summary"
+              label={t("detail.issueSummary")}
               value={issue.summary}
               onSave={(value) => onUpdateIssue(issue.id, { summary: value })}
             />
           </section>
           <section className="inspector-section">
-            <SectionTitle title="Impact" />
+            <SectionTitle title={t("detail.impact")} />
             <InlineText
-              label="Issue impact"
+              label={t("detail.issueImpact")}
               value={issue.impact}
               onSave={(value) => onUpdateIssue(issue.id, { impact: value })}
             />
           </section>
           <section className="inspector-section">
-            <SectionTitle title="Activity" />
+            <SectionTitle title={t("detail.activity")} />
             <ActivityItem
               icon={<CircleDot size={13} />}
               title="Issue linked to conversation"
@@ -838,14 +855,14 @@ export function IssueInspector({
             type="button"
             onClick={() => onOpenFull(issue.identifier)}
           >
-            Open full issue <ArrowUp size={14} />
+            {t("detail.openFull")} <ArrowUp size={14} />
           </button>
           <button
             className="button button-primary"
             type="button"
             onClick={() => onStartRun(issue.id)}
           >
-            <TerminalSquare size={14} /> Run coding agent
+            <TerminalSquare size={14} /> {t("detail.runAgent")}
           </button>
         </div>
       </aside>

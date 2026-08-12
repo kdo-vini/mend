@@ -8,6 +8,7 @@ import {
 import { validateRemoteMediaUrl } from "../media.js";
 import { supportFlowSchema } from "../../src/shared/support-flow.js";
 import { authMethods, codingStages } from "../coding-control-plane.js";
+import { supabaseMcpFeatures } from "../mcp.js";
 
 export const workspaceRoleSchema = z.enum([
   "owner",
@@ -523,8 +524,35 @@ export const mcpConnectionCreateSchema = z
       .optional(),
     clientId: z.string().trim().max(1_000).optional(),
     clientSecret: z.string().trim().max(4_000).optional(),
+    provider: z.enum(["custom", "supabase"]).default("custom"),
+    supabase: z
+      .object({
+        projectRef: z
+          .string()
+          .trim()
+          .toLowerCase()
+          .regex(/^[a-z0-9]{6,64}$/),
+        readOnly: z.boolean().default(true),
+        features: z.array(z.enum(supabaseMcpFeatures)).min(1).max(7),
+      })
+      .strict()
+      .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.provider === "supabase" && !value.supabase)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["supabase"],
+        message: "Supabase MCP scope is required",
+      });
+    if (value.provider !== "supabase" && value.supabase)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["supabase"],
+        message: "Supabase MCP scope is only valid for Supabase connections",
+      });
+  });
 export const mcpConnectionPatchSchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),

@@ -13,6 +13,12 @@ export interface McpConnection {
   name: string;
   description: string;
   serverUrl: string;
+  provider: "custom" | "supabase";
+  supabaseScope: {
+    projectRef: string;
+    readOnly: boolean;
+    features: SupabaseMcpFeature[];
+  } | null;
   authMode: "none" | "headers" | "oauth";
   status: "pending" | "connected" | "error" | "disconnected";
   tools: McpToolRecord[];
@@ -23,6 +29,17 @@ export interface McpConnection {
   createdAt: string;
   updatedAt: string;
 }
+
+export const supabaseMcpFeatures = [
+  "docs",
+  "database",
+  "debugging",
+  "development",
+  "functions",
+  "branching",
+  "storage",
+] as const;
+export type SupabaseMcpFeature = (typeof supabaseMcpFeatures)[number];
 
 export async function listLiveMcpConnections(workspaceId: string) {
   const response = await apiRequest<{ data: McpConnection[] }>(
@@ -43,6 +60,12 @@ export async function createLiveMcpConnection(
     headers?: Record<string, string>;
     clientId?: string;
     clientSecret?: string;
+    provider?: McpConnection["provider"];
+    supabase?: {
+      projectRef: string;
+      readOnly: boolean;
+      features: SupabaseMcpFeature[];
+    };
   },
 ) {
   const response = await apiRequest<{ connection: McpConnection }>(

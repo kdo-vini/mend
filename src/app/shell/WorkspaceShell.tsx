@@ -25,17 +25,17 @@ function translatedNavLabel(
 ) {
   switch (label) {
     case "Inbox":
-      return t("navigation.inbox");
+      return t("navigation.inbox", { ns: "common" });
     case "Issues":
-      return t("navigation.issues");
+      return t("navigation.issues", { ns: "common" });
     case "Kanban":
-      return t("navigation.kanban");
+      return t("navigation.kanban", { ns: "common" });
     case "Agent runs":
-      return t("navigation.agentRuns");
+      return t("navigation.agentRuns", { ns: "common" });
     case "Knowledge":
-      return t("navigation.knowledge");
+      return t("navigation.knowledge", { ns: "common" });
     case "Settings":
-      return t("navigation.settings");
+      return t("navigation.settings", { ns: "common" });
   }
 }
 
@@ -156,7 +156,11 @@ export function NotificationCenter({
         ref={triggerRef}
         className="icon-button subtle notification-trigger"
         type="button"
-        aria-label={`Notifications${unreadNotificationCount ? ` (${unreadNotificationCount} unread)` : ""}`}
+        aria-label={t("navigation.notificationsLabel", {
+          count: unreadNotificationCount
+            ? ` (${t("navigation.unread", { count: unreadNotificationCount })})`
+            : "",
+        })}
         aria-expanded={open}
         onClick={() => {
           setPanelPosition(null);
@@ -305,7 +309,7 @@ export function Sidebar({
       <button className="command-trigger" type="button" onClick={onOpenCommand}>
         <Search size={15} />
         <span>{t("navigation.searchEverything")}</span>
-        <kbd>⌘ K</kbd>
+        <kbd>{t("navigation.shortcutCommand")}</kbd>
       </button>
       <nav
         className="primary-nav"

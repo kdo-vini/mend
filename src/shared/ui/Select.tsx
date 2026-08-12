@@ -8,6 +8,8 @@ import {
 } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
+// i18n-exempt: generic primitive renders labels supplied by its translated caller.
+
 export interface SelectOption {
   value: string;
   label: ReactNode;

@@ -62,13 +62,12 @@ import {
 import { CodexService } from "./codex-service.js";
 import {
   SupabaseCodexRunStore,
+  SupabaseMcpConnectionAdapter,
   SupabaseRepositoryAdapter,
 } from "./supabase-api-adapters.js";
 import {
   connectionEncryptionKey,
-  decryptMcpSecret,
   mcpArgumentsHmac,
-  mcpConnectionRecordFromRow,
   type McpRuntimeConnection,
 } from "./mcp.js";
 import {
@@ -2083,54 +2082,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   private async loadMcpConnections(
     input: LiveWorkerAutomationInput,
   ): Promise<McpRuntimeConnection[]> {
-    const result = await this.metadataClient
-      .from("mcp_connections")
-      .select("*")
-      .eq("workspace_id", input.binding.workspaceId)
-      .eq("status", "connected");
-    if (result.error)
-      throw new Error(`supabase:mcp_connections:${result.error.message}`);
-    const rows = Array.isArray(result.data) ? result.data : [];
-    const output: McpRuntimeConnection[] = [];
-    for (const value of rows) {
-      const row = value as Record<string, unknown>;
-      const connection = mcpConnectionRecordFromRow(row);
-      if (!connection.allowedToolNames.length) continue;
-      let headers: Record<string, string> = {};
-      if (row.auth_mode === "headers") {
-        const secret = await this.metadataClient
-          .from("mcp_connection_secrets")
-          .select("headers_encrypted")
-          .eq("connection_id", String(row.id))
-          .maybeSingle();
-        if (secret.error)
-          throw new Error(`supabase:mcp_secrets:${secret.error.message}`);
-        if (
-          typeof (secret.data as Record<string, unknown> | null)
-            ?.headers_encrypted === "string"
-        ) {
-          const plaintext = decryptMcpSecret(
-            String((secret.data as Record<string, unknown>).headers_encrypted),
-            connectionEncryptionKey(),
-          );
-          const parsed = JSON.parse(plaintext) as unknown;
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-            headers = Object.fromEntries(
-              Object.entries(parsed).filter(
-                (entry): entry is [string, string] =>
-                  typeof entry[1] === "string",
-              ),
-            );
-        }
-      }
-      output.push({
-        ...connection,
-        status: "connected",
-        lastError: connection.lastError,
-        headers,
-      });
-    }
-    return output;
+    return new SupabaseMcpConnectionAdapter(
+      this.metadataClient as unknown as SupabaseClient,
+      this.metadataClient as unknown as SupabaseClient,
+    ).runtimeList({ workspaceId: input.binding.workspaceId });
   }
 
   private async customerPhone(

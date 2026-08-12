@@ -61,6 +61,24 @@
     "itemsCount_other": "{{count}} items",
     "personalTaskDate": "Personal task · {{date}}",
     "nothingDue": "Nothing due today. Add a task from the header.",
-    "filterColumn": "Filter {{column}} column"
+    "filterColumn": "Filter {{column}} column",
+    "noDueDate": "No due date"
+  },
+  "errors": {
+    "personalLoad": "Personal planning could not be loaded.",
+    "offlineUpdatePlan": "You are offline. Reconnect to update your plan.",
+    "taskMove": "Task could not be moved.",
+    "offlineMoveWork": "You are offline. Reconnect to move work.",
+    "issueMove": "Issue could not be moved.",
+    "offlineAddTask": "You are offline. Reconnect to add a task.",
+    "taskCreate": "Task could not be created.",
+    "offlineAddEvent": "You are offline. Reconnect to add an event.",
+    "eventCreate": "Event could not be created.",
+    "offlineChangePlan": "You are offline. Reconnect to change your plan.",
+    "taskDelete": "Task could not be deleted.",
+    "offlineDueDate": "You are offline. Reconnect to change the due date.",
+    "taskDueDate": "Task due date could not be updated.",
+    "offlineAgenda": "You are offline. Reconnect to change your agenda.",
+    "eventDelete": "Event could not be deleted."
   }
 }

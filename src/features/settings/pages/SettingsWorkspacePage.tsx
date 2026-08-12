@@ -221,7 +221,7 @@ export function SettingsOverviewPage({
               type="button"
               onClick={() => void load()}
             >
-              Retry
+              {t("ui.retry")}
             </button>
           </div>
         </div>

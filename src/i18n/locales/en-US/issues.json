@@ -56,6 +56,7 @@
     "openInbox": "Open Inbox",
     "browseIssues": "Browse issues",
     "createIssue": "Create new issue",
+    "startRun": "Start",
     "viewRuns": "View Agent runs",
     "openKnowledge": "Open knowledge",
     "openSettings": "Open settings",
@@ -71,6 +72,7 @@
     "shortcuts": "Shortcuts"
   },
   "dialogs": {
+    "researchLinked": "This implementation is linked to the current research artifact",
     "newWorkItem": "New work item",
     "createIssue": "Create issue",
     "closeCreate": "Close create issue dialog",

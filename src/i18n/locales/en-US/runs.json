@@ -25,7 +25,12 @@
     "complete": "complete",
     "filesChanged": "files changed",
     "runtime": "runtime",
-    "localCommit": "local commit"
+    "localCommit": "local commit",
+    "modelUsed": "model used",
+    "tokens": "tokens",
+    "cost": "cost",
+    "attempts": "Coding attempts",
+    "provider": "provider"
   },
   "failure": {
     "title": "Run failed",
@@ -114,6 +119,10 @@
       "duplicate": "Duplicate",
       "needs_human": "Needs human review"
     },
+    "model": "model: {{model}}",
+    "effort": "effort: {{effort}}",
+    "subscription": "subscription",
+    "apiKey": "API key",
     "decisions": {
       "pending": "Pending",
       "notify": "Notify a person",

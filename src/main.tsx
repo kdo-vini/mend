@@ -11,6 +11,8 @@ import {
 import { normalizeLocale } from "./i18n/resources";
 import "./styles/index.css";
 
+// i18n-exempt: application bootstrap has no user-facing product copy.
+
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
     if (event.key !== interfaceLanguageStorageKey || !event.newValue) return;

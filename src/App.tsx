@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { useRef, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorState, LoadingState } from "./shared/ui/ResourceState";
 import { useConfirmation } from "./shared/ui/useConfirmation";
@@ -191,6 +192,7 @@ function mergeConversationSnapshot(
 }
 
 function App() {
+  const { t } = useTranslation(["common", "issues"]);
   const [demoMode] = useState(() => isDemoModeRequested() || !isLiveConfigured);
   const [conversations, setConversations] = useState<Conversation[]>(
     demoMode ? seedConversations : [],
@@ -235,7 +237,7 @@ function App() {
   );
   const [operatorIdentity, setOperatorIdentity] = useState({
     id: "",
-    name: "Current operator",
+    name: t("app.currentOperator"),
     email: "",
   });
   const [workspaceMemberNames, setWorkspaceMemberNames] = useState<
@@ -341,7 +343,7 @@ function App() {
       const name =
         typeof metadataName === "string" && metadataName.trim()
           ? metadataName.trim()
-          : (data.user.email?.split("@")[0] ?? "Current operator");
+          : (data.user.email?.split("@")[0] ?? t("app.currentOperator"));
       setOperatorIdentity({
         id: data.user.id,
         name,
@@ -351,7 +353,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (demoMode || !workspaceId || !supabase) return;
@@ -495,7 +497,7 @@ function App() {
                     setLiveDataError(
                       error instanceof Error
                         ? error.message
-                        : "Live workspace reconciliation failed.",
+                        : t("errors.liveReconciliation"),
                     );
                 });
             },
@@ -516,7 +518,7 @@ function App() {
               ? error.message
               : "The live workspace data could not be loaded.";
           setLiveDataError(message);
-          setToast(`Live data unavailable: ${message}`);
+          setToast(t("toasts.liveDataUnavailable", { message }));
         }
       } finally {
         if (active && showLoading) setWorkspaceLoading(false);
@@ -534,7 +536,7 @@ function App() {
               setLiveDataError(
                 error instanceof Error
                   ? error.message
-                  : "Live workspace reconciliation failed.",
+                  : t("errors.liveReconciliation"),
               );
           });
       },
@@ -546,7 +548,7 @@ function App() {
       unsubscribe();
       realtimeFallback.stop();
     };
-  }, [demoMode, liveDataRetry, workspaceId]);
+  }, [demoMode, liveDataRetry, t, workspaceId]);
 
   useEffect(() => {
     if (demoMode || !mendApiBaseUrl) return;
@@ -575,12 +577,10 @@ function App() {
         await createLiveIssue({ workspaceId, ...input });
         setCreateIssueOpen(false);
         setLiveDataRetry((current) => current + 1);
-        setToast("Issue created in the live workspace");
+        setToast(t("toasts.issueCreatedLive"));
       } catch (error) {
         setToast(
-          error instanceof Error
-            ? error.message
-            : "Issue could not be created.",
+          error instanceof Error ? error.message : t("errors.issueCreate"),
         );
       }
       return;
@@ -607,10 +607,10 @@ function App() {
       source: conversation ? "Conversation" : "Internal",
       summary: conversation
         ? conversation.lastMessage
-        : "Internal work item created from the workspace.",
-      impact: "Impact to be assessed during triage.",
-      updatedAt: "Just now",
-      createdAt: "Just now",
+        : t("app.internalIssueSummary"),
+      impact: t("app.issueImpactPending"),
+      updatedAt: t("states.justNow"),
+      createdAt: t("states.justNow"),
       agentRuns: 0,
     };
     setIssues((current) => [issue, ...current]);
@@ -630,7 +630,7 @@ function App() {
     }
     setInspectorIssueId(issue.id);
     setCreateIssueOpen(false);
-    setToast(`${issue.identifier} created`);
+    setToast(t("toasts.issueCreated", { identifier: issue.identifier }));
   };
 
   const dismissNotification = async (notificationId: string) => {
@@ -645,7 +645,7 @@ function App() {
       setToast(
         error instanceof Error
           ? error.message
-          : "Notification could not be dismissed.",
+          : t("errors.notificationDismiss"),
       );
       setNotifications(previous);
     }
@@ -661,7 +661,7 @@ function App() {
       setToast(
         error instanceof Error
           ? error.message
-          : "Notifications could not be dismissed.",
+          : t("errors.notificationsDismiss"),
       );
       setNotifications(previous);
     }
@@ -674,18 +674,18 @@ function App() {
       setPushStatus(status);
       setToast(
         status === "enabled"
-          ? "Native notifications enabled"
+          ? t("toasts.nativeNotificationsEnabled")
           : status === "denied"
-            ? "Browser notifications are blocked"
+            ? t("toasts.browserNotificationsBlocked")
             : status === "unsupported"
-              ? "This browser does not support native notifications here"
-              : "Native notifications are not configured yet",
+              ? t("toasts.nativeNotificationsUnsupported")
+              : t("toasts.nativeNotificationsNotConfigured"),
       );
     } catch (error) {
       setToast(
         error instanceof Error
           ? error.message
-          : "Native notifications could not be enabled.",
+          : t("errors.nativeNotificationsEnable"),
       );
     }
   };
@@ -711,16 +711,14 @@ function App() {
               current.map((item) => (item.id === issueId ? previous : item)),
             );
           setToast(
-            error instanceof Error
-              ? error.message
-              : "Issue could not be updated.",
+            error instanceof Error ? error.message : t("errors.issueUpdate"),
           );
         });
     }
     setIssues((current) =>
       current.map((issue) =>
         issue.id === issueId
-          ? { ...issue, ...patch, updatedAt: "Just now" }
+          ? { ...issue, ...patch, updatedAt: t("states.justNow") }
           : issue,
       ),
     );
@@ -731,9 +729,11 @@ function App() {
     if (!issue) return;
     if (
       !(await requestConfirmation({
-        title: "Delete issue?",
-        description: `Delete ${issue.identifier}? This cannot be undone.`,
-        confirmLabel: "Delete issue",
+        title: t("confirmations.deleteIssueTitle"),
+        description: t("confirmations.deleteIssueDescription", {
+          identifier: issue.identifier,
+        }),
+        confirmLabel: t("confirmations.deleteIssueConfirm"),
         destructive: true,
       }))
     )
@@ -766,10 +766,10 @@ function App() {
         window.history.pushState({}, "", "/issues");
         window.dispatchEvent(new PopStateEvent("popstate"));
       }
-      setToast(`${issue.identifier} deleted`);
+      setToast(t("toasts.issueDeleted", { identifier: issue.identifier }));
     } catch (error) {
       setToast(
-        error instanceof Error ? error.message : "Issue could not be deleted.",
+        error instanceof Error ? error.message : t("errors.issueDelete"),
       );
     }
   };
@@ -839,13 +839,13 @@ function App() {
           ),
         );
       }
-      setToast(`${issue.identifier} resolved and customer notified`);
+      setToast(t("toasts.issueResolved", { identifier: issue.identifier }));
       return true;
     } catch (error) {
       setToast(
         error instanceof Error
           ? `Resolution incomplete: ${error.message}`
-          : "Issue could not be resolved and notified.",
+          : t("errors.issueResolve"),
       );
       setLiveDataRetry((current) => current + 1);
       return false;
@@ -880,13 +880,13 @@ function App() {
         .then(() => {
           setRunDialogIssueId(null);
           setLiveDataRetry((current) => current + 1);
-          setToast(`Engineering run queued for ${issue.identifier}`);
+          setToast(
+            t("toasts.agentRunQueued", { identifier: issue.identifier }),
+          );
         })
         .catch((error) =>
           setToast(
-            error instanceof Error
-              ? error.message
-              : "Engineering run could not be queued.",
+            error instanceof Error ? error.message : t("errors.agentRunQueue"),
           ),
         );
       return;
@@ -898,17 +898,16 @@ function App() {
       mode,
       status: "queued",
       progress: 8,
-      startedAt: "Just now",
+      startedAt: t("states.justNow"),
       duration: "00:00",
-      summary:
-        "Preparing an isolated workspace and assembling the issue context.",
+      summary: t("app.agentRunPreparing"),
       files: [],
       events: [
         {
           id: `event-${Date.now()}`,
           label: "run_started",
-          detail: "Run queued with a clean repository context",
-          time: "Just now",
+          detail: t("app.agentRunStartedDetail"),
+          time: t("states.justNow"),
           tone: "accent",
         },
       ],
@@ -919,7 +918,7 @@ function App() {
       status: issue.status === "Triage" ? "In Progress" : issue.status,
     });
     setRunDialogIssueId(null);
-    setToast(`Engineering run started for ${issue.identifier}`);
+    setToast(t("toasts.agentRunStarted", { identifier: issue.identifier }));
   };
 
   const updateRun = (
@@ -947,18 +946,18 @@ function App() {
                 : "rejected";
     const successMessage =
       action === "cancel"
-        ? "Engineering run canceled"
+        ? t("toasts.agentRunCanceled")
         : action === "approve"
-          ? "Engineering result approved and committed locally"
+          ? t("toasts.agentResultApproved")
           : action === "publish"
-            ? "Engineering branch published"
+            ? t("toasts.agentBranchPublished")
             : action === "merge"
-              ? "Engineering pull request merged"
+              ? t("toasts.agentPullRequestMerged")
               : action === "deploy"
-                ? "Engineering deployment started"
+                ? t("toasts.agentDeploymentStarted")
                 : action === "health"
-                  ? "Deployment health checked"
-                  : "Engineering result rejected";
+                  ? t("toasts.agentHealthChecked")
+                  : t("toasts.agentResultRejected");
     const commitLocalAction = () => {
       setRuns((current) =>
         current.map((run) =>
@@ -985,9 +984,7 @@ function App() {
         })
         .catch((error) =>
           setToast(
-            error instanceof Error
-              ? error.message
-              : "Engineering run could not be updated.",
+            error instanceof Error ? error.message : t("errors.agentRunUpdate"),
           ),
         )
         .finally(() => pendingRunActions.current.delete(pendingKey));
@@ -1011,7 +1008,7 @@ function App() {
         }
         onSignOut={() => {
           if (demoMode) {
-            setToast("Demo mode has no signed-in session");
+            setToast(t("toasts.demoNoSession"));
             return;
           }
           void supabase?.auth.signOut().then(() => window.location.reload());
@@ -1037,8 +1034,10 @@ function App() {
         {liveDataError && (
           <div className="live-data-error">
             <ErrorState
-              title="Live data unavailable"
-              description={`${liveDataError} No demo records are being shown.`}
+              title={t("errors.liveDataTitle")}
+              description={t("errors.liveDataDescription", {
+                message: liveDataError,
+              })}
               onRetry={() => setLiveDataRetry((current) => current + 1)}
             />
           </div>
@@ -1063,7 +1062,7 @@ function App() {
           ) : (
             <WorkspaceRoutes
               inbox={
-                <FeatureBoundary label="Loading inbox…">
+                <FeatureBoundary label={t("states.loadingInbox")}>
                   <FeatureInboxPage
                     workspaceId={workspaceId}
                     conversations={conversations}
@@ -1089,7 +1088,7 @@ function App() {
                 </FeatureBoundary>
               }
               issues={
-                <FeatureBoundary label="Loading issues…">
+                <FeatureBoundary label={t("states.loadingIssues")}>
                   <FeatureIssuesPage
                     issues={issues}
                     assigneeOptions={assigneeOptions}
@@ -1102,7 +1101,7 @@ function App() {
                 </FeatureBoundary>
               }
               kanban={
-                <FeatureBoundary label="Loading Kanban…">
+                <FeatureBoundary label={t("states.loadingKanban")}>
                   <FeatureKanbanPage
                     workspaceId={workspaceId ?? ""}
                     currentUserId={operatorIdentity.id}
@@ -1144,7 +1143,7 @@ function App() {
                 />
               }
               runs={
-                <FeatureBoundary label="Loading engineering runs…">
+                <FeatureBoundary label={t("states.loadingAgentRuns")}>
                   <FeatureRunsPage
                     runs={runs}
                     onOpenIssue={setInspectorIssueId}
@@ -1155,7 +1154,7 @@ function App() {
                 </FeatureBoundary>
               }
               knowledge={
-                <FeatureBoundary label="Loading knowledge…">
+                <FeatureBoundary label={t("states.loadingKnowledge")}>
                   {demoMode ? (
                     <FeatureKnowledgePage />
                   ) : (
@@ -1167,7 +1166,7 @@ function App() {
                 </FeatureBoundary>
               }
               settings={
-                <FeatureBoundary label="Loading settings…">
+                <FeatureBoundary label={t("states.loadingSettings")}>
                   <FeatureSettingsPage
                     workspaceId={workspaceId}
                     onToast={setToast}
@@ -1185,7 +1184,7 @@ function App() {
                 />
               }
               fallback={
-                <FeatureBoundary label="Loading inbox…">
+                <FeatureBoundary label={t("states.loadingInbox")}>
                   <FeatureInboxPage
                     workspaceId={workspaceId}
                     conversations={conversations}
@@ -1263,7 +1262,7 @@ function App() {
             setWorkspaceId(workspace.id);
             setOperationalLanguage(workspace.defaultLanguage ?? "en-US");
             setSelectedConversationId("");
-            setToast(`Switched to ${workspace.name}`);
+            setToast(t("toasts.workspaceSwitched", { name: workspace.name }));
           }}
         />
       )}

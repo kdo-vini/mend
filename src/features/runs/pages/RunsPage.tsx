@@ -113,15 +113,19 @@ function BugLoopOverview({ run }: { run: CodingRun }) {
           )}
           {run.requestedModel && (
             <span className="run-provider-tag">
-              model: {run.requestedModel}
+              {t("loop.model", { model: run.requestedModel })}
             </span>
           )}
           {run.effort && (
-            <span className="run-provider-tag">effort: {run.effort}</span>
+            <span className="run-provider-tag">
+              {t("loop.effort", { effort: run.effort })}
+            </span>
           )}
           {run.authMethod && (
             <span className="run-provider-tag">
-              {run.authMethod === "subscription" ? "subscription" : "API key"}
+              {run.authMethod === "subscription"
+                ? t("loop.subscription")
+                : t("loop.apiKey")}
             </span>
           )}
           {run.caseStatus && (
@@ -511,12 +515,14 @@ export function RunsPage({
               )}
               {selectedRun.realModel && (
                 <span>
-                  <strong>{selectedRun.realModel}</strong> model used
+                  <strong>{selectedRun.realModel}</strong>{" "}
+                  {t("stats.modelUsed")}
                 </span>
               )}
               {selectedRun.usage?.totalTokens !== undefined && (
                 <span>
-                  <strong>{selectedRun.usage.totalTokens}</strong> tokens
+                  <strong>{selectedRun.usage.totalTokens}</strong>{" "}
+                  {t("stats.tokens")}
                 </span>
               )}
               {selectedRun.usage?.cost && (
@@ -526,15 +532,16 @@ export function RunsPage({
                       ? selectedRun.usage.cost.method
                       : `$${selectedRun.usage.cost.amountUsd.toFixed(4)}`}
                   </strong>{" "}
-                  cost
+                  {t("stats.cost")}
                 </span>
               )}
             </div>
             {selectedRun.attempts && selectedRun.attempts.length > 0 && (
-              <div className="run-attempts" aria-label="Coding attempts">
+              <div className="run-attempts" aria-label={t("stats.attempts")}>
                 {selectedRun.attempts.map((attempt) => (
                   <span key={attempt.attemptNumber}>
-                    #{attempt.attemptNumber} {attempt.provider ?? "provider"}
+                    #{attempt.attemptNumber}{" "}
+                    {attempt.provider ?? t("stats.provider")}
                     {attempt.requestedModel
                       ? " · " + attempt.requestedModel
                       : ""}{" "}

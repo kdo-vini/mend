@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSupabaseMcpServerUrl,
   connectionEncryptionKey,
   decryptMcpSecret,
   encryptMcpSecret,
   mcpArgumentsHmac,
   mcpToolRecord,
+  parseSupabaseMcpServerUrl,
   validateMcpHeaders,
   validateMcpServerUrl,
 } from "./mcp.js";
@@ -47,5 +49,53 @@ describe("MCP connection security helpers", () => {
     expect(mcpArgumentsHmac('{"phone":"5511"}', "test-key")).toMatch(
       /^[a-f0-9]{64}$/,
     );
+  });
+
+  it("builds a project-scoped Supabase MCP URL from an explicit allowlist", () => {
+    const url = buildSupabaseMcpServerUrl({
+      projectRef: "abcdefghijklmnopqrst",
+      readOnly: true,
+      features: ["database", "debugging", "docs"],
+    });
+
+    expect(url).toContain("https://mcp.supabase.com/mcp?");
+    expect(parseSupabaseMcpServerUrl(url)).toEqual({
+      projectRef: "abcdefghijklmnopqrst",
+      readOnly: true,
+      features: ["database", "debugging", "docs"],
+    });
+    expect(url).not.toContain("account");
+    expect(
+      parseSupabaseMcpServerUrl(
+        "https://mcp.supabase.com/mcp?project_ref=abcdefghijklmnopqrst&features=database,account",
+      ),
+    ).toBeNull();
+    expect(
+      parseSupabaseMcpServerUrl(
+        "https://mcp.supabase.com/mcp?project_ref=abcdefghijklmnopqrst&features=database&account=true",
+      ),
+    ).toBeNull();
+    expect(
+      parseSupabaseMcpServerUrl(
+        "https://mcp.supabase.com/mcp?project_ref=abcdefghijklmnopqrst&features=database&features=docs",
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects unscoped or unsupported Supabase MCP capabilities", () => {
+    expect(() =>
+      buildSupabaseMcpServerUrl({
+        projectRef: "bad ref",
+        readOnly: true,
+        features: ["database"],
+      }),
+    ).toThrow("project ref");
+    expect(() =>
+      buildSupabaseMcpServerUrl({
+        projectRef: "abcdefghijklmnopqrst",
+        readOnly: false,
+        features: [] as never[],
+      }),
+    ).toThrow("feature group");
   });
 });

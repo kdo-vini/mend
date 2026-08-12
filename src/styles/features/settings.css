@@ -1437,6 +1437,7 @@
 .settings-v2-check-grid label,
 .settings-v2-calendar-grid label,
 .settings-v2-mcp-tools label,
+.settings-v2-form-grid label.settings-v2-checkbox-field,
 .settings-v2-flow-form label.settings-v2-checkbox-field {
   display: flex;
   align-items: center;
@@ -1451,6 +1452,7 @@
 .settings-v2-check-grid input,
 .settings-v2-calendar-grid input,
 .settings-v2-mcp-tools input,
+.settings-v2-form-grid label.settings-v2-checkbox-field input,
 .settings-v2-checkbox-field input {
   width: auto;
   min-height: auto;
@@ -1591,6 +1593,25 @@
   display: grid;
   gap: 4px;
   margin-top: 10px;
+}
+
+.settings-v2-mcp-scope {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+
+.settings-v2-mcp-scope legend {
+  padding-inline: var(--space-1);
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.settings-v2-mcp-scope p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
 }
 .settings-v2-inline-field {
   grid-template-columns: auto minmax(150px, 240px);

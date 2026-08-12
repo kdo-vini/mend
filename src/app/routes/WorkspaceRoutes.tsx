@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
+// i18n-exempt: route composition only; all rendered elements own their copy.
+
 export interface WorkspaceRouteElements {
   inbox: ReactNode;
   issues: ReactNode;

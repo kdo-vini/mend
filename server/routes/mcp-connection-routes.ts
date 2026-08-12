@@ -146,8 +146,8 @@ export function registerMcpConnectionRoutes(context: ApiRouteModuleContext) {
         await dependencies.mcpConnections.completeOAuth(code, state);
         const base = process.env.APP_BASE_URL?.trim();
         const destination = base
-          ? new URL("/settings?tab=connections&mcp=connected", base).toString()
-          : "/settings?tab=connections&mcp=connected";
+          ? new URL("/settings/integrations/mcp?mcp=connected", base).toString()
+          : "/settings/integrations/mcp?mcp=connected";
         return response.redirect(303, destination);
       } catch (error) {
         rethrowMcpError(error);

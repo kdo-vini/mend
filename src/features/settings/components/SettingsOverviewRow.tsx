@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 import { SettingsStatus } from "./SettingsShared";
 
+// i18n-exempt: labels, descriptions, and status are translated by the page caller.
+
 export function SettingsOverviewRow({
   label,
   description,

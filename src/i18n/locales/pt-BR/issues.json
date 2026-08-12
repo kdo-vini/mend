@@ -53,6 +53,7 @@
     "shortcutCommand": "⌘ K"
   },
   "command": {
+    "startRun": "Iniciar",
     "openInbox": "Abrir caixa de entrada",
     "browseIssues": "Ver chamados",
     "createIssue": "Criar novo chamado",
@@ -71,6 +72,7 @@
     "shortcuts": "Atalhos"
   },
   "dialogs": {
+    "researchLinked": "Esta implementaÃ§Ã£o estÃ¡ vinculada ao artefato de pesquisa atual",
     "newWorkItem": "Novo item de trabalho",
     "createIssue": "Criar chamado",
     "closeCreate": "Fechar diálogo de criação de chamado",

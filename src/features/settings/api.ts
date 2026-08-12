@@ -85,8 +85,13 @@ export {
   disconnectLiveMcpConnection,
   listLiveMcpConnections,
   startLiveMcpOAuth,
+  supabaseMcpFeatures,
   testLiveMcpConnection,
   updateLiveMcpConnection,
 } from "../../api/mcp-connections";
-export type { McpConnection, McpToolRecord } from "../../api/mcp-connections";
+export type {
+  McpConnection,
+  McpToolRecord,
+  SupabaseMcpFeature,
+} from "../../api/mcp-connections";
 export { supabase } from "../../lib/supabase";
