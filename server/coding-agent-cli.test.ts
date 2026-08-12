@@ -157,6 +157,9 @@ describe("coding agent CLI boundary", () => {
         return { stdout: "claude 9.9.9", stderr: "", exitCode: 0 };
       workspace = invocation.cwd;
       expect(existsSync(invocation.env.CODEX_HOME!)).toBe(true);
+      expect(
+        path.relative(os.tmpdir(), invocation.env.CODEX_HOME!).startsWith(".."),
+      ).toBe(true);
       await writeFile(path.join(workspace, "README.md"), "after\n", "utf8");
       return {
         stdout: JSON.stringify({ structured_output: report, num_turns: 2 }),

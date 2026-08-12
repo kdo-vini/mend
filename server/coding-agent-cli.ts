@@ -967,8 +967,11 @@ export class CodingAgentCli {
     let version = "deterministic_checks";
     const before = await snapshotWorkspace(repoRoot);
     const workspace = await createIsolatedWorkspace(repoRoot, input.provider);
+    // Codex refuses to create its helper binaries when CODEX_HOME lives under
+    // the system temp directory. Keep the isolated state in the process home
+    // and remove it in the same finally block as the disposable checkout.
     const stateRoot = await mkdtemp(
-      path.join(os.tmpdir(), "mend-agent-state-"),
+      path.join(os.homedir(), ".mend-agent-state-"),
     );
     const paths = {
       schema: path.join(stateRoot, "report.schema.json"),
