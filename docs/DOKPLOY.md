@@ -51,10 +51,15 @@ the public origin:
 VITE_SUPABASE_URL=https://uwhugsimhtjtrnuotuki.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=<Supabase publishable key>
 VITE_MEND_API_URL=
+VITE_MEND_AUTH_EMAIL_DELIVERY_READY=1
 ```
 
 Never pass service-role, Whatsmiau, GitHub private keys or BYOK values as
 Docker build arguments or `VITE_*` variables.
+
+Set `VITE_MEND_AUTH_EMAIL_DELIVERY_READY=1` only after Supabase Auth SMTP is
+configured with the verified Resend sender. The Resend API key belongs in
+Supabase Authentication → Email → SMTP Settings, never in the browser build.
 
 ## Control-plane environment
 
@@ -81,8 +86,6 @@ MEND_GITHUB_WEBHOOK_SECRET=<GitHub webhook secret>
 MEND_GITHUB_API_URL=https://api.github.com
 MEND_AGENT_CREDENTIAL_ENCRYPTION_KEY=<same server secret used by the runner>
 MEND_AGENT_MAX_RUNTIME_SECONDS=1200
-MEND_AGENT_MAX_CONCURRENCY=1
-MEND_GITHUB_ACTIONS_ENABLED=0
 MEND_WORKER_POLL_MS=2000
 MEND_DEV_MODE=0
 ```
@@ -99,8 +102,6 @@ MEND_PROCESS_ROLE=runner
 MEND_AGENT_WORKSPACE_ROOT=/workspace/runs
 MEND_AGENT_CREDENTIAL_ENCRYPTION_KEY=<same server secret used by the control plane>
 MEND_AGENT_MAX_RUNTIME_SECONDS=1200
-MEND_AGENT_MAX_CONCURRENCY=1
-MEND_GITHUB_ACTIONS_ENABLED=0
 MEND_WORKER_POLL_MS=1000
 MEND_CODEX_SANDBOX_MODE=external
 ```

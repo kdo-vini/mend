@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import type { Session } from "@supabase/supabase-js";
+import { isAuthWeakPasswordError, type Session } from "@supabase/supabase-js";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
@@ -25,6 +25,10 @@ import {
   isGmailAddress,
   validateSignupEmail,
 } from "../shared/email-validation";
+import {
+  isAuthEmailDeliveryError,
+  isAuthEmailDeliveryReady,
+} from "../shared/auth-email-delivery";
 
 const browserEnv =
   (import.meta as ImportMeta & { env?: Record<string, string | undefined> })
@@ -37,6 +41,13 @@ const explicitDemoMode =
   typeof window !== "undefined" &&
   (new URLSearchParams(window.location.search).get("demo") === "1" ||
     window.sessionStorage.getItem("mend.demo") === "1");
+
+// Mirrors supabase/config.toml for copy only. Supabase Auth remains the
+// authority and returns the weak_password reason when the policy changes.
+const supabaseMinimumPasswordLength = 8;
+const authEmailDeliveryReady = isAuthEmailDeliveryReady(
+  browserEnv.VITE_MEND_AUTH_EMAIL_DELIVERY_READY,
+);
 
 const authCallbackKeys = [
   "access_token",
@@ -211,6 +222,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setError(t("enterPassword"));
       return;
     }
+    if (authMode === "sign-up" && !authEmailDeliveryReady) {
+      setError(t("emailDeliveryUnavailable"));
+      return;
+    }
 
     const rateLimit = consumeAuthAttempt();
     if (!rateLimit.allowed) {
@@ -234,16 +249,38 @@ export function AuthGate({ children }: { children: ReactNode }) {
             );
       if (result.error) {
         const rateLimited = isAuthRateLimitError(result.error);
-        setCredentialsInvalid(!rateLimited);
-        setError(
-          t(
-            rateLimited
-              ? "rateLimitError"
-              : authMode === "sign-in"
-                ? "authError"
-                : "signUpError",
-          ),
-        );
+        if (isAuthEmailDeliveryError(result.error)) {
+          setCredentialsInvalid(false);
+          setPasswordInvalid(false);
+          setError(t("emailDeliveryFailed"));
+        } else if (isAuthWeakPasswordError(result.error)) {
+          setCredentialsInvalid(false);
+          setPasswordInvalid(true);
+          const reason = result.error.reasons[0];
+          setError(
+            t(
+              reason === "length"
+                ? "passwordTooShort"
+                : reason === "characters"
+                  ? "passwordNeedsCharacters"
+                  : reason === "pwned"
+                    ? "passwordPwned"
+                    : "weakPasswordError",
+              { minimum: supabaseMinimumPasswordLength },
+            ),
+          );
+        } else {
+          setCredentialsInvalid(!rateLimited);
+          setError(
+            t(
+              rateLimited
+                ? "rateLimitError"
+                : authMode === "sign-in"
+                  ? "authError"
+                  : "signUpError",
+            ),
+          );
+        }
       } else if (authMode === "sign-up" && !result.data.session) {
         setNotice(t("checkInboxConfirm"));
         setShowGmailShortcut(isGmailAddress(email));
@@ -286,13 +323,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setError(t("enterEmail"));
       return;
     }
+    if (!authEmailDeliveryReady) {
+      setError(t("emailDeliveryUnavailable"));
+      return;
+    }
     setError(null);
     const result = await sendMagicLinkRequest(
       email,
       authRedirectUrl(),
       supabase,
     );
-    if (result.error) setError(t("magicLinkError"));
+    if (result.error)
+      setError(
+        isAuthEmailDeliveryError(result.error)
+          ? t("emailDeliveryFailed")
+          : t("magicLinkError"),
+      );
     else setNotice(t("magicLinkSent"));
   };
 

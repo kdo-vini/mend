@@ -50,7 +50,7 @@ test("register submits the confirmation redirect and shows the next step", async
   await page.locator(".auth-submit").click();
 
   await expect(page.getByRole("status")).toContainText(
-    "Check your email to confirm, then come back to sign in.",
+    "We sent a confirmation email. Check your inbox, then come back to sign in.",
   );
   expect(signUpPayload).toMatchObject({
     email: testUser.email,
@@ -86,6 +86,65 @@ test("register rejects disposable email addresses before calling Auth", async ({
   );
   await expect(page.locator(".auth-input-invalid")).toHaveCount(1);
   expect(signUpCalled).toBe(false);
+});
+
+test("register explains Supabase's weak password response", async ({
+  page,
+}) => {
+  await page.route("**/auth/v1/signup**", async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "weak_password",
+        msg: "Password should be at least 8 characters.",
+        weak_password: {
+          reasons: ["length"],
+          message: "Password should be at least 8 characters.",
+        },
+      }),
+    });
+  });
+
+  await page.goto("/?auth=1");
+  await page.getByRole("tab", { name: "Create account" }).click();
+  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
+  await page.getByRole("textbox", { name: "Password" }).fill("123");
+  await page.locator(".auth-submit").click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Use at least 8 characters for your password.",
+  );
+  await expect(page.locator(".auth-input-invalid")).toHaveCount(1);
+});
+
+test("signup does not show a confirmation success when Auth rejects email delivery", async ({
+  page,
+}) => {
+  await page.route("**/auth/v1/signup**", async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "unexpected_failure",
+        msg: "Error sending confirmation email",
+      }),
+    });
+  });
+
+  await page.goto("/?auth=1");
+  await page.getByRole("tab", { name: "Create account" }).click();
+  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
+  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
+  await page.locator(".auth-submit").click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "We couldn't confirm the email was sent. Try again later.",
+  );
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Open Gmail", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("password auth shows a clear message for malformed email", async ({
@@ -125,7 +184,7 @@ test("Gmail signup offers a direct inbox shortcut", async ({ page }) => {
   await page.locator(".auth-submit").click();
 
   await expect(page.getByRole("status")).toContainText(
-    "Check your email to confirm, then come back to sign in.",
+    "We sent a confirmation email. Check your inbox, then come back to sign in.",
   );
   await expect(
     page.getByRole("button", { name: "Open Gmail", exact: true }),

@@ -8,13 +8,7 @@ export default defineConfig({
   },
   lint: {
     ignoredTags: ["pre", "code"],
-    // The legacy settings form is being decomposed into Settings V2 pages.
-    // Keep its existing copy out of the extractor while the frontend guard
-    // still requires every settings module to participate in i18n.
-    ignore: [
-      "src/features/settings/pages/SettingsPage.tsx",
-      "src/features/settings/pages/SettingsWhatsAppPage.tsx",
-    ],
+    ignore: ["src/features/settings/pages/SettingsWhatsAppPage.tsx"],
     checkInterpolationParams: true,
   },
 });

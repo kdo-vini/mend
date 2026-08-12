@@ -24,7 +24,6 @@ import {
   apiRequest,
   LiveActionError,
   mendApiBaseUrl,
-  mendApiToken,
   requireClient,
   unwrap,
 } from "./transport";
@@ -35,7 +34,6 @@ export {
   isLiveConfigured,
   LiveActionError,
   mendApiBaseUrl,
-  mendApiToken,
 } from "./transport";
 
 type Tables = Database["public"]["Tables"];
@@ -574,24 +572,6 @@ export async function listLiveWorkspaceMembers(
   return result.data ?? [];
 }
 
-export async function addLiveWorkspaceMember(input: {
-  workspaceId: string;
-  userId: string;
-  role?: "owner" | "admin" | "agent" | "viewer";
-}) {
-  return apiRequest<LiveWorkspaceMember>(
-    `/api/workspaces/${encodeURIComponent(input.workspaceId)}/members`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        userId: input.userId,
-        role: input.role ?? "agent",
-      }),
-    },
-    input.workspaceId,
-  );
-}
-
 export async function updateLiveWorkspaceMemberRole(input: {
   workspaceId: string;
   userId: string;
@@ -686,33 +666,6 @@ export async function listLiveAuditLog(
 ): Promise<LiveAuditLogEntry[]> {
   const result = await apiRequest<{ data: LiveAuditLogEntry[] }>(
     `/api/workspaces/${encodeURIComponent(workspaceId)}/audit-log${queryString(options)}`,
-    {},
-    workspaceId,
-  );
-  return result.data ?? [];
-}
-
-export interface LiveIssueListFilters {
-  status?: string;
-  priority?: string;
-  assignedUserId?: string;
-  search?: string;
-  type?: string;
-  source?: string;
-  label?: string;
-  contactId?: string;
-  conversationId?: string;
-  hasAgent?: boolean;
-  limit?: number;
-  cursor?: string;
-}
-
-export async function listLiveIssues(
-  workspaceId: string,
-  filters: LiveIssueListFilters = {},
-): Promise<Array<Record<string, unknown>>> {
-  const result = await apiRequest<{ data: Array<Record<string, unknown>> }>(
-    `/api/issues${queryString(filters)}`,
     {},
     workspaceId,
   );
@@ -1427,34 +1380,6 @@ export async function createLiveIssueComment(
   );
 }
 
-export async function addLiveEvidence(input: {
-  workspaceId: string;
-  issueId: string;
-  issueIdentifier?: string;
-  file: File;
-}) {
-  if (!mendApiBaseUrl)
-    throw new LiveActionError(
-      "Evidence upload needs the Mend API endpoint. Set VITE_MEND_API_URL.",
-    );
-  const form = new FormData();
-  form.append("file", input.file);
-  form.append("issueId", input.issueIdentifier ?? input.issueId);
-  const headers = new Headers();
-  if (mendApiToken) headers.set("authorization", `Bearer ${mendApiToken}`);
-  headers.set("x-mend-workspace-id", input.workspaceId);
-  const response = await fetch(
-    `${mendApiBaseUrl}/api/issues/${encodeURIComponent(input.issueIdentifier ?? input.issueId)}/evidence`,
-    { method: "POST", headers, body: form },
-  );
-  if (!response.ok)
-    throw new LiveActionError(
-      `Evidence upload failed (${response.status}).`,
-      response.status,
-    );
-  return response.json();
-}
-
 export async function addLiveTextEvidence(
   input: {
     workspaceId: string;
@@ -1522,28 +1447,6 @@ export async function createLiveKnowledge(
       })
       .select("*")
       .single(),
-  );
-}
-
-export async function listLivePublishedKnowledge(
-  workspaceId: string,
-  client: MendSupabaseClient | null = supabase,
-): Promise<KnowledgeRow[]> {
-  if (mendApiBaseUrl) {
-    const result = await apiRequest<{ data: KnowledgeRow[] }>(
-      "/api/knowledge?status=published",
-      {},
-      workspaceId,
-    );
-    return result.data ?? [];
-  }
-  return unwrap(
-    requireClient(client)
-      .from("knowledge_articles")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .eq("status", "published")
-      .order("updated_at", { ascending: false }),
   );
 }
 
@@ -2359,17 +2262,6 @@ export function getWhatsAppQr(input: {
 }) {
   return apiRequest<{ qr: string }>(
     `/api/whatsapp/instances/${encodeURIComponent(input.instanceName)}/qr`,
-    {},
-    input.workspaceId,
-  );
-}
-
-export function refreshWhatsAppInstance(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<WhatsAppInstance>(
-    `/api/whatsapp/instances/${encodeURIComponent(input.instanceName)}/state`,
     {},
     input.workspaceId,
   );

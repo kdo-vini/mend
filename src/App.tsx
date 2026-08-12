@@ -97,15 +97,11 @@ const FeatureRunsPage = lazy(() =>
     default: RunsPage,
   })),
 );
-const FeatureSettingsPage = lazy(() => {
-  if (import.meta.env.VITE_SETTINGS_V2 === "false")
-    return import("./features/settings/pages/SettingsPage").then(
-      ({ SettingsPage }) => ({ default: SettingsPage }),
-    );
-  return import("./features/settings/pages/SettingsWorkspacePage").then(
+const FeatureSettingsPage = lazy(() =>
+  import("./features/settings/pages/SettingsWorkspacePage").then(
     ({ SettingsWorkspacePage }) => ({ default: SettingsWorkspacePage }),
-  );
-});
+  ),
+);
 
 function FeatureBoundary({
   label,

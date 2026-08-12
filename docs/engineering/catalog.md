@@ -31,6 +31,7 @@ Antes de escrever código novo:
 | `apiRequest`                                                               | `src/api/transport.ts`                                          | Toda chamada HTTP autenticada do navegador. Componentes não devem montar `fetch` próprio.                                                                                                                                                                                           |
 | `consumeAuthAttempt` / `AUTH_RATE_LIMIT_POLICY`                            | `src/shared/auth-rate-limit.ts`                                 | Barreira local de UX para login e cadastro por senha. Não substitui o limite autoritativo do Supabase Auth; reutilize a mesma política para evitar contadores divergentes.                                                                                                          |
 | `validateSignupEmail` / `isGmailAddress`                                   | `src/shared/email-validation.ts`                                | Validar formato e domínios descartáveis antes do cadastro e reconhecer Gmail para o atalho de confirmação. A confirmação do provedor continua sendo a prova de posse da caixa.                                                                                                      |
+| `isAuthEmailDeliveryReady` / `isAuthEmailDeliveryError`                    | `src/shared/auth-email-delivery.ts`                             | Gate de readiness e classificação dos erros de entrega do Supabase Auth. Só habilitar após SMTP Resend verificado; nunca tratar `session: null` sozinho como prova de envio.                                                                                                        |
 | `checked`, `row`, `rows`, `str`                                            | `server/adapters/supabase-mappers.ts`                           | Validar resultados Supabase e converter dados no limite do backend. Não duplicar casts espalhados nos serviços.                                                                                                                                                                     |
 | `policyDecision` / `normalizeWorkspaceAiPolicy`                            | `server/automation/decision.ts` e `src/ai-policy.ts`            | Toda decisão de draft, Auto-reply, escalonamento e política de falha. A UI apenas edita a política; não reimplementa os gates.                                                                                                                                                      |
 | `conversationReplyInput`                                                   | `server/automation/decision.ts`                                 | Montar o contexto de rascunho com histórico limitado, papéis inbound/outbound explícitos e um único alvo de resposta. Reutilizar nos fluxos automático e manual.                                                                                                                    |
@@ -60,6 +61,10 @@ camadas:
   é tratado como uma fronteira de segurança;
 - respostas `429` do provedor continuam sendo mapeadas para uma mensagem calma
   de limite excedido, sem marcar e-mail ou senha como incorretos.
+- a política de senha também é do Supabase Auth: o baseline usa oito
+  caracteres em `supabase/config.toml`; o frontend não tenta duplicar a regra,
+  apenas traduz `AuthWeakPasswordError.reasons` (`length`, `characters` e
+  `pwned`) para copy acionável.
 
 Alterações nos limites de produção devem ser aplicadas também no projeto
 Supabase remoto pela configuração de Auth/Management API. Não use o

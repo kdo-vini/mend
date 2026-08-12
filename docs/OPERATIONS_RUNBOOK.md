@@ -47,7 +47,7 @@ Set these server-side values in the deployment secret manager:
 - `MEND_PROCESS_ROLE=control` on the public service and
   `MEND_PROCESS_ROLE=runner` on the private Agent worker.
 - `MEND_AGENT_WORKSPACE_ROOT`, `MEND_AGENT_MAX_RUNTIME_SECONDS`,
-  `MEND_AGENT_MAX_CONCURRENCY`, and
+  `MEND_CODING_RUN_STALE_MS`, and
   `MEND_AGENT_CREDENTIAL_ENCRYPTION_KEY` on the private runner.
 - Configure each workspace's LLM provider credential from Settings. These
   credentials are encrypted server-side and never returned to the browser.

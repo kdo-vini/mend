@@ -35,6 +35,7 @@ export default defineConfig({
     env: {
       VITE_SUPABASE_URL: "http://127.0.0.1:54321",
       VITE_SUPABASE_PUBLISHABLE_KEY: "e2e-public-key",
+      VITE_MEND_AUTH_EMAIL_DELIVERY_READY: "1",
     },
     reuseExistingServer: true,
     timeout: 120_000,

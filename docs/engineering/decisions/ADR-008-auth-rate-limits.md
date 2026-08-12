@@ -26,6 +26,9 @@ Aplicar duas camadas complementares:
    segurança.
 3. Respostas `429` do Supabase têm prioridade sobre a mensagem local e são
    apresentadas sem sinalizar credenciais incorretas.
+4. A força da senha permanece no Supabase Auth. O baseline é de oito
+   caracteres; o cliente somente traduz `AuthWeakPasswordError.reasons` e não
+   aplica uma segunda política divergente.
 
 Os limites de produção devem ser replicados no projeto Supabase remoto via
 Auth/Management API após revisão. O `config.toml` local não deve ser enviado
