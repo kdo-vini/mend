@@ -1,4 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  selectExactChannelBinding,
+  type WebhookChannelBinding,
+} from "./binding.ts";
 
 type JsonRecord = Record<string, unknown>;
 type MessageType =
@@ -527,6 +531,24 @@ async function recordAndQueue(
   return { inserted: true, messageId: "" };
 }
 
+async function recordQuarantinedEvent(
+  client: ReturnType<typeof createClient>,
+  input: {
+    event: string;
+    reportedInstanceName?: string;
+    rawBody: string;
+  },
+): Promise<void> {
+  const { error } = await client.from("webhook_quarantine_events").insert({
+    provider: "whatsmiau",
+    event_name: input.event.slice(0, 120),
+    instance_digest: await sha256(input.reportedInstanceName ?? "missing"),
+    payload_digest: await sha256(input.rawBody),
+  });
+  if (error)
+    throw new Error(`webhook_quarantine_failed:${error.code ?? "database"}`);
+}
+
 Deno.serve(async (request) => {
   if (request.method === "GET")
     return response(200, { ok: true, service: "mend-whatsmiau-webhook" });
@@ -577,51 +599,41 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    let bindingQuery = client
-      .from("channel_connections")
-      .select("id, workspace_id, provider_instance_name")
-      .eq("provider", "whatsmiau");
-    if (reportedInstanceName)
-      bindingQuery = bindingQuery.eq(
-        "provider_instance_name",
-        reportedInstanceName,
-      );
-    let { data: bindings, error: bindingError } = await bindingQuery.limit(2);
-    if (bindingError)
-      throw new Error(
-        `binding_lookup_failed:${bindingError.code ?? "database"}`,
-      );
-    if (!bindings?.length && reportedInstanceName) {
-      const fallback = await client
+    const event = normalizeEventName(payload.event ?? payload.type);
+    let bindings: WebhookChannelBinding[] = [];
+    if (reportedInstanceName) {
+      const bindingResult = await client
         .from("channel_connections")
         .select("id, workspace_id, provider_instance_name")
         .eq("provider", "whatsmiau")
-        .eq("status", "open")
+        .eq("provider_instance_name", reportedInstanceName)
         .limit(2);
-      bindings = fallback.data;
-      bindingError = fallback.error;
-      if (bindingError)
+      if (bindingResult.error)
         throw new Error(
-          `binding_fallback_failed:${bindingError.code ?? "database"}`,
+          `binding_lookup_failed:${bindingResult.error.code ?? "database"}`,
         );
+      bindings = (bindingResult.data ?? []) as WebhookChannelBinding[];
     }
-    if (!bindings?.length) return response(404, { error: "channel_not_found" });
-    if (bindings.length > 1)
+    let binding: WebhookChannelBinding | null;
+    try {
+      binding = selectExactChannelBinding(bindings, reportedInstanceName);
+    } catch {
       return response(409, { error: "channel_ambiguous" });
-    const binding = bindings[0] as {
-      id: string;
-      workspace_id: string;
-      provider_instance_name: string;
-    };
-    const instanceName = binding.provider_instance_name;
-    if (reportedInstanceName && reportedInstanceName !== instanceName) {
-      console.warn(
-        "Whatsmiau instance identifier mapped to the only open channel",
-        { reportedInstanceName, instanceName },
-      );
     }
-
-    const event = normalizeEventName(payload.event ?? payload.type);
+    if (!binding) {
+      await recordQuarantinedEvent(client, {
+        event,
+        reportedInstanceName,
+        rawBody,
+      });
+      return response(202, {
+        accepted: true,
+        quarantined: true,
+        event,
+        processed: 0,
+      });
+    }
+    const instanceName = binding.provider_instance_name;
     if (event === "connection.update") {
       await markConnectionEvent(client, instanceName, payload);
       return response(202, { accepted: true, event, processed: 0 });

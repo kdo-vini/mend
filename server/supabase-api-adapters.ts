@@ -54,6 +54,7 @@ import {
   type AgentLoginStartInput,
   type AgentRoutingPolicyInput,
   type CodingControlPlanePort,
+  type ImpactPort,
 } from "./contracts/api-ports.js";
 import {
   type KanbanIssuePort,
@@ -99,18 +100,18 @@ import {
   type IssueLinkMessageInput,
   type ResolveAndNotifyInput,
 } from "./issue-service.js";
+import { type KnowledgePort } from "./knowledge-service.js";
 import {
-  type KnowledgePort,
-  type KnowledgeRequestContext,
-  type KnowledgeCreateInput,
-  type KnowledgePatchInput,
-  type KnowledgeListQuery,
-} from "./knowledge-service.js";
-import {
-  createSupportAiProvider,
+  resolveSupportAiProvider,
   type SupportAiProvider,
 } from "./providers.js";
 import { normalizeLocale } from "./locale.js";
+import { SupabaseKnowledgeAdapter } from "./adapters/supabase/knowledge.js";
+import { SupabaseExternalOperationAdapter } from "./adapters/supabase/external-operations.js";
+import { SupabaseImpactAdapter } from "./adapters/supabase/impact.js";
+export { SupabaseKnowledgeAdapter } from "./adapters/supabase/knowledge.js";
+export { SupabaseExternalOperationAdapter } from "./adapters/supabase/external-operations.js";
+export { SupabaseImpactAdapter } from "./adapters/supabase/impact.js";
 import { conversationReplyInput } from "./automation/decision.js";
 import {
   CodexService,
@@ -197,7 +198,6 @@ import {
   encryptConnectionSecret,
 } from "./connection-crypto.js";
 import {
-  article,
   auditLog,
   channel,
   checked,
@@ -287,6 +287,7 @@ export type SupabaseApiPortDependencies = {
   codingRuns: CodingRunPort;
   googleConnections: GoogleConnectionPort;
   mcpConnections: McpConnectionPort;
+  impact: ImpactPort;
   media: MediaPort;
   kanban: KanbanIssuePort;
   personalPlanning: PersonalPlanningPort;
@@ -847,16 +848,37 @@ export class SupabaseConversationAdapter implements ConversationPort {
   constructor(
     private readonly client: AnySupabaseClient,
     provider: WhatsAppProvider,
-    private readonly ai: SupportAiProvider,
+    private readonly ai: SupportAiProvider | undefined,
     mediaStorage?: SupabaseMediaStorage,
     private readonly mediaPipeline?: SupabaseMediaPipeline,
     private readonly agentCredentials?: AgentCredentialPort,
+    private readonly metricsClient?: AnySupabaseClient,
   ) {
     this.inbox = new InboxService(
       new SupabaseInboxPort(client),
       mediaStorage ? { mediaStorage } : {},
     );
     this.whatsapp = new WhatsAppService(this.inbox, provider, mediaStorage);
+  }
+
+  private async recordConversationFact(
+    context: RequestContext,
+    conversationId: string,
+    factType: "founder_intervention" | "policy_required_touch",
+    suffix: string,
+  ): Promise<void> {
+    if (!this.metricsClient) return;
+    const result = await this.metricsClient.from("workflow_facts").upsert(
+      {
+        workspace_id: context.workspaceId,
+        workflow_id: conversationId,
+        fact_type: factType,
+        value_boolean: true,
+        idempotency_key: `${conversationId}:${factType}:${suffix}`,
+      },
+      { onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true },
+    );
+    checked(`workflow_facts.${factType}`, result);
   }
 
   async list(context: RequestContext, query: ConversationListQuery) {
@@ -1109,6 +1131,13 @@ export class SupabaseConversationAdapter implements ConversationPort {
       p_reason: reason,
     });
     checked("conversation_ai.pause", result);
+    if (context.role === "owner")
+      await this.recordConversationFact(
+        context,
+        conversationId,
+        "founder_intervention",
+        reason,
+      );
     return this.get(context, conversationId);
   }
 
@@ -1126,6 +1155,13 @@ export class SupabaseConversationAdapter implements ConversationPort {
     conversationId: string,
     input: SendMessageInput,
   ) {
+    if (context.role === "owner")
+      await this.recordConversationFact(
+        context,
+        conversationId,
+        "founder_intervention",
+        "human-message",
+      );
     const actor = {
       workspaceId: context.workspaceId,
       actorUserId: context.userId,
@@ -1276,16 +1312,12 @@ export class SupabaseConversationAdapter implements ConversationPort {
     };
     const operationalLanguage = normalizeLocale(workspaceRow.default_language);
     const provider = this.agentCredentials
-      ? createSupportAiProvider({
-          apiKey: (
-            await this.agentCredentials.resolve(
-              context.workspaceId,
-              "support",
-              "openai",
-            )
-          )?.apiKey,
-        })
+      ? await resolveSupportAiProvider(
+          context.workspaceId,
+          this.agentCredentials,
+        )
       : this.ai;
+    if (!provider) throw new Error("support_ai_credential_required");
     const draft = await provider.draftReply(
       `${values}${input.instruction ? `\nOperator instruction: ${input.instruction}` : ""}`,
       knowledge,
@@ -2140,75 +2172,6 @@ export class SupabasePersonalPlanningAdapter implements PersonalPlanningPort {
   }
 }
 
-export class SupabaseKnowledgeAdapter implements KnowledgePort {
-  constructor(private readonly client: AnySupabaseClient) {}
-
-  async list(context: KnowledgeRequestContext, query: KnowledgeListQuery) {
-    const value = query as unknown as Row;
-    let request = this.client
-      .from("knowledge_articles")
-      .select("*")
-      .eq("workspace_id", context.workspaceId);
-    if (value.status) request = request.eq("status", value.status);
-    if (value.category) request = request.eq("category", value.category);
-    if (value.search) request = request.ilike("title", `%${value.search}%`);
-    if (value.cursor) request = request.gt("id", value.cursor);
-    const result = await request
-      .order("updated_at", { ascending: false })
-      .limit(Number(value.limit ?? 100));
-    return rows(checked("knowledge_articles.list", result)).map(article);
-  }
-
-  async create(context: KnowledgeRequestContext, input: KnowledgeCreateInput) {
-    const result = await this.client
-      .from("knowledge_articles")
-      .insert({
-        workspace_id: context.workspaceId,
-        title: input.title,
-        category: input.category,
-        body: input.body,
-        status: input.status,
-        created_by_user_id: context.userId,
-      })
-      .select("*")
-      .single();
-    return article(row(checked("knowledge_articles.create", result)));
-  }
-
-  async update(
-    context: KnowledgeRequestContext,
-    id: string,
-    input: KnowledgePatchInput,
-  ) {
-    const value = input as unknown as Row;
-    const result = await this.client
-      .from("knowledge_articles")
-      .update({
-        ...(value.title !== undefined ? { title: value.title } : {}),
-        ...(value.category !== undefined ? { category: value.category } : {}),
-        ...(value.body !== undefined ? { body: value.body } : {}),
-        ...(value.status !== undefined ? { status: value.status } : {}),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .eq("workspace_id", context.workspaceId)
-      .select("*")
-      .maybeSingle();
-    const data = checked("knowledge_articles.update", result);
-    return data ? article(row(data)) : null;
-  }
-
-  async remove(context: KnowledgeRequestContext, id: string) {
-    const result = await this.client
-      .from("knowledge_articles")
-      .delete()
-      .eq("id", id)
-      .eq("workspace_id", context.workspaceId)
-      .select("id");
-    return rows(checked("knowledge_articles.delete", result)).length > 0;
-  }
-}
-
 export class SupabaseRepositoryAdapter
   implements RepositoryPort, RepositoryConfigPort
 {
@@ -2709,6 +2672,48 @@ export class SupabaseAgentCredentialAdapter implements AgentCredentialPort {
     task: AgentCredentialTask,
     provider: AgentProvider,
   ): Promise<{ apiKey: string; config: Record<string, unknown> } | null> {
+    if (task === "support") {
+      const connectionResult = await this.privilegedClient
+        .from("agent_connections")
+        .select("id, metadata_json")
+        .eq("workspace_id", workspaceId)
+        .eq("purpose", "support")
+        .eq("provider", provider)
+        .eq("auth_method", "api_key")
+        .eq("status", "connected")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const connection = checked(
+        "agent_credentials.support_connection",
+        connectionResult,
+      );
+      if (connection) {
+        const connectionRow = row(connection);
+        const secretResult = await this.privilegedClient
+          .from("agent_connection_secrets")
+          .select("encrypted_bundle")
+          .eq("connection_id", str(connectionRow.id))
+          .maybeSingle();
+        const secret = checked(
+          "agent_credentials.support_connection_secret",
+          secretResult,
+        );
+        if (!secret) return null;
+        const decrypted = decryptConnectionSecret(
+          str(row(secret).encrypted_bundle),
+          connectionEncryptionKey(),
+        );
+        let apiKey = decrypted;
+        try {
+          const bundle = JSON.parse(decrypted) as Record<string, unknown>;
+          if (typeof bundle.apiKey === "string") apiKey = bundle.apiKey;
+        } catch {
+          // Legacy connection payloads stored the API key directly.
+        }
+        return { apiKey, config: row(connectionRow.metadata_json) };
+      }
+    }
     const result = await this.privilegedClient
       .from("workspace_agent_credentials")
       .select("encrypted_api_key, config_json")
@@ -4015,6 +4020,42 @@ export class SupabaseCodexRunStore implements CodexRunStore {
       .eq("attempt_number", attemptNumber);
     if (result.error)
       throw new Error(`agent_run_attempt.update:${result.error.message}`);
+    const cost = Number(patch.cost_amount_usd);
+    if (Number.isFinite(cost) && cost >= 0) {
+      const runResult = await this.privilegedClient
+        .from("agent_runs")
+        .select("workspace_id, issue_id")
+        .eq("id", runId)
+        .maybeSingle();
+      const runValue = checked("agent_run_attempt.cost_run", runResult);
+      if (runValue) {
+        const runRow = row(runValue);
+        const caseResult = await this.privilegedClient
+          .from("bug_cases")
+          .select("conversation_id")
+          .eq("workspace_id", str(runRow.workspace_id))
+          .eq("issue_id", str(runRow.issue_id))
+          .maybeSingle();
+        const caseValue = checked("workflow_facts.cost_case", caseResult);
+        const workflowId = caseValue
+          ? str(row(caseValue).conversation_id, str(runRow.issue_id))
+          : str(runRow.issue_id);
+        const fact = await this.privilegedClient.from("workflow_facts").upsert(
+          {
+            workspace_id: str(runRow.workspace_id),
+            workflow_id: workflowId,
+            fact_type: "cost_recorded",
+            value_numeric: cost,
+            idempotency_key: `${runId}:cost:${attemptNumber}`,
+          },
+          {
+            onConflict: "workspace_id,idempotency_key",
+            ignoreDuplicates: true,
+          },
+        );
+        checked("workflow_facts.cost_recorded", fact);
+      }
+    }
   }
 }
 
@@ -4038,6 +4079,9 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
         repositories,
         runs: store,
         deployment: createDokployDeploymentFromEnv(),
+        externalOperations: new SupabaseExternalOperationAdapter(
+          privilegedClient,
+        ),
         ...(controlPlane
           ? {
               agentConnectionSecretResolver:
@@ -4045,6 +4089,37 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
             }
           : {}),
       });
+  }
+
+  private async recordRunFact(
+    runRecord: import("./codex.js").CodexRunRecord,
+    factType: "policy_required_touch" | "fix_verified" | "cost_recorded",
+    suffix: string,
+    value: boolean | number = true,
+  ): Promise<void> {
+    const caseResult = await this.privilegedClient
+      .from("bug_cases")
+      .select("conversation_id")
+      .eq("workspace_id", runRecord.workspaceId)
+      .eq("issue_id", runRecord.issueId)
+      .maybeSingle();
+    const caseValue = checked("workflow_facts.bug_case", caseResult);
+    const workflowId = caseValue
+      ? str(row(caseValue).conversation_id, runRecord.issueId)
+      : runRecord.issueId;
+    const result = await this.privilegedClient.from("workflow_facts").upsert(
+      {
+        workspace_id: runRecord.workspaceId,
+        workflow_id: workflowId,
+        fact_type: factType,
+        ...(typeof value === "boolean"
+          ? { value_boolean: value }
+          : { value_numeric: value }),
+        idempotency_key: `${runRecord.id}:${factType}:${suffix}`,
+      },
+      { onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true },
+    );
+    checked(`workflow_facts.${factType}`, result);
   }
 
   async list(context: RequestContext, query: CodingRunListQuery) {
@@ -4494,6 +4569,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       );
     await this.requirePolicyAction(context.workspaceId, "implement_fix");
     const updated = await this.codex.approve(id);
+    await this.recordRunFact(updated, "policy_required_touch", "approval");
     await this.advanceCaseForRun(context.workspaceId, updated, "approval", {
       eventType: "fix.approved",
       message: "A human approved the verified fix.",
@@ -4566,6 +4642,8 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
           : "The deployed fix failed its health check and needs attention.",
       healthStatus,
     });
+    if (healthStatus === "healthy")
+      await this.recordRunFact(updated, "fix_verified", "health-check");
     return updated;
   }
   async reject(context: RequestContext, id: string) {
@@ -5685,7 +5763,7 @@ export function createSupabaseApiAdapters(
   const provider =
     options.whatsMiau ??
     (new WhatsmiauMessagingProvider() as WhatsmiauProviderPort);
-  const ai = options.aiProvider ?? createSupportAiProvider();
+  const ai = options.aiProvider;
   const membership = new SupabaseMembershipAdapter(client);
   const workspaces = new SupabaseWorkspaceAdapter(
     client,
@@ -5712,6 +5790,7 @@ export function createSupabaseApiAdapters(
     mediaStorage,
     media,
     agentCredentials,
+    privilegedClient,
   );
   const issues = new SupabaseIssueAdapter(
     client,
@@ -5721,7 +5800,12 @@ export function createSupabaseApiAdapters(
   );
   const kanban = new SupabaseKanbanAdapter(client, issues);
   const personalPlanning = new SupabasePersonalPlanningAdapter(client);
-  const knowledge = new SupabaseKnowledgeAdapter(client);
+  const knowledge = new SupabaseKnowledgeAdapter(
+    client,
+    privilegedClient,
+    agentCredentials,
+  );
+  const impact = new SupabaseImpactAdapter(client);
   const repositories = new SupabaseRepositoryAdapter(client);
   const githubConnections = new SupabaseGitHubConnectionAdapter(
     client,
@@ -5752,6 +5836,7 @@ export function createSupabaseApiAdapters(
     conversations,
     issues,
     knowledge,
+    impact,
     repositories,
     agentCredentials,
     codingControlPlane,

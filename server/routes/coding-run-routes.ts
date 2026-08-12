@@ -92,7 +92,7 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
         200,
         requireFound(
           await dependencies.codingRuns.approve(
-            await scoped(request, response, "agent"),
+            await scoped(request, response, "admin"),
             pathId(request),
           ),
           "agent_run",
@@ -124,7 +124,7 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
         200,
         requireFound(
           await dependencies.codingRuns.publish(
-            await scoped(request, response, "agent"),
+            await scoped(request, response, "admin"),
             pathId(request),
           ),
           "agent_run",
@@ -140,7 +140,7 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
         200,
         requireFound(
           await dependencies.codingRuns.deploy(
-            await scoped(request, response, "agent"),
+            await scoped(request, response, "admin"),
             pathId(request),
           ),
           "agent_run",
@@ -156,7 +156,7 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
         200,
         requireFound(
           await dependencies.codingRuns.merge(
-            await scoped(request, response, "agent"),
+            await scoped(request, response, "admin"),
             pathId(request),
           ),
           "agent_run",

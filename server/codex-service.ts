@@ -23,6 +23,10 @@ import {
 import type { OpenAiCodexClient, OpenAiCodexOptions } from "./codex-openai.js";
 import type { CodexDeploymentPort } from "./deployment.js";
 import { createDokployDeploymentFromEnv } from "./deployment.js";
+import {
+  executeRecoverableOperation,
+  type ExternalOperationPort,
+} from "./external-operations.js";
 import { createCodingAgentRunExecutor } from "./coding-agent-executor.js";
 import type { CodingAgentName } from "./coding-agent-cli.js";
 import type {
@@ -166,6 +170,7 @@ export interface CodexServicePorts {
   github?: GitHubControlPlane | null;
   healthProbe?: typeof probeDeploymentHealth;
   healthFetcher?: GitHubFetch;
+  externalOperations?: ExternalOperationPort;
 }
 
 export interface StartCodexRunInput {
@@ -1185,13 +1190,25 @@ export class CodexService {
       });
       deploymentResult = asRecord(intentRun.result);
     }
-    const deployed = await deployment.deploy({
+    const deploymentInput = {
       workspaceId: run.workspaceId,
       runId: run.id,
       branch: deploymentBranch,
       ...(deploymentCommitSha ? { commitSha: deploymentCommitSha } : {}),
       idempotencyKey,
-    });
+    };
+    const deployed = this.ports.externalOperations
+      ? await executeRecoverableOperation({
+          workspaceId: run.workspaceId,
+          kind: "dokploy_deploy",
+          idempotencyKey,
+          request: deploymentInput,
+          port: this.ports.externalOperations,
+          reconcile: () =>
+            deployment.reconcile?.(deploymentInput) ?? Promise.resolve(null),
+          mutate: () => deployment.deploy(deploymentInput),
+        })
+      : await deployment.deploy(deploymentInput);
     const updated = await this.update(run.id, {
       result: {
         ...deploymentResult,
@@ -1299,20 +1316,44 @@ export class CodexService {
     const githubRepository = this.githubRepository(repository);
     if (!githubRepository || !this.github)
       throw new CodexServiceError("GitHub App merge is not configured");
-    const readyPullRequest = await this.github.markPullRequestReadyForReview(
-      githubRepository,
-      pullNumber,
-    );
-    if (readyPullRequest.draft)
-      throw new CodexServiceError(
-        "GitHub pull request is still a draft after requesting review",
+    const mergeMutation = async () => {
+      const readyPullRequest = await this.github!.markPullRequestReadyForReview(
+        githubRepository,
+        pullNumber,
       );
-    const merged = await this.github.mergePullRequest(
-      githubRepository,
-      pullNumber,
-      headSha,
-      "squash",
-    );
+      if (readyPullRequest.draft)
+        throw new CodexServiceError(
+          "GitHub pull request is still a draft after requesting review",
+        );
+      return this.github!.mergePullRequest(
+        githubRepository,
+        pullNumber,
+        headSha,
+        "squash",
+      );
+    };
+    const mergeKey = `mend:merge:${run.id}:${pullNumber}:${headSha}`;
+    const merged = this.ports.externalOperations
+      ? await executeRecoverableOperation({
+          workspaceId: run.workspaceId,
+          kind: "github_merge",
+          idempotencyKey: mergeKey,
+          request: { pullNumber, headSha, method: "squash" },
+          port: this.ports.externalOperations,
+          reconcile: async () => {
+            if (typeof this.github!.getPullRequestMerge !== "function")
+              return null;
+            const existing = await this.github!.getPullRequestMerge(
+              githubRepository,
+              pullNumber,
+            );
+            return existing.merged
+              ? { merged: true, sha: existing.sha, message: "reconciled" }
+              : null;
+          },
+          mutate: mergeMutation,
+        })
+      : await mergeMutation();
     if (!merged.merged || !merged.sha)
       throw new CodexServiceError(
         `GitHub did not merge the pull request: ${merged.message}`,

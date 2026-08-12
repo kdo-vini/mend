@@ -8,8 +8,9 @@ import {
 } from "./inbox-service.js";
 import { redactJobError, type JobRecord, type JobStore } from "./jobs.js";
 import {
-  OpenAiAudioTranscriber,
-  createSupportAiProvider,
+  WorkspaceSupportAudioTranscriber,
+  resolveSupportAiProvider,
+  SupportAiConfigurationError,
   type McpApprovalInput,
   type SupportAiDraftResult,
   type SupportAiProvider,
@@ -76,6 +77,8 @@ import {
   type BugCaseReference,
 } from "./bug-loop.js";
 import { row, run } from "./adapters/supabase-mappers.js";
+import { OpenAiKnowledgeEmbeddings } from "./knowledge-retrieval.js";
+import { SupabaseRunnerHeartbeat } from "./workers/runner-heartbeat.js";
 
 type LiveWorkerSupabaseClient = SupabaseClient<Database>;
 type KnowledgeArticleRow =
@@ -173,6 +176,10 @@ interface UncheckedSupabaseQuery
   }> {
   select(columns?: string): UncheckedSupabaseQuery;
   insert(values: unknown): UncheckedSupabaseQuery;
+  upsert(
+    values: unknown,
+    options?: { onConflict?: string; ignoreDuplicates?: boolean },
+  ): UncheckedSupabaseQuery;
   update(values: unknown): UncheckedSupabaseQuery;
   eq(column: string, value: unknown): UncheckedSupabaseQuery;
   order(
@@ -220,6 +227,7 @@ export interface LiveWorkerGroupDirectory {
 export interface LiveWorkerKnowledge {
   listPublished(
     workspaceId: string,
+    query?: string,
   ): Promise<readonly LiveWorkerKnowledgeArticle[]>;
 }
 
@@ -291,6 +299,13 @@ export interface LiveWorkerOptions {
   /** Delay inbound automation so consecutive customer messages can be grouped. */
   inboundDebounceMs?: number;
   workerId?: string;
+  heartbeat?: {
+    beat(input: {
+      workerId: string;
+      currentJobType?: string;
+      currentJobId?: string;
+    }): Promise<void>;
+  };
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
@@ -341,8 +356,19 @@ export class LiveWorker {
 
   /** Poll once. The job store owns claim, retry/backoff and dead-letter behavior. */
   async poll(): Promise<boolean> {
+    await this.options.heartbeat
+      ?.beat({ workerId: this.workerId })
+      .catch(() => undefined);
     const job = await this.options.jobStore.claim(this.workerId);
     if (!job) return false;
+
+    await this.options.heartbeat
+      ?.beat({
+        workerId: this.workerId,
+        currentJobType: job.type,
+        currentJobId: job.id,
+      })
+      .catch(() => undefined);
 
     const typedJob = job as unknown as JobRecord<LiveWorkerJobPayload>;
     try {
@@ -380,6 +406,9 @@ export class LiveWorker {
         // The durable job remains available for its current owner/reclaimer.
       }
     }
+    await this.options.heartbeat
+      ?.beat({ workerId: this.workerId })
+      .catch(() => undefined);
     return true;
   }
 
@@ -599,7 +628,10 @@ export class LiveWorker {
       return;
 
     const knowledge = this.options.knowledge
-      ? await this.options.knowledge.listPublished(payload.binding.workspaceId)
+      ? await this.options.knowledge.listPublished(
+          payload.binding.workspaceId,
+          messageText(payload.message),
+        )
       : [];
     const result = await automation.process({ ...automationBase, knowledge });
     if (result?.send) {
@@ -685,11 +717,65 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
     private readonly client: LiveWorkerSupabaseClient,
     private readonly maxArticles = 20,
     private readonly maxTotalCharacters = 50_000,
+    private readonly agentCredentials?: AgentCredentialPort,
   ) {}
 
   async listPublished(
     workspaceId: string,
+    query?: string,
   ): Promise<readonly LiveWorkerKnowledgeArticle[]> {
+    if (query?.trim()) {
+      let queryEmbedding: readonly number[] | undefined;
+      if (this.agentCredentials) {
+        const credential = await this.agentCredentials.resolve(
+          workspaceId,
+          "support",
+          "openai",
+        );
+        const embeddingModel = credential?.config.embeddingModel;
+        if (
+          credential &&
+          typeof embeddingModel === "string" &&
+          embeddingModel.trim()
+        )
+          queryEmbedding = await new OpenAiKnowledgeEmbeddings(
+            credential.apiKey,
+            embeddingModel,
+          ).embed(query);
+      }
+      const result = await (
+        this.client as unknown as {
+          rpc(
+            name: string,
+            parameters: Record<string, unknown>,
+          ): Promise<{
+            data: unknown[] | null;
+            error: { message: string } | null;
+          }>;
+        }
+      ).rpc("match_knowledge_chunks", {
+        p_workspace_id: workspaceId,
+        p_query: query,
+        p_limit: Math.min(this.maxArticles, 20),
+        p_min_score: 0.08,
+        ...(queryEmbedding ? { p_query_embedding: queryEmbedding } : {}),
+      });
+      if (result.error)
+        throw new Error(`supabase:knowledge_chunks:${result.error.message}`);
+      return (result.data ?? []).map((value) => {
+        const chunk = value as Record<string, unknown>;
+        const title = String(chunk.article_title ?? "Published knowledge");
+        const heading = String(chunk.heading ?? "");
+        return {
+          id: String(chunk.article_id),
+          title,
+          category: heading || "Support",
+          body: String(chunk.content ?? ""),
+          retrievalScore: Number(chunk.hybrid_score ?? 0),
+          citation: `${title}${heading ? ` — ${heading}` : ""}`,
+        };
+      });
+    }
     const result = await this.client
       .from("knowledge_articles")
       .select("id, title, category, body")
@@ -736,7 +822,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
 
   constructor(
     private readonly client: LiveWorkerSupabaseClient,
-    private readonly provider: SupportAiProvider,
+    private readonly provider: SupportAiProvider | undefined,
     inbox?: InboxService,
     whatsappProvider?: WhatsAppProvider,
     private readonly codexStarter?: LiveWorkerCodexStarter,
@@ -752,6 +838,39 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
 
   get metadataClient(): UncheckedSupabaseClient {
     return this.client as unknown as UncheckedSupabaseClient;
+  }
+
+  private async recordWorkflowFact(
+    input: {
+      binding: { workspaceId: string };
+      persisted: { id: string; conversationId: string };
+    },
+    factType:
+      | "eligible"
+      | "policy_required_touch"
+      | "founder_intervention"
+      | "escalated"
+      | "grounded_answer"
+      | "ai_resolved"
+      | "fix_verified"
+      | "cost_recorded",
+    suffix: string,
+    value: boolean | number = true,
+  ): Promise<void> {
+    const result = await this.metadataClient.from("workflow_facts").upsert(
+      {
+        workspace_id: input.binding.workspaceId,
+        workflow_id: input.persisted.conversationId,
+        fact_type: factType,
+        ...(typeof value === "boolean"
+          ? { value_boolean: value }
+          : { value_numeric: value }),
+        idempotency_key: `${input.persisted.id}:${factType}:${suffix}`,
+      },
+      { onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true },
+    );
+    if (result.error)
+      throw new Error(`supabase:workflow_facts:${result.error.message}`);
   }
 
   async isComplete(
@@ -786,7 +905,15 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (current?.automationState === "human_paused") return;
     const modePolicy = await this.aiMode(input);
     if (modePolicy.mode === "off") return;
-    const provider = await this.providerFor(input.binding.workspaceId);
+    await this.recordWorkflowFact(input, "eligible", "ai-mode-enabled");
+    let provider: SupportAiProvider;
+    try {
+      provider = await this.providerFor(input.binding.workspaceId);
+    } catch (error) {
+      if (!(error instanceof SupportAiConfigurationError)) throw error;
+      await this.markSupportConfigurationNeeded(input, error.code);
+      return;
+    }
     const triage = await triageConversation(
       provider,
       triageConversationInput(input.message, input.knowledge),
@@ -843,6 +970,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         : configuredRoute;
     if (mcpFailureRequiresReview && route !== "bug_triage")
       route = "human_escalation";
+    if (route === "human_escalation" || route === "bug_triage")
+      await this.recordWorkflowFact(input, "escalated", route);
     const provisionalDecision = policyDecision(
       modePolicy.mode,
       triage,
@@ -931,7 +1060,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       hasEvidence,
       route,
     );
-    if (draft && decision.allowed)
+    if (draft && decision.allowed) {
       await this.persistDraft(
         input,
         draft,
@@ -941,6 +1070,13 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         decision,
         matchedKnowledge,
       );
+      if (matchedKnowledge.length)
+        await this.recordWorkflowFact(
+          input,
+          "grounded_answer",
+          "knowledge-backed-draft",
+        );
+    }
     if (
       (route === "human_escalation" ||
         (route === "knowledge_auto_reply" && !matchedKnowledge.length)) &&
@@ -1026,6 +1162,11 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         ? "low_confidence"
         : null;
     if (takeoverReason) {
+      await this.recordWorkflowFact(
+        input,
+        "policy_required_touch",
+        takeoverReason,
+      );
       const takeover = await this.client.rpc("pause_conversation_ai", {
         p_workspace_id: input.binding.workspaceId,
         p_conversation_id: input.persisted.conversationId,
@@ -1236,6 +1377,17 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       await this.auditDecision(input, input.triage, "ai.auto_reply.sent", {
         sourceMessageId: input.sourceMessageId,
       });
+      await this.recordWorkflowFact(
+        {
+          binding: input.binding,
+          persisted: {
+            id: input.sourceMessageId,
+            conversationId: input.conversationId,
+          },
+        },
+        "ai_resolved",
+        "auto-reply-sent",
+      );
     } catch (error) {
       await this.metadataClient
         .from("ai_outbound_messages")
@@ -1969,15 +2121,56 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   }
 
   private async providerFor(workspaceId: string): Promise<SupportAiProvider> {
-    if (!this.agentCredentials) return this.provider;
-    const credential = await this.agentCredentials.resolve(
-      workspaceId,
-      "support",
-      "openai",
+    if (this.agentCredentials)
+      return resolveSupportAiProvider(workspaceId, this.agentCredentials);
+    if (this.provider) return this.provider;
+    throw new Error("support_ai_credential_required");
+  }
+
+  private async markSupportConfigurationNeeded(
+    input: LiveWorkerAutomationInput,
+    code: string,
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const state = await this.metadataClient
+      .from("conversation_ai_state")
+      .upsert(
+        {
+          workspace_id: input.binding.workspaceId,
+          conversation_id: input.persisted.conversationId,
+          automation_state: "human_paused",
+          needs_human: true,
+          needs_human_reason: code,
+          last_decision: "blocked",
+          last_decision_reason: code,
+          last_decision_at: now,
+          updated_at: now,
+        },
+        { onConflict: "conversation_id" },
+      );
+    if (state.error)
+      throw new Error(`supabase:conversation_ai_state:${state.error.message}`);
+    const notification = await this.metadataClient
+      .from("notifications")
+      .insert({
+        workspace_id: input.binding.workspaceId,
+        kind: "support_ai_configuration_required",
+        title: "Support AI configuration required",
+        body: "Configure the workspace support credential and models, then resume AI.",
+        entity_type: "conversation",
+        entity_id: input.persisted.conversationId,
+        dedupe_key: `support-ai-config:${input.persisted.conversationId}`,
+      });
+    if (
+      notification.error &&
+      !/duplicate|unique/i.test(notification.error.message)
+    )
+      throw new Error(`supabase:notifications:${notification.error.message}`);
+    await this.recordWorkflowFact(
+      input,
+      "policy_required_touch",
+      "support-ai-configuration",
     );
-    return credential
-      ? createSupportAiProvider({ apiKey: credential.apiKey })
-      : this.provider;
   }
 
   private async conversationHistory(
@@ -2309,7 +2502,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
 export interface CreateSupabaseLiveWorkerOptions {
   client: LiveWorkerSupabaseClient;
   jobStore: JobStore<WhatsmiauMessageJobPayload>;
-  provider: SupportAiProvider;
+  provider?: SupportAiProvider;
   whatsappProvider?: WhatsAppProvider;
   inbox?: LiveWorkerInbox;
   knowledge?: LiveWorkerKnowledge;
@@ -2422,7 +2615,6 @@ export class SupabaseCodexStarter implements LiveWorkerCodexStarter {
     const service = new CodexService({
       repositories,
       runs: store,
-      openAi: { enabled: Boolean(process.env.OPENAI_API_KEY) },
       ...(this.agentCredentials
         ? {
             agentCredentialResolver: async (
@@ -2503,11 +2695,23 @@ export function createSupabaseLiveWorker(
   );
   const inboxService = new InboxService(new SupabaseInboxPort(options.client), {
     mediaStorage,
-    transcriber: new OpenAiAudioTranscriber(),
+    ...(options.agentCredentials
+      ? {
+          transcriber: new WorkspaceSupportAudioTranscriber(
+            options.agentCredentials,
+          ),
+        }
+      : {}),
   });
   const inbox = options.inbox ?? inboxService;
   const knowledge =
-    options.knowledge ?? new SupabaseLiveWorkerKnowledge(options.client);
+    options.knowledge ??
+    new SupabaseLiveWorkerKnowledge(
+      options.client,
+      20,
+      50_000,
+      options.agentCredentials,
+    );
   const automation = new SupabaseLiveWorkerAutomation(
     options.client,
     options.provider,
@@ -2526,6 +2730,7 @@ export function createSupabaseLiveWorker(
     mediaPipeline,
     knowledge,
     automation,
+    heartbeat: new SupabaseRunnerHeartbeat(options.client),
     ...(options.onDraftReady ? { onDraftReady: options.onDraftReady } : {}),
     ...(options.onIssueReady ? { onIssueReady: options.onIssueReady } : {}),
     ...(options.onUnmappedMessage

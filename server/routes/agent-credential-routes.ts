@@ -10,7 +10,38 @@ const credentialSchema = z
     apiKey: z.string().trim().min(1).max(500),
     config: z.record(z.unknown()).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.task === "support" &&
+      (typeof value.config?.model !== "string" || !value.config.model.trim())
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["config", "model"],
+        message: "A support model must be selected.",
+      });
+    if (
+      value.task === "support" &&
+      (typeof value.config?.embeddingModel !== "string" ||
+        !value.config.embeddingModel.trim())
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["config", "embeddingModel"],
+        message: "A support embedding model must be selected.",
+      });
+    if (
+      value.task === "support" &&
+      (typeof value.config?.transcriptionModel !== "string" ||
+        !value.config.transcriptionModel.trim())
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["config", "transcriptionModel"],
+        message: "A support transcription model must be selected.",
+      });
+  });
 
 export function registerAgentCredentialRoutes(
   context: ApiRouteModuleContext,

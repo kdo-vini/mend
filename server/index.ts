@@ -6,9 +6,6 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import pino from "pino";
 import { z } from "zod";
-import { createSupportAiProvider } from "./providers.js";
-import { normalizeLocale } from "./locale.js";
-import { gateAiAction, triageConversation, type AiMode } from "./triage.js";
 import { InMemoryJobStore } from "./jobs.js";
 import {
   enqueueWhatsmiauEvent,
@@ -41,6 +38,7 @@ import {
   agentMaxRuntimeMs,
   type AgentRunRequestedJobPayload,
 } from "./agent-runtime.js";
+import { runnerIsReady } from "./impact.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -105,15 +103,6 @@ app.use((request, response, next) => {
 });
 
 const WebhookPayloadSchema = z.record(z.unknown());
-const DraftSchema = z.object({
-  conversation: z.string().min(1).max(12_000),
-  knowledge: z.string().max(50_000).optional(),
-  language: z.enum(["pt-BR", "en-US"]).default("pt-BR"),
-});
-const TriageSchema = z.object({
-  conversation: z.string().min(1).max(12_000),
-  mode: z.enum(["off", "draft", "safe_auto"]).default("draft"),
-});
 const WorkspaceHeader = z.string().uuid().optional();
 const InstanceNameSchema = z
   .string()
@@ -129,6 +118,7 @@ const serverSupabase = createServerSupabaseClient();
 const workerSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
   ? serverSupabase
   : null;
+const processRole = process.env.MEND_PROCESS_ROLE?.trim() || "control";
 const messageJobs = workerSupabase
   ? new SupabaseJobStore<WhatsmiauMessageJobPayload>(workerSupabase)
   : new InMemoryJobStore<WhatsmiauMessageJobPayload>();
@@ -154,9 +144,54 @@ app.get("/api/push/config", (_request, response) =>
   }),
 );
 
-app.get("/api/ready", (_request, response) => {
+app.get("/api/ready", async (_request, response) => {
   const agentRoot = process.env.MEND_AGENT_WORKSPACE_ROOT?.trim() ?? "";
-  const processRole = process.env.MEND_PROCESS_ROLE?.trim() || "control";
+  let runner =
+    processRole === "runner" && Boolean(agentRoot && existsSync(agentRoot));
+  if (processRole !== "runner" && workerSupabase) {
+    const heartbeat = await (
+      workerSupabase as unknown as {
+        from(name: string): {
+          select(columns: string): {
+            order(
+              column: string,
+              options: { ascending: boolean },
+            ): {
+              limit(value: number): {
+                maybeSingle(): Promise<{
+                  data: Record<string, unknown> | null;
+                  error: { message: string } | null;
+                }>;
+              };
+            };
+          };
+        };
+      }
+    )
+      .from("runner_heartbeats")
+      .select("worker_id, last_seen_at, current_job_type, current_job_id")
+      .order("last_seen_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    runner =
+      !heartbeat.error &&
+      runnerIsReady(
+        heartbeat.data
+          ? {
+              workerId: String(heartbeat.data.worker_id),
+              lastSeenAt: String(heartbeat.data.last_seen_at),
+              currentJobType:
+                typeof heartbeat.data.current_job_type === "string"
+                  ? heartbeat.data.current_job_type
+                  : null,
+              currentJobId:
+                typeof heartbeat.data.current_job_id === "string"
+                  ? heartbeat.data.current_job_id
+                  : null,
+            }
+          : null,
+      );
+  }
   const checks = {
     supabase: hasServerSupabaseConfig(),
     whatsMiau: Boolean(process.env.WHATSMIAU_API_KEY),
@@ -165,6 +200,7 @@ app.get("/api/ready", (_request, response) => {
       processRole === "runner"
         ? Boolean(agentRoot && existsSync(agentRoot))
         : true,
+    runner,
   };
   const ready = Object.values(checks).every(Boolean);
   return response.status(ready ? 200 : 503).json({ ready, checks });
@@ -252,44 +288,18 @@ async function requireAiAuthentication(
 
 app.post("/api/ai/draft", async (request, response) => {
   if (!(await requireAiAuthentication(request, response))) return;
-  const parsed = DraftSchema.safeParse(request.body as unknown);
-  if (!parsed.success)
-    return response
-      .status(400)
-      .json({ error: "Conversation context is required" });
-  try {
-    const provider = createSupportAiProvider();
-    const draft = await provider.draftReply(
-      parsed.data.conversation,
-      parsed.data.knowledge,
-      normalizeLocale(parsed.data.language),
-    );
-    return response.json({ draft, provider: provider.name });
-  } catch (error) {
-    logger.error({ err: error }, "AI draft failed");
-    return response.status(502).json({ error: "AI provider unavailable" });
-  }
+  return response.status(410).json({
+    error: "legacy_ai_route_removed",
+    replacement: "/api/conversations/:id/ai-draft",
+  });
 });
 
 app.post("/api/ai/triage", async (request, response) => {
   if (!(await requireAiAuthentication(request, response))) return;
-  const parsed = TriageSchema.safeParse(request.body as unknown);
-  if (!parsed.success)
-    return response
-      .status(400)
-      .json({ error: "Conversation context is required" });
-  try {
-    const provider = createSupportAiProvider();
-    const triage = await triageConversation(provider, parsed.data.conversation);
-    return response.json({
-      triage,
-      decision: gateAiAction(parsed.data.mode as AiMode, triage),
-      provider: provider.name,
-    });
-  } catch (error) {
-    logger.error({ err: error }, "AI triage failed");
-    return response.status(502).json({ error: "AI provider unavailable" });
-  }
+  return response.status(410).json({
+    error: "legacy_ai_route_removed",
+    replacement: "/api/conversations/:id/ai-draft",
+  });
 });
 
 app.get("/api/whatsapp/instances", async (request, response) => {
@@ -542,13 +552,11 @@ if (existsSync(frontendIndex)) {
 }
 
 let liveWorker: LiveWorker | undefined;
-const processRole = process.env.MEND_PROCESS_ROLE?.trim() || "control";
 if (workerSupabase && processRole === "runner") {
   const agentCredentials = new SupabaseAgentCredentialAdapter(workerSupabase);
   liveWorker = createSupabaseLiveWorker({
     client: workerSupabase,
     jobStore: messageJobs,
-    provider: createSupportAiProvider(),
     whatsappProvider: new WhatsmiauMessagingProvider(),
     agentRunRunner: async (payload: AgentRunRequestedJobPayload) => {
       const repositories = new SupabaseRepositoryAdapter(workerSupabase);

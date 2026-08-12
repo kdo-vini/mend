@@ -1,7 +1,8 @@
 import { createServerSupabaseClient } from "./supabase.js";
 import { InboxService, SupabaseInboxPort } from "./inbox-service.js";
 import { SupabaseMediaStorage } from "./media.js";
-import { OpenAiAudioTranscriber } from "./providers.js";
+import { WorkspaceSupportAudioTranscriber } from "./providers.js";
+import { SupabaseAgentCredentialAdapter } from "./supabase-api-adapters.js";
 
 type AudioRow = {
   id: string;
@@ -45,7 +46,9 @@ console.log(
 if (!dryRun) {
   const inbox = new InboxService(new SupabaseInboxPort(client), {
     mediaStorage: new SupabaseMediaStorage(client),
-    transcriber: new OpenAiAudioTranscriber(),
+    transcriber: new WorkspaceSupportAudioTranscriber(
+      new SupabaseAgentCredentialAdapter(client),
+    ),
   });
   for (const row of rows) {
     try {

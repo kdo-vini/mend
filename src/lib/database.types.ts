@@ -7,11 +7,6 @@
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.15"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -39,6 +34,427 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_connection_auth_jobs: {
+        Row: {
+          auth_method: string
+          code: string | null
+          connection_id: string | null
+          created_at: string
+          error_code: string | null
+          expires_at: string
+          id: string
+          metadata_json: Json
+          provider: string
+          status: string
+          updated_at: string
+          url: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          auth_method: string
+          code?: string | null
+          connection_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          expires_at: string
+          id?: string
+          metadata_json?: Json
+          provider: string
+          status?: string
+          updated_at?: string
+          url?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          auth_method?: string
+          code?: string | null
+          connection_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          expires_at?: string
+          id?: string
+          metadata_json?: Json
+          provider?: string
+          status?: string
+          updated_at?: string
+          url?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_connection_auth_jobs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "agent_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_connection_auth_jobs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_connection_secrets: {
+        Row: {
+          connection_id: string
+          encrypted_bundle: string
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          encrypted_bundle: string
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          encrypted_bundle?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_connection_secrets_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "agent_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_connections: {
+        Row: {
+          auth_method: string
+          automation_consent: boolean
+          catalog_expires_at: string | null
+          catalog_json: Json | null
+          catalog_source: string | null
+          cli_version: string | null
+          consent_updated_at: string | null
+          created_at: string
+          id: string
+          label: string
+          last_validated_at: string | null
+          metadata_json: Json
+          owner_user_id: string | null
+          provider: string
+          purpose: string
+          quota_json: Json
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          auth_method: string
+          automation_consent?: boolean
+          catalog_expires_at?: string | null
+          catalog_json?: Json | null
+          catalog_source?: string | null
+          cli_version?: string | null
+          consent_updated_at?: string | null
+          created_at?: string
+          id?: string
+          label: string
+          last_validated_at?: string | null
+          metadata_json?: Json
+          owner_user_id?: string | null
+          provider: string
+          purpose?: string
+          quota_json?: Json
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          auth_method?: string
+          automation_consent?: boolean
+          catalog_expires_at?: string | null
+          catalog_json?: Json | null
+          catalog_source?: string | null
+          cli_version?: string | null
+          consent_updated_at?: string | null
+          created_at?: string
+          id?: string
+          label?: string
+          last_validated_at?: string | null
+          metadata_json?: Json
+          owner_user_id?: string | null
+          provider?: string
+          purpose?: string
+          quota_json?: Json
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_connections_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_research_artifacts: {
+        Row: {
+          artifact_json: Json
+          base_sha: string
+          case_id: string
+          content_hash: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          issue_id: string
+          status: string
+          ticket_revision: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          artifact_json: Json
+          base_sha: string
+          case_id: string
+          content_hash: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          issue_id: string
+          status?: string
+          ticket_revision: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          artifact_json?: Json
+          base_sha?: string
+          case_id?: string
+          content_hash?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          issue_id?: string
+          status?: string
+          ticket_revision?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_research_artifacts_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "bug_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_research_artifacts_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_research_artifacts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_routing_policies: {
+        Row: {
+          budget_json: Json
+          connection_id: string | null
+          created_at: string
+          created_by_user_id: string | null
+          effort: string | null
+          fallback_connection_ids_json: Json
+          fallback_enabled: boolean
+          id: string
+          model: string | null
+          preset: string
+          repository_id: string | null
+          snapshot_json: Json
+          stage: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          budget_json?: Json
+          connection_id?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          effort?: string | null
+          fallback_connection_ids_json?: Json
+          fallback_enabled?: boolean
+          id?: string
+          model?: string | null
+          preset?: string
+          repository_id?: string | null
+          snapshot_json?: Json
+          stage: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          budget_json?: Json
+          connection_id?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          effort?: string | null
+          fallback_connection_ids_json?: Json
+          fallback_enabled?: boolean
+          id?: string
+          model?: string | null
+          preset?: string
+          repository_id?: string | null
+          snapshot_json?: Json
+          stage?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_routing_policies_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "agent_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_routing_policies_repository_id_fkey"
+            columns: ["repository_id"]
+            isOneToOne: false
+            referencedRelation: "repositories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_routing_policies_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_run_attempts: {
+        Row: {
+          attempt_number: number
+          auth_method: string | null
+          cache_json: Json
+          cached_input_tokens: number | null
+          connection_id: string | null
+          cost_amount_usd: number | null
+          cost_status: string | null
+          created_at: string
+          duration_ms: number | null
+          effort: string | null
+          error_category: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          input_tokens: number | null
+          output_tokens: number | null
+          provider: string | null
+          quota_json: Json
+          real_model: string | null
+          requested_model: string | null
+          run_id: string
+          stage: string
+          started_at: string | null
+          status: string
+          total_tokens: number | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          attempt_number: number
+          auth_method?: string | null
+          cache_json?: Json
+          cached_input_tokens?: number | null
+          connection_id?: string | null
+          cost_amount_usd?: number | null
+          cost_status?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          effort?: string | null
+          error_category?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          provider?: string | null
+          quota_json?: Json
+          real_model?: string | null
+          requested_model?: string | null
+          run_id: string
+          stage: string
+          started_at?: string | null
+          status?: string
+          total_tokens?: number | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          attempt_number?: number
+          auth_method?: string | null
+          cache_json?: Json
+          cached_input_tokens?: number | null
+          connection_id?: string | null
+          cost_amount_usd?: number | null
+          cost_status?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          effort?: string | null
+          error_category?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          provider?: string | null
+          quota_json?: Json
+          real_model?: string | null
+          requested_model?: string | null
+          run_id?: string
+          stage?: string
+          started_at?: string | null
+          status?: string
+          total_tokens?: number | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_run_attempts_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "agent_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_run_attempts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_run_attempts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_run_events: {
         Row: {
           agent_run_id: string
@@ -76,6 +492,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "agent_run_events_run_workspace_fkey"
+            columns: ["agent_run_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "coding_run_events_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -86,50 +509,51 @@ export type Database = {
       }
       agent_runs: {
         Row: {
+          billing_method: string | null
           branch_name: string | null
-          billing_method?: string | null
-          cache_json?: Json
+          cache_json: Json
           commit_sha: string | null
-          connection_id?: string | null
+          connection_id: string | null
+          cost_amount_usd: number | null
+          cost_status: string | null
           created_at: string
           created_by_user_id: string | null
-          cost_amount_usd?: number | null
-          cost_status?: string | null
-          duration_ms?: number | null
-          effort?: string | null
+          duration_ms: number | null
+          effective_config_json: Json
+          effort: string | null
           finished_at: string | null
           id: string
           issue_id: string
           mode: string
-          parent_run_id?: string | null
+          parent_run_id: string | null
           progress: number
-          provider?: string | null
+          provider: string | null
+          quota_json: Json
+          real_model: string
           repository_id: string | null
-          requested_config_json?: Json
-          requested_model?: string | null
-          research_artifact_id?: string | null
-          real_model?: string
+          requested_config_json: Json
+          requested_model: string | null
+          research_artifact_id: string | null
           result_json: Json
-          stage?: string
+          stage: string
           started_at: string | null
           status: string
           updated_at: string
-          usage_json?: Json
-          effective_config_json?: Json
-          quota_json?: Json
+          usage_json: Json
           workspace_id: string
         }
         Insert: {
-          branch_name?: string | null
           billing_method?: string | null
+          branch_name?: string | null
           cache_json?: Json
           commit_sha?: string | null
           connection_id?: string | null
-          created_at?: string
-          created_by_user_id?: string | null
           cost_amount_usd?: number | null
           cost_status?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
           duration_ms?: number | null
+          effective_config_json?: Json
           effort?: string | null
           finished_at?: string | null
           id?: string
@@ -138,32 +562,32 @@ export type Database = {
           parent_run_id?: string | null
           progress?: number
           provider?: string | null
+          quota_json?: Json
+          real_model?: string
           repository_id?: string | null
           requested_config_json?: Json
           requested_model?: string | null
           research_artifact_id?: string | null
-          real_model?: string
           result_json?: Json
           stage?: string
           started_at?: string | null
           status?: string
           updated_at?: string
           usage_json?: Json
-          effective_config_json?: Json
-          quota_json?: Json
           workspace_id: string
         }
         Update: {
-          branch_name?: string | null
           billing_method?: string | null
+          branch_name?: string | null
           cache_json?: Json
           commit_sha?: string | null
           connection_id?: string | null
-          created_at?: string
-          created_by_user_id?: string | null
           cost_amount_usd?: number | null
           cost_status?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
           duration_ms?: number | null
+          effective_config_json?: Json
           effort?: string | null
           finished_at?: string | null
           id?: string
@@ -172,22 +596,77 @@ export type Database = {
           parent_run_id?: string | null
           progress?: number
           provider?: string | null
+          quota_json?: Json
+          real_model?: string
           repository_id?: string | null
           requested_config_json?: Json
           requested_model?: string | null
           research_artifact_id?: string | null
-          real_model?: string
           result_json?: Json
           stage?: string
           started_at?: string | null
           status?: string
           updated_at?: string
           usage_json?: Json
-          effective_config_json?: Json
-          quota_json?: Json
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "agent_runs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "agent_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_connection_workspace_fkey"
+            columns: ["connection_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "agent_connections"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "agent_runs_issue_workspace_fkey"
+            columns: ["issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "agent_runs_parent_run_id_fkey"
+            columns: ["parent_run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_parent_workspace_fkey"
+            columns: ["parent_run_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "agent_runs_repository_workspace_fkey"
+            columns: ["repository_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "repositories"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "agent_runs_research_artifact_id_fkey"
+            columns: ["research_artifact_id"]
+            isOneToOne: false
+            referencedRelation: "agent_research_artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_research_workspace_fkey"
+            columns: ["research_artifact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "agent_research_artifacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "coding_runs_issue_id_fkey"
             columns: ["issue_id"]
@@ -216,24 +695,41 @@ export type Database = {
           draft_id: string
           knowledge_article_id: string
           rank: number
+          workspace_id: string
         }
         Insert: {
           draft_id: string
           knowledge_article_id: string
           rank?: number
+          workspace_id: string
         }
         Update: {
           draft_id?: string
           knowledge_article_id?: string
           rank?: number
+          workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ai_draft_knowledge_article_workspace_fkey"
+            columns: ["knowledge_article_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_articles"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "ai_draft_knowledge_draft_id_fkey"
             columns: ["draft_id"]
             isOneToOne: false
             referencedRelation: "ai_drafts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_draft_knowledge_draft_workspace_fkey"
+            columns: ["draft_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "ai_drafts"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "ai_draft_knowledge_knowledge_article_id_fkey"
@@ -303,6 +799,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "conversations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_drafts_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "ai_drafts_message_workspace_fkey"
+            columns: ["source_message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "ai_drafts_source_message_id_fkey"
@@ -468,6 +978,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bug_case_events_case_workspace_fkey"
+            columns: ["bug_case_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "bug_cases"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "bug_case_events_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -570,11 +1087,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bug_cases_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "bug_cases_duplicate_of_issue_id_fkey"
             columns: ["duplicate_of_issue_id"]
             isOneToOne: false
             referencedRelation: "issues"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_duplicate_workspace_fkey"
+            columns: ["duplicate_of_issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "bug_cases_fix_agent_run_id_fkey"
@@ -584,11 +1115,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bug_cases_fix_run_workspace_fkey"
+            columns: ["fix_agent_run_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "bug_cases_investigation_agent_run_id_fkey"
             columns: ["investigation_agent_run_id"]
             isOneToOne: false
             referencedRelation: "agent_runs"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_investigation_run_workspace_fkey"
+            columns: ["investigation_agent_run_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "bug_cases_issue_id_fkey"
@@ -598,11 +1143,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bug_cases_issue_workspace_fkey"
+            columns: ["issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "bug_cases_signal_message_id_fkey"
             columns: ["signal_message_id"]
             isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bug_cases_signal_workspace_fkey"
+            columns: ["signal_message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "bug_cases_workspace_id_fkey"
@@ -730,6 +1289,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contacts_channel_workspace_fkey"
+            columns: ["channel_connection_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "channel_connections"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "contacts_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -820,6 +1386,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "conversation_ai_state_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "conversation_ai_state_last_human_message_id_fkey"
             columns: ["last_human_message_id"]
             isOneToOne: false
@@ -832,6 +1405,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_ai_state_triaged_message_workspace_fkey"
+            columns: ["last_triaged_message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "conversation_ai_state_workspace_id_fkey"
@@ -912,11 +1492,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "conversations_channel_workspace_fkey"
+            columns: ["channel_connection_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "channel_connections"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "conversations_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_contact_workspace_fkey"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "conversations_workspace_id_fkey"
@@ -979,6 +1573,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "evidence_issue_workspace_fkey"
+            columns: ["issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "evidence_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: false
@@ -986,7 +1587,67 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "evidence_message_workspace_fkey"
+            columns: ["message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "evidence_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_operations: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          idempotency_key: string
+          kind: string
+          provider_reference: string | null
+          request_digest: string
+          result_json: Json
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          idempotency_key: string
+          kind: string
+          provider_reference?: string | null
+          request_digest: string
+          result_json?: Json
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          idempotency_key?: string
+          kind?: string
+          provider_reference?: string | null
+          request_digest?: string
+          result_json?: Json
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_operations_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1211,6 +1872,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "issue_comments_issue_workspace_fkey"
+            columns: ["issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "issue_comments_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -1223,14 +1891,17 @@ export type Database = {
         Row: {
           issue_id: string
           label_id: string
+          workspace_id: string
         }
         Insert: {
           issue_id: string
           label_id: string
+          workspace_id: string
         }
         Update: {
           issue_id?: string
           label_id?: string
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -1241,11 +1912,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "issue_labels_issue_workspace_fkey"
+            columns: ["issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "issue_labels_label_id_fkey"
             columns: ["label_id"]
             isOneToOne: false
             referencedRelation: "labels"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "issue_labels_label_workspace_fkey"
+            columns: ["label_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "labels"
+            referencedColumns: ["id", "workspace_id"]
           },
         ]
       }
@@ -1277,11 +1962,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "issue_messages_issue_workspace_fkey"
+            columns: ["issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "issue_messages_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "issue_messages_message_workspace_fkey"
+            columns: ["message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "issue_messages_workspace_id_fkey"
@@ -1299,8 +1998,8 @@ export type Database = {
           affected_product: string | null
           ai_summary: string | null
           assigned_user_id: string | null
-          confidence: number | null
           completed_at: string | null
+          confidence: number | null
           contact_id: string | null
           conversation_id: string | null
           created_at: string
@@ -1333,8 +2032,8 @@ export type Database = {
           affected_product?: string | null
           ai_summary?: string | null
           assigned_user_id?: string | null
-          confidence?: number | null
           completed_at?: string | null
+          confidence?: number | null
           contact_id?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -1367,8 +2066,8 @@ export type Database = {
           affected_product?: string | null
           ai_summary?: string | null
           assigned_user_id?: string | null
-          confidence?: number | null
           completed_at?: string | null
+          confidence?: number | null
           contact_id?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -1404,11 +2103,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "issues_contact_workspace_fkey"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "issues_conversation_id_fkey"
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "issues_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "issues_duplicate_of_issue_id_fkey"
@@ -1418,11 +2131,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "issues_duplicate_workspace_fkey"
+            columns: ["duplicate_of_issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "issues_parent_issue_id_fkey"
             columns: ["parent_issue_id"]
             isOneToOne: false
             referencedRelation: "issues"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "issues_parent_workspace_fkey"
+            columns: ["parent_issue_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "issues_workspace_id_fkey"
@@ -1538,6 +2265,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "knowledge_articles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_chunks: {
+        Row: {
+          article_id: string
+          article_version: string
+          chunk_index: number
+          content: string
+          content_hash: string
+          created_at: string
+          embedding: string | null
+          heading: string
+          id: string
+          search_document: unknown
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          article_id: string
+          article_version: string
+          chunk_index: number
+          content: string
+          content_hash: string
+          created_at?: string
+          embedding?: string | null
+          heading?: string
+          id?: string
+          search_document?: unknown
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          article_id?: string
+          article_version?: string
+          chunk_index?: number
+          content?: string
+          content_hash?: string
+          created_at?: string
+          embedding?: string | null
+          heading?: string
+          id?: string
+          search_document?: unknown
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_article_id_workspace_id_fkey"
+            columns: ["article_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_articles"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1726,6 +2513,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "mcp_oauth_states_connection_workspace_fkey"
+            columns: ["connection_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_connections"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "mcp_oauth_states_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -1787,6 +2581,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "mcp_connections"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mcp_tool_executions_connection_workspace_fkey"
+            columns: ["connection_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_connections"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "mcp_tool_executions_message_workspace_fkey"
+            columns: ["source_message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "mcp_tool_executions_source_message_id_fkey"
@@ -1874,11 +2682,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "media_assets_batch_workspace_fkey"
+            columns: ["batch_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "media_batches"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "media_assets_conversation_id_fkey"
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "media_assets_workspace_id_fkey"
@@ -1930,6 +2752,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "conversations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_batches_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "media_batches_workspace_id_fkey"
@@ -1987,6 +2816,34 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "media_send_asset_workspace_fkey"
+            columns: ["asset_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "media_send_batch_workspace_fkey"
+            columns: ["batch_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "media_batches"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "media_send_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "media_send_message_workspace_fkey"
+            columns: ["message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "media_send_requests_asset_id_fkey"
             columns: ["asset_id"]
@@ -2068,6 +2925,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "media_assets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_variants_asset_workspace_fkey"
+            columns: ["asset_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "media_variants_workspace_id_fkey"
@@ -2193,11 +3057,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "messages_channel_workspace_fkey"
+            columns: ["channel_connection_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "channel_connections"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "messages_conversation_id_fkey"
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "messages_media_asset_id_fkey"
@@ -2219,6 +3097,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_quoted_workspace_fkey"
+            columns: ["quoted_message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "messages_workspace_id_fkey"
@@ -2479,6 +3364,30 @@ export type Database = {
           },
         ]
       }
+      runner_heartbeats: {
+        Row: {
+          current_job_id: string | null
+          current_job_type: string | null
+          last_seen_at: string
+          metadata_json: Json
+          worker_id: string
+        }
+        Insert: {
+          current_job_id?: string | null
+          current_job_type?: string | null
+          last_seen_at: string
+          metadata_json?: Json
+          worker_id: string
+        }
+        Update: {
+          current_job_id?: string | null
+          current_job_type?: string | null
+          last_seen_at?: string
+          metadata_json?: Json
+          worker_id?: string
+        }
+        Relationships: []
+      }
       timeline_events: {
         Row: {
           actor_type: string
@@ -2625,6 +3534,77 @@ export type Database = {
           },
           {
             foreignKeyName: "webhook_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhook_quarantine_events: {
+        Row: {
+          event_name: string
+          id: string
+          instance_digest: string
+          payload_digest: string
+          provider: string
+          received_at: string
+        }
+        Insert: {
+          event_name: string
+          id?: string
+          instance_digest: string
+          payload_digest: string
+          provider: string
+          received_at?: string
+        }
+        Update: {
+          event_name?: string
+          id?: string
+          instance_digest?: string
+          payload_digest?: string
+          provider?: string
+          received_at?: string
+        }
+        Relationships: []
+      }
+      workflow_facts: {
+        Row: {
+          fact_type: string
+          id: number
+          idempotency_key: string
+          metadata_json: Json
+          occurred_at: string
+          value_boolean: boolean | null
+          value_numeric: number | null
+          workflow_id: string
+          workspace_id: string
+        }
+        Insert: {
+          fact_type: string
+          id?: never
+          idempotency_key: string
+          metadata_json?: Json
+          occurred_at?: string
+          value_boolean?: boolean | null
+          value_numeric?: number | null
+          workflow_id: string
+          workspace_id: string
+        }
+        Update: {
+          fact_type?: string
+          id?: never
+          idempotency_key?: string
+          metadata_json?: Json
+          occurred_at?: string
+          value_boolean?: boolean | null
+          value_numeric?: number | null
+          workflow_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_facts_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2970,6 +3950,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      complete_agent_subscription_login: {
+        Args: {
+          p_connection_id: string
+          p_encrypted_bundle: string
+          p_job_id: string
+        }
+        Returns: boolean
+      }
       complete_job: {
         Args: { p_completed_at?: string; p_job_id: string; p_worker_id: string }
         Returns: {
@@ -3170,6 +4158,26 @@ export type Database = {
           role: string
           user_id: string
           workspace_id: string
+        }[]
+      }
+      match_knowledge_chunks: {
+        Args: {
+          p_limit?: number
+          p_min_score?: number
+          p_query: string
+          p_query_embedding?: string
+          p_workspace_id: string
+        }
+        Returns: {
+          article_id: string
+          article_title: string
+          article_version: string
+          chunk_id: string
+          content: string
+          heading: string
+          hybrid_score: number
+          lexical_score: number
+          semantic_score: number
         }[]
       }
       pause_conversation_ai: {

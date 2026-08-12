@@ -545,6 +545,13 @@ export interface GitHubConnectionPort {
   completeSetup(query: Record<string, unknown>): Promise<unknown>;
 }
 
+export interface ImpactPort {
+  summary(
+    context: RequestContext,
+    period: { from: string; to: string },
+  ): Promise<unknown>;
+}
+
 export interface ApiRouterDependencies {
   auth: AuthAdapter;
   membership: MembershipAdapter;
@@ -563,4 +570,5 @@ export interface ApiRouterDependencies {
   media?: MediaPort;
   kanban: KanbanIssuePort;
   personalPlanning: PersonalPlanningPort;
+  impact: ImpactPort;
 }

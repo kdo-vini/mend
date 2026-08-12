@@ -10,6 +10,7 @@ import {
 import type { IssuePort } from "./issue-service.js";
 import type { KnowledgePort } from "./knowledge-service.js";
 import { CodexServiceError } from "./codex-service.js";
+import { SupportAiConfigurationError } from "./providers.js";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const workspaceId = "22222222-2222-4222-8222-222222222222";
@@ -248,6 +249,12 @@ function createFakeDependencies(
       updateEvent: vi.fn(async (_context, id, input) => ({ id, ...input })),
       removeEvent: vi.fn(async () => true),
     },
+    impact: {
+      summary: vi.fn(async (_context, period) => ({
+        period,
+        sampleSize: 0,
+      })),
+    },
     knowledge: knowledgePort,
     repositories: {
       list: vi.fn(async () => [{ id: repositoryId, name: "Mend" }]),
@@ -338,6 +345,100 @@ const scoped = (agent = false) => ({
 });
 
 describe("Mend API router", () => {
+  it("returns a controlled workspace configuration outcome when support BYOK is missing", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.conversations.aiDraft = vi.fn(async () => {
+      throw new SupportAiConfigurationError("support_ai_credential_required");
+    });
+    const response = await request(makeApp(dependencies))
+      .post(`/api/conversations/${conversationId}/ai-draft`)
+      .set(scoped())
+      .send({});
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toEqual({
+      code: "support_ai_credential_required",
+      message: "Configure a workspace support AI credential and model.",
+    });
+  });
+
+  it("returns Impact metrics for an explicit workspace-scoped period", async () => {
+    const dependencies = createFakeDependencies();
+    const response = await request(makeApp(dependencies))
+      .get("/api/impact")
+      .query({
+        from: "2026-08-01T00:00:00.000Z",
+        to: "2026-08-12T23:59:59.999Z",
+      })
+      .set(scoped());
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      period: {
+        from: "2026-08-01T00:00:00.000Z",
+        to: "2026-08-12T23:59:59.999Z",
+      },
+      sampleSize: 0,
+    });
+    expect(dependencies.impact.summary).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId }),
+      expect.objectContaining({ from: "2026-08-01T00:00:00.000Z" }),
+    );
+  });
+
+  it("requires an admin for release-changing agent run actions", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.membership.getMembership = vi.fn(async () => ({
+      workspaceId,
+      role: "agent",
+    }));
+    const app = makeApp(dependencies);
+
+    for (const action of ["approve", "publish", "merge", "deploy"] as const) {
+      const response = await request(app)
+        .post(`/api/agent-runs/${runId}/${action}`)
+        .set(scoped(true));
+      expect(response.status, action).toBe(403);
+      expect(response.body.error.code, action).toBe("forbidden");
+    }
+
+    expect(
+      (
+        await request(app)
+          .post(`/api/agent-runs/${runId}/cancel`)
+          .set(scoped(true))
+      ).status,
+    ).toBe(200);
+  });
+
+  it("requires an admin to mutate workspace agent credentials", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.membership.getMembership = vi.fn(async () => ({
+      workspaceId,
+      role: "agent",
+    }));
+    const createConnection = vi.fn();
+    dependencies.codingControlPlane = {
+      createConnection,
+    } as unknown as NonNullable<ApiRouterDependencies["codingControlPlane"]>;
+    const app = makeApp(dependencies);
+
+    const response = await request(app)
+      .post("/api/agent-connections")
+      .set(scoped(true))
+      .send({
+        label: "Support OpenAI",
+        provider: "openai",
+        authMethod: "api_key",
+        purpose: "support",
+        apiKey: "workspace-secret",
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe("forbidden");
+    expect(createConnection).not.toHaveBeenCalled();
+  });
+
   it("returns actionable readiness details when the Agent runner cannot start", async () => {
     const dependencies = createFakeDependencies();
     dependencies.codingRuns.create = vi.fn(async () => {

@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   OpenAiAudioTranscriber,
   OpenAiSupportProvider,
+  SupportAiConfigurationError,
   type OpenAiResponsesClient,
   createSupportAiProvider,
+  resolveSupportAiProvider,
 } from "./providers.js";
 
 describe("support AI providers", () => {
@@ -40,8 +42,50 @@ describe("support AI providers", () => {
         client: {
           responses: { create: async () => ({ output_text: "" }) },
         },
+        model: "test-model",
       }),
     ).toBeInstanceOf(OpenAiSupportProvider);
+  });
+
+  it("never falls back to a process-wide support credential", async () => {
+    process.env.OPENAI_API_KEY = "global-key-must-not-be-used";
+    expect(() => createSupportAiProvider()).toThrow(
+      SupportAiConfigurationError,
+    );
+
+    await expect(
+      resolveSupportAiProvider("workspace-1", {
+        resolve: async () => ({ apiKey: "workspace-key", config: {} }),
+      }),
+    ).rejects.toMatchObject({ code: "support_ai_model_required" });
+  });
+
+  it("resolves the workspace support key and selected model together", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const provider = await resolveSupportAiProvider(
+      "workspace-1",
+      {
+        resolve: async (workspaceId, task, providerName) => {
+          expect([workspaceId, task, providerName]).toEqual([
+            "workspace-1",
+            "support",
+            "openai",
+          ]);
+          return { apiKey: "workspace-key", config: { model: "gpt-test" } };
+        },
+      },
+      () => ({
+        responses: {
+          async create(input) {
+            calls.push(input as Record<string, unknown>);
+            return { output_text: "draft" };
+          },
+        },
+      }),
+    );
+
+    await provider.draftReply("hello", undefined, "en-US");
+    expect(calls[0]?.model).toBe("gpt-test");
   });
 
   it("transcribes audio with the configured model", async () => {
@@ -54,6 +98,7 @@ describe("support AI providers", () => {
     await expect(
       transcriber.transcribe({
         data: new Uint8Array([1, 2, 3]),
+        workspaceId: "workspace-1",
         mimeType: "audio/ogg",
         fileName: "voice.ogg",
       }),

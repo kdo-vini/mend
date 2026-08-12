@@ -33,6 +33,8 @@ import { registerMcpConnectionRoutes } from "./routes/mcp-connection-routes.js";
 import { registerGitHubConnectionRoutes } from "./routes/github-connection-routes.js";
 import { registerAgentCredentialRoutes } from "./routes/agent-credential-routes.js";
 import { registerCodingControlPlaneRoutes } from "./routes/coding-control-plane-routes.js";
+import { registerImpactRoutes } from "./routes/impact-routes.js";
+import { SupportAiConfigurationError } from "./providers.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -537,6 +539,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerCodingControlPlaneRoutes(routeContext);
   registerGoogleConnectionRoutes(routeContext);
   registerMcpConnectionRoutes(routeContext);
+  registerImpactRoutes(routeContext);
 
   router.use(
     (
@@ -563,6 +566,13 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
               path: issue.path,
               message: issue.message,
             })),
+          },
+        });
+      if (error instanceof SupportAiConfigurationError)
+        return send(response, 409, {
+          error: {
+            code: error.code,
+            message: "Configure a workspace support AI credential and model.",
           },
         });
       const mediaError = mediaApiError(error);

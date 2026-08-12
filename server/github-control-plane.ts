@@ -1111,6 +1111,25 @@ export class GitHubControlPlane {
     return { merged: value.merged, sha: value.sha, message: value.message };
   }
 
+  async getPullRequestMerge(
+    repository: GitHubRepositoryRef,
+    pullNumber: number,
+  ): Promise<{ merged: boolean; sha?: string }> {
+    const value = await this.request<{
+      merged: boolean;
+      merge_commit_sha?: string | null;
+    }>(
+      repository,
+      "GET",
+      `${repoPath(validateRepository(repository))}/pulls/${validateNumber(pullNumber, "pull request number")}`,
+      { pull_requests: "read" },
+    );
+    return {
+      merged: value.merged,
+      ...(value.merge_commit_sha ? { sha: value.merge_commit_sha } : {}),
+    };
+  }
+
   async createDeployment(
     repository: GitHubRepositoryRef,
     input: {

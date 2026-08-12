@@ -1664,7 +1664,17 @@ export async function saveLiveAgentCredential(input: {
   task: "support" | "agent";
   provider: CodingAgentProvider;
   apiKey: string;
+  model?: string;
+  transcriptionModel?: string;
+  embeddingModel?: string;
 }): Promise<LiveAgentCredential> {
+  if (
+    input.task === "support" &&
+    (!input.model?.trim() ||
+      !input.transcriptionModel?.trim() ||
+      !input.embeddingModel?.trim())
+  )
+    throw new Error("Support and transcription models must be selected.");
   return apiRequest<LiveAgentCredential>(
     "/api/agent-credentials",
     {
@@ -1673,6 +1683,15 @@ export async function saveLiveAgentCredential(input: {
         task: input.task,
         provider: input.provider,
         apiKey: input.apiKey,
+        ...(input.task === "support"
+          ? {
+              config: {
+                model: input.model?.trim(),
+                transcriptionModel: input.transcriptionModel?.trim(),
+                embeddingModel: input.embeddingModel?.trim(),
+              },
+            }
+          : {}),
       }),
     },
     input.workspaceId,

@@ -15,6 +15,8 @@ export interface LiveWorkerKnowledgeArticle {
   title: string;
   category: string;
   body: string;
+  retrievalScore?: number;
+  citation?: string;
 }
 
 export interface ConversationReplyMessage {
@@ -282,6 +284,8 @@ export function relevantKnowledge(
   const query = knowledgeTokens(messageText(message));
   if (!query.size) return [];
   return articles.filter((article) => {
+    if (typeof article.retrievalScore === "number")
+      return article.retrievalScore > 0;
     const articleTerms = knowledgeTokens(
       `${article.title} ${article.category} ${article.body}`,
     );

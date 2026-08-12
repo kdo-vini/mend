@@ -854,6 +854,7 @@ export class InboxService {
     try {
       const transcript = (
         await this.options.transcriber.transcribe({
+          workspaceId: context.workspaceId,
           data: media.data,
           mimeType: media.mimeType,
           fileName: media.fileName,

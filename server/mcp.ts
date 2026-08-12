@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { lookup as dnsLookup } from "node:dns/promises";
 import net from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -238,6 +239,168 @@ export class McpConnectionError extends Error {
   }
 }
 
+export interface NetworkAddress {
+  address: string;
+  family: 4 | 6;
+}
+
+export type NetworkLookup = (
+  hostname: string,
+) => Promise<readonly NetworkAddress[]>;
+
+function isNonPublicIpv4(address: string): boolean {
+  const parts = address.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part)))
+    return true;
+  const [first, second, third] = parts;
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 0 && third === 0) ||
+    (first === 192 && second === 0 && third === 2) ||
+    (first === 192 && second === 168) ||
+    (first === 198 && (second === 18 || second === 19)) ||
+    (first === 198 && second === 51 && third === 100) ||
+    (first === 203 && second === 0 && third === 113) ||
+    first >= 224
+  );
+}
+
+function isNonPublicIpv6(address: string): boolean {
+  const normalized = address.toLowerCase().split("%")[0] ?? "";
+  if (normalized === "::" || normalized === "::1") return true;
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(normalized);
+  if (mapped?.[1]) return isNonPublicIpv4(mapped[1]);
+  return (
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    /^fe[89ab]/.test(normalized) ||
+    normalized.startsWith("2001:db8:")
+  );
+}
+
+function isNonPublicAddress(address: string): boolean {
+  const family = net.isIP(address);
+  return family === 4
+    ? isNonPublicIpv4(address)
+    : family === 6
+      ? isNonPublicIpv6(address)
+      : true;
+}
+
+const defaultNetworkLookup: NetworkLookup = async (hostname) => {
+  const records = await dnsLookup(hostname, { all: true, verbatim: true });
+  return records.map((record) => ({
+    address: record.address,
+    family: record.family as 4 | 6,
+  }));
+};
+
+/** Resolves every A/AAAA record and rejects the target if any answer is non-public. */
+export async function resolvePublicNetworkTarget(
+  value: string | URL,
+  lookup: NetworkLookup = defaultNetworkLookup,
+  lookupTimeoutMs = 3_000,
+): Promise<URL> {
+  const url = new URL(value);
+  if (url.protocol !== "https:")
+    throw new McpConnectionError(
+      400,
+      "mcp_server_url_insecure",
+      "MCP servers must use HTTPS.",
+    );
+  const literal = url.hostname.replace(/^\[|\]$/g, "");
+  let timeout: NodeJS.Timeout | undefined;
+  const records = net.isIP(literal)
+    ? [{ address: literal, family: net.isIP(literal) as 4 | 6 }]
+    : await Promise.race([
+        lookup(url.hostname),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () =>
+              reject(
+                new McpConnectionError(
+                  504,
+                  "mcp_dns_timeout",
+                  "MCP server DNS lookup timed out.",
+                ),
+              ),
+            lookupTimeoutMs,
+          );
+        }),
+      ]).finally(() => {
+        if (timeout) clearTimeout(timeout);
+      });
+  if (
+    !records.length ||
+    records.some((record) => isNonPublicAddress(record.address))
+  )
+    throw new McpConnectionError(
+      400,
+      "mcp_server_url_private",
+      "Private or reserved MCP network targets are not allowed.",
+    );
+  return url;
+}
+
+export interface SafeExternalFetchOptions extends RequestInit {
+  fetchImpl?: typeof fetch;
+  lookup?: NetworkLookup;
+  maxRedirects?: number;
+  timeoutMs?: number;
+}
+
+/** Fetches an external HTTPS resource while validating every redirect hop. */
+export async function safeExternalFetch(
+  value: string | URL,
+  options: SafeExternalFetchOptions = {},
+): Promise<Response> {
+  const {
+    fetchImpl = fetch,
+    lookup = defaultNetworkLookup,
+    maxRedirects = 3,
+    timeoutMs = 10_000,
+    ...requestInit
+  } = options;
+  let current = new URL(value);
+  for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
+    current = await resolvePublicNetworkTarget(
+      current,
+      lookup,
+      Math.min(timeoutMs, 3_000),
+    );
+    const response = await fetchImpl(current, {
+      ...requestInit,
+      redirect: "manual",
+      signal: requestInit.signal ?? AbortSignal.timeout(timeoutMs),
+    });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get("location");
+    if (!location)
+      throw new McpConnectionError(
+        502,
+        "mcp_redirect_invalid",
+        "MCP redirect has no target.",
+      );
+    if (redirect === maxRedirects)
+      throw new McpConnectionError(
+        502,
+        "mcp_redirect_limit",
+        "MCP redirect limit exceeded.",
+      );
+    current = new URL(location, current);
+  }
+  throw new McpConnectionError(
+    502,
+    "mcp_redirect_limit",
+    "MCP redirect limit exceeded.",
+  );
+}
+
 export function validateMcpServerUrl(
   value: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -401,9 +564,16 @@ export async function discoverMcpTools(
   serverUrl: string,
   headers: Record<string, string> = {},
 ): Promise<McpToolRecord[]> {
+  if (process.env.NODE_ENV === "production")
+    await resolvePublicNetworkTarget(serverUrl);
+  else validateMcpServerUrl(serverUrl);
   const client = new Client({ name: "mend", version: "0.1.0" });
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
-    requestInit: { headers },
+    requestInit: {
+      headers,
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
+    },
     reconnectionOptions: {
       maxRetries: 0,
       initialReconnectionDelay: 100,

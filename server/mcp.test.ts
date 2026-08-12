@@ -7,6 +7,8 @@ import {
   mcpArgumentsHmac,
   mcpToolRecord,
   parseSupabaseMcpServerUrl,
+  resolvePublicNetworkTarget,
+  safeExternalFetch,
   validateMcpHeaders,
   validateMcpServerUrl,
 } from "./mcp.js";
@@ -97,5 +99,50 @@ describe("MCP connection security helpers", () => {
         features: [] as never[],
       }),
     ).toThrow("feature group");
+  });
+
+  it("rejects hostnames whose DNS records resolve to private networks", async () => {
+    const lookup = async () => [
+      { address: "127.0.0.1", family: 4 as const },
+      { address: "::1", family: 6 as const },
+    ];
+
+    await expect(
+      resolvePublicNetworkTarget("https://mcp.example.test/tools", lookup),
+    ).rejects.toMatchObject({ code: "mcp_server_url_private" });
+  });
+
+  it("bounds DNS resolution time", async () => {
+    await expect(
+      resolvePublicNetworkTarget(
+        "https://mcp.example.test/tools",
+        () => new Promise(() => undefined),
+        5,
+      ),
+    ).rejects.toMatchObject({ code: "mcp_dns_timeout", status: 504 });
+  });
+
+  it("revalidates redirect targets and refuses redirects into private networks", async () => {
+    const fetchImpl = async (url: string | URL) =>
+      new Response(null, {
+        status: String(url).includes("public.example") ? 302 : 200,
+        headers: String(url).includes("public.example")
+          ? { location: "https://internal.example/admin" }
+          : {},
+      });
+    const lookup = async (hostname: string) => [
+      {
+        address:
+          hostname === "internal.example" ? "169.254.169.254" : "93.184.216.34",
+        family: 4 as const,
+      },
+    ];
+
+    await expect(
+      safeExternalFetch("https://public.example/mcp", {
+        fetchImpl,
+        lookup,
+      }),
+    ).rejects.toMatchObject({ code: "mcp_server_url_private" });
   });
 });

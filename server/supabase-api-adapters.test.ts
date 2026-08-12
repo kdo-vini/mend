@@ -272,6 +272,39 @@ function adapters(
 }
 
 describe("Supabase API adapters", () => {
+  it("resolves support BYOK from a workspace-owned support connection", async () => {
+    const client = new FakeClient({
+      agent_connections: [],
+      agent_connection_secrets: [],
+      workspace_agent_credentials: [],
+    });
+    const dependencies = adapters(client, fakeProvider());
+    await dependencies.codingControlPlane.createConnection(
+      { userId, workspaceId, role: "admin" },
+      {
+        label: "Support OpenAI",
+        provider: "openai",
+        authMethod: "api_key",
+        purpose: "support",
+        apiKey: "workspace-support-key",
+        metadata: {
+          model: "gpt-support",
+          transcriptionModel: "gpt-transcribe",
+        },
+      },
+    );
+
+    await expect(
+      dependencies.agentCredentials.resolve(workspaceId, "support", "openai"),
+    ).resolves.toEqual({
+      apiKey: "workspace-support-key",
+      config: {
+        model: "gpt-support",
+        transcriptionModel: "gpt-transcribe",
+      },
+    });
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();

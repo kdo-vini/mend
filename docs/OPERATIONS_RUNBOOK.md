@@ -42,8 +42,9 @@ LLM credential in `VITE_*` variables.
 Set these server-side values in the deployment secret manager:
 
 - `WHATSMIAU_API_KEY`, `WHATSMIAU_WEBHOOK_SECRET`, and `WHATSMIAU_BASE_URL`.
-- `SUPPORT_AI_MODEL` and, only if the support fallback is intentionally used,
-  the server-side `OPENAI_API_KEY`.
+- Do not configure a global support-model key or fallback. Each workspace must
+  select its support, transcription, and embedding models and provide its own
+  encrypted provider credential in Settings.
 - `MEND_PROCESS_ROLE=control` on the public service and
   `MEND_PROCESS_ROLE=runner` on the private Agent worker.
 - `MEND_AGENT_WORKSPACE_ROOT`, `MEND_AGENT_MAX_RUNTIME_SECONDS`,

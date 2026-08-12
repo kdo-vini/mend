@@ -230,7 +230,7 @@ class FakeSupabaseHandoff {
       },
       update: () => builder,
       upsert: (values: Record<string, unknown>) => {
-        this.state = values;
+        if (table === "conversation_ai_state") this.state = values;
         return Promise.resolve({ error: null });
       },
       then: (

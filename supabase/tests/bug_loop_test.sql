@@ -193,16 +193,15 @@ select is(
 );
 
 insert into public.repositories (
-  workspace_id, name, local_path
+  workspace_id, name
 ) values (
   '11111111-1111-1111-1111-111111111111',
-  'repo',
-  '/tmp/repo'
+  'repo'
 );
 select is(
   (select agent_provider || ':' || execution_plane from public.repositories where name = 'repo'),
-  'codex:local_cli',
-  'repository execution defaults remain backwards compatible'
+  'openai:dokploy',
+  'repository execution defaults use the current hosted runner vocabulary'
 );
 
 select * from finish();

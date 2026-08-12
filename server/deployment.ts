@@ -17,6 +17,9 @@ export interface CodexDeploymentResult {
 
 export interface CodexDeploymentPort {
   deploy(input: CodexDeploymentInput): Promise<CodexDeploymentResult>;
+  reconcile?(
+    input: CodexDeploymentInput,
+  ): Promise<CodexDeploymentResult | null>;
 }
 
 export class DokployDeployment implements CodexDeploymentPort {
@@ -24,10 +27,11 @@ export class DokployDeployment implements CodexDeploymentPort {
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly applicationId: string,
+    private readonly fetcher: typeof fetch = fetch,
   ) {}
 
   async deploy(input: CodexDeploymentInput): Promise<CodexDeploymentResult> {
-    const response = await fetch(`${this.baseUrl}/application.deploy`, {
+    const response = await this.fetcher(`${this.baseUrl}/application.deploy`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -57,6 +61,57 @@ export class DokployDeployment implements CodexDeploymentPort {
       provider: "dokploy",
       ...(typeof body.id === "string" ? { reference: body.id } : {}),
       ...(typeof body.url === "string" ? { url: body.url } : {}),
+    };
+  }
+
+  async reconcile(
+    input: CodexDeploymentInput,
+  ): Promise<CodexDeploymentResult | null> {
+    const url = new URL(`${this.baseUrl}/deployment.all`);
+    url.searchParams.set("applicationId", this.applicationId);
+    const response = await this.fetcher(url, {
+      method: "GET",
+      headers: { accept: "application/json", "x-api-key": this.apiKey },
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`Dokploy reconciliation failed: HTTP ${response.status}`);
+    }
+    const body = (await response.json().catch(() => [])) as unknown;
+    const bodyRecord =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const candidates = Array.isArray(body)
+      ? body
+      : Array.isArray(bodyRecord.deployments)
+        ? bodyRecord.deployments
+        : Array.isArray(bodyRecord.data)
+          ? bodyRecord.data
+          : [];
+    const title = `Mend Agent ${input.runId}`;
+    const expectedSource = input.commitSha ?? input.branch;
+    const match = candidates.find((candidate) => {
+      if (!candidate || typeof candidate !== "object") return false;
+      const value = candidate as Record<string, unknown>;
+      return (
+        value.title === title &&
+        String(value.description ?? "").includes(expectedSource)
+      );
+    }) as Record<string, unknown> | undefined;
+    if (!match) return null;
+    const reference =
+      typeof match.deploymentId === "string"
+        ? match.deploymentId
+        : typeof match.id === "string"
+          ? match.id
+          : undefined;
+    return {
+      provider: "dokploy",
+      ...(reference ? { reference } : {}),
+      ...(typeof match.url === "string" ? { url: match.url } : {}),
     };
   }
 }

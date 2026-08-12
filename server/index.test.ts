@@ -30,6 +30,7 @@ describe("API boundary", () => {
         whatsMiau: expect.any(Boolean),
         webhook: expect.any(Boolean),
         agentWorkspace: expect.any(Boolean),
+        runner: expect.any(Boolean),
       },
     });
     expect(JSON.stringify(response.body)).not.toContain("test-secret");

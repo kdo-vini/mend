@@ -14,5 +14,7 @@ consistentes entre backend, frontend, banco, workers e operação.
 | [ADR-007](ADR-007-coding-control-plane-v2.md)      | Control plane por etapa e artefato de pesquisa         | accepted |
 | [ADR-008](ADR-008-auth-rate-limits.md)             | Rate limits em camadas para autenticação               | accepted |
 
+| [ADR-009](ADR-009-architecture-hardening.md) | Tenant-safe automation and recoverable effects | accepted |
+
 Novas decisões devem copiar o [template de ADR](../templates/ADR.md), receber o
 próximo número e ser adicionadas a esta tabela.

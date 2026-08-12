@@ -154,6 +154,30 @@ existir uma execução aprovada, concluída ou incerta, não execute novamente;
 encaminhe para revisão humana. Falha depois de uma possível mutação não deve
 ser automaticamente repetida.
 
+### Hardening de automação
+
+- `selectExactChannelBinding` é a única regra aceita para associar um webhook
+  WhatsApp a uma workspace. Instância ausente ou desconhecida vai para uma
+  quarentena service-role com hashes; não existe fallback por canal aberto.
+- `resolveSupportAiProvider` resolve chave e modelo da conexão de suporte da
+  workspace. Completion, transcrição e embeddings não podem consultar uma
+  chave global do processo.
+- `chunkPublishedArticle`, `KnowledgeRetriever` e
+  `OpenAiKnowledgeEmbeddings` formam o limite reutilizável de RAG. O banco
+  conserva chunks, scores e versão da citação; draft nunca é indexado.
+- `executeRecoverableOperation` envolve merge e deploy com intent durável,
+  digest da requisição, chave idempotente e reconciliação antes de retry.
+- `computeImpactSummary` agrega somente `workflow_facts` append-only e sempre
+  retorna numerador, denominador, amostra e período exato. Touch obrigatório
+  por política não é classificado como intervenção do fundador.
+- `runner_heartbeats` é backend-only; readiness expõe apenas o booleano de
+  atividade recente, nunca o payload ou identificador do job.
+
+Novos adapters ou processors desses domínios devem ir para `server/adapters/`
+ou `server/workers/`. `server/supabase-api-adapters.ts` e
+`server/live-worker.ts` permanecem compositores de compatibilidade durante a
+extração por domínio, sem criar serviços distribuídos.
+
 ## Checklist para uma mudança nova
 
 - [ ] Pesquisei helpers existentes com `rg` antes de implementar.

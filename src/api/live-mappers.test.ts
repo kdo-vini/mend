@@ -257,9 +257,30 @@ describe("live conversation mapper", () => {
   });
 });
 
+const codingRunDefaults = {
+  billing_method: null,
+  cache_json: {},
+  connection_id: null,
+  cost_amount_usd: null,
+  cost_status: null,
+  duration_ms: null,
+  effective_config_json: {},
+  effort: null,
+  parent_run_id: null,
+  provider: null,
+  quota_json: {},
+  real_model: "",
+  requested_config_json: {},
+  requested_model: null,
+  research_artifact_id: null,
+  stage: "implement",
+  usage_json: {},
+} as const;
+
 describe("live Agent run mapper", () => {
   it("exposes persisted diff, files, checks and model summary for review", () => {
     const record = {
+      ...codingRunDefaults,
       id: "run-1",
       workspace_id: "workspace-1",
       issue_id: "issue-1",
@@ -327,6 +348,7 @@ describe("live Agent run mapper", () => {
     "rejected",
   ])("preserves the persisted %s status", (status) => {
     const record = {
+      ...codingRunDefaults,
       id: `run-${status}`,
       workspace_id: "workspace-1",
       issue_id: "issue-1",

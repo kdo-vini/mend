@@ -34,7 +34,7 @@ export function registerCodingControlPlaneRoutes(
         response,
         201,
         await controlPlane.createConnection(
-          await scoped(request, response),
+          await scoped(request, response, "admin"),
           parse(agentConnectionCreateSchema, request.body),
         ),
       );
@@ -48,7 +48,7 @@ export function registerCodingControlPlaneRoutes(
         response,
         200,
         await controlPlane.updateConnection(
-          await scoped(request, response),
+          await scoped(request, response, "admin"),
           input.id,
           parse(agentConnectionPatchSchema, request.body),
         ),
@@ -60,7 +60,7 @@ export function registerCodingControlPlaneRoutes(
     asyncRoute(async (request, response) => {
       const input = parse(agentConnectionParamSchema, request.params);
       const removed = await controlPlane.removeConnection(
-        await scoped(request, response),
+        await scoped(request, response, "admin"),
         input.id,
       );
       if (!removed) {
@@ -80,7 +80,7 @@ export function registerCodingControlPlaneRoutes(
     asyncRoute(async (request, response) => {
       const input = parse(agentConnectionParamSchema, request.params);
       const result = await controlPlane.verifyConnection(
-        await scoped(request, response),
+        await scoped(request, response, "admin"),
         input.id,
       );
       if (!result) {
@@ -124,7 +124,7 @@ export function registerCodingControlPlaneRoutes(
     "/api/agent-connections/login",
     asyncRoute(async (request, response) => {
       const result = await controlPlane.startLogin(
-        await scoped(request, response),
+        await scoped(request, response, "admin"),
         parse(agentLoginStartSchema, request.body),
       );
       send(
@@ -167,7 +167,7 @@ export function registerCodingControlPlaneRoutes(
     asyncRoute(async (request, response) => {
       const input = parse(agentLoginJobParamSchema, request.params);
       const result = await controlPlane.cancelLogin(
-        await scoped(request, response),
+        await scoped(request, response, "admin"),
         input.jobId,
       );
       if (!result) {

@@ -4,6 +4,18 @@ import type { McpRuntimeConnection } from "./mcp.js";
 
 export type SupportAiProviderName = "openai";
 
+export class SupportAiConfigurationError extends Error {
+  constructor(
+    readonly code:
+      | "support_ai_credential_required"
+      | "support_ai_model_required"
+      | "support_ai_transcription_model_required",
+  ) {
+    super(code);
+    this.name = "SupportAiConfigurationError";
+  }
+}
+
 export interface SupportAiProvider {
   readonly name: SupportAiProviderName;
   draftReply(
@@ -49,6 +61,7 @@ const conversationRoleInstruction =
 
 export interface AudioTranscriber {
   transcribe(input: {
+    workspaceId: string;
     data: Uint8Array;
     mimeType: string;
     fileName: string;
@@ -73,20 +86,26 @@ export class OpenAiAudioTranscriber implements AudioTranscriber {
 
   constructor(
     client?: OpenAiTranscriptionClient,
-    options: { model?: string } = {},
+    options: { model?: string; apiKey?: string } = {},
   ) {
+    const apiKey = options.apiKey?.trim();
+    if (!client && !apiKey)
+      throw new SupportAiConfigurationError("support_ai_credential_required");
+    const model = options.model?.trim();
+    if (!model)
+      throw new SupportAiConfigurationError(
+        "support_ai_transcription_model_required",
+      );
     this.client =
       client ??
       (new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
+        apiKey,
       }) as unknown as OpenAiTranscriptionClient);
-    this.model =
-      options.model ??
-      process.env.SUPPORT_TRANSCRIPTION_MODEL ??
-      "gpt-4o-mini-transcribe";
+    this.model = model;
   }
 
   async transcribe(input: {
+    workspaceId: string;
     data: Uint8Array;
     mimeType: string;
     fileName: string;
@@ -101,6 +120,36 @@ export class OpenAiAudioTranscriber implements AudioTranscriber {
     const text = response.text?.trim() ?? "";
     if (!text) throw new Error("audio_transcription_empty");
     return text;
+  }
+}
+
+export class WorkspaceSupportAudioTranscriber implements AudioTranscriber {
+  constructor(private readonly credentials: SupportCredentialResolver) {}
+
+  async transcribe(input: {
+    workspaceId: string;
+    data: Uint8Array;
+    mimeType: string;
+    fileName: string;
+  }): Promise<string> {
+    const credential = await this.credentials.resolve(
+      input.workspaceId,
+      "support",
+      "openai",
+    );
+    const apiKey = credential?.apiKey.trim();
+    if (!apiKey)
+      throw new SupportAiConfigurationError("support_ai_credential_required");
+    const configuredModel = credential?.config.transcriptionModel;
+    const model =
+      typeof configuredModel === "string" ? configuredModel.trim() : "";
+    if (!model)
+      throw new SupportAiConfigurationError(
+        "support_ai_transcription_model_required",
+      );
+    return new OpenAiAudioTranscriber(undefined, { apiKey, model }).transcribe(
+      input,
+    );
   }
 }
 
@@ -128,12 +177,18 @@ export class OpenAiSupportProvider implements SupportAiProvider {
     client?: OpenAiResponsesClient,
     options: { model?: string; apiKey?: string } = {},
   ) {
+    const apiKey = options.apiKey?.trim();
+    if (!client && !apiKey)
+      throw new SupportAiConfigurationError("support_ai_credential_required");
+    const model = options.model?.trim();
+    if (!model)
+      throw new SupportAiConfigurationError("support_ai_model_required");
     this.client =
       client ??
       (new OpenAI({
-        apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
+        apiKey,
       }) as unknown as OpenAiResponsesClient);
-    this.model = options.model ?? process.env.SUPPORT_AI_MODEL ?? "gpt-5-mini";
+    this.model = model;
   }
 
   async draftReply(
@@ -334,5 +389,39 @@ export function createSupportAiProvider(
   return new OpenAiSupportProvider(options.client, {
     model: options.model,
     apiKey: options.apiKey,
+  });
+}
+
+export interface SupportCredentialResolver {
+  resolve(
+    workspaceId: string,
+    task: "support",
+    provider: "openai",
+  ): Promise<{ apiKey: string; config: Record<string, unknown> } | null>;
+}
+
+/** Resolves support AI exclusively from workspace-owned BYOK configuration. */
+export async function resolveSupportAiProvider(
+  workspaceId: string,
+  credentials: SupportCredentialResolver,
+  clientFactory?: (apiKey: string) => OpenAiResponsesClient,
+): Promise<SupportAiProvider> {
+  const credential = await credentials.resolve(
+    workspaceId,
+    "support",
+    "openai",
+  );
+  const apiKey = credential?.apiKey.trim();
+  if (!apiKey)
+    throw new SupportAiConfigurationError("support_ai_credential_required");
+  const configuredModel = credential?.config.model;
+  const model =
+    typeof configuredModel === "string" ? configuredModel.trim() : "";
+  if (!model)
+    throw new SupportAiConfigurationError("support_ai_model_required");
+  return createSupportAiProvider({
+    apiKey,
+    model,
+    ...(clientFactory ? { client: clientFactory(apiKey) } : {}),
   });
 }
