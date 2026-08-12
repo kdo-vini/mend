@@ -497,6 +497,21 @@ export async function materializeCodingAuthBundle(
   }
 }
 
+async function prepareCodingAgentHome(homeDirectory: string): Promise<void> {
+  await Promise.all(
+    [
+      ".codex",
+      ".mend-agent",
+      ".claude",
+      ".gemini",
+      path.join("AppData", "Roaming"),
+      path.join("AppData", "Local"),
+    ].map((relativeDirectory) =>
+      mkdir(path.join(homeDirectory, relativeDirectory), { recursive: true }),
+    ),
+  );
+}
+
 function effectiveMode(
   input: Pick<RunCodingAgentInput, "mode" | "stage">,
 ): CodingAgentMode {
@@ -1010,6 +1025,7 @@ export class CodingAgentCli {
         JSON.stringify(codingAgentReportJsonSchema),
         "utf8",
       );
+      await prepareCodingAgentHome(stateRoot);
       await materializeCodingAuthBundle(stateRoot, input.authBundle);
       const agentPrompt = verificationChecks
         ? [
