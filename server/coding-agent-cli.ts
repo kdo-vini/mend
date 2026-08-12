@@ -255,33 +255,41 @@ const AgentReportSchema = z
       .object({
         summary: z.string().trim().min(1).max(8_000),
         changes: z.array(z.string().trim().min(1).max(2_000)).max(30),
-        risks: z.array(z.string().trim().min(1).max(2_000)).max(30).optional(),
+        risks: z
+          .array(z.string().trim().min(1).max(2_000))
+          .max(30)
+          .nullable()
+          .optional(),
       })
       .strict()
+      .nullable()
       .optional(),
     reproduction: z
       .object({
         steps: z.array(z.string().trim().min(1).max(2_000)).max(30),
-        observed: z.string().trim().max(4_000).optional(),
-        expected: z.string().trim().max(4_000).optional(),
+        observed: z.string().trim().max(4_000).nullable().optional(),
+        expected: z.string().trim().max(4_000).nullable().optional(),
       })
       .strict()
+      .nullable()
       .optional(),
     acceptanceCriteria: z
       .array(z.string().trim().min(1).max(2_000))
       .max(30)
+      .nullable()
       .optional(),
     files: z
       .array(
         z
           .object({
             path: z.string().trim().min(1).max(500),
-            lines: z.string().trim().max(120).optional(),
-            reason: z.string().trim().max(2_000).optional(),
+            lines: z.string().trim().max(120).nullable().optional(),
+            reason: z.string().trim().max(2_000).nullable().optional(),
           })
           .strict(),
       )
       .max(100)
+      .nullable()
       .optional(),
   })
   .strict();
@@ -317,37 +325,40 @@ export const codingAgentReportJsonSchema = {
       },
     },
     proposal: {
-      type: "object",
+      type: ["object", "null"],
       additionalProperties: false,
       properties: {
         summary: { type: "string" },
         changes: { type: "array", items: { type: "string" } },
-        risks: { type: "array", items: { type: "string" } },
+        risks: { type: ["array", "null"], items: { type: "string" } },
       },
-      required: ["summary", "changes"],
+      required: ["summary", "changes", "risks"],
     },
     reproduction: {
-      type: "object",
+      type: ["object", "null"],
       additionalProperties: false,
       properties: {
         steps: { type: "array", items: { type: "string" } },
-        observed: { type: "string" },
-        expected: { type: "string" },
+        observed: { type: ["string", "null"] },
+        expected: { type: ["string", "null"] },
       },
-      required: ["steps"],
+      required: ["steps", "observed", "expected"],
     },
-    acceptanceCriteria: { type: "array", items: { type: "string" } },
+    acceptanceCriteria: {
+      type: ["array", "null"],
+      items: { type: "string" },
+    },
     files: {
-      type: "array",
+      type: ["array", "null"],
       items: {
         type: "object",
         additionalProperties: false,
         properties: {
           path: { type: "string" },
-          lines: { type: "string" },
-          reason: { type: "string" },
+          lines: { type: ["string", "null"] },
+          reason: { type: ["string", "null"] },
         },
-        required: ["path"],
+        required: ["path", "lines", "reason"],
       },
     },
   },
@@ -357,6 +368,10 @@ export const codingAgentReportJsonSchema = {
     "rootCause",
     "recommendedAction",
     "evidence",
+    "proposal",
+    "reproduction",
+    "acceptanceCriteria",
+    "files",
   ],
 } as const;
 
@@ -831,6 +846,26 @@ export function normalizeCodingAgentReport(raw: string): CodingAgentReport {
       ...item,
       detail: item.detail ?? undefined,
     })),
+    proposal: result.data.proposal
+      ? {
+          ...result.data.proposal,
+          risks: result.data.proposal.risks ?? undefined,
+        }
+      : undefined,
+    reproduction: result.data.reproduction
+      ? {
+          ...result.data.reproduction,
+          observed: result.data.reproduction.observed ?? undefined,
+          expected: result.data.reproduction.expected ?? undefined,
+        }
+      : undefined,
+    acceptanceCriteria: result.data.acceptanceCriteria ?? undefined,
+    files:
+      result.data.files?.map((file) => ({
+        ...file,
+        lines: file.lines ?? undefined,
+        reason: file.reason ?? undefined,
+      })) ?? undefined,
   };
 }
 

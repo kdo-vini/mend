@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CodingAgentCli,
   buildCodingAgentInvocation,
+  codingAgentReportJsonSchema,
   codingAgentNames,
   getCodingAgentDefinition,
   normalizeCodingAgentReport,
@@ -130,6 +131,46 @@ describe("coding agent CLI boundary", () => {
     expect(() =>
       normalizeCodingAgentReport('{"summary":"missing verdict"}'),
     ).toThrow("structured report");
+  });
+
+  it("keeps the Codex strict output schema recursively required and nullable", () => {
+    expect(codingAgentReportJsonSchema.required).toEqual(
+      Object.keys(codingAgentReportJsonSchema.properties),
+    );
+    expect(codingAgentReportJsonSchema.properties.proposal.required).toEqual(
+      Object.keys(codingAgentReportJsonSchema.properties.proposal.properties),
+    );
+    expect(
+      codingAgentReportJsonSchema.properties.reproduction.required,
+    ).toEqual(
+      Object.keys(
+        codingAgentReportJsonSchema.properties.reproduction.properties,
+      ),
+    );
+    expect(codingAgentReportJsonSchema.properties.files.items.required).toEqual(
+      Object.keys(
+        codingAgentReportJsonSchema.properties.files.items.properties,
+      ),
+    );
+
+    expect(
+      normalizeCodingAgentReport(
+        JSON.stringify({
+          ...report,
+          rootCause: null,
+          proposal: null,
+          reproduction: null,
+          acceptanceCriteria: null,
+          files: null,
+        }),
+      ),
+    ).toMatchObject({
+      rootCause: undefined,
+      proposal: undefined,
+      reproduction: undefined,
+      acceptanceCriteria: undefined,
+      files: undefined,
+    });
   });
 
   it("delegates Codex command isolation to the dedicated runner container", () => {
