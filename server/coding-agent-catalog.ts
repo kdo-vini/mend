@@ -52,6 +52,14 @@ function responseModels(value: unknown): CatalogModel[] {
     .filter((item) => item.id.length > 0 && item.id.length <= 160);
 }
 
+function openAiCodingModels(value: unknown): CatalogModel[] {
+  return responseModels(value).filter(({ id }) =>
+    /(?:^|[-_.])codex(?:$|[-_.])|^gpt-5(?:$|[-_.])|^gpt-4\.1(?:$|[-_.])|^o[134](?:$|[-_.])/i.test(
+      id,
+    ),
+  );
+}
+
 function codexModels(value: unknown): CatalogModel[] {
   if (!value || typeof value !== "object") return [];
   const record = value as Record<string, unknown>;
@@ -222,6 +230,12 @@ export class DefaultCodingCatalogProvider implements CodingCatalogProvider {
     }
     if (connection.provider !== "openai")
       throw new Error("agent_catalog_provider_not_supported");
+    if (secret?.apiKey) {
+      const value = await jsonRequest("https://api.openai.com/v1/models", {
+        headers: { Authorization: `Bearer ${secret.apiKey}` },
+      });
+      return apiCatalog(connection, openAiCodingModels(value), "api");
+    }
     const executable = await resolveCodingAgentExecutable("openai");
     const homeDirectory = await mkdtemp(
       path.join(os.tmpdir(), "mend-coding-catalog-"),
