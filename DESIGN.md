@@ -1,57 +1,146 @@
-# Design system
+# Mend design direction
 
-## Mood
+Mend is a quiet control room for founders who still own the customer
+relationship. The interface should make the next safe product decision obvious:
+message, context, evidence, verified fix.
 
-Midnight control room after the last customer message: cool monitor light, quiet urgency, a few reliable signals, no decorative noise.
+The repository has two visual registers connected by the same brand system:
 
-## Color strategy
+- Marketing is the Stitch x Solaris expression: a near-black stage, a compact
+  floating navigation bar, controlled Signal Blue illumination, tightly set
+  display type, and a dominant product window in the first fold. Later sections
+  use dark framed capability surfaces, explicit workflow proof, and restrained
+  state-driven motion.
+- The authenticated workspace is the Midnight Control Room: compact, dark,
+  operational, and dense enough for daily support work.
 
-Restrained. Near-black neutrals carry the surface; blue-indigo is reserved for selection, primary actions, and engineering state; the olive seed appears as a small operational signal; WhatsApp green is only a channel indicator.
+## Approved brand system
 
-## Tokens
+The Google Stitch brand board is the source of truth for the Mend identity.
 
-The implemented CSS tokens live in `src/styles.css` and use OKLCH: neutral near-black background, cool-tinted surfaces, high-contrast ink, blue-indigo `--accent`, olive `--signal`, and semantic success/warning/danger states. Spacing follows a 4px base scale (`--space-1` through `--space-6`), controls use `--control-height`, and surfaces use the shared radius tokens. Layering uses the `--z-*` scale; components must not invent arbitrary z-index values.
+- Mark: **Closed Loop**, the approved interlocking `all_inclusive` loop from the
+  Google Stitch identity screen `e143bd917ab7407da35c7a0c023d74c6`. Use the
+  shared `BrandMark` component or `public/mend-mark.svg`; do not redraw,
+  approximate, or substitute it with a square, rotated diamond, elongated
+  chain link, circle-and-dot, or generic sparkle.
+- Wordmark: `Mend`, set with a clean, compact grotesk.
+- Signal Blue: `#2E7DFF`. Use for primary actions, links, selection, and the
+  relationship between objects.
+- Ink / Main background: `#0B0E14`.
+- Surface Low: `#10131B`.
+- Surface Mid: `#191B23`.
+- Operational Olive: `#849270`. Use only for calm, verified, or operational
+  states.
+- Tertiary Orange: `#D65F00`. Reserve for exceptional tertiary emphasis; it is
+  not a brand accent.
+- Neutral: `#747780` for technical muted content.
+
+The marketing canvas is `#07090D`, with `#0B0E14`, `#10131B`, and `#171A22`
+providing depth. Signal Blue may create one restrained radial illumination in
+the hero, matching the Solaris composition; it is never used as gradient text.
+Do not introduce purple, rainbow color, decorative gradients, default
+glassmorphism, or a global WhatsApp green.
 
 ## Typography
 
-Inter is used for operational text, with DM Mono for identifiers, command hints, and machine-generated run events. The scale is compact: 10–12px metadata, 13px body, 17–26px page headings.
+- Geist is the display face for marketing headlines and the wordmark treatment.
+- Inter is the body and product UI face.
+- JetBrains Mono is the technical face for IDs, labels, evidence states, and
+  implementation details; DM Mono remains a fallback for existing workspace
+  surfaces during migration.
+- Marketing display type is large and short: approximately 58–104px on
+  desktop, 48–68px on mobile, with tight tracking and balanced wrapping.
+- Product type stays compact: 10–12px metadata, 13px body, and 17–26px page
+  headings.
 
-## Signature
+## Geometry and layout
 
-The thin blue signal language connects attention states, linked issues, and Codex progress. It is a system of small marks and restrained surfaces rather than a decorative illustration.
+- Use a 4px base grid and the shared `--space-*`, `--radius-*`, `--z-*`, and
+  focus tokens for product UI.
+- Marketing uses a 1180px content frame with 24px desktop gutters and 16px
+  mobile gutters. The floating navigation is capped at 1024px.
+- Marketing mockups use a 14–16px outer radius. Product UI inside a mockup keeps
+  the operational 12px, 8px, and 6px radii.
+- Use 1px rules, flat surfaces, and restrained shadows. A marketing mockup is
+  a proof object, not a decorative floating card.
+- The landing page structure is: floating header, centered announcement + hero,
+  product window filling the lower first fold, continuous proof strip,
+  two-column capability surfaces, message-to-fix loop, founder / boundary
+  section, design partner CTA, and minimal footer.
+- The signature line is the Closed Loop relationship: it may connect real
+  stages in a flow, but must not become a decorative background grid.
 
-## Layout
+## Canonical landing example
 
-The app shell uses a compact global sidebar. Inbox is a two-area workspace: conversation rail plus selected conversation. Issue details open in a drawer when context matters, and become a full page only when editing needs room. Tables remain dense and list-first.
+The public landing is the executable reference for this system. Use it to
+evaluate new marketing surfaces before inventing another composition:
 
-## System contract
+- Implementation: `src/features/marketing/LandingPage.tsx`
+- Scoped visual language: `src/styles/features/marketing.css`
+- Copy contract: `src/i18n/locales/en-US/marketing.json` and
+  `src/i18n/locales/pt-BR/marketing.json`
+- Shared identity: `src/components/BrandLockup.tsx` and `public/mend-mark.svg`
 
-These rules are part of the product surface, not optional styling preferences.
+The reference composition is intentionally specific: a centered hero inside a
+quiet near-black stage, a capped floating header, one Signal Blue halo, a
+large semantic product window in the first fold, a continuous proof strip,
+two-column capability surfaces, the message-to-fix loop, a visible founder
+approval boundary, and a restrained closing CTA.
 
-- Use CSS tokens for color, spacing, radius, focus, motion, and layering. Raw hex colors and one-off spacing values are not allowed in new UI.
-- Prefer existing primitives and patterns before adding a component: `ResourceState` for loading, empty, and error states; `ActionMenu` for row actions; the shared button and field classes for controls.
-- Loading a resource uses a skeleton preview. Spinners are reserved for an active operation whose progress is indeterminate, such as connect, refresh, send, or delete.
-- Async posts use optimistic feedback: render the intended result immediately with `.optimistic-pending` at reduced opacity, disable duplicate controls, and settle it to confirmed or failed only after the server responds. On failure, revert the optimistic result and explain the next action.
-- Row actions stay in an `Actions` column or the equivalent trailing slot. The menu trigger is an icon-only button with an accessible label; destructive actions are separated and confirmed when irreversible.
-- Confirmation actions use the shared `ConfirmDialog` pattern. Never use browser-native `alert()`, `confirm()`, or `prompt()` in product UI.
-- Every interactive control needs a visible `:focus-visible` state, a semantic label, and a disabled state when the operation is pending.
-- Semantic colors communicate state only: blue for selected/engineering state, olive for operational signal, green for success/channel state, amber for warning, and red for danger.
-- Keep the visual hierarchy calm: one primary action per surface, compact metadata, no decorative gradients, and no new animation unless it communicates state.
-- Keep data access at the API boundary. UI components may compose API actions and adapters, but must not create direct Supabase queries or duplicate mapping logic.
-- Preserve the dense desktop layout while allowing mobile overflow to become horizontal scrolling or stacked controls; never hide an action without an accessible alternative.
-- New or modified UI uses the local shadcn/ui primitives in `src/components/ui/` (Radix-based, New York style, CSS variables). Do not add a one-off control when a primitive exists. Tailwind utilities are available without Preflight so the legacy base CSS remains authoritative.
+When extending the system, preserve these decisions:
 
-## Confirmation pattern
+- Treat the product window as proof of the support loop, not as a decorative
+  dashboard screenshot.
+- Use blue to establish relationships and next actions; use olive for calm or
+  verified states; keep exceptional colors semantic and sparse.
+- Prefer flat framed surfaces, 1px rules, compact controls, and intentional
+  hover/state motion over generic cards, glassmorphism, or ornamental effects.
+- Keep the landing semantic and bilingual so the same visual reference can be
+  reviewed in both locales and at `1440x900` and `390x844`.
 
-Confirmations are app-native AlertDialogs built from the shared shadcn primitive. Use `useConfirmation()` from `src/shared/ui/useConfirmation.tsx` and await its Promise before running the action.
+`DESIGN.md` is the single design-system source of truth. Update this file and
+the executable landing together when the shared visual direction changes; do
+not create a second design-system document with competing tokens or layout
+rules.
 
-- State the decision in a short, sentence-case title using the action verb: “Delete issue?” or “Enable Auto-reply?”.
-- Explain the consequence in the description. Do not repeat the title or hide important impact in a toast.
-- Keep Cancel available and use a specific confirm label such as “Delete issue” or “Disconnect”.
-- Destructive confirmations use the semantic danger button and place initial keyboard focus on Cancel. Non-destructive confirmations use the primary button.
-- Escape cancels. The dialog exposes `role="dialog"` and `aria-modal="true"` and must remain usable with keyboard focus.
-- One confirmation is shown at a time. Pending destructive actions must disable their initiating control while the operation runs.
+## Product register
 
-## Review checklist
+The workspace remains the Midnight Control Room. The sidebar, page frame,
+Inbox-first hierarchy, issue drawers, run ledger, and settings patterns should
+stay compact and predictable. Use blue for selection and engineering state,
+olive for calm operational state, green only for channel/success semantics,
+amber for warning, and red for danger.
 
-Before merging UI work, verify: tokens are reused; loading/empty/error states use the shared primitives; actions follow the trailing menu pattern; keyboard focus is visible; destructive actions are explicit; confirmations use `ConfirmDialog`; mobile layout remains usable; and the change does not add a dependency for behavior already covered by the platform or existing components.
+The app shell and marketing header must use the same `BrandMark`. Shared brand
+changes belong in `src/components/BrandLockup.tsx` and its shell styles; do not
+maintain a second logo in a page component.
+
+## Interaction and accessibility
+
+- Every interactive control needs an accessible name, visible `:focus-visible`
+  state, and a disabled state while its operation is pending.
+- Maintain AA contrast. Never communicate state with color alone.
+- Marketing copy is bilingual by contract. Every visible string must exist in
+  both `en-US` and `pt-BR`, pass through the active profile language, and pass
+  `npm run i18n:check` plus `npm run i18n:frontend`.
+- Mobile must stack or scroll intentionally. No clipped headline, hidden CTA,
+  or horizontal page overflow.
+- Motion is optional and subordinate to comprehension. Respect
+  `prefers-reduced-motion`; do not add perpetual aura, tilt, or background
+  animation.
+- Product confirmations use the shared `ConfirmDialog` pattern. Do not use
+  browser-native `alert`, `confirm`, or `prompt` in product UI.
+
+## Implementation rules
+
+- Read `docs/product/MEND_PRODUCT_STRATEGY_V1.md`,
+  `docs/design/MEND_DESIGN_PATTERNS.md`, and the i18n contract before changing
+  UI.
+- Reuse `src/components/ui/` primitives and existing state patterns before
+  adding a one-off control.
+- Keep feature API calls in the feature's `api.ts`; UI does not create direct
+  Supabase queries.
+- New colors, spacing, radius, and layering values belong in tokens or the
+  scoped marketing layer. Avoid arbitrary one-off values in product surfaces.
+- Visual review is required at desktop `1440x900` and mobile `390x844`, with
+  the Maestri QA portals when available.

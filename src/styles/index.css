@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 /* Tailwind v4 utilities only: the legacy app owns its base styles. */
 @layer theme, base, components, utilities;
@@ -23,6 +23,7 @@
 @import "./responsive.css";
 @import "./features/kanban.css";
 @import "./shared.css";
+@import "./control-room.css";
 @import "./features/auth.css";
 @import "./features/marketing.css";
 @import "./custom-select.css";

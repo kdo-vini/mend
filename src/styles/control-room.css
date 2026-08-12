@@ -1,0 +1,128 @@
+/*
+ * Control Room v2
+ *
+ * Shared product refinements only. Feature styles still own their geometry;
+ * this layer gives the inbox, issue, run, knowledge, and settings surfaces a
+ * common evidence-first frame without changing their data or interaction
+ * contracts.
+ */
+.app-shell .page,
+.app-shell .inbox-page {
+  color: var(--ink);
+}
+
+.app-shell .page-header h1,
+.app-shell .inbox-toolbar h1 {
+  letter-spacing: -0.04em;
+}
+
+.app-shell .page-header p,
+.app-shell .inbox-toolbar p {
+  max-width: 64ch;
+  line-height: 1.55;
+}
+
+.app-shell .inbox-layout,
+.app-shell .runs-layout,
+.app-shell .issue-table-wrap,
+.app-shell .settings-v2-shell {
+  border-color: var(--line-strong);
+}
+
+.app-shell .conversation-row.selected {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.app-shell .conversation-row.selected .conversation-row-top strong {
+  color: var(--ink);
+}
+
+.app-shell .conversation-header {
+  background: color-mix(in oklch, var(--surface) 88%, var(--surface-2));
+}
+
+.app-shell .conversation-header .conversation-identity h2 {
+  letter-spacing: -0.02em;
+}
+
+.app-shell .conversation-assignee,
+.app-shell .mode-label,
+.app-shell .filter-strip button.selected {
+  border-color: var(--line-strong);
+}
+
+.app-shell .ai-decision-card,
+.app-shell .ai-draft-card {
+  border-radius: var(--radius-card);
+}
+
+.app-shell .ai-decision-card {
+  border-left: 3px solid var(--accent);
+}
+
+.app-shell .ai-draft-card {
+  border-left: 3px solid var(--signal);
+}
+
+.app-shell .issue-event {
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-card);
+}
+
+.app-shell .message-bubble {
+  border-color: var(--line-strong);
+}
+
+.app-shell .message-row.outbound .message-bubble {
+  border-color: color-mix(in oklch, var(--accent) 48%, var(--line-strong));
+}
+
+.app-shell .composer {
+  border-color: var(--line-strong);
+  background: color-mix(in oklch, var(--surface) 92%, var(--surface-2));
+}
+
+.app-shell .run-list-row.selected {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.app-shell .run-detail-header h2,
+.app-shell .settings-v2-section-header h2,
+.app-shell .knowledge-row h3,
+.app-shell .issue-title-cell strong {
+  letter-spacing: -0.015em;
+}
+
+.app-shell .issue-table tbody tr:hover,
+.app-shell .knowledge-row:hover,
+.app-shell .settings-v2-row:hover {
+  background: color-mix(in oklch, var(--surface-2) 82%, var(--surface));
+}
+
+.app-shell .settings-v2-nav-item.selected {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.app-shell .settings-v2-section {
+  border-color: var(--line-strong);
+}
+
+.app-shell .settings-v2-row,
+.app-shell .settings-overview-row {
+  border-color: var(--line-strong);
+}
+
+@media (max-width: 650px) {
+  .app-shell .page,
+  .app-shell .inbox-page {
+    padding-inline: var(--page-padding-inline-mobile);
+  }
+
+  .app-shell .inbox-toolbar {
+    gap: var(--space-3);
+  }
+
+  .app-shell .conversation-header {
+    min-height: 64px;
+  }
+}

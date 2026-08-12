@@ -1,28 +1,29 @@
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
+  Bell,
+  BookOpen,
   Bot,
+  Bug,
   Check,
   CheckCircle2,
-  ChevronRight,
   CircleDot,
-  ClipboardCheck,
-  Code2,
-  ExternalLink,
+  Copy,
+  Database,
   GitBranch,
-  GitCommitHorizontal,
   GitPullRequest,
-  HeartPulse,
+  Inbox,
+  LockKeyhole,
   Menu,
   MessageCircle,
-  SearchCheck,
+  Plus,
+  Search,
   ShieldCheck,
-  Sparkles,
   TerminalSquare,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { BrandLockup } from "../../components/BrandLockup";
+import { BrandLockup, BrandMark } from "../../components/BrandLockup";
 import {
   applyInterfaceLanguage,
   saveInterfaceLanguage,
@@ -30,81 +31,169 @@ import {
 import { normalizeLocale } from "../../i18n/resources";
 import { supabase } from "../../lib/supabase";
 
-const loopSteps = [
-  { key: "signal", icon: MessageCircle },
-  { key: "suspicion", icon: SearchCheck },
-  { key: "evidence", icon: ClipboardCheck },
-  { key: "investigation", icon: Bot },
-  { key: "verdict", icon: ShieldCheck },
-  { key: "decision", icon: ShieldCheck },
-  { key: "fix", icon: Code2 },
-  { key: "checks", icon: CheckCircle2 },
-  { key: "pullRequest", icon: GitPullRequest },
-  { key: "approval", icon: ShieldCheck },
-  { key: "release", icon: GitCommitHorizontal },
-  { key: "health", icon: HeartPulse },
-  { key: "customer", icon: CheckCircle2 },
+const featureCards = [
+  { key: "triage", icon: Inbox },
+  { key: "investigate", icon: TerminalSquare },
+  { key: "act", icon: ShieldCheck },
+  { key: "remember", icon: Database },
 ] as const;
 
-const connectorNames = ["openai", "anthropic", "google", "verboo"] as const;
+const loopSteps = [
+  { key: "message", icon: MessageCircle },
+  { key: "context", icon: CircleDot },
+  { key: "triage", icon: Bot },
+  { key: "evidence", icon: TerminalSquare },
+  { key: "fix", icon: GitPullRequest },
+  { key: "verify", icon: CheckCircle2 },
+  { key: "reply", icon: ArrowRight },
+] as const;
 
-function LoopCasePreview() {
+const proofItems = ["whatsapp", "context", "evidence", "verified"] as const;
+
+const specimenNavigation = [
+  { key: "inbox", icon: Inbox },
+  { key: "issues", icon: Bug },
+  { key: "runs", icon: TerminalSquare },
+  { key: "knowledge", icon: BookOpen },
+] as const;
+
+function ProductWindow() {
   const { t } = useTranslation("marketing");
+
   return (
-    <div className="marketing-loop-console reveal">
-      <div className="marketing-loop-console-head">
-        <div>
-          <span>{t("loopLanding.casePreview.case")}</span>
-          <strong>{t("loopLanding.casePreview.title")}</strong>
-        </div>
-        <span className="marketing-case-state">
-          <CircleDot size={10} /> {t("loopLanding.casePreview.state")}
+    <div
+      className="marketing-product-window"
+      aria-label={t("specimen.ariaLabel")}
+    >
+      <div className="marketing-browser-bar">
+        <span className="marketing-browser-dots" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="marketing-browser-address">
+          <LockKeyhole size={11} /> {t("specimen.address")}
+        </span>
+        <span className="marketing-browser-controls" aria-hidden="true">
+          <Plus size={14} />
+          <Copy size={13} />
         </span>
       </div>
-      <ol
-        className="marketing-loop-track"
-        aria-label={t("loopLanding.loop.progressLabel")}
-      >
-        {loopSteps.map(({ key, icon: Icon }, index) => (
-          <li
-            className={
-              index < 7 ? "is-complete" : index === 7 ? "is-current" : ""
-            }
-            key={key}
-          >
-            <span>{index < 4 ? <Check size={13} /> : <Icon size={13} />}</span>
-            <strong>{t(`loopLanding.steps.${key}.title`)}</strong>
-          </li>
-        ))}
-      </ol>
-      <div className="marketing-case-grid">
-        <div className="marketing-case-evidence">
-          <span>{t("loopLanding.casePreview.evidence")}</span>
-          {["trace", "release", "reproduction"].map((item) => (
-            <div key={item}>
-              <CheckCircle2 size={13} />
-              <span>
-                <strong>
-                  {t(`loopLanding.casePreview.items.${item}.title`)}
-                </strong>
-                <small>
-                  {t(`loopLanding.casePreview.items.${item}.detail`)}
-                </small>
+
+      <div className="marketing-app-shell">
+        <aside className="marketing-app-sidebar">
+          <BrandLockup compact />
+          <div className="marketing-app-sidebar-nav">
+            {specimenNavigation.map(({ key, icon: Icon }, index) => (
+              <span className={index === 0 ? "is-active" : ""} key={key}>
+                <Icon size={14} />
+                {t(`specimen.nav.${key}`)}
+                {index === 0 ? <em>2</em> : null}
               </span>
-            </div>
-          ))}
-        </div>
-        <div className="marketing-case-verdict">
-          <span>{t("loopLanding.casePreview.verdict")}</span>
-          <strong>{t("loopLanding.casePreview.confirmed")}</strong>
-          <p>{t("loopLanding.casePreview.verdictDetail")}</p>
-          <div>
-            <span>{t("loopLanding.casePreview.agent")}</span>
-            <code>claude cli</code>
+            ))}
           </div>
-          <div>
-            <span>{t("loopLanding.casePreview.next")}</span>
-            <code>{t("loopLanding.casePreview.fixRun")}</code>
+          <div className="marketing-app-sidebar-foot">
+            <span>{t("specimen.ownerInitials")}</span>
+            <div>
+              <strong>{t("specimen.owner")}</strong>
+              <small>{t("specimen.plan")}</small>
+            </div>
+          </div>
+        </aside>
+
+        <div className="marketing-app-main">
+          <div className="marketing-app-topbar">
+            <span className="marketing-app-search">
+              <Search size={13} />
+              {t("specimen.search")}
+            </span>
+            <span className="marketing-app-actions" aria-hidden="true">
+              <CircleDot size={14} />
+              <Bell size={14} />
+              <Plus size={14} />
+            </span>
+          </div>
+
+          <div className="marketing-case-grid">
+            <aside className="marketing-case-list">
+              <div className="marketing-case-list-heading">
+                <span>{t("specimen.railLabel")}</span>
+                <strong>02</strong>
+              </div>
+              <div className="marketing-case-row is-selected">
+                <span className="marketing-case-avatar">L</span>
+                <span>
+                  <strong>{t("specimen.customer")}</strong>
+                  <small>{t("specimen.subject")}</small>
+                </span>
+                <em>1</em>
+              </div>
+              <div className="marketing-case-row">
+                <span className="marketing-case-avatar is-muted">P</span>
+                <span>
+                  <strong>{t("specimen.secondaryCustomer")}</strong>
+                  <small>{t("specimen.secondarySubject")}</small>
+                </span>
+              </div>
+              <div className="marketing-case-list-foot">
+                <i aria-hidden="true" />
+                {t("specimen.railFoot")}
+              </div>
+            </aside>
+
+            <section className="marketing-conversation">
+              <div className="marketing-conversation-heading">
+                <div>
+                  <span>{t("specimen.conversationLabel")}</span>
+                  <strong>{t("specimen.customer")}</strong>
+                </div>
+                <span>{t("specimen.channel")}</span>
+              </div>
+              <div className="marketing-messages">
+                <div className="marketing-message is-inbound">
+                  <span>{t("specimen.inboundLabel")}</span>
+                  <p>{t("specimen.inboundMessage")}</p>
+                  <small>{t("specimen.inboundTime")}</small>
+                </div>
+                <div className="marketing-message is-outbound">
+                  <span>{t("specimen.outboundLabel")}</span>
+                  <p>{t("specimen.outboundMessage")}</p>
+                  <small>{t("specimen.outboundTime")}</small>
+                </div>
+              </div>
+              <div className="marketing-linked-issue">
+                <CircleDot size={14} />
+                <span>
+                  <strong>{t("specimen.issueTitle")}</strong>
+                  <small>{t("specimen.issueMeta")}</small>
+                </span>
+                <ArrowRight size={14} />
+              </div>
+            </section>
+
+            <aside className="marketing-evidence-panel">
+              <div className="marketing-evidence-heading">
+                <span>{t("specimen.spineLabel")}</span>
+                <strong>{t("specimen.spineTitle")}</strong>
+              </div>
+              <div className="marketing-evidence-list">
+                {(["context", "evidence", "next"] as const).map(
+                  (item, index) => (
+                    <div key={item} className={index === 2 ? "is-next" : ""}>
+                      <i>{index < 2 ? <Check size={9} /> : <span />}</i>
+                      <span>
+                        <strong>{t(`specimen.spine.${item}.title`)}</strong>
+                        <small>{t(`specimen.spine.${item}.detail`)}</small>
+                      </span>
+                    </div>
+                  ),
+                )}
+              </div>
+              <div className="marketing-review-gate">
+                <ShieldCheck size={13} />
+                {t("specimen.reviewGate")}
+              </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -112,115 +201,127 @@ function LoopCasePreview() {
   );
 }
 
-function ProductPreview() {
+function FeatureVisual({
+  feature,
+}: {
+  feature: (typeof featureCards)[number]["key"];
+}) {
   const { t } = useTranslation("marketing");
-  return (
-    <div
-      className="marketing-product-shell"
-      aria-label={t("preview.ariaLabel")}
-    >
-      <div className="marketing-product-topbar">
-        <span className="marketing-product-title">
-          <span className="marketing-product-mark" /> {t("preview.inbox")}
+
+  if (feature === "triage") {
+    return (
+      <div className="marketing-feature-visual is-triage" aria-hidden="true">
+        {(["one", "two", "three"] as const).map((item, index) => (
+          <span key={item} className={index === 0 ? "is-active" : ""}>
+            <i>{index === 0 ? "L" : index === 1 ? "P" : "M"}</i>
+            <b>{t(`capabilities.visuals.triage.${item}`)}</b>
+            <small>{index === 0 ? "now" : `${index + 2}m`}</small>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  if (feature === "investigate") {
+    return (
+      <div className="marketing-feature-visual is-terminal" aria-hidden="true">
+        <div className="marketing-terminal-top">
+          <i /> <i /> <i />
+          <span>{t("capabilities.visuals.investigate.label")}</span>
+        </div>
+        <p>
+          <em>01</em>
+          <Check size={11} /> {t("capabilities.visuals.investigate.context")}
+        </p>
+        <p>
+          <em>02</em>
+          <Check size={11} /> {t("capabilities.visuals.investigate.reproduce")}
+        </p>
+        <p className="is-running">
+          <em>03</em>
+          <span /> {t("capabilities.visuals.investigate.rootCause")}
+        </p>
+      </div>
+    );
+  }
+
+  if (feature === "act") {
+    return (
+      <div className="marketing-feature-visual is-policy" aria-hidden="true">
+        <span>
+          <MessageCircle size={14} />
+          <b>{t("capabilities.visuals.act.reply")}</b>
+          <CheckCircle2 size={14} />
         </span>
-        <span className="marketing-live-state">
-          <i /> {t("preview.live")}
+        <span>
+          <TerminalSquare size={14} />
+          <b>{t("capabilities.visuals.act.investigate")}</b>
+          <CheckCircle2 size={14} />
+        </span>
+        <span className="is-locked">
+          <GitBranch size={14} />
+          <b>{t("capabilities.visuals.act.ship")}</b>
+          <LockKeyhole size={14} />
         </span>
       </div>
-      <div className="marketing-product-body">
-        <aside className="marketing-conversation-rail">
-          <div className="marketing-rail-label">
-            {t("preview.conversations")}
-          </div>
-          <div className="marketing-search-line">{t("preview.search")}</div>
-          {["one", "two", "three"].map((key, index) => (
-            <div
-              className={`marketing-thread ${index === 0 ? "is-active" : ""}`}
-              key={key}
-            >
-              <span className="marketing-avatar">
-                {t(`preview.threads.${key}.initial`)}
-              </span>
-              <span>
-                <strong>{t(`preview.threads.${key}.customer`)}</strong>
-                <small>{t(`preview.threads.${key}.subject`)}</small>
-              </span>
-            </div>
-          ))}
-        </aside>
-        <div className="marketing-conversation-view">
-          <div className="marketing-conversation-head">
-            <span>
-              <strong>{t("preview.threads.one.customer")}</strong>
-              <small>
-                {t("preview.channel")} · {t("preview.needsAttention")}
-              </small>
-            </span>
-            <span className="marketing-ai-pill">
-              <Sparkles size={11} /> {t("preview.aiDrafts")}
-            </span>
-          </div>
-          <div className="marketing-message-stack">
-            <p className="marketing-message is-customer">
-              {t("preview.customerMessage")}
-            </p>
-            <p className="marketing-message is-agent">
-              {t("preview.agentMessage")}
-            </p>
-            <div className="marketing-linked-issue">
-              <span className="marketing-issue-icon">
-                <CircleDot size={14} />
-              </span>
-              <span>
-                <strong>{t("preview.issueTitle")}</strong>
-                <small>
-                  {t("preview.issueId")} · {t("preview.issueStatus")}
-                </small>
-              </span>
-              <ArrowRight size={14} />
-            </div>
-          </div>
-          <div className="marketing-composer">
-            <span>{t("preview.composer")}</span>
-            <span className="marketing-send-dot" />
-          </div>
+    );
+  }
+
+  return (
+    <div className="marketing-feature-visual is-memory" aria-hidden="true">
+      <BrandMark />
+      <div>
+        {(["verified", "related", "resolved"] as const).map((item) => (
+          <span key={item}>
+            {t(`capabilities.visuals.memory.${item}.case`)}
+            <b>{t(`capabilities.visuals.memory.${item}.status`)}</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FounderBoundary() {
+  const { t } = useTranslation("marketing");
+
+  return (
+    <div
+      className="marketing-boundary-window"
+      aria-label={t("boundary.ariaLabel")}
+    >
+      <div className="marketing-boundary-window-top">
+        <span>
+          <BrandMark /> {t("boundary.caseLabel")}
+        </span>
+        <span>
+          <i /> {t("boundary.status")}
+        </span>
+      </div>
+      <div className="marketing-boundary-window-body">
+        <div className="marketing-boundary-summary">
+          <span>{t("boundary.summaryLabel")}</span>
+          <strong>{t("boundary.summary")}</strong>
+          <p>{t("boundary.evidence")}</p>
         </div>
-        <aside className="marketing-run-panel">
-          <div className="marketing-run-heading">
-            <span>{t("preview.runTitle")}</span>
-            <small>{t("preview.runStatus")}</small>
-          </div>
-          <div className="marketing-run-timeline">
-            {(["context", "issue", "run", "review"] as const).map(
-              (step, index) => (
-                <div
-                  className={index < 3 ? "is-complete" : "is-current"}
-                  key={step}
-                >
-                  <i>{index < 3 ? <Check size={10} /> : <span />}</i>
-                  <span>
-                    <strong>{t(`preview.steps.${step}`)}</strong>
-                    <small>{t(`preview.steps.${step}Meta`)}</small>
-                  </span>
-                </div>
-              ),
-            )}
-          </div>
-          <div className="marketing-diff-mini">
-            <span>{t("preview.additions")}</span>
-            <span>{t("preview.deletions")}</span>
-            <small>{t("preview.filesChanged")}</small>
-          </div>
-        </aside>
+        <div className="marketing-boundary-action">
+          <ShieldCheck size={20} />
+          <span>
+            <strong>{t("boundary.actionTitle")}</strong>
+            <small>{t("boundary.actionDetail")}</small>
+          </span>
+          <span className="marketing-boundary-action-cta">
+            {t("boundary.action")}
+          </span>
+        </div>
       </div>
     </div>
   );
 }
 
 export function LandingPage() {
-  const { t, i18n } = useTranslation(["marketing", "common"]);
+  const { t, i18n } = useTranslation("marketing");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const locale = normalizeLocale(i18n.language);
 
   useEffect(() => {
@@ -242,21 +343,21 @@ export function LandingPage() {
   };
 
   return (
-    <main className="marketing-page">
+    <main className="marketing-page" id="top">
       <header className="marketing-nav-wrap">
         <nav className="marketing-nav" aria-label={t("navigation.label")}>
           <a
             className="marketing-brand-link"
             href="#top"
-            aria-label={t("common:brand.name")}
+            aria-label={t("brand")}
           >
-            <BrandLockup />
+            <BrandLockup compact />
           </a>
           <div className="marketing-nav-links">
-            <a href="#features">{t("navigation.features")}</a>
-            <a href="#capabilities">{t("navigation.capabilities")}</a>
-            <a href="#use-cases">{t("navigation.useCases")}</a>
-            <a href="#pricing">{t("navigation.pricing")}</a>
+            <a href="#features">{t("navigation.product")}</a>
+            <a href="#loop">{t("navigation.howItWorks")}</a>
+            <a href="#founders">{t("navigation.forFounders")}</a>
+            <a href="#design-partners">{t("navigation.designPartners")}</a>
           </div>
           <div className="marketing-nav-actions">
             <button
@@ -286,229 +387,199 @@ export function LandingPage() {
           </div>
         </nav>
         <div className={`marketing-mobile-menu ${menuOpen ? "is-open" : ""}`}>
-          {[
-            ["features", "features"],
-            ["capabilities", "capabilities"],
-            ["use-cases", "useCases"],
-            ["pricing", "pricing"],
-          ].map(([target, label]) => (
-            <a
-              href={`#${target}`}
-              key={target}
-              onClick={() => setMenuOpen(false)}
-            >
-              {t(`navigation.${label}`)}
-            </a>
-          ))}
-          <a href="/?auth=1">{t("navigation.signIn")}</a>
+          <a href="#features" onClick={() => setMenuOpen(false)}>
+            {t("navigation.product")}
+          </a>
+          <a href="#loop" onClick={() => setMenuOpen(false)}>
+            {t("navigation.howItWorks")}
+          </a>
+          <a href="#founders" onClick={() => setMenuOpen(false)}>
+            {t("navigation.forFounders")}
+          </a>
+          <a href="#design-partners" onClick={() => setMenuOpen(false)}>
+            {t("navigation.designPartners")}
+          </a>
+          <a href="/?auth=1" onClick={() => setMenuOpen(false)}>
+            {t("navigation.signIn")}
+          </a>
         </div>
       </header>
 
-      <section className="marketing-hero" id="top">
-        <div className="marketing-hero-aura" aria-hidden="true" />
-        <div className="marketing-release-pill">
-          <span>{t("hero.releaseLabel")}</span>
-          {t("hero.releaseText")} <ArrowRight size={12} />
-        </div>
-        <h1>{t("hero.title")}</h1>
-        <p>{t("loopLanding.hero.description")}</p>
-        <div className="marketing-hero-actions">
-          <a className="button button-primary" href="/?auth=1">
-            {t("navigation.getStarted")} <ArrowRight size={15} />
+      <section className="marketing-hero" id="product">
+        <div className="marketing-hero-glow" aria-hidden="true" />
+        <div className="marketing-container marketing-hero-inner">
+          <a className="marketing-announcement" href="#design-partners">
+            <span>{t("hero.badge")}</span>
+            {t("hero.announcement")}
+            <ArrowRight size={14} />
           </a>
-          <a className="button button-ghost" href="#features">
-            {t("loopLanding.hero.secondaryCta")}
-          </a>
-        </div>
-        <div className="marketing-hero-proof">
-          <ProductPreview />
-        </div>
-      </section>
-
-      <section
-        className="marketing-connector-rail"
-        aria-label={t("loopLanding.connectors.label")}
-      >
-        <span>{t("loopLanding.connectors.label")}</span>
-        <div>
-          {connectorNames.map((connector) => (
-            <span key={connector}>
-              <TerminalSquare size={14} />{" "}
-              {t(`loopLanding.connectors.${connector}`)}
+          <h1>
+            <span>{t("hero.titleLead")}</span>
+            <span className="marketing-hero-accent">
+              {t("hero.titleAccent")}
             </span>
-          ))}
-        </div>
-        <span>{t("loopLanding.connectors.github")}</span>
-      </section>
-
-      <section
-        className="marketing-section marketing-loop-section"
-        id="features"
-      >
-        <div className="marketing-section-copy reveal">
-          <h2>{t("loopLanding.loop.title")}</h2>
-          <p>{t("loopLanding.loop.description")}</p>
-        </div>
-        <LoopCasePreview />
-      </section>
-
-      <section
-        className="marketing-section marketing-evidence-section"
-        id="capabilities"
-      >
-        <div className="marketing-evidence-copy reveal">
-          <h2>{t("loopLanding.evidence.title")}</h2>
-          <p>{t("loopLanding.evidence.description")}</p>
-          <div className="marketing-decision-rule">
-            <ShieldCheck size={18} />
-            <span>
-              <strong>{t("loopLanding.evidence.ruleTitle")}</strong>
-              <small>{t("loopLanding.evidence.ruleDetail")}</small>
-            </span>
-          </div>
-        </div>
-        <div className="marketing-evidence-ledger reveal">
-          {["suspicion", "proof", "verdict", "action"].map((item, index) => (
-            <div key={item}>
-              <span>
-                {index < 3 ? (
-                  <CheckCircle2 size={14} />
-                ) : (
-                  <ChevronRight size={14} />
-                )}
-              </span>
-              <div>
-                <strong>{t(`loopLanding.evidence.items.${item}.title`)}</strong>
-                <p>{t(`loopLanding.evidence.items.${item}.detail`)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section
-        className="marketing-section marketing-execution-section"
-        id="use-cases"
-      >
-        <div className="marketing-execution-map reveal">
-          <div className="marketing-execution-github">
-            <GitBranch size={20} />
-            <strong>{t("loopLanding.execution.githubTitle")}</strong>
-            <p>{t("loopLanding.execution.githubDetail")}</p>
-          </div>
-          <div className="marketing-execution-line" aria-hidden="true" />
-          <div className="marketing-execution-runner">
-            <TerminalSquare size={20} />
-            <strong>{t("loopLanding.execution.runnerTitle")}</strong>
-            <p>{t("loopLanding.execution.runnerDetail")}</p>
-          </div>
-          <div className="marketing-execution-line" aria-hidden="true" />
-          <div className="marketing-execution-pr">
-            <GitPullRequest size={20} />
-            <strong>{t("loopLanding.execution.prTitle")}</strong>
-            <p>{t("loopLanding.execution.prDetail")}</p>
-          </div>
-        </div>
-        <div className="marketing-execution-copy reveal">
-          <h2>{t("loopLanding.execution.title")}</h2>
-          <p>{t("loopLanding.execution.description")}</p>
-          <ul>
-            {["token", "workspace", "checks", "approval"].map((item) => (
-              <li key={item}>
-                <Check size={13} /> {t(`loopLanding.execution.items.${item}`)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section className="marketing-section marketing-pricing" id="pricing">
-        <div className="marketing-pricing-intro reveal">
-          <h2>{t("loopLanding.pricing.title")}</h2>
-          <p>{t("loopLanding.pricing.description")}</p>
-          <div
-            className="marketing-billing-toggle"
-            role="group"
-            aria-label={t("pricing.billingLabel")}
-          >
-            <button
-              className={billing === "monthly" ? "is-active" : ""}
-              type="button"
-              onClick={() => setBilling("monthly")}
-            >
-              {t("pricing.monthly")}
-            </button>
-            <button
-              className={billing === "annual" ? "is-active" : ""}
-              type="button"
-              onClick={() => setBilling("annual")}
-            >
-              {t("pricing.annual")}
-            </button>
-          </div>
-        </div>
-        <div className="marketing-pricing-layout reveal">
-          <article className="marketing-plan-featured">
-            <div>
-              <span>{t("pricing.plans.1.name")}</span>
-              <strong>{t(`pricing.plans.1.${billing}`)}</strong>
-              <small>{t("pricing.perMonth")}</small>
-            </div>
-            <p>{t("loopLanding.pricing.builderDescription")}</p>
-            <ul>
-              {[0, 1, 2, 3].map((feature) => (
-                <li key={feature}>
-                  <Check size={13} />{" "}
-                  {t(`loopLanding.pricing.features.${feature}`)}
-                </li>
-              ))}
-            </ul>
+          </h1>
+          <p>{t("hero.description")}</p>
+          <div className="marketing-hero-actions">
             <a className="button button-primary" href="/?auth=1">
-              {t("navigation.getStarted")} <ArrowRight size={14} />
+              {t("hero.primaryCta")} <ArrowRight size={15} />
             </a>
-          </article>
-          <div className="marketing-plan-alternatives">
-            {([0, 2] as const).map((plan) => (
-              <article key={plan}>
-                <span>{t(`pricing.plans.${plan}.name`)}</span>
-                <strong>{t(`pricing.plans.${plan}.${billing}`)}</strong>
-                <p>{t(`pricing.plans.${plan}.description`)}</p>
+            <a className="button button-secondary" href="#loop">
+              {t("hero.secondaryCta")}
+            </a>
+          </div>
+          <ProductWindow />
+        </div>
+      </section>
+
+      <section
+        className="marketing-proof-strip"
+        aria-label={t("proof.ariaLabel")}
+      >
+        <div className="marketing-proof-track">
+          {[...proofItems, ...proofItems].map((item, index) => (
+            <span key={`${item}-${index}`}>
+              <CheckCircle2 size={15} />
+              {t(`proof.items.${item}`)}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="marketing-capabilities" id="features">
+        <div className="marketing-container">
+          <div className="marketing-section-heading is-centered">
+            <h2>{t("capabilities.title")}</h2>
+            <p>{t("capabilities.description")}</p>
+            <a className="button button-secondary" href="#loop">
+              {t("capabilities.cta")} <ArrowRight size={14} />
+            </a>
+          </div>
+          <div className="marketing-feature-grid">
+            {featureCards.map(({ key, icon: Icon }) => (
+              <article className={`marketing-feature-card is-${key}`} key={key}>
+                <span className="marketing-feature-icon">
+                  <Icon size={18} />
+                </span>
+                <h3>{t(`capabilities.items.${key}.title`)}</h3>
+                <p>{t(`capabilities.items.${key}.description`)}</p>
+                <ul>
+                  {(["one", "two", "three"] as const).map((item) => (
+                    <li key={item}>
+                      <Check size={13} />
+                      {t(`capabilities.items.${key}.points.${item}`)}
+                    </li>
+                  ))}
+                </ul>
+                <FeatureVisual feature={key} />
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="marketing-final-cta reveal">
-        <div>
-          <h2>{t("loopLanding.finalCta.title")}</h2>
-          <p>{t("loopLanding.finalCta.description")}</p>
+      <section className="marketing-loop-section" id="loop">
+        <div className="marketing-container">
+          <div className="marketing-section-heading is-centered">
+            <h2>{t("loop.title")}</h2>
+            <p>{t("loop.description")}</p>
+          </div>
+          <div
+            className="marketing-loop-window"
+            aria-label={t("loop.ariaLabel")}
+          >
+            <div className="marketing-loop-progress" aria-hidden="true">
+              <span />
+              <i />
+            </div>
+            <div className="marketing-loop-steps">
+              {loopSteps.map(({ key, icon: Icon }, index) => (
+                <div key={key} className={index === 0 ? "is-current" : ""}>
+                  <span>
+                    <Icon size={16} />
+                  </span>
+                  <strong>{t(`loop.steps.${key}.title`)}</strong>
+                  <small>{t(`loop.steps.${key}.detail`)}</small>
+                </div>
+              ))}
+            </div>
+            <div className="marketing-loop-result">
+              <CheckCircle2 size={17} />
+              <span>
+                <strong>{t("loop.resultTitle")}</strong>
+                <small>{t("loop.resultDetail")}</small>
+              </span>
+              <span className="marketing-loop-result-status">
+                {t("loop.resultStatus")}
+              </span>
+            </div>
+          </div>
         </div>
-        <a className="button button-primary" href="/?auth=1">
-          {t("navigation.getStarted")} <ArrowRight size={15} />
-        </a>
+      </section>
+
+      <section className="marketing-founder-section" id="founders">
+        <div className="marketing-container marketing-founder-grid">
+          <div className="marketing-founder-copy">
+            <h2>{t("founders.title")}</h2>
+            <p>{t("founders.description")}</p>
+            <div className="marketing-founder-principles">
+              {(["repeat", "risk", "decision"] as const).map((item) => (
+                <span key={item}>
+                  <Check size={14} />
+                  {t(`founders.principles.${item}`)}
+                </span>
+              ))}
+            </div>
+          </div>
+          <FounderBoundary />
+        </div>
+      </section>
+
+      <section className="marketing-partner-section" id="design-partners">
+        <div className="marketing-container marketing-partner-panel">
+          <BrandMark />
+          <div>
+            <span className="marketing-partner-label">
+              {t("partners.label")}
+            </span>
+            <h2>{t("partners.title")}</h2>
+            <p>{t("partners.description")}</p>
+          </div>
+          <a className="button button-primary" href="/?auth=1">
+            {t("partners.cta")} <ArrowRight size={15} />
+          </a>
+        </div>
       </section>
 
       <footer className="marketing-footer">
-        <div className="marketing-footer-brand">
-          <BrandLockup />
-          <p>{t("loopLanding.footer.description")}</p>
-        </div>
-        <nav aria-label={t("loopLanding.footer.label")}>
-          <a href="#features">{t("navigation.features")}</a>
-          <a href="#capabilities">{t("navigation.capabilities")}</a>
-          <a href="#use-cases">{t("navigation.useCases")}</a>
-          <a href="#pricing">{t("navigation.pricing")}</a>
-        </nav>
-        <div className="marketing-footer-bottom">
-          <span>
-            {t("loopLanding.footer.copyright", {
-              year: new Date().getFullYear(),
-            })}
-          </span>
-          <a href="#top">
-            {t("footer.backToTop")} <ExternalLink size={12} />
-          </a>
+        <div className="marketing-container marketing-footer-grid">
+          <div className="marketing-footer-brand">
+            <BrandLockup compact />
+            <p>{t("footer.description")}</p>
+          </div>
+          <div className="marketing-footer-column">
+            <strong>{t("footer.product")}</strong>
+            <a href="#features">{t("navigation.product")}</a>
+            <a href="#loop">{t("navigation.howItWorks")}</a>
+            <a href="#founders">{t("navigation.forFounders")}</a>
+          </div>
+          <div className="marketing-footer-column">
+            <strong>{t("footer.company")}</strong>
+            <a href="#design-partners">{t("navigation.designPartners")}</a>
+            <a href="/?auth=1">{t("navigation.signIn")}</a>
+          </div>
+          <div className="marketing-footer-status">
+            <i />
+            <span>{t("footer.status")}</span>
+          </div>
+          <div className="marketing-footer-bottom">
+            <span>
+              {t("footer.copyright", { year: new Date().getFullYear() })}
+            </span>
+            <button type="button" onClick={switchLanguage}>
+              {t("navigation.switchLanguageShort")}
+            </button>
+          </div>
         </div>
       </footer>
     </main>

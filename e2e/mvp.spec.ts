@@ -19,6 +19,26 @@ async function chooseOption(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
+test("public landing makes the support-to-fix loop visible", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("heading", {
+      name: "Your support loop, finally off your plate.",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel(
+      "Mend workspace showing a customer conversation connected to evidence and a verified next step",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.locator("#product").getByRole("link", { name: "See Mend at work" }),
+  ).toBeVisible();
+});
+
 test("explicit auth link renders the sign-in form while the session probe runs", async ({
   page,
 }) => {

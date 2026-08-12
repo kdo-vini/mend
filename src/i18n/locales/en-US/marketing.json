@@ -1,449 +1,196 @@
 {
+  "brand": "Mend — AI Support Engineer",
   "navigation": {
-    "label": "Marketing navigation",
-    "features": "Features",
-    "capabilities": "Capabilities",
-    "useCases": "Use cases",
-    "pricing": "Pricing",
+    "label": "Mend product navigation",
+    "product": "Product",
+    "howItWorks": "How it works",
+    "forFounders": "For founders",
+    "designPartners": "Design partners",
     "signIn": "Sign in",
     "getStarted": "Get started",
     "openMenu": "Open navigation",
     "closeMenu": "Close navigation",
-    "switchLanguageShort": "PT",
-    "switchLanguageLong": "Português"
+    "switchLanguageShort": "PT-BR"
   },
   "hero": {
-    "releaseLabel": "New",
-    "releaseText": "The support-to-code loop is live",
-    "title": "Stay close to the customer without leaving the product.",
-    "description": "Mend turns WhatsApp support into clear replies, traceable issues, and reviewable engineering work. Customer context reaches the fix without slowing the people building it.",
-    "primaryCta": "Connect WhatsApp",
-    "secondaryCta": "See the product"
+    "badge": "New",
+    "announcement": "Design partner applications are open",
+    "titleLead": "Your support loop,",
+    "titleAccent": "finally off your plate.",
+    "description": "Mend handles support from the first customer message to the verified fix — and only brings you in when the decision actually needs you.",
+    "primaryCta": "See Mend at work",
+    "secondaryCta": "Explore the loop"
   },
-  "preview": {
-    "ariaLabel": "Mend Inbox, issue, and Agent run product preview",
-    "inbox": "Mend Inbox",
-    "live": "Live workspace",
-    "conversations": "Conversations",
-    "search": "Search conversations",
-    "threads": {
-      "one": {
-        "initial": "L",
-        "customer": "Luiza · Acme",
-        "subject": "Checkout is failing again"
+  "specimen": {
+    "ariaLabel": "Mend workspace showing a customer conversation connected to evidence and a verified next step",
+    "address": "app.mend.so/inbox/MEND-184",
+    "nav": {
+      "inbox": "Inbox",
+      "issues": "Issues",
+      "runs": "Agent runs",
+      "knowledge": "Knowledge"
+    },
+    "owner": "Vinicius",
+    "ownerInitials": "VN",
+    "plan": "Founder workspace",
+    "search": "Search cases",
+    "railLabel": "Needs attention",
+    "railFoot": "Live support loop",
+    "customer": "Luiza · Acme",
+    "subject": "Checkout fails after plan change",
+    "secondaryCustomer": "Pedro · Tally",
+    "secondarySubject": "Question about the new plan",
+    "conversationLabel": "Customer conversation",
+    "channel": "WhatsApp",
+    "inboundLabel": "Customer · 09:42",
+    "inboundMessage": "Checkout failed again for two customers after the plan change. Can you take a look?",
+    "inboundTime": "Original signal",
+    "outboundLabel": "Mend draft · 09:45",
+    "outboundMessage": "I found the affected release. I’m checking the reproduction path before proposing the next step.",
+    "outboundTime": "Grounded draft",
+    "issueTitle": "Checkout regression after plan change",
+    "issueMeta": "Issue · In progress · MEND-184",
+    "spineLabel": "Evidence before action",
+    "spineTitle": "Next step",
+    "spine": {
+      "context": {
+        "title": "Context captured",
+        "detail": "Conversation + release history"
       },
-      "two": {
-        "initial": "P",
-        "customer": "Pedro · Tally",
-        "subject": "Question about the new plan"
+      "evidence": {
+        "title": "Root cause confirmed",
+        "detail": "Trace + reproduction path"
       },
-      "three": {
-        "initial": "M",
-        "customer": "Marina · Nova",
-        "subject": "Import finished"
+      "next": {
+        "title": "Review proposed fix",
+        "detail": "You decide what ships"
       }
     },
-    "channel": "WhatsApp",
-    "needsAttention": "needs attention",
-    "channelAttention": "WhatsApp · needs attention",
-    "aiDrafts": "AI draft",
-    "customerMessage": "Checkout failed again for two customers after the plan change. Can you take a look?",
-    "agentMessage": "I’m on it. I’ve linked the affected release and I’ll update you here after review.",
-    "issueTitle": "Checkout error after plan change",
-    "issueStatus": "In progress",
-    "issueId": "MEND-184",
-    "issueMeta": "{{id}} · {{status}}",
-    "composer": "Write a reply…",
-    "runTitle": "Support loop",
-    "runStatus": "Human review required",
-    "filesChanged": "3 files",
-    "additions": "+ 18",
-    "deletions": "− 4",
-    "steps": {
-      "context": "Context captured",
-      "contextMeta": "WhatsApp + history",
-      "issue": "Issue created",
-      "issueMeta": "MEND-184",
-      "run": "Agent run complete",
-      "runMeta": "Checks passed",
-      "review": "Awaiting review",
-      "reviewMeta": "You decide what ships"
-    }
+    "reviewGate": "Human review before code changes"
   },
   "proof": {
-    "label": "Built for teams close to the customer",
+    "ariaLabel": "Mend support workflow strengths",
     "items": {
-      "solo": "Solo founders",
-      "microSaas": "Micro SaaS",
-      "developerLed": "Developer-led support",
-      "whatsappFirst": "WhatsApp-first teams",
-      "smallTeams": "Small product teams"
+      "whatsapp": "WhatsApp-first support",
+      "context": "One case, complete context",
+      "evidence": "Evidence before action",
+      "verified": "Never claim fixed before verification"
     }
-  },
-  "stories": {
-    "title": "Everything needed to turn support into shipped work.",
-    "description": "From the first customer signal to the reviewed fix, Mend keeps one continuous thread of context, ownership, and evidence.",
-    "cta": "Start your loop",
-    "cards": {
-      "reply": {
-        "title": "Reply with the whole customer story",
-        "description": "Work from one operational inbox instead of reconstructing context across chats, docs, and memory.",
-        "points": {
-          "0": "WhatsApp history in one view",
-          "1": "Grounded AI drafts",
-          "2": "Human approval stays explicit"
-        }
-      },
-      "ground": {
-        "title": "Ground every suggestion in trusted knowledge",
-        "description": "Give AI the product facts it needs while making source quality and review state visible to the operator.",
-        "points": {
-          "0": "Workspace knowledge sources",
-          "1": "Confidence and source trace",
-          "2": "Reviewable automation boundaries"
-        }
-      },
-      "issue": {
-        "title": "Turn a signal into an issue without copying",
-        "description": "Create native work directly from the conversation and keep the customer impact attached to every decision.",
-        "points": {
-          "0": "Conversation-linked issues",
-          "1": "Owner and next action",
-          "2": "No external tracker handoff"
-        }
-      },
-      "run": {
-        "title": "Run code changes behind a review gate",
-        "description": "Let an Agent inspect, implement, and test in a constrained workspace while the founder keeps final control.",
-        "points": {
-          "0": "Scoped local execution",
-          "1": "Checks and diff evidence",
-          "2": "Approve before shipping"
-        }
-      }
-    },
-    "items": {
-      "0": {
-        "quote": "A customer message should arrive with enough context to become the next safe product decision, not another tab I need to remember.",
-        "role": "Solo founder scenario",
-        "outcome": "Support stays moving while product work continues"
-      },
-      "1": {
-        "quote": "The useful handoff is not a ticket. It is the conversation, the decision, the issue, and the evidence that the fix is ready.",
-        "role": "Small SaaS team scenario",
-        "outcome": "Support and engineering share one source of truth"
-      },
-      "2": {
-        "quote": "I want the speed of vibe coding with a visible boundary around what AI changed and what I still need to approve.",
-        "role": "Vibe coder scenario",
-        "outcome": "Fast iteration without an invisible automation step"
-      }
-    },
-    "previous": "Previous story",
-    "next": "Next story",
-    "goTo": "Go to story {{number}}"
   },
   "capabilities": {
-    "title": "A support system designed for people who also ship the product.",
-    "description": "Mend combines the speed of a focused inbox with the structure needed to make AI-assisted work safe and traceable.",
+    "title": "Everything needed to take support off the founder’s desk",
+    "description": "One calm workspace for the customer message, the investigation, the decision, and the reply that closes the loop.",
+    "cta": "Follow a complete case",
     "items": {
-      "0": {
-        "title": "WhatsApp-native inbox",
-        "description": "Receive, triage, and reply without forcing customers into a new support channel."
+      "triage": {
+        "title": "Handle support without becoming support",
+        "description": "Mend learns your product, answers safe questions, and keeps the queue moving while you build.",
+        "points": {
+          "one": "WhatsApp-first inbox",
+          "two": "Grounded drafts",
+          "three": "Targeted escalation"
+        }
       },
-      "1": {
-        "title": "Grounded AI drafts",
-        "description": "Draft from the conversation and approved knowledge, with the operator still in control."
+      "investigate": {
+        "title": "Turn complaints into engineering context",
+        "description": "Customer reports become traceable issues with evidence, reproduction steps, and root-cause investigation.",
+        "points": {
+          "one": "Conversation-linked issues",
+          "two": "Evidence collection",
+          "three": "Isolated agent runs"
+        }
       },
-      "2": {
-        "title": "Conversation-linked issues",
-        "description": "Preserve customer evidence, ownership, and status from signal to fix."
+      "act": {
+        "title": "Let policy decide what can move",
+        "description": "Replies, investigations, patches, and releases have different boundaries. Mend makes each one explicit.",
+        "points": {
+          "one": "Visible approval gates",
+          "two": "Risk-based autonomy",
+          "three": "Reversible actions"
+        }
       },
-      "3": {
-        "title": "Controlled Agent runs",
-        "description": "Scope local engineering work, inspect checks, and approve the resulting diff."
+      "remember": {
+        "title": "Every resolved case improves the next one",
+        "description": "Symptoms, evidence, root causes, fixes, and outcomes become durable operational memory.",
+        "points": {
+          "one": "Structured case memory",
+          "two": "Duplicate detection",
+          "three": "Reusable resolutions"
+        }
+      }
+    },
+    "visuals": {
+      "triage": {
+        "one": "Checkout regression",
+        "two": "Plan question",
+        "three": "API timeout"
       },
-      "4": {
-        "title": "Human review boundaries",
-        "description": "Make every automated step visible, reversible, and clear about who acts next."
+      "investigate": {
+        "label": "MEND-184 / investigation",
+        "context": "context captured",
+        "reproduce": "reproduction confirmed",
+        "rootCause": "tracing root cause"
       },
-      "5": {
-        "title": "One operational graph",
-        "description": "Keep messages, decisions, issues, knowledge, and runs connected in one workspace."
+      "act": {
+        "reply": "Reply",
+        "investigate": "Investigate",
+        "ship": "Ship fix"
+      },
+      "memory": {
+        "verified": { "case": "MEND-184", "status": "verified" },
+        "related": { "case": "MEND-139", "status": "related" },
+        "resolved": { "case": "MEND-072", "status": "resolved" }
       }
     }
   },
-  "audience": {
-    "title": "Built around the way small SaaS teams actually work.",
-    "description": "Choose your operating mode. The same support loop adapts to a founder doing everything, a growing team, or a builder moving fast with AI.",
-    "tabLabel": "Builder profiles",
-    "flow": {
-      "signal": "Signal",
-      "context": "Context",
-      "action": "Action",
-      "outcome": "Outcome"
-    },
-    "items": {
-      "0": {
-        "title": "Solo founders",
-        "short": "Stay in product mode",
-        "headline": "Handle support without surrendering the day to support.",
-        "description": "Mend collects the customer story, prepares the next safe action, and keeps you focused on the decisions only you should make.",
-        "flow": {
-          "signal": "A customer writes on WhatsApp",
-          "context": "History and release context arrive together",
-          "action": "Reply or create an issue",
-          "outcome": "Keep shipping without dropping the request"
-        }
-      },
-      "1": {
-        "title": "Growing SaaS teams",
-        "short": "Share one source of truth",
-        "headline": "Give support and engineering the same customer evidence.",
-        "description": "Replace ticket summaries and scattered handoffs with one connected record of what happened, who owns it, and what changed.",
-        "flow": {
-          "signal": "Support identifies a recurring problem",
-          "context": "Conversation and knowledge are attached",
-          "action": "The issue gets an owner and status",
-          "outcome": "Engineering reviews the fix with impact visible"
-        }
-      },
-      "2": {
-        "title": "Vibe coders",
-        "short": "Move fast with a review gate",
-        "headline": "Turn a WhatsApp thread into a safe next coding step.",
-        "description": "Use AI speed where it helps, while making the scope, checks, and final approval impossible to miss.",
-        "flow": {
-          "signal": "A user reports an edge case",
-          "context": "Mend structures the reproduction path",
-          "action": "An Agent works inside a constrained run",
-          "outcome": "You inspect the diff before anything ships"
-        }
-      }
-    }
-  },
-  "pricing": {
-    "title": "Simple pricing for teams that stay close to support.",
-    "description": "Start with the loop you need today. Add collaboration and automation only when they earn their place.",
-    "billingLabel": "Billing cycle",
-    "monthly": "Monthly",
-    "annual": "Annual",
-    "discount": "−18%",
-    "popular": "Most useful",
-    "perMonth": "/ month",
-    "included": "What’s included",
-    "plans": {
-      "0": {
-        "name": "Starter",
-        "description": "For a founder validating the support loop with real customers.",
-        "monthly": "$0",
-        "annual": "$0",
-        "features": {
-          "0": "1 workspace and 1 operator",
-          "1": "WhatsApp conversation inbox",
-          "2": "Conversation-linked issues",
-          "3": "No credit card required"
-        },
-        "cta": "Start free"
-      },
-      "1": {
-        "name": "Builder",
-        "description": "For small SaaS teams connecting support, knowledge, and code.",
-        "monthly": "$20",
-        "annual": "$16",
-        "features": {
-          "0": "Up to 5 operators",
-          "1": "Grounded AI drafts",
-          "2": "Controlled Agent runs",
-          "3": "Priority workspace support"
-        },
-        "cta": "Start Builder"
-      },
-      "2": {
-        "name": "Scale",
-        "description": "For teams that need custom limits, onboarding, and controls.",
-        "monthly": "Let’s talk",
-        "annual": "Let’s talk",
-        "features": {
-          "0": "Custom operators and volume",
-          "1": "Advanced automation policies",
-          "2": "Workspace onboarding",
-          "3": "Priority response path"
-        },
-        "cta": "Talk to us"
-      }
-    }
-  },
-  "finalCta": {
-    "title": "Build your first support loop today.",
-    "description": "Bring one real WhatsApp conversation. Leave with the reply, issue, and next engineering action connected.",
-    "primary": "Connect WhatsApp",
-    "secondary": "See how it works"
-  },
-  "loopLanding": {
-    "hero": {
-      "eyebrow": "Complaint to fix, one controlled loop",
-      "title": "From complaint to pull request.",
-      "description": "Mend proves and fixes bugs with any CLI agent while GitHub, checks, and approval stay under your control.",
-      "secondaryCta": "See the loop"
-    },
-    "connectors": {
-      "label": "Bring the coding agent your team already trusts",
-      "openai": "ChatGPT",
-      "anthropic": "Claude Code",
-      "google": "Gemini CLI",
-      "verboo": "Verboo CLI",
-      "github": "GitHub is the control plane"
-    },
-    "loop": {
-      "title": "One case from complaint to customer",
-      "description": "Every decision keeps the original message, evidence, code work, release state, and customer outcome attached.",
-      "progressLabel": "Durable bug loop progress"
-    },
+  "loop": {
+    "title": "From customer message to verified outcome",
+    "description": "Mend connects the work small SaaS teams still stitch together by hand — without hiding the evidence or the boundary.",
+    "ariaLabel": "The Mend support loop from message to customer reply",
     "steps": {
-      "signal": { "title": "Signal" },
-      "suspicion": { "title": "Triage" },
-      "evidence": { "title": "Evidence" },
-      "investigation": { "title": "Investigate" },
-      "verdict": { "title": "Verdict" },
-      "decision": { "title": "Decide" },
-      "fix": { "title": "Fix" },
-      "checks": { "title": "Checks" },
-      "pullRequest": { "title": "Pull request" },
-      "approval": { "title": "Approve" },
-      "release": { "title": "Release" },
-      "health": { "title": "Health" },
-      "customer": { "title": "Customer" }
+      "message": { "title": "Message", "detail": "Customer signal" },
+      "context": { "title": "Context", "detail": "History + impact" },
+      "triage": { "title": "Triage", "detail": "Intent + risk" },
+      "evidence": { "title": "Evidence", "detail": "Logs + code" },
+      "fix": { "title": "Fix", "detail": "Policy allows" },
+      "verify": { "title": "Verify", "detail": "Independent check" },
+      "reply": { "title": "Reply", "detail": "Close the loop" }
     },
-    "casePreview": {
-      "case": "Bug case MEND-184",
-      "title": "Checkout fails after a plan change",
-      "state": "Fix in progress",
-      "evidence": "Evidence accepted",
-      "verdict": "Verdict",
-      "confirmed": "Real bug",
-      "verdictDetail": "The failure reproduces on the affected release and maps to one guarded code path.",
-      "agent": "Coding agent",
-      "next": "Next action",
-      "fixRun": "Implement and check",
-      "items": {
-        "trace": {
-          "title": "Error trace",
-          "detail": "Matches the reported checkout path"
-        },
-        "release": {
-          "title": "Affected release",
-          "detail": "Regression starts after the plan change"
-        },
-        "reproduction": {
-          "title": "Reproduction",
-          "detail": "Confirmed in an isolated workspace"
-        }
-      }
-    },
-    "evidence": {
-      "title": "Automation starts after proof.",
-      "description": "Mend separates suspicion from fact before any agent receives permission to change code.",
-      "ruleTitle": "Human gates stay explicit",
-      "ruleDetail": "Notify, autofix, publish, and deploy are separate policy decisions.",
-      "items": {
-        "suspicion": {
-          "title": "Triage the signal",
-          "detail": "Classify intent, impact, recurrence, and confidence without treating the complaint as ground truth."
-        },
-        "proof": {
-          "title": "Collect durable evidence",
-          "detail": "Attach traces, release context, conversation history, and reproduction results to one case."
-        },
-        "verdict": {
-          "title": "Record a verdict",
-          "detail": "Confirm the bug, mark a duplicate, or explain why it was not reproduced."
-        },
-        "action": {
-          "title": "Choose the safe next action",
-          "detail": "Notify a person or open a separate fix run under workspace policy."
-        }
-      }
-    },
-    "execution": {
-      "title": "GitHub coordinates. The CLI does the work.",
-      "description": "Run in an ephemeral workspace, return a patch, and let Mend open the review surface.",
-      "githubTitle": "Repository context",
-      "githubDetail": "Issue, branch, installation scope",
-      "runnerTitle": "Ephemeral runner",
-      "runnerDetail": "ChatGPT, Claude, Gemini, or Verboo",
-      "prTitle": "Draft pull request",
-      "prDetail": "Patch, checks, and evidence",
-      "items": {
-        "token": "Short-lived, scoped GitHub credentials",
-        "workspace": "Clean workspace for every investigation and fix",
-        "checks": "Independent checks before review",
-        "approval": "Approval before merge, deploy, or customer reply"
-      }
-    },
-    "pricing": {
-      "title": "Start with one durable loop.",
-      "description": "Connect support, a repository, and the CLI agent your team already uses.",
-      "builderDescription": "For small SaaS teams that want complaint-to-fix automation with visible control.",
-      "features": {
-        "0": "WhatsApp inbox and bug triage",
-        "1": "ChatGPT, Claude, Gemini, or Verboo CLI",
-        "2": "GitHub pull requests and checks",
-        "3": "Human approval and release gates"
-      }
-    },
-    "finalCta": {
-      "title": "Let the next real complaint prove the loop.",
-      "description": "Connect one support channel and one repository. Mend keeps every step visible."
-    },
-    "footer": {
-      "label": "Product links",
-      "description": "Mend connects customer complaints, evidence, coding agents, GitHub, and the reply that closes the loop.",
-      "copyright": "© {{year}} Mend. Built for accountable automation."
+    "resultTitle": "Fix verified in production",
+    "resultDetail": "Customer reply is ready with evidence attached.",
+    "resultStatus": "Ready to send"
+  },
+  "founders": {
+    "title": "Mend handles the chase. You keep the judgment.",
+    "description": "The agent gathers context, investigates, and prepares the next safe move. You only step in for product judgment, ambiguity, or risk that deserves a founder.",
+    "principles": {
+      "repeat": "Repetition stays with Mend",
+      "risk": "Risk stays visible",
+      "decision": "Founder decisions arrive with context"
     }
+  },
+  "boundary": {
+    "ariaLabel": "Founder review gate for a proposed production fix",
+    "caseLabel": "MEND-184",
+    "status": "Founder decision",
+    "summaryLabel": "Proposed next move",
+    "summary": "Roll back the checkout rate-limit change",
+    "evidence": "Reproduced on release 2026.08.12 · 3 affected workspaces · patch checks passed",
+    "actionTitle": "Production change needs approval",
+    "actionDetail": "Policy: payments and checkout always require a human.",
+    "action": "Review change"
+  },
+  "partners": {
+    "label": "Design partner program",
+    "title": "Keep shipping. Mend the support loop.",
+    "description": "We’re onboarding a small group of technical founders who want support and corrective engineering to stop interrupting product work.",
+    "cta": "Join the program"
   },
   "footer": {
-    "description": "Mend helps SaaS builders turn WhatsApp support into clear replies, traceable issues, and reviewed product work.",
-    "status": "All systems operational",
-    "columns": {
-      "product": {
-        "title": "Product",
-        "links": {
-          "0": "Inbox",
-          "1": "Issues",
-          "2": "Knowledge",
-          "3": "Agent runs"
-        }
-      },
-      "resources": {
-        "title": "Resources",
-        "links": {
-          "0": "Documentation",
-          "1": "API reference",
-          "2": "WhatsApp setup",
-          "3": "Changelog"
-        }
-      },
-      "company": {
-        "title": "Company",
-        "links": {
-          "0": "About",
-          "1": "Contact",
-          "2": "Status",
-          "3": "Support"
-        }
-      },
-      "legal": {
-        "title": "Legal",
-        "links": {
-          "0": "Privacy",
-          "1": "Terms",
-          "2": "Security",
-          "3": "Data policy"
-        }
-      }
-    },
-    "copyright": "© {{year}} Mend. Built for people who ship.",
-    "backToTop": "Back to top"
+    "description": "An AI Support Engineer for early-stage SaaS teams.",
+    "product": "Product",
+    "company": "Company",
+    "status": "Systems operational",
+    "copyright": "© {{year}} Mend. Keep shipping."
   }
 }

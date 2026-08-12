@@ -16,6 +16,7 @@ import type {
   PushSetupResult,
   WorkspaceNotification,
 } from "../../api/notifications";
+import { BrandMark } from "../../components/BrandLockup";
 import { formatActivityTime, identityInitials } from "../../shared/lib/format";
 import { navItems } from "./navigation";
 
@@ -285,9 +286,7 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="brand-row">
-        <div className="brand-mark">
-          <span />
-        </div>
+        <BrandMark />
         <div>
           <div className="brand-name">{t("brand.name")}</div>
           <div className="brand-subtitle">{t("brand.descriptor")}</div>
@@ -411,9 +410,7 @@ export function MobileTopbar({
         to="/inbox"
         aria-label={t("navigation.openInbox")}
       >
-        <span className="brand-mark">
-          <span />
-        </span>
+        <BrandMark />
         <strong>{t("brand.name")}</strong>
       </NavLink>
       <div className="mobile-topbar-actions">

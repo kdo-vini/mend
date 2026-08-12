@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { createWorkspace } from "../../api/auth";
 import { supabase } from "../../lib/supabase";
 import { LanguageSwitcher } from "../../components/LanguageSwitcher";
+import { BrandMark } from "../../components/BrandLockup";
 import type { SupportedLocale } from "../../i18n/resources";
 
 export function WorkspaceOnboarding({
@@ -48,9 +49,7 @@ export function WorkspaceOnboarding({
   return (
     <div className="page onboarding-page">
       <div className="onboarding-card">
-        <div className="brand-mark">
-          <span />
-        </div>
+        <BrandMark />
         <span className="page-kicker">{t("kicker", { ns: "onboarding" })}</span>
         <h1>{t("title", { ns: "onboarding" })}</h1>
         <p>{t("description", { ns: "onboarding" })}</p>

@@ -1,12 +1,12 @@
 {
-  "name": "Mend workspace operations",
+  "name": "Mend — AI Support Engineer",
   "short_name": "Mend",
-  "description": "Shared issues, personal planning and workspace operations.",
+  "description": "Close the loop from customer message to verified fix.",
   "start_url": "/kanban",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#090b0f",
-  "theme_color": "#090b0f",
+  "background_color": "#0b0e14",
+  "theme_color": "#0b0e14",
   "icons": [
     {
       "src": "/icon-192.svg",
