@@ -13,6 +13,9 @@ The repository has two visual registers connected by the same brand system:
   state-driven motion.
 - The authenticated workspace is the Midnight Control Room: compact, dark,
   operational, and dense enough for daily support work.
+- Authentication is the bridge between the two: it keeps the Solaris stage and
+  Mend identity, then introduces the compact product vocabulary through a
+  framed access card.
 
 ## Approved brand system
 
@@ -114,6 +117,29 @@ amber for warning, and red for danger.
 The app shell and marketing header must use the same `BrandMark`. Shared brand
 changes belong in `src/components/BrandLockup.tsx` and its shell styles; do not
 maintain a second logo in a page component.
+
+The authentication surface follows the same bridge pattern:
+
+- Use the shared Closed Loop mark, near-black canvas, Signal Blue action, flat
+  framed card, and one restrained blue halo.
+- Keep `Entrar` / `Criar conta` (or `Sign in` / `Create account`) in a single
+  horizontal segmented control so the account mode is visible before the
+  form is filled.
+- Treat Google, password, and email sign-in link as clear paths through the
+  same flow; wording should describe the user's next step, not the provider
+  implementation.
+- Password fields expose an accessible visibility toggle and preserve the
+  shared focus-ring and disabled/loading states.
+- Auth desktop uses the 1180px content frame as a centered modular grid: a
+  580px editorial block, a 440px access card, and a responsive gap built from
+  the 4px spacing scale. At 820px and below, the grid becomes one column with
+  the same 4px rhythm and no horizontal overflow.
+- The primary access card keeps one stable 610px geometry across account modes;
+  mode changes animate the content inside the frame instead of moving the
+  surrounding layout.
+- Auth feedback uses a floating toast outside the form flow. Error and success
+  copy stays short, calm, and actionable so feedback never pushes the primary
+  action out of its rhythm.
 
 ## Interaction and accessibility
 

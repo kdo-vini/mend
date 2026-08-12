@@ -29,6 +29,8 @@ Antes de escrever código novo:
 | `SupabaseMcpConnectionAdapter.runtimeList` / OAuth DCR                     | `server/supabase-api-adapters.ts`                               | Carregar conexões MCP prontas para o worker e registrar clientes OAuth dinamicamente pelo `registration_endpoint`, persistindo client ID/secret criptografados. Workers não devem consultar ou descriptografar `mcp_connection_secrets` diretamente.                                |
 | `normalizePhoneNumber`                                                     | `server/whatsmiau.ts`                                           | Normalizar telefone antes de procurar o contato em qualquer MCP ou integração de atendimento.                                                                                                                                                                                       |
 | `apiRequest`                                                               | `src/api/transport.ts`                                          | Toda chamada HTTP autenticada do navegador. Componentes não devem montar `fetch` próprio.                                                                                                                                                                                           |
+| `consumeAuthAttempt` / `AUTH_RATE_LIMIT_POLICY`                            | `src/shared/auth-rate-limit.ts`                                 | Barreira local de UX para login e cadastro por senha. Não substitui o limite autoritativo do Supabase Auth; reutilize a mesma política para evitar contadores divergentes.                                                                                                          |
+| `validateSignupEmail` / `isGmailAddress`                                   | `src/shared/email-validation.ts`                                | Validar formato e domínios descartáveis antes do cadastro e reconhecer Gmail para o atalho de confirmação. A confirmação do provedor continua sendo a prova de posse da caixa.                                                                                                      |
 | `checked`, `row`, `rows`, `str`                                            | `server/adapters/supabase-mappers.ts`                           | Validar resultados Supabase e converter dados no limite do backend. Não duplicar casts espalhados nos serviços.                                                                                                                                                                     |
 | `policyDecision` / `normalizeWorkspaceAiPolicy`                            | `server/automation/decision.ts` e `src/ai-policy.ts`            | Toda decisão de draft, Auto-reply, escalonamento e política de falha. A UI apenas edita a política; não reimplementa os gates.                                                                                                                                                      |
 | `conversationReplyInput`                                                   | `server/automation/decision.ts`                                 | Montar o contexto de rascunho com histórico limitado, papéis inbound/outbound explícitos e um único alvo de resposta. Reutilizar nos fluxos automático e manual.                                                                                                                    |
@@ -44,6 +46,25 @@ Antes de escrever código novo:
 Aliases antigos, como `encryptGoogleToken` e `decryptGoogleToken`, existem
 somente para compatibilidade com chamadas legadas. Código novo deve usar os
 nomes genéricos.
+
+### Rate limiting de autenticação
+
+Login e cadastro por senha compartilham uma política de rate limit em duas
+camadas:
+
+- o Supabase Auth é a barreira autoritativa, aplicada por IP e configurada em
+  `supabase/config.toml` com limites conservadores para sign-in/sign-up e
+  envio de e-mail;
+- `consumeAuthAttempt` reduz spam acidental e cliques repetidos no navegador,
+  mas funciona em modo fail-open quando o storage não está disponível e nunca
+  é tratado como uma fronteira de segurança;
+- respostas `429` do provedor continuam sendo mapeadas para uma mensagem calma
+  de limite excedido, sem marcar e-mail ou senha como incorretos.
+
+Alterações nos limites de produção devem ser aplicadas também no projeto
+Supabase remoto pela configuração de Auth/Management API. Não use o
+`supabase config push` deste repositório sem revisar os demais valores do
+`config.toml`, pois ele inclui URLs locais de desenvolvimento.
 
 ## Padrões de arquitetura
 

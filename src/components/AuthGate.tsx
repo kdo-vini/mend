@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import {
@@ -14,15 +14,17 @@ import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { LanguageSwitcher } from "./LanguageSwitcher";
 import { BrandMark } from "./BrandLockup";
 import { LandingPage } from "../features/marketing/LandingPage";
+import { resolveInterfaceLanguage } from "../i18n/preferences";
 import {
-  applyInterfaceLanguage,
-  resolveInterfaceLanguage,
-  storedInterfaceLanguage,
-} from "../i18n/preferences";
-import type { SupportedLocale } from "../i18n/resources";
+  consumeAuthAttempt,
+  resetAuthRateLimit,
+} from "../shared/auth-rate-limit";
+import {
+  isGmailAddress,
+  validateSignupEmail,
+} from "../shared/email-validation";
 
 const browserEnv =
   (import.meta as ImportMeta & { env?: Record<string, string | undefined> })
@@ -62,20 +64,32 @@ function hasAuthCallback() {
   );
 }
 
+function isAuthRateLimitError(
+  error: { message?: string; status?: number } | null,
+) {
+  if (!error) return false;
+  return (
+    error.status === 429 ||
+    /rate[ -]?limit|too many|over[ _-]?rate/i.test(error.message ?? "")
+  );
+}
+
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [authAction, setAuthAction] = useState<"password" | "google" | null>(
     null,
   );
+  const [credentialsInvalid, setCredentialsInvalid] = useState(false);
+  const [emailInvalid, setEmailInvalid] = useState(false);
+  const [passwordInvalid, setPasswordInvalid] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [interfaceLanguage, setInterfaceLanguage] = useState<SupportedLocale>(
-    storedInterfaceLanguage,
-  );
+  const [showGmailShortcut, setShowGmailShortcut] = useState(false);
   const { t } = useTranslation("auth");
   const invitePath =
     typeof window !== "undefined" &&
@@ -95,24 +109,16 @@ export function AuthGate({ children }: { children: ReactNode }) {
     !authRouteRequested;
 
   useEffect(() => {
-    const syncStoredLanguage = () =>
-      setInterfaceLanguage(storedInterfaceLanguage());
-    window.addEventListener("storage", syncStoredLanguage);
-    return () => window.removeEventListener("storage", syncStoredLanguage);
-  }, []);
-
-  useEffect(() => {
     const client = supabase;
     if (!client) return;
     let active = true;
     const hydrate = async () => {
       const { data, error: sessionError } = await client.auth.getSession();
       if (!active) return;
-      if (sessionError) setError(i18n.t("authError", { ns: "auth" }));
+      if (sessionError) setError(i18n.t("sessionError", { ns: "auth" }));
       if (data.session) {
-        const locale = await resolveInterfaceLanguage(client);
+        await resolveInterfaceLanguage(client);
         if (!active) return;
-        setInterfaceLanguage(locale);
       }
       setSession(data.session);
       setLoading(false);
@@ -129,10 +135,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         // authenticated events. Loading here unmounts the workspace for a
         // moment whenever the browser returns from the background.
         setSession(nextSession);
-        void resolveInterfaceLanguage(client).then((locale) => {
-          if (!active) return;
-          setInterfaceLanguage(locale);
-        });
+        void resolveInterfaceLanguage(client);
       },
     );
     return () => {
@@ -166,9 +169,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
         title={t("inviteSessionTitle")}
         message={t("inviteSessionRequired")}
       >
-        <p className="auth-error" role="alert">
-          {invitationId ? t("inviteSessionExpired") : t("inviteLinkInvalid")}
-        </p>
+        <div className="auth-feedback-slot" aria-live="polite">
+          <p className="auth-error" role="alert">
+            {invitationId ? t("inviteSessionExpired") : t("inviteLinkInvalid")}
+          </p>
+        </div>
         <Button
           className="auth-submit"
           type="button"
@@ -184,6 +189,35 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (!supabase || authAction) return;
     setError(null);
     setNotice(null);
+    setCredentialsInvalid(false);
+    setEmailInvalid(false);
+    setPasswordInvalid(false);
+    setShowGmailShortcut(false);
+
+    const emailValidation = validateSignupEmail(email);
+    if (!emailValidation.valid) {
+      setEmailInvalid(true);
+      setError(
+        t(
+          emailValidation.reason === "disposable" && authMode === "sign-up"
+            ? "disposableEmail"
+            : "invalidEmail",
+        ),
+      );
+      return;
+    }
+    if (!password) {
+      setPasswordInvalid(true);
+      setError(t("enterPassword"));
+      return;
+    }
+
+    const rateLimit = consumeAuthAttempt();
+    if (!rateLimit.allowed) {
+      setError(t("rateLimitError"));
+      return;
+    }
+
     setAuthAction("password");
     try {
       const result =
@@ -198,11 +232,25 @@ export function AuthGate({ children }: { children: ReactNode }) {
               authRedirectUrl(),
               supabase,
             );
-      if (result.error) setError(t("authError"));
-      else if (authMode === "sign-up" && !result.data.session)
+      if (result.error) {
+        const rateLimited = isAuthRateLimitError(result.error);
+        setCredentialsInvalid(!rateLimited);
+        setError(
+          t(
+            rateLimited
+              ? "rateLimitError"
+              : authMode === "sign-in"
+                ? "authError"
+                : "signUpError",
+          ),
+        );
+      } else if (authMode === "sign-up" && !result.data.session) {
         setNotice(t("checkInboxConfirm"));
-      else
+        setShowGmailShortcut(isGmailAddress(email));
+      } else {
+        resetAuthRateLimit();
         setNotice(authMode === "sign-up" ? t("accountCreated") : t("signedIn"));
+      }
     } finally {
       setAuthAction(null);
     }
@@ -212,6 +260,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (!supabase || authAction) return;
     setError(null);
     setNotice(null);
+    setCredentialsInvalid(false);
+    setEmailInvalid(false);
+    setPasswordInvalid(false);
+    setShowGmailShortcut(false);
     setAuthAction("google");
     try {
       const result = await startGoogleSignIn(authRedirectUrl(), supabase);
@@ -226,6 +278,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   };
 
   const sendMagicLink = async () => {
+    setCredentialsInvalid(false);
+    setEmailInvalid(false);
+    setPasswordInvalid(false);
+    setShowGmailShortcut(false);
     if (!supabase || !email.trim()) {
       setError(t("enterEmail"));
       return;
@@ -236,25 +292,69 @@ export function AuthGate({ children }: { children: ReactNode }) {
       authRedirectUrl(),
       supabase,
     );
-    if (result.error) setError(t("authError"));
+    if (result.error) setError(t("magicLinkError"));
     else setNotice(t("magicLinkSent"));
   };
 
   return (
     <AuthShell
+      className="auth-card-primary"
+      shellClassName="auth-shell-primary"
       title={
         authMode === "sign-in" ? t("signInTitle") : t("createAccountTitle")
       }
       message={t("authDescription")}
     >
-      <form className="auth-form" onSubmit={submit}>
-        <LanguageSwitcher
-          value={interfaceLanguage}
-          onChange={(locale) => {
-            setInterfaceLanguage(locale);
-            void applyInterfaceLanguage(locale);
-          }}
-        />
+      <form
+        className="auth-form auth-mode-content"
+        data-mode={authMode}
+        noValidate
+        onSubmit={submit}
+      >
+        <div
+          className="auth-mode-toggle"
+          role="tablist"
+          aria-label={t("authModeLabel")}
+        >
+          <button
+            className={authMode === "sign-in" ? "is-active" : undefined}
+            type="button"
+            role="tab"
+            aria-selected={authMode === "sign-in"}
+            onClick={() => {
+              setAuthMode("sign-in");
+              setShowPassword(false);
+              setCredentialsInvalid(false);
+              setEmailInvalid(false);
+              setPasswordInvalid(false);
+              setError(null);
+              setNotice(null);
+              setShowGmailShortcut(false);
+            }}
+            disabled={authAction !== null}
+          >
+            {t("signIn")}
+          </button>
+          <button
+            className={authMode === "sign-up" ? "is-active" : undefined}
+            type="button"
+            role="tab"
+            aria-selected={authMode === "sign-up"}
+            onClick={() => {
+              setAuthMode("sign-up");
+              setShowPassword(false);
+              setCredentialsInvalid(false);
+              setEmailInvalid(false);
+              setPasswordInvalid(false);
+              setError(null);
+              setNotice(null);
+              setShowGmailShortcut(false);
+            }}
+            disabled={authAction !== null}
+          >
+            {t("createAccount")}
+          </button>
+        </div>
         <button
           className="button button-ghost auth-google"
           type="button"
@@ -269,44 +369,80 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <div className="auth-divider" aria-hidden="true">
           <span>{t("orContinueWith")}</span>
         </div>
-        <label>
+        <label
+          className={
+            credentialsInvalid || emailInvalid
+              ? "auth-label-invalid"
+              : undefined
+          }
+        >
           <span>{t("email")}</span>
-          <div className="auth-input">
+          <div
+            className={`auth-input${credentialsInvalid || emailInvalid ? " auth-input-invalid" : ""}`}
+          >
             <Mail size={15} />
             <input
               type="email"
               autoComplete="email"
               required
+              aria-invalid={credentialsInvalid || emailInvalid}
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setShowGmailShortcut(false);
+                if (credentialsInvalid || emailInvalid) {
+                  setCredentialsInvalid(false);
+                  setEmailInvalid(false);
+                  setError(null);
+                }
+              }}
               placeholder="you@company.com"
             />
           </div>
         </label>
-        <label>
+        <label
+          className={
+            credentialsInvalid || passwordInvalid
+              ? "auth-label-invalid"
+              : undefined
+          }
+        >
           <span>{t("password")}</span>
-          <div className="auth-input">
+          <div
+            className={`auth-input${credentialsInvalid || passwordInvalid ? " auth-input-invalid" : ""}`}
+          >
             <LockKeyhole size={15} />
             <input
-              type="password"
-              autoComplete="current-password"
+              type={showPassword ? "text" : "password"}
+              autoComplete={
+                authMode === "sign-in" ? "current-password" : "new-password"
+              }
               required
+              aria-invalid={credentialsInvalid || passwordInvalid}
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (credentialsInvalid || passwordInvalid) {
+                  setCredentialsInvalid(false);
+                  setPasswordInvalid(false);
+                  setError(null);
+                }
+              }}
               placeholder="••••••••"
             />
+            <button
+              className="auth-password-toggle"
+              type="button"
+              aria-label={t(showPassword ? "hidePassword" : "showPassword")}
+              title={t(showPassword ? "hidePassword" : "showPassword")}
+              aria-pressed={showPassword}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
           </div>
         </label>
-        {error && (
-          <p className="auth-error" role="alert">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p className="auth-notice" role="status">
-            {notice}
-          </p>
-        )}
         <button
           className="button button-primary auth-submit"
           type="submit"
@@ -315,33 +451,66 @@ export function AuthGate({ children }: { children: ReactNode }) {
           {authMode === "sign-in" ? t("signIn") : t("createAccount")}{" "}
           <ArrowRight size={15} />
         </button>
-        {authMode === "sign-in" && (
-          <button
-            className="text-button auth-magic"
-            type="button"
-            onClick={() => void sendMagicLink()}
-            disabled={authAction !== null}
-          >
-            {t("magicLink")}
-          </button>
-        )}
-        <button
-          className="text-button auth-magic"
-          type="button"
-          disabled={authAction !== null}
-          onClick={() => {
-            setAuthMode((current) =>
-              current === "sign-in" ? "sign-up" : "sign-in",
-            );
-            setError(null);
-            setNotice(null);
-          }}
-        >
-          {authMode === "sign-in"
-            ? t("createNewAccount")
-            : t("alreadyHaveAccount")}
-        </button>
+        <div className="auth-magic-slot">
+          {authMode === "sign-in" && (
+            <button
+              className="text-button auth-magic"
+              type="button"
+              onClick={() => void sendMagicLink()}
+              disabled={authAction !== null}
+            >
+              {t("magicLink")}
+            </button>
+          )}
+        </div>
       </form>
+      <div className="auth-feedback-slot" aria-live="polite">
+        {error && (
+          <div className="auth-error" role="alert">
+            <span>{error}</span>
+            {credentialsInvalid && authMode === "sign-in" && (
+              <span className="auth-error-prompt">
+                {t("noAccount")}{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("sign-up");
+                    setShowPassword(false);
+                    setCredentialsInvalid(false);
+                    setEmailInvalid(false);
+                    setPasswordInvalid(false);
+                    setError(null);
+                    setNotice(null);
+                    setShowGmailShortcut(false);
+                  }}
+                >
+                  {t("createAccountPrompt")}
+                </button>
+              </span>
+            )}
+          </div>
+        )}
+        {notice && (
+          <div className="auth-notice" role="status">
+            <span>{notice}</span>
+            {showGmailShortcut && (
+              <button
+                className="auth-toast-action"
+                type="button"
+                onClick={() =>
+                  window.open(
+                    "https://mail.google.com/",
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
+              >
+                {t("openGmail")}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </AuthShell>
   );
 }
@@ -423,16 +592,18 @@ function InviteAcceptance({ invitationId }: { invitationId: string | null }) {
           />
         </div>
         <p className="auth-hint">{t("invitePasswordHint")}</p>
-        {error && (
-          <p className="auth-error" role="alert">
-            {error}
-          </p>
-        )}
         <Button className="auth-submit" type="submit" disabled={action}>
           {action ? t("acceptingInvite") : t("acceptInvite")}{" "}
           <ArrowRight size={15} />
         </Button>
       </form>
+      <div className="auth-feedback-slot" aria-live="polite">
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
     </AuthShell>
   );
 }
@@ -469,29 +640,26 @@ function AuthShell({
   title,
   message,
   children,
+  className,
+  shellClassName,
 }: {
   title: string;
   message: string;
   children?: ReactNode;
+  className?: string;
+  shellClassName?: string;
 }) {
   const { t } = useTranslation("auth");
   return (
-    <main className="auth-shell">
+    <main className={`auth-shell${shellClassName ? ` ${shellClassName}` : ""}`}>
       <div className="auth-context">
         <span className="landing-signal">
           <span /> {t("contextSignal")}
         </span>
         <h2>{t("contextTitle")}</h2>
         <p>{t("contextDescription")}</p>
-        <div className="auth-context-flow" aria-hidden="true">
-          <span>{t("channelWhatsApp")}</span>
-          <i>→</i>
-          <span>{t("contextIssue")}</span>
-          <i>→</i>
-          <span>{t("contextShip")}</span>
-        </div>
       </div>
-      <div className="auth-card">
+      <div className={`auth-card${className ? ` ${className}` : ""}`}>
         <div className="brand-row auth-brand">
           <BrandMark />
           <div>
@@ -499,8 +667,7 @@ function AuthShell({
             <div className="brand-subtitle">{t("supportDescriptor")}</div>
           </div>
         </div>
-        <span className="page-kicker">{t("secureWorkspace")}</span>
-        <h1>{title}</h1>
+        <h1 key={title}>{title}</h1>
         <p>{message}</p>
         {children}
       </div>
