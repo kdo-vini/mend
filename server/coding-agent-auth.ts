@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { resolveCodingAgentExecutable } from "./coding-agent-cli.js";
@@ -47,6 +47,23 @@ function loginEnvironment(homeDirectory: string): NodeJS.ProcessEnv {
     GEMINI_CLI_HOME: path.join(homeDirectory, ".gemini"),
   };
   return env;
+}
+
+export async function prepareSubscriptionLoginHome(): Promise<string> {
+  const homeDirectory = await mkdtemp(
+    path.join(os.homedir(), ".mend-coding-login-"),
+  );
+  await Promise.all(
+    [
+      ".codex",
+      ".gemini",
+      path.join("AppData", "Roaming"),
+      path.join("AppData", "Local"),
+    ].map((relativeDirectory) =>
+      mkdir(path.join(homeDirectory, relativeDirectory), { recursive: true }),
+    ),
+  );
+  return homeDirectory;
 }
 
 function challengeFromOutput(
@@ -118,9 +135,7 @@ export async function startSubscriptionLogin(
   if (provider !== "openai")
     throw new Error("google_subscription_login_requires_interactive_runner");
   const executable = await resolveCodingAgentExecutable("openai");
-  const homeDirectory = await mkdtemp(
-    path.join(os.tmpdir(), "mend-coding-login-"),
-  );
+  const homeDirectory = await prepareSubscriptionLoginHome();
   const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
   const child = spawn(
     executable.command,
