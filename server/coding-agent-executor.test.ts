@@ -3,7 +3,10 @@ import { InMemoryCodexRunStore, type RunCodexInput } from "./codex.js";
 import type { CodexContext } from "./codex-service.js";
 import type { CodingAgentCli } from "./coding-agent-cli.js";
 import { createCodingAgentRunExecutor } from "./coding-agent-executor.js";
-import type { EffectiveRunConfig } from "./coding-control-plane.js";
+import {
+  createResearchArtifact,
+  type EffectiveRunConfig,
+} from "./coding-control-plane.js";
 
 const context: CodexContext = {
   issue: { id: "issue-1", identifier: "MEND-1", title: "Checkout fails" },
@@ -25,6 +28,70 @@ function input(store: InMemoryCodexRunStore): RunCodexInput {
 }
 
 describe("coding agent run executor", () => {
+  it("refines a proposal from linked research without asking for another repository pass", async () => {
+    const store = new InMemoryCodexRunStore();
+    const run = vi.fn(async () => ({
+      provider: "openai" as const,
+      version: "0.147.0",
+      report: {
+        verdict: "confirmed" as const,
+        summary: "The proposal is ready.",
+        recommendedAction: "fix" as const,
+        evidence: [],
+        proposal: { summary: "Add the guard", changes: ["Update route"] },
+      },
+      patch: { files: [], patch: "", truncated: false },
+      checks: [],
+      metadata: {},
+    }));
+    const execute = createCodingAgentRunExecutor(
+      {
+        getRepository: async () => ({
+          agentProvider: "openai",
+          executionPlane: "dokploy",
+        }),
+      },
+      { run } as unknown as CodingAgentCli,
+    );
+    const researchArtifact = createResearchArtifact({
+      schemaVersion: 1,
+      workspaceId: "workspace-1",
+      caseId: "case-1",
+      issueId: "issue-1",
+      ticketRevision: "revision-1",
+      baseSha: "abc123",
+      diagnosis: { verdict: "confirmed", summary: "Guard is missing" },
+      evidence: [],
+      reproduction: { steps: ["Call the route"] },
+      files: [{ path: "src/route.ts" }],
+      proposal: { summary: "Add the guard", changes: ["Update route"] },
+      acceptanceCriteria: ["Invalid input is rejected"],
+      checks: ["test"],
+      hashes: { base: "abc123" },
+    });
+
+    await execute(
+      {
+        ...input(store),
+        mode: "propose_fix",
+        stage: "research",
+        caseId: "case-1",
+        ticketRevision: "revision-1",
+        researchArtifact,
+      },
+      context,
+    );
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "investigate",
+        stage: "research",
+        prompt: expect.stringContaining("Do not research the repository again"),
+      }),
+    );
+    expect(run.mock.calls[0]?.[0]?.prompt).toContain('"researchArtifact"');
+  });
+
   it("selects the repository CLI and persists a normalized verdict", async () => {
     const store = new InMemoryCodexRunStore();
     const run = vi.fn(async () => ({

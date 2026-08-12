@@ -175,6 +175,7 @@ import {
   type ResearchArtifact,
   type StageRoutingPolicy,
   type StageRoutingPolicyOverride,
+  assertRunContinuation,
   legacyModeForStage,
   resolveEffectiveRunConfig,
   snapshotRoutingPolicy,
@@ -4093,6 +4094,44 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
           ? "research"
           : "research");
     const requestedMode = input.mode ?? legacyModeForStage(stage);
+    if (input.parentRunId) {
+      const parentResult = await this.privilegedClient
+        .from("agent_runs")
+        .select(
+          "id, issue_id, repository_id, mode, status, verdict, research_artifact_id",
+        )
+        .eq("id", input.parentRunId)
+        .eq("workspace_id", context.workspaceId)
+        .maybeSingle();
+      const parentData = checked("agent_runs.parent", parentResult);
+      if (!parentData) throw new Error("parent_run_not_found");
+      const parent = row(parentData);
+      assertRunContinuation({
+        parent: {
+          issueId: str(parent.issue_id),
+          ...(parent.repository_id
+            ? { repositoryId: str(parent.repository_id) }
+            : {}),
+          mode: str(parent.mode) as
+            | "investigate"
+            | "propose_fix"
+            | "implement_fix",
+          status: str(parent.status),
+          ...(parent.verdict ? { verdict: str(parent.verdict) } : {}),
+          ...(parent.research_artifact_id
+            ? { researchArtifactId: str(parent.research_artifact_id) }
+            : {}),
+        },
+        child: {
+          issueId: str(issue.id),
+          repositoryId: input.repositoryId,
+          mode: requestedMode,
+          ...(input.researchArtifactId
+            ? { researchArtifactId: input.researchArtifactId }
+            : {}),
+        },
+      });
+    }
     let effectiveConfig;
     let researchArtifact: ResearchArtifact | undefined;
     let caseId: string | undefined;
@@ -4184,6 +4223,7 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       repositoryId: input.repositoryId,
       mode: requestedMode,
       ...(input.stage ? { stage } : {}),
+      ...(input.parentRunId ? { parentRunId: input.parentRunId } : {}),
       ...(input.researchArtifactId
         ? { researchArtifactId: input.researchArtifactId }
         : {}),

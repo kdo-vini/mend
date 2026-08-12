@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertRunContinuation,
   contentAddressHash,
   createResearchArtifact,
   isRecoverableFallbackError,
@@ -37,6 +38,115 @@ const catalog = (connectionId = "connection-a"): CatalogSnapshot => ({
 });
 
 describe("coding control plane", () => {
+  it("allows a verified investigation to continue as proposal or implementation", () => {
+    const parent = {
+      issueId: "issue-1",
+      repositoryId: "repository-1",
+      mode: "investigate" as const,
+      status: "completed",
+      verdict: "confirmed",
+      researchArtifactId: "artifact-1",
+    };
+
+    expect(() =>
+      assertRunContinuation({
+        parent,
+        child: {
+          issueId: "issue-1",
+          repositoryId: "repository-1",
+          mode: "propose_fix",
+          researchArtifactId: "artifact-1",
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertRunContinuation({
+        parent,
+        child: {
+          issueId: "issue-1",
+          repositoryId: "repository-1",
+          mode: "implement_fix",
+          researchArtifactId: "artifact-1",
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it("allows a proposal to continue to implementation with the same artifact", () => {
+    expect(() =>
+      assertRunContinuation({
+        parent: {
+          issueId: "issue-1",
+          repositoryId: "repository-1",
+          mode: "propose_fix",
+          status: "completed",
+          verdict: "confirmed",
+          researchArtifactId: "artifact-1",
+        },
+        child: {
+          issueId: "issue-1",
+          repositoryId: "repository-1",
+          mode: "implement_fix",
+          researchArtifactId: "artifact-1",
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects cross-scope, unfinished, backwards, and mismatched-artifact continuations", () => {
+    const parent = {
+      issueId: "issue-1",
+      repositoryId: "repository-1",
+      mode: "investigate" as const,
+      status: "completed",
+      verdict: "confirmed",
+      researchArtifactId: "artifact-1",
+    };
+    const child = {
+      issueId: "issue-1",
+      repositoryId: "repository-1",
+      mode: "implement_fix" as const,
+      researchArtifactId: "artifact-1",
+    };
+
+    expect(() =>
+      assertRunContinuation({
+        parent: { ...parent, issueId: "other-issue" },
+        child,
+      }),
+    ).toThrow("parent_run_scope_mismatch");
+    expect(() =>
+      assertRunContinuation({
+        parent: { ...parent, status: "running" },
+        child,
+      }),
+    ).toThrow("parent_run_not_completed");
+    expect(() =>
+      assertRunContinuation({
+        parent: { ...parent, verdict: "not_reproduced" },
+        child,
+      }),
+    ).toThrow("parent_run_not_confirmed");
+    expect(() =>
+      assertRunContinuation({
+        parent: { ...parent, researchArtifactId: undefined },
+        child: { ...child, researchArtifactId: undefined },
+      }),
+    ).toThrow("parent_run_artifact_required");
+    expect(() =>
+      assertRunContinuation({
+        parent: { ...parent, mode: "implement_fix" },
+        child: { ...child, mode: "propose_fix" },
+      }),
+    ).toThrow("parent_run_transition_invalid");
+    expect(() =>
+      assertRunContinuation({
+        parent,
+        child: { ...child, researchArtifactId: "artifact-2" },
+      }),
+    ).toThrow("parent_run_artifact_mismatch");
+  });
+
   it("resolves override before repository and workspace policy", () => {
     const result = resolveEffectiveRunConfig({
       stage: "implement",

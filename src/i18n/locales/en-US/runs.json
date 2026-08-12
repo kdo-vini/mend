@@ -6,6 +6,8 @@
     "openIssue": "Open issue",
     "cancel": "Cancel run",
     "runAgain": "Run again",
+    "continueInvestigationDescription": "The verified investigation can continue without losing its evidence. Generate a proposal or implement directly from the linked research.",
+    "propose": "Propose fix",
     "implementDescription": "The proposal is confirmed. Start a write-enabled run to generate the patch and checks.",
     "implement": "Implement fix",
     "reviewDescription": "Review the diff and checks. Approval creates the local commit; publication is a separate action.",

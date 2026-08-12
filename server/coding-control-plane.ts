@@ -415,6 +415,43 @@ export function isResearchArtifactCurrent(
   );
 }
 
+export function assertRunContinuation(input: {
+  parent: {
+    issueId: string;
+    repositoryId?: string;
+    mode: "investigate" | "propose_fix" | "implement_fix";
+    status: string;
+    verdict?: string;
+    researchArtifactId?: string;
+  };
+  child: {
+    issueId: string;
+    repositoryId: string;
+    mode: "investigate" | "propose_fix" | "implement_fix";
+    researchArtifactId?: string;
+  };
+}): void {
+  if (
+    input.parent.issueId !== input.child.issueId ||
+    input.parent.repositoryId !== input.child.repositoryId
+  )
+    throw new Error("parent_run_scope_mismatch");
+  if (input.parent.status !== "completed")
+    throw new Error("parent_run_not_completed");
+  if (input.parent.verdict !== "confirmed")
+    throw new Error("parent_run_not_confirmed");
+  if (!input.parent.researchArtifactId)
+    throw new Error("parent_run_artifact_required");
+  const transitionAllowed =
+    (input.parent.mode === "investigate" &&
+      ["propose_fix", "implement_fix"].includes(input.child.mode)) ||
+    (input.parent.mode === "propose_fix" &&
+      input.child.mode === "implement_fix");
+  if (!transitionAllowed) throw new Error("parent_run_transition_invalid");
+  if (input.parent.researchArtifactId !== input.child.researchArtifactId)
+    throw new Error("parent_run_artifact_mismatch");
+}
+
 export function normalizeAgentUsage(
   raw: AgentUsage | Record<string, unknown> | undefined,
   authMethod: AuthMethod,

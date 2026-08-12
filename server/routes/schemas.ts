@@ -368,6 +368,7 @@ export const codingRunCreateSchema = z
     repositoryId: uuid.optional(),
     mode: z.enum(["investigate", "propose_fix", "implement_fix"]).optional(),
     stage: z.enum(codingStages).optional(),
+    parentRunId: uuid.optional(),
     researchArtifactId: uuid.optional(),
     routeOverride: z
       .object({
@@ -411,12 +412,18 @@ export const codingRunCreateSchema = z
     if (
       value.researchArtifactId &&
       value.stage !== "implement" &&
-      value.mode !== "implement_fix"
+      value.mode !== "implement_fix" &&
+      !(
+        value.stage === "research" &&
+        value.mode === "propose_fix" &&
+        value.parentRunId
+      )
     )
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["researchArtifactId"],
-        message: "researchArtifactId is only valid for implement runs",
+        message:
+          "researchArtifactId is only valid for linked propose or implement runs",
       });
   });
 

@@ -68,7 +68,9 @@ function codingPrompt(
 ): string {
   const objective =
     stage === "research"
-      ? "Perform one repository research pass. Return the diagnosis, evidence, reproduction, smallest safe proposal, acceptance criteria and checks in the structured report. Do not change files."
+      ? mode === "propose_fix" && researchArtifact
+        ? "Refine the smallest safe proposal from the supplied research artifact. Do not research the repository again and do not change files."
+        : "Perform one repository research pass. Return the diagnosis, evidence, reproduction, smallest safe proposal, acceptance criteria and checks in the structured report. Do not change files."
       : stage === "implement"
         ? "Implement the smallest safe fix described by the research artifact. Do not research the repository again and do not publish it."
         : stage === "review"

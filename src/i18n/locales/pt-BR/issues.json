@@ -72,6 +72,7 @@
     "shortcuts": "Atalhos"
   },
   "dialogs": {
+    "continuationLinked": "Esta execução continua a partir da execução selecionada e preserva seu contexto de engenharia.",
     "researchLinked": "Esta implementaÃ§Ã£o estÃ¡ vinculada ao artefato de pesquisa atual",
     "newWorkItem": "Novo item de trabalho",
     "createIssue": "Criar chamado",

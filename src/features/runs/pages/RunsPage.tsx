@@ -25,7 +25,10 @@ import type { CodingRun } from "../../../types";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { SectionTitle, StatusRun } from "../../../shared/ui/DataDisplay";
-import { canImplementProposedFix } from "../run-actions";
+import {
+  canImplementProposedFix,
+  canProposeFromInvestigation,
+} from "../run-actions";
 
 const stageOrder = [
   "signal",
@@ -286,6 +289,7 @@ export function RunsPage({
     repositoryId?: string,
     options?: {
       stage?: "research" | "implement" | "review" | "verify";
+      parentRunId?: string;
       researchArtifactId?: string;
     },
   ) => void;
@@ -307,9 +311,23 @@ export function RunsPage({
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimer = useRef<number | null>(null);
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
+  const runModeLabel = (mode: CodingRun["mode"]) =>
+    t(
+      `common:data.runMode.${
+        mode === "Investigate"
+          ? "investigate"
+          : mode === "Propose fix"
+            ? "proposeFix"
+            : "implementFix"
+      }`,
+    );
+  const canProposeFix = selectedRun
+    ? canProposeFromInvestigation(selectedRun)
+    : false;
   const canImplementProposal = selectedRun
     ? canImplementProposedFix(selectedRun)
     : false;
+  const hasContinuation = canProposeFix || canImplementProposal;
 
   useEffect(
     () => () => {
@@ -391,8 +409,10 @@ export function RunsPage({
                     <span>{run.startedAt}</span>
                   </div>
                   <p>
-                    {run.caseOnly ? t("loop.caseRecord") : run.mode} ·{" "}
-                    {run.summary}
+                    {run.caseOnly
+                      ? t("loop.caseRecord")
+                      : runModeLabel(run.mode)}{" "}
+                    · {run.summary}
                   </p>
                   <div className="run-list-meta">
                     <StatusRun status={run.status} />
@@ -412,7 +432,8 @@ export function RunsPage({
                 </div>
                 <h2>
                   {selectedRun.issueIdentifier}{" "}
-                  <span className="muted-separator">·</span> {selectedRun.mode}
+                  <span className="muted-separator">·</span>{" "}
+                  {runModeLabel(selectedRun.mode)}
                 </h2>
                 <p>{selectedRun.summary}</p>
               </div>
@@ -441,7 +462,7 @@ export function RunsPage({
                   >
                     {t("actions.cancel")}
                   </button>
-                ) : canImplementProposal ? null : (
+                ) : hasContinuation ? null : (
                   <button
                     className="button button-primary"
                     type="button"
@@ -453,28 +474,55 @@ export function RunsPage({
               </div>
             </div>
             <BugLoopOverview run={selectedRun} />
-            {canImplementProposal && (
+            {hasContinuation && (
               <div className="run-review-actions run-implement-actions">
-                <span>{t("actions.implementDescription")}</span>
-                <button
-                  className="button button-primary"
-                  type="button"
-                  onClick={() =>
-                    onStartRun(
-                      selectedRun.issueId,
-                      "Implement fix",
-                      selectedRun.repositoryId,
-                      selectedRun.researchArtifactId
-                        ? {
+                <span>
+                  {canProposeFix
+                    ? t("actions.continueInvestigationDescription")
+                    : t("actions.implementDescription")}
+                </span>
+                <div className="run-detail-actions">
+                  {canProposeFix && (
+                    <button
+                      className="button button-ghost"
+                      type="button"
+                      onClick={() =>
+                        onStartRun(
+                          selectedRun.issueId,
+                          "Propose fix",
+                          selectedRun.repositoryId,
+                          {
+                            stage: "research",
+                            parentRunId: selectedRun.id,
+                            researchArtifactId: selectedRun.researchArtifactId!,
+                          },
+                        )
+                      }
+                    >
+                      <Code2 size={14} /> {t("actions.propose")}
+                    </button>
+                  )}
+                  {canImplementProposal && (
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      onClick={() =>
+                        onStartRun(
+                          selectedRun.issueId,
+                          "Implement fix",
+                          selectedRun.repositoryId,
+                          {
                             stage: "implement",
-                            researchArtifactId: selectedRun.researchArtifactId,
-                          }
-                        : undefined,
-                    )
-                  }
-                >
-                  <Wrench size={14} /> {t("actions.implement")}
-                </button>
+                            parentRunId: selectedRun.id,
+                            researchArtifactId: selectedRun.researchArtifactId!,
+                          },
+                        )
+                      }
+                    >
+                      <Wrench size={14} /> {t("actions.implement")}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             <div

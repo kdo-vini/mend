@@ -257,18 +257,23 @@ function App() {
   >();
   const [runDialogResearchArtifactId, setRunDialogResearchArtifactId] =
     useState<string | undefined>();
+  const [runDialogParentRunId, setRunDialogParentRunId] = useState<
+    string | undefined
+  >();
   const openRunDialog = (
     issueId: string,
     mode: CodingRun["mode"] = "Propose fix",
     repositoryId?: string,
     options?: {
       stage?: "research" | "implement" | "review" | "verify";
+      parentRunId?: string;
       researchArtifactId?: string;
     },
   ) => {
     setRunDialogInitialMode(mode);
     setRunDialogRepositoryId(repositoryId);
     setRunDialogStage(options?.stage);
+    setRunDialogParentRunId(options?.parentRunId);
     setRunDialogResearchArtifactId(options?.researchArtifactId);
     setRunDialogIssueId(issueId);
   };
@@ -859,6 +864,7 @@ function App() {
       repositoryId?: string;
       instructions?: string;
       stage?: "research" | "implement" | "review" | "verify";
+      parentRunId?: string;
       researchArtifactId?: string;
     },
   ) => {
@@ -1292,6 +1298,7 @@ function App() {
           initialMode={runDialogInitialMode}
           initialRepositoryId={runDialogRepositoryId}
           initialStage={runDialogStage}
+          initialParentRunId={runDialogParentRunId}
           initialResearchArtifactId={runDialogResearchArtifactId}
           onClose={() => setRunDialogIssueId(null)}
           onStart={startRun}

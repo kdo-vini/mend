@@ -73,6 +73,7 @@
   },
   "dialogs": {
     "researchLinked": "This implementation is linked to the current research artifact",
+    "continuationLinked": "This run continues from the selected execution and preserves its engineering context.",
     "newWorkItem": "New work item",
     "createIssue": "Create issue",
     "closeCreate": "Close create issue dialog",

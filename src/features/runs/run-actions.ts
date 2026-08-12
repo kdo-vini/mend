@@ -1,11 +1,20 @@
 import type { CodingRun } from "../../types";
 
-export function canImplementProposedFix(run: CodingRun): boolean {
+function isVerifiedResearch(run: CodingRun): boolean {
   return (
     run.status === "completed" &&
-    (run.mode === "Propose fix" || run.codingStage === "research") &&
-    (run.codingStage !== "research" || Boolean(run.researchArtifactId)) &&
     run.verdict === "confirmed" &&
-    (run.decision === "manual_fix" || run.decision === "autofix")
+    Boolean(run.researchArtifactId)
+  );
+}
+
+export function canProposeFromInvestigation(run: CodingRun): boolean {
+  return isVerifiedResearch(run) && run.mode === "Investigate";
+}
+
+export function canImplementProposedFix(run: CodingRun): boolean {
+  return (
+    isVerifiedResearch(run) &&
+    (run.mode === "Investigate" || run.mode === "Propose fix")
   );
 }

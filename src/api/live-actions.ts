@@ -1605,6 +1605,7 @@ export async function startLiveAgentRun(
     issueIdentifier?: string;
     mode: CodingRun["mode"];
     stage?: CodingStage;
+    parentRunId?: string;
     researchArtifactId?: string;
     instructions?: string;
     repositoryId?: string;
@@ -1624,6 +1625,7 @@ export async function startLiveAgentRun(
         body: JSON.stringify({
           mode: dbRunMode(input.mode),
           ...(input.stage ? { stage: input.stage } : {}),
+          ...(input.parentRunId ? { parentRunId: input.parentRunId } : {}),
           ...(input.researchArtifactId
             ? { researchArtifactId: input.researchArtifactId }
             : {}),
@@ -1644,6 +1646,7 @@ export async function startLiveAgentRun(
         issue_id: input.issueId,
         mode: dbRunMode(input.mode),
         ...(input.stage ? { stage: input.stage } : {}),
+        ...(input.parentRunId ? { parent_run_id: input.parentRunId } : {}),
         ...(input.researchArtifactId
           ? { research_artifact_id: input.researchArtifactId }
           : {}),

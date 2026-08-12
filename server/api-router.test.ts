@@ -364,6 +364,42 @@ describe("Mend API router", () => {
     });
   });
 
+  it("accepts an explicit parent run when continuing to implementation", async () => {
+    const dependencies = createFakeDependencies();
+    const response = await request(makeApp(dependencies))
+      .post("/api/issues/TEC-1/agent-runs")
+      .set(scoped(true))
+      .send({
+        repositoryId,
+        mode: "implement_fix",
+        stage: "implement",
+        parentRunId: otherWorkspaceId,
+        researchArtifactId: conversationId,
+      });
+
+    expect(response.status).toBe(202);
+    expect(dependencies.codingRuns.create).toHaveBeenCalledWith(
+      expect.anything(),
+      "TEC-1",
+      expect.objectContaining({
+        parentRunId: otherWorkspaceId,
+        researchArtifactId: conversationId,
+      }),
+    );
+
+    const proposal = await request(makeApp(dependencies))
+      .post("/api/issues/TEC-1/agent-runs")
+      .set(scoped(true))
+      .send({
+        repositoryId,
+        mode: "propose_fix",
+        stage: "research",
+        parentRunId: otherWorkspaceId,
+        researchArtifactId: conversationId,
+      });
+    expect(proposal.status).toBe(202);
+  });
+
   it("routes workspace-scoped Google connection actions through the API port", async () => {
     const dependencies = createFakeDependencies();
     const app = makeApp(dependencies);

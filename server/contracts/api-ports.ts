@@ -501,6 +501,7 @@ export interface CodingRunCreateInput {
   repositoryId?: string;
   mode?: "investigate" | "propose_fix" | "implement_fix";
   stage?: CodingStage;
+  parentRunId?: string;
   researchArtifactId?: string;
   routeOverride?: StageRoutingPolicyOverride;
   branchBase: string;

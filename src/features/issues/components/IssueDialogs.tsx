@@ -587,6 +587,7 @@ export function RunAgentDialog({
   initialMode = "Propose fix",
   initialRepositoryId,
   initialStage,
+  initialParentRunId,
   initialResearchArtifactId,
   onClose,
   onStart,
@@ -597,6 +598,7 @@ export function RunAgentDialog({
   initialMode?: CodingRun["mode"];
   initialRepositoryId?: string;
   initialStage?: "research" | "implement" | "review" | "verify";
+  initialParentRunId?: string;
   initialResearchArtifactId?: string;
   onClose: () => void;
   onStart: (
@@ -606,6 +608,7 @@ export function RunAgentDialog({
       repositoryId?: string;
       instructions?: string;
       stage?: "research" | "implement" | "review" | "verify";
+      parentRunId?: string;
       researchArtifactId?: string;
     },
   ) => void;
@@ -674,11 +677,24 @@ export function RunAgentDialog({
             {t("dialogs.mode")}
             <Select
               value={mode}
-              options={["Investigate", "Propose fix", "Implement fix"].map(
-                (item) => ({ value: item, label: item }),
-              )}
+              options={[
+                {
+                  value: "Investigate",
+                  label: t("common:data.runMode.investigate"),
+                },
+                {
+                  value: "Propose fix",
+                  label: t("common:data.runMode.proposeFix"),
+                },
+                {
+                  value: "Implement fix",
+                  label: t("common:data.runMode.implementFix"),
+                },
+              ]}
               onChange={(value) => setMode(value as CodingRun["mode"])}
-              disabled={Boolean(initialResearchArtifactId)}
+              disabled={Boolean(
+                initialParentRunId || initialResearchArtifactId,
+              )}
             />
           </label>
           <label>
@@ -729,6 +745,12 @@ export function RunAgentDialog({
               </span>
             </div>
           )}
+          {initialParentRunId && (
+            <div className="modal-note">
+              <GitBranch size={14} />
+              <span>{t("dialogs.continuationLinked")}</span>
+            </div>
+          )}
           <label>
             {t("dialogs.additionalInstructions")}
             <textarea
@@ -760,6 +782,9 @@ export function RunAgentDialog({
                 repositoryId: repositoryId || undefined,
                 instructions: instructions.trim() || undefined,
                 ...(initialStage ? { stage: initialStage } : {}),
+                ...(initialParentRunId
+                  ? { parentRunId: initialParentRunId }
+                  : {}),
                 ...(initialResearchArtifactId
                   ? { researchArtifactId: initialResearchArtifactId }
                   : {}),

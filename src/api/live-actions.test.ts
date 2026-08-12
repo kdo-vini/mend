@@ -18,6 +18,7 @@ import {
   removeLiveRepository,
   startLiveGitHubSetup,
   startLiveGitHubWorkspaceSetup,
+  startLiveAgentRun,
   updateLiveRepository,
   updateLiveAgentRun,
   saveLiveAgentRoutingPolicy,
@@ -25,6 +26,36 @@ import {
 } from "./live-actions";
 
 describe("live Agent run actions", () => {
+  it("links a continuation to its parent run and research artifact", async () => {
+    apiRequest.mockResolvedValueOnce({ id: "child-run" });
+
+    await startLiveAgentRun({
+      workspaceId: "workspace-1",
+      issueId: "issue-1",
+      issueIdentifier: "MEND-12",
+      repositoryId: "repository-1",
+      mode: "Implement fix",
+      stage: "implement",
+      parentRunId: "parent-run",
+      researchArtifactId: "artifact-1",
+    });
+
+    expect(apiRequest).toHaveBeenCalledWith(
+      "/api/issues/MEND-12/agent-runs",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "implement_fix",
+          stage: "implement",
+          parentRunId: "parent-run",
+          researchArtifactId: "artifact-1",
+          repositoryId: "repository-1",
+        }),
+      },
+      "workspace-1",
+    );
+  });
+
   it.each([
     "cancel",
     "approve",
