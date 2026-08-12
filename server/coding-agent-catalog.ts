@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -205,6 +205,14 @@ async function runCodexModelList(
   });
 }
 
+export async function prepareCodingCatalogHome(): Promise<string> {
+  const homeDirectory = await mkdtemp(
+    path.join(os.homedir(), ".mend-coding-catalog-"),
+  );
+  await mkdir(path.join(homeDirectory, ".codex"), { recursive: true });
+  return homeDirectory;
+}
+
 export class DefaultCodingCatalogProvider implements CodingCatalogProvider {
   async list(
     connection: AgentConnection,
@@ -237,9 +245,7 @@ export class DefaultCodingCatalogProvider implements CodingCatalogProvider {
       return apiCatalog(connection, openAiCodingModels(value), "api");
     }
     const executable = await resolveCodingAgentExecutable("openai");
-    const homeDirectory = await mkdtemp(
-      path.join(os.tmpdir(), "mend-coding-catalog-"),
-    );
+    const homeDirectory = await prepareCodingCatalogHome();
     try {
       const bundle = secret?.bundle
         ? Object.fromEntries(

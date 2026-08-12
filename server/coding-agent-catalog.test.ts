@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { stat, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { AgentConnection } from "./coding-control-plane.js";
-import { DefaultCodingCatalogProvider } from "./coding-agent-catalog.js";
+import {
+  DefaultCodingCatalogProvider,
+  prepareCodingCatalogHome,
+} from "./coding-agent-catalog.js";
 
 const connection: AgentConnection = {
   id: "connection-1",
@@ -51,6 +57,20 @@ describe("coding agent catalog", () => {
       source: "api",
       models: [{ id: "gpt-5.3-codex" }, { id: "gpt-4.1" }],
     });
+  });
+
+  it("prepares subscription catalog state outside the system temp directory", async () => {
+    const homeDirectory = await prepareCodingCatalogHome();
+    try {
+      expect(path.relative(os.tmpdir(), homeDirectory).startsWith("..")).toBe(
+        true,
+      );
+      expect(
+        (await stat(path.join(homeDirectory, ".codex"))).isDirectory(),
+      ).toBe(true);
+    } finally {
+      await rm(homeDirectory, { recursive: true, force: true });
+    }
   });
 
   it("rejects a successful catalog response without coding-capable models", async () => {
