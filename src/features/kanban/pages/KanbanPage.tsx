@@ -38,6 +38,10 @@ import {
   type PersonalTask,
   type PersonalTaskStatus,
 } from "../api";
+import {
+  isCompletionArchived,
+  nextCompletionArchiveAt,
+} from "../completion-archive";
 
 type Mode = "shared" | "personal";
 type PersonalRange = "today" | "week" | "all";
@@ -230,6 +234,7 @@ export function KanbanPage({
   const [online, setOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const handleOnline = () => setOnline(true);
@@ -246,8 +251,27 @@ export function KanbanPage({
     () =>
       issues
         .map((issue) => ({ ...issue, ...issueDrafts[issue.id] }))
-        .filter((issue) => showCanceled || issue.status !== "Canceled"),
-    [issues, issueDrafts, showCanceled],
+        .filter(
+          (issue) =>
+            (showCanceled || issue.status !== "Canceled") &&
+            !(
+              issue.status === "Done" &&
+              isCompletionArchived(issue.completedAt, now)
+            ),
+        ),
+    [issues, issueDrafts, now, showCanceled],
+  );
+
+  const visibleTasks = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          !(
+            task.status === "done" &&
+            isCompletionArchived(task.completedAt, now)
+          ),
+      ),
+    [now, tasks],
   );
 
   const assignedIssues = useMemo(
@@ -268,11 +292,32 @@ export function KanbanPage({
 
   const personalItems = useMemo(
     () => [
-      ...tasks.map((task) => ({ kind: "task" as const, task })),
+      ...visibleTasks.map((task) => ({ kind: "task" as const, task })),
       ...assignedIssues.map((issue) => ({ kind: "issue" as const, issue })),
     ],
-    [assignedIssues, tasks],
+    [assignedIssues, visibleTasks],
   );
+
+  const nextArchiveAt = useMemo(() => {
+    const dates = [
+      ...visibleIssues
+        .filter((issue) => issue.status === "Done")
+        .map((issue) => nextCompletionArchiveAt(issue.completedAt)),
+      ...visibleTasks
+        .filter((task) => task.status === "done")
+        .map((task) => nextCompletionArchiveAt(task.completedAt)),
+    ].filter((value): value is number => value !== null && value > now);
+    return dates.length ? Math.min(...dates) : null;
+  }, [now, visibleIssues, visibleTasks]);
+
+  useEffect(() => {
+    if (nextArchiveAt === null) return undefined;
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.max(0, nextArchiveAt - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [nextArchiveAt]);
 
   const refreshPersonal = useCallback(async () => {
     if (demoMode || !workspaceId) return;
@@ -329,6 +374,10 @@ export function KanbanPage({
                 change.row.due_on == null
                   ? current[id]?.dueOn
                   : String(change.row.due_on),
+              completedAt:
+                change.row.completed_at == null
+                  ? current[id]?.completedAt
+                  : String(change.row.completed_at),
             },
           }));
         }
@@ -378,9 +427,10 @@ export function KanbanPage({
       return;
     }
     const previousStatus = issue.status;
+    const completedAt = nextStatus === "Done" ? new Date().toISOString() : null;
     setIssueDrafts((current) => ({
       ...current,
-      [issue.id]: { status: nextStatus },
+      [issue.id]: { status: nextStatus, completedAt },
     }));
     try {
       if (!demoMode)
@@ -758,7 +808,7 @@ export function KanbanPage({
             issues={visibleIssues}
             showCanceled={showCanceled}
             personalItems={personalItems}
-            tasks={tasks}
+            tasks={visibleTasks}
             drag={drag}
             setDrag={setDrag}
             onMoveIssue={moveIssue}
@@ -777,7 +827,7 @@ export function KanbanPage({
         {mode === "personal" ? (
           <MobileAgenda
             events={events}
-            tasks={tasks}
+            tasks={visibleTasks}
             issues={assignedIssues}
             onRemoveEvent={removeEvent}
             onTaskStatus={updateTaskStatus}

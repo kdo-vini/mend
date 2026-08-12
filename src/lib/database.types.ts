@@ -1300,6 +1300,7 @@ export type Database = {
           ai_summary: string | null
           assigned_user_id: string | null
           confidence: number | null
+          completed_at: string | null
           contact_id: string | null
           conversation_id: string | null
           created_at: string
@@ -1333,6 +1334,7 @@ export type Database = {
           ai_summary?: string | null
           assigned_user_id?: string | null
           confidence?: number | null
+          completed_at?: string | null
           contact_id?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -1366,6 +1368,7 @@ export type Database = {
           ai_summary?: string | null
           assigned_user_id?: string | null
           confidence?: number | null
+          completed_at?: string | null
           contact_id?: string | null
           conversation_id?: string | null
           created_at?: string

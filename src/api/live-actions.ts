@@ -1306,8 +1306,11 @@ export async function updateLiveIssue(
   if (input.patch.summary !== undefined)
     updates.ai_summary = input.patch.summary;
   if (input.patch.impact !== undefined) updates.impact = input.patch.impact;
-  if (input.patch.status !== undefined)
+  if (input.patch.status !== undefined) {
     updates.status = dbStatus(input.patch.status);
+    updates.completed_at =
+      input.patch.status === "Done" ? new Date().toISOString() : null;
+  }
   if (input.patch.priority !== undefined)
     updates.priority = dbPriority(input.patch.priority);
   if (input.patch.type !== undefined) updates.type = dbType(input.patch.type);

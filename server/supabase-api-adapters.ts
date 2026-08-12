@@ -1486,11 +1486,16 @@ export class SupabaseIssueAdapter implements IssuePort {
   ) {
     const current = await this.getRow(context, identifier);
     if (!current) return null;
+    const now = new Date().toISOString();
+    const status = (input as unknown as Row).status;
     const result = await this.client
       .from("issues")
       .update({
         ...issueDbPayload(input),
-        updated_at: new Date().toISOString(),
+        ...(status !== undefined
+          ? { completed_at: status === "done" ? now : null }
+          : {}),
+        updated_at: now,
       })
       .eq("id", current.id)
       .eq("workspace_id", context.workspaceId)
@@ -1918,6 +1923,8 @@ export class SupabaseKanbanAdapter implements KanbanIssuePort {
         .update({
           status: input.status,
           kanban_position: position,
+          completed_at:
+            input.status === "done" ? new Date().toISOString() : null,
           updated_at: new Date().toISOString(),
         })
         .eq("workspace_id", context.workspaceId)

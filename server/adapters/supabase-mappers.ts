@@ -230,6 +230,7 @@ export function issue(rowValue: Row): Row {
     type: str(rowValue.type, "task"),
     priority: str(rowValue.priority, "none"),
     status: str(rowValue.status, "triage"),
+    completedAt: nullable(rowValue.completed_at),
     dueOn: nullable(rowValue.due_on),
     kanbanPosition: num(rowValue.kanban_position),
     title: str(rowValue.title),

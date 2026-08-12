@@ -343,6 +343,7 @@ export function toUiIssue(
     type: fallback(record.type, typeMap, "Other"),
     priority: fallback(record.priority, priorityMap, "No priority"),
     status: fallback(record.status, statusMap, "Triage"),
+    completedAt: record.completed_at,
     dueOn: record.due_on,
     kanbanPosition: record.kanban_position,
     assignee: record.assigned_user_id ?? "Unassigned",

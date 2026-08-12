@@ -127,6 +127,7 @@ export interface Issue {
   type: IssueType;
   priority: Priority;
   status: IssueStatus;
+  completedAt?: string | null;
   dueOn?: string | null;
   kanbanPosition?: number;
   assignee: string;

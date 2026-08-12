@@ -506,7 +506,10 @@ export async function moveLiveIssue(input: {
   return unwrap(
     requireClient(supabase)
       .from("issues")
-      .update({ status: input.status as never })
+      .update({
+        status: input.status as never,
+        completed_at: input.status === "done" ? new Date().toISOString() : null,
+      })
       .eq("workspace_id", input.workspaceId)
       .eq("id", input.issueId)
       .select("*")
