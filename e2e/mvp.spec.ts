@@ -168,7 +168,7 @@ test("operator can use the command palette and navigate to runs", async ({
   await expect(
     page.getByPlaceholder("Search actions or jump to…"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "View engineering runs" }).click();
+  await page.getByRole("button", { name: "View Agent runs" }).click();
   await expect(
     page.getByRole("heading", { name: "Engineering runs" }),
   ).toBeVisible();
@@ -255,9 +255,7 @@ test("operator can review checks and approve an engineering diff", async ({
   await expect(page.getByText("12 tests passed")).toBeVisible();
 
   await page.getByRole("button", { name: "Approve local commit" }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "Engineering result approved",
-  );
+  await expect(page.getByRole("status")).toContainText("Agent result approved");
   await expect(
     page.getByText("Approved", { exact: true }).first(),
   ).toBeVisible();

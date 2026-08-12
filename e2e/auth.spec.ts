@@ -27,6 +27,7 @@ test.beforeEach(async ({ page }) => {
 
 test("register submits the confirmation redirect and shows the next step", async ({
   page,
+  baseURL,
 }) => {
   let signUpPayload: Record<string, unknown> | undefined;
   let signUpRedirect: string | null = null;
@@ -57,7 +58,8 @@ test("register submits the confirmation redirect and shows the next step", async
     email: testUser.email,
     password: "password-123",
   });
-  expect(signUpRedirect).toBe("http://127.0.0.1:5174/?auth=1");
+  expect(baseURL).toBeDefined();
+  expect(signUpRedirect).toBe(new URL("/?auth=1", baseURL!).toString());
 });
 
 test("login creates a session and leaves the auth route for the workspace", async ({

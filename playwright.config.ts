@@ -14,6 +14,10 @@ const localFallback = process.env.LOCALAPPDATA
 const executablePath =
   process.env.PLAYWRIGHT_EXECUTABLE_PATH ??
   (existsSync(localFallback) ? localFallback : undefined);
+const e2ePort = process.env.MEND_E2E_PORT?.trim() || "5174";
+if (!/^\d{2,5}$/.test(e2ePort))
+  throw new Error("MEND_E2E_PORT must be a valid TCP port");
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -21,13 +25,13 @@ export default defineConfig({
   fullyParallel: true,
   reporter: process.env.CI ? "line" : "list",
   use: {
-    baseURL: "http://127.0.0.1:5174",
+    baseURL: e2eBaseUrl,
     trace: "on-first-retry",
     ...(executablePath ? { launchOptions: { executablePath } } : {}),
   },
   webServer: {
-    command: "npm run dev -- --host 127.0.0.1 --port 5174",
-    url: "http://127.0.0.1:5174/inbox",
+    command: `npm run dev -- --host 127.0.0.1 --port ${e2ePort}`,
+    url: `${e2eBaseUrl}/inbox`,
     env: {
       VITE_SUPABASE_URL: "http://127.0.0.1:54321",
       VITE_SUPABASE_PUBLISHABLE_KEY: "e2e-public-key",
