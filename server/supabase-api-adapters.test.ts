@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createSupabaseApiAdapters,
+  SupabaseCodingRunAdapter,
   type WhatsmiauProviderPort,
 } from "./supabase-api-adapters.js";
 import type {
@@ -269,6 +270,98 @@ function adapters(
 }
 
 describe("Supabase API adapters", () => {
+  it("creates a durable bug case before queuing a direct research run", async () => {
+    const issueId = "55555555-5555-4555-8555-555555555555";
+    const client = new FakeClient({
+      issues: [
+        {
+          id: issueId,
+          workspace_id: workspaceId,
+          identifier: "MEND-12",
+          title: "Inspect README",
+          updated_at: "2026-08-12T00:00:00.000Z",
+        },
+      ],
+      issue_comments: [],
+      bug_cases: [],
+      workspaces: [{ id: workspaceId, ai_policy_json: {} }],
+    });
+    const createRun = vi.fn(async (input: Row) => ({
+      ...input,
+      status: "queued",
+      progress: 0,
+      result: {},
+    }));
+    const updateRun = vi.fn(async (id: string, patch: Row) => ({
+      id,
+      workspaceId,
+      issueId,
+      repositoryId: "repo-1",
+      mode: "investigate",
+      status: "queued",
+      progress: 0,
+      result: patch.result ?? {},
+      events: [],
+      files: [],
+      checks: [],
+      createdAt: "2026-08-12T00:00:00.000Z",
+      updatedAt: "2026-08-12T00:00:00.000Z",
+    }));
+    const enqueue = vi.fn(async () => undefined);
+    const adapter = new SupabaseCodingRunAdapter(
+      client as never,
+      { getRepository: vi.fn(async () => ({ id: "repo-1" })) } as never,
+      { createRun, updateRun } as never,
+      undefined,
+      client as never,
+      { enqueue } as never,
+      {
+        resolveConnectionSecret: vi.fn(async () => ({ apiKey: "test-key" })),
+        resolveRunConfig: vi.fn(async () => ({
+          stage: "research",
+          connectionId: "connection-1",
+          provider: "openai",
+          authMethod: "api_key",
+          model: "gpt-5.6-terra",
+          budget: {
+            maxRuntimeMs: 60_000,
+            maxOutputTokens: 1_000,
+            maxRepairs: 1,
+          },
+          fallbackEnabled: false,
+          fallbackConnectionIds: [],
+          fallbacks: [],
+          preset: "Custom",
+          policySource: "workspace",
+          resolvedAt: "2026-08-12T00:00:00.000Z",
+          snapshot: {},
+        })),
+      } as never,
+    );
+
+    await adapter.create({ userId, workspaceId, role: "agent" }, "MEND-12", {
+      repositoryId: "repo-1",
+      mode: "investigate",
+      stage: "research",
+      branchBase: "main",
+      allowChanges: false,
+      commands: [],
+    });
+
+    const bugCase = client.rows.get("bug_cases")?.[0];
+    expect(bugCase).toMatchObject({
+      workspace_id: workspaceId,
+      issue_id: issueId,
+      stage: "evidence",
+      status: "active",
+    });
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ caseId: bugCase?.id }),
+      }),
+    );
+  });
+
   it("deduplicates active subscription login and scopes cancellation", async () => {
     const client = new FakeClient({
       agent_connections: [],

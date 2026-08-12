@@ -4139,6 +4139,11 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
         .maybeSingle();
       const caseData = checked("bug_cases.run_case", caseResult);
       caseId = caseData ? str(row(caseData).id) : undefined;
+      if (!caseId && stage === "research")
+        caseId = await this.createCaseForResearchRun(
+          context.workspaceId,
+          str(issue.id),
+        );
     }
     const policy = await this.workspacePolicy(context.workspaceId);
     if (!policy.allowedIntegrations.includes("agent"))
@@ -4307,6 +4312,38 @@ export class SupabaseCodingRunAdapter implements CodingRunPort {
       });
     }
     return persisted ?? queued;
+  }
+
+  private async createCaseForResearchRun(
+    workspaceId: string,
+    issueId: string,
+  ): Promise<string> {
+    const created = await this.privilegedClient
+      .from("bug_cases")
+      .insert({
+        workspace_id: workspaceId,
+        issue_id: issueId,
+        stage: "evidence",
+        status: "active",
+        evidence_json: [],
+      })
+      .select("id")
+      .single();
+    if (!created.error && created.data) return str(row(created.data).id);
+
+    // A concurrent request may have created the issue's unique case after the
+    // lookup above. Re-read before surfacing the original insert failure.
+    const raced = await this.privilegedClient
+      .from("bug_cases")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("issue_id", issueId)
+      .maybeSingle();
+    const racedData = checked("bug_cases.run_case_race", raced);
+    if (racedData) return str(row(racedData).id);
+    throw new Error(
+      `supabase:bug_cases.run_case_create:${created.error?.message ?? "empty_result"}`,
+    );
   }
 
   private async loadCodexContext(

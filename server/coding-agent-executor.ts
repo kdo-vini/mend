@@ -404,10 +404,11 @@ export function createCodingAgentRunExecutor(
       }));
       let researchArtifact: ResearchArtifact | undefined;
       if (input.stage === "research") {
+        if (!input.caseId) throw new Error("research_case_required");
         researchArtifact = createResearchArtifact({
           schemaVersion: 1,
           workspaceId: input.workspaceId,
-          caseId: input.caseId ?? input.issueId,
+          caseId: input.caseId,
           issueId: input.issueId,
           ticketRevision: input.ticketRevision ?? context.issue.id,
           baseSha: input.baseSha ?? input.githubBaseSha ?? "unknown",
