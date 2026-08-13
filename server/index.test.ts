@@ -203,7 +203,7 @@ describe("readiness gating", () => {
     expect(response.status).toBe(200);
     expect(response.body.ready).toBe(true);
     expect(response.body.checks.runner).toBe(false);
-    expect(elapsedMs).toBeLessThan(4_500);
+    expect(elapsedMs).toBeLessThan(3_000);
   }, 20_000);
 
   it("keeps the runner process unready without a usable agent workspace", async () => {

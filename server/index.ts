@@ -223,6 +223,16 @@ app.get("/api/ready", async (_request, response) => {
     whatsMiau: Boolean(process.env.WHATSMIAU_API_KEY),
     webhook: Boolean(process.env.WHATSMIAU_WEBHOOK_SECRET),
     agentWorkspace: processRole === "runner" ? agentWorkspaceUsable : true,
+    // Careful before simplifying this. In the runner role `runner` and
+    // `agentWorkspace` are deliberately the same probe. That duplication looks
+    // redundant and is not: they are two different questions that happen to
+    // share one signal today, and `runner` MUST stay in the gating list below.
+    // Nothing in the test suite fails if you drop it, because in this role
+    // `agentWorkspace` already forces the same 503 on its own, so the suite
+    // stays green while the runner's own gate quietly disappears. Code review
+    // is the only guard here. To merge them properly, first give the runner a
+    // real check of its own health (its heartbeat actually landing), then
+    // point the gate at that instead of deleting an entry.
     runner:
       processRole === "runner"
         ? agentWorkspaceUsable
