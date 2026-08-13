@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   PenLine,
@@ -16,12 +16,15 @@ import {
   removeKnowledgeArticle,
   saveKnowledgeArticle,
 } from "../api";
-import { normalizeSearch } from "../../../shared/lib/format";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { EmptyState, Skeleton } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
 import { localizedError } from "../../../shared/ui/localizedError";
 import { KnowledgeCollection } from "../components/KnowledgeCollection";
+import {
+  filterKnowledgeArticles,
+  reconcileKnowledgeSelection,
+} from "../knowledge-selection";
 
 function KnowledgeSkeletonPreview({ label }: { label: string }) {
   return (
@@ -69,6 +72,9 @@ export function KnowledgeWorkspacePage({
   });
   const [editorOpen, setEditorOpen] = useState(false);
   const [loading, setLoading] = useState(Boolean(workspaceId));
+  const newArticleRef = useRef<HTMLButtonElement>(null);
+  const clearSearchRef = useRef<HTMLButtonElement>(null);
+  const pendingDeleteFocusRef = useRef<"clear" | "new" | null>(null);
 
   const refresh = useCallback(async () => {
     if (!workspaceId) {
@@ -89,11 +95,27 @@ export function KnowledgeWorkspacePage({
     void refresh();
   }, [refresh]);
 
-  const filtered = articles.filter((article) =>
-    normalizeSearch(
-      `${article.title} ${article.category} ${article.excerpt}`,
-    ).includes(normalizeSearch(search)),
-  );
+  const filtered = filterKnowledgeArticles(articles, search);
+
+  useEffect(() => {
+    const destination = pendingDeleteFocusRef.current;
+    if (!destination) return;
+
+    const target =
+      destination === "clear" ? clearSearchRef.current : newArticleRef.current;
+    if (target) {
+      target.focus();
+      pendingDeleteFocusRef.current = null;
+    }
+  }, [articles.length, filtered.length]);
+
+  const updateSearch = (nextSearch: string) => {
+    setSearch(nextSearch);
+    const visible = filterKnowledgeArticles(articles, nextSearch);
+    setSelectedArticleId((current) =>
+      reconcileKnowledgeSelection(visible, current),
+    );
+  };
 
   const openNewArticle = () => {
     setEditing({ title: "", category: "Suporte", body: "", status: "draft" });
@@ -116,6 +138,7 @@ export function KnowledgeWorkspacePage({
           ? current.map((item) => (item.id === article.id ? article : item))
           : [article, ...current],
       );
+      setSearch("");
       setSelectedArticleId(article.id);
       setEditorOpen(false);
       setEditing({ title: "", category: "Suporte", body: "", status: "draft" });
@@ -135,11 +158,17 @@ export function KnowledgeWorkspacePage({
     if (!workspaceId) return;
     try {
       await removeKnowledgeArticle(workspaceId, id);
-      setArticles((current) => current.filter((item) => item.id !== id));
+      const remaining = articles.filter((item) => item.id !== id);
+      const visibleRemaining = filterKnowledgeArticles(remaining, search);
+      setArticles(remaining);
       if (selectedArticleId === id) {
-        setSelectedArticleId(
-          articles.find((article) => article.id !== id)?.id ?? null,
-        );
+        setSelectedArticleId(visibleRemaining[0]?.id ?? null);
+        if (
+          !visibleRemaining.length &&
+          window.matchMedia("(max-width: 650px)").matches
+        ) {
+          pendingDeleteFocusRef.current = remaining.length ? "clear" : "new";
+        }
       }
       onToast(t("toasts.deleted", { ns: "knowledge" }));
     } catch (error) {
@@ -155,6 +184,7 @@ export function KnowledgeWorkspacePage({
         description={t("ui.description")}
         actions={
           <button
+            ref={newArticleRef}
             className="button button-primary"
             type="button"
             disabled={!workspaceId}
@@ -180,7 +210,7 @@ export function KnowledgeWorkspacePage({
               <input
                 data-global-search
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => updateSearch(event.target.value)}
                 placeholder={t("ui.search")}
                 aria-label={t("ui.search")}
               />
@@ -238,18 +268,39 @@ export function KnowledgeWorkspacePage({
           ) : (
             <div className="knowledge-collection knowledge-collection-empty">
               <EmptyState
-                title={t("ui.noArticles")}
-                description={t("ui.createReviewedAnswer")}
-                action={
-                  <button
-                    className="button button-ghost button-small"
-                    type="button"
-                    disabled={!workspaceId}
-                    onClick={openNewArticle}
-                  >
-                    <Plus size={13} /> {t("create")}
-                  </button>
+                title={
+                  articles.length ? t("ui.noMatching") : t("ui.noArticles")
                 }
+                description={
+                  articles.length
+                    ? t("ui.tryDifferent")
+                    : t("ui.createReviewedAnswer")
+                }
+                action={
+                  articles.length ? (
+                    <button
+                      ref={clearSearchRef}
+                      className="text-button"
+                      type="button"
+                      onClick={() => {
+                        updateSearch("");
+                        setSelectedArticleId(null);
+                      }}
+                    >
+                      {t("ui.clearFilters")}
+                    </button>
+                  ) : (
+                    <button
+                      className="button button-ghost button-small"
+                      type="button"
+                      disabled={!workspaceId}
+                      onClick={openNewArticle}
+                    >
+                      <Plus size={13} /> {t("create")}
+                    </button>
+                  )
+                }
+                search={Boolean(search)}
               />
             </div>
           )}

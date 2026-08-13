@@ -3,11 +3,14 @@ import { useTranslation } from "react-i18next";
 import { ListFilter, Plus, Search, ShieldCheck } from "lucide-react";
 import type { KnowledgeArticle } from "../../../types";
 import { seedKnowledge } from "../../../data";
-import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { Select } from "../../../shared/ui/Select";
 import { KnowledgeCollection } from "../components/KnowledgeCollection";
+import {
+  filterKnowledgeArticles,
+  reconcileKnowledgeSelection,
+} from "../knowledge-selection";
 
 export function KnowledgePage() {
   const { t } = useTranslation("knowledge");
@@ -22,13 +25,15 @@ export function KnowledgePage() {
     "All",
     ...new Set(articles.map((article) => article.category)),
   ];
-  const filtered = articles.filter(
-    (article) =>
-      normalizeSearch(
-        `${article.title} ${article.category} ${article.excerpt}`,
-      ).includes(normalizeSearch(search)) &&
-      (categoryFilter === "All" || article.category === categoryFilter),
-  );
+  const filtered = filterKnowledgeArticles(articles, search, categoryFilter);
+  const applyFilters = (nextSearch: string, nextCategory: string) => {
+    setSearch(nextSearch);
+    setCategoryFilter(nextCategory);
+    const visible = filterKnowledgeArticles(articles, nextSearch, nextCategory);
+    setSelectedArticleId((current) =>
+      reconcileKnowledgeSelection(visible, current),
+    );
+  };
   const addArticle = () => {
     const id = `kb-${Date.now()}`;
     setArticles((current) => [
@@ -43,6 +48,8 @@ export function KnowledgePage() {
       },
       ...current,
     ]);
+    setSearch("");
+    setCategoryFilter("All");
     setSelectedArticleId(id);
   };
 
@@ -69,7 +76,9 @@ export function KnowledgePage() {
             ref={searchRef}
             data-global-search
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) =>
+              applyFilters(event.target.value, categoryFilter)
+            }
             placeholder={t("ui.search")}
             aria-label={t("ui.search")}
           />
@@ -83,7 +92,7 @@ export function KnowledgePage() {
               value: category,
               label: category === "All" ? t("ui.allCategories") : category,
             }))}
-            onChange={setCategoryFilter}
+            onChange={(category) => applyFilters(search, category)}
           />
         </div>
       </div>
@@ -106,8 +115,8 @@ export function KnowledgePage() {
                   className="text-button"
                   type="button"
                   onClick={() => {
-                    setSearch("");
-                    setCategoryFilter("All");
+                    applyFilters("", "All");
+                    setSelectedArticleId(null);
                   }}
                 >
                   {t("ui.clearFilters")}
