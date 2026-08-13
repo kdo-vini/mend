@@ -2398,3 +2398,60 @@ and any non-blocking residual risk. Mark the implementation plan checkboxes for
 completed tasks in one final documentation commit only if that commit itself is
 also deployed and re-smoked; otherwise keep execution evidence in the ignored
 SDD ledger and leave the reviewed release immutable.
+
+---
+
+### Task 11: Replace the Inbox "New issue" action with "New chat"
+
+Added 2026-08-13, after Tasks 0-8, on the product owner's approval of a bounded
+design. Sequenced after Task 8 and before Task 9 so the cross-feature QA and
+visual matrix cover this surface. Full step-by-step brief lives in the ignored
+SDD workspace as `task-11-brief.md`; this section is the durable record of
+scope, rationale, and the constraint it overrides.
+
+**Constraint override (owner decision, not an implementer ruling):** this task
+adds one backend route, which the Global Constraints above forbid. The owner
+approved that override knowing it puts backend changes into the whole-branch
+review and the Dokploy release. The override covers the single route below and
+nothing else — no new dependency, no migration, no direct Supabase call from
+the UI, no autonomous behavior.
+
+**Problem:** the Inbox header's primary action is New issue / Novo chamado
+(`InboxPage.tsx:1214` desktop, `:2089` mobile), duplicating the primary action
+of the Issues page. Creating an issue is not the job being done in the Inbox.
+Starting a conversation is, and the app offers no way to do it.
+
+**Existing machinery this task reuses rather than reinvents:**
+
+- `normalizePhoneNumber` (`server/whatsmiau.ts:183`) reduces any input to
+  digits, which is the normalization for DDI + DDD + number.
+- `inbox_ingest_message`, called from `InboxService.ingestMessage`
+  (`server/inbox-service.ts:386`), already creates contact + conversation +
+  message from a phone number and accepts `direction: "outbound"`.
+- Outbound-first conversations are an established schema concept
+  (`supabase/migrations/20260811125008_classify_outbound_first_conversations.sql`),
+  landing at `attention_state = 'none'` rather than `needs_attention`.
+- `WhatsAppService.sendText` (`server/whatsapp-service.ts:148`) already does
+  provider-send then record-outbound, in that order.
+
+**Scope:**
+
+- `POST /api/conversations` returning `{ conversationId, created }`, with the
+  auth and workspace scoping of its neighbours in `conversation-routes.ts`.
+  Existing conversation for that phone: return it with `created: false` and
+  send nothing. New phone: send, then record as outbound.
+- A phone lookup on `ConversationPort` (`server/contracts/api-ports.ts:234`),
+  implemented in the Supabase adapter, workspace-scoped.
+- `NewChatDialog` in the Inbox, reusing Task 3's Radix Dialog focus/Escape/
+  restore contract. Channel selector only when more than one channel is
+  connected. Visible advisory that messaging a number which never wrote first
+  carries WhatsApp account risk.
+- `startConversation()` in `src/features/inbox/api.ts`.
+- New issue removed from the Inbox on desktop and mobile, including the
+  `onNewIssue` prop threading that exists only to serve it. The Issues page
+  keeps its own New issue action unchanged.
+- Bilingual copy, 44px mobile targets, semantic theme tokens, no overflow.
+
+**The test that matters most:** a phone number that already has a conversation
+must return `created: false` and send nothing. An accidental send into an
+existing customer thread is the failure mode this design exists to prevent.
