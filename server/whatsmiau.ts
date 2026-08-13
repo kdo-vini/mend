@@ -10,7 +10,13 @@ export interface ConnectionState {
   suspended?: boolean;
 }
 export interface ProviderMessage {
-  key?: { id?: string };
+  /**
+   * `remoteJid` is the number WhatsApp actually resolved the send to, which can
+   * differ from the digits a human typed (a Brazilian mobile is reachable with
+   * and without the ninth digit). Optional: not every provider response carries
+   * it.
+   */
+  key?: { id?: string; remoteJid?: string };
   message?: Record<string, unknown>;
 }
 

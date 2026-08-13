@@ -159,9 +159,6 @@
   .conversation-panel {
     min-height: 600px;
   }
-  .conversation-list {
-    max-height: 330px;
-  }
   .conversation-header {
     padding: 12px;
   }

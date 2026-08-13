@@ -463,7 +463,7 @@
       "automation": "Automation",
       "status": "Status",
       "actions": "Actions",
-      "automationNotRequired": "Available"
+      "automationNotRequired": "Not required"
     },
     "overview": {
       "title": "Workspace settings",

@@ -12,15 +12,16 @@ import {
   type InboxMediaInput,
   type InboxMessageRecord,
 } from "./inbox-service.js";
-import type {
-  ProviderMessage,
-  SendButtonsInput,
-  SendListInput,
-  SendReactionInput,
-  SendAudioInput,
-  SendMediaInput,
-  SendTextInput,
-  WhatsmiauGroupInfo,
+import {
+  normalizePhoneNumber,
+  type ProviderMessage,
+  type SendButtonsInput,
+  type SendListInput,
+  type SendReactionInput,
+  type SendAudioInput,
+  type SendMediaInput,
+  type SendTextInput,
+  type WhatsmiauGroupInfo,
 } from "./whatsmiau.js";
 import type { SupportFlowNode } from "../src/shared/support-flow.js";
 
@@ -116,6 +117,20 @@ function providerMessageId(value: unknown): string {
   return id?.slice(0, 500) ?? `client-${randomUUID()}`;
 }
 
+/** The number WhatsApp resolved the send to, when the provider reports one. */
+function providerRemoteJid(value: unknown): string | undefined {
+  const root = asRecord(value);
+  const data = asRecord(root.data);
+  const candidates = [
+    asRecord(root.key).remoteJid,
+    asRecord(data.key).remoteJid,
+  ];
+  return candidates.find(
+    (candidate): candidate is string =>
+      typeof candidate === "string" && candidate.trim().length > 0,
+  );
+}
+
 function mediaTypeFor(input: {
   mediaType?: SendMediaRequest["mediaType"];
   mimeType?: string;
@@ -202,14 +217,21 @@ export class WhatsAppService {
       number: input.phoneNumber,
       text,
     });
+    // Record the number WhatsApp resolved, not the digits that were typed: a
+    // Brazilian mobile answers on both the 8- and 9-digit forms, and the
+    // customer's reply arrives at the webhook under the resolved JID. Recording
+    // the typed form would let that reply create a second contact and
+    // conversation, splitting the thread this endpoint exists to keep whole.
+    const remoteJid =
+      providerRemoteJid(response) ?? `${input.phoneNumber}@s.whatsapp.net`;
     return this.inbox.persistNormalizedMessage(
       context,
       input.channelConnectionId,
       {
         instanceName: input.instanceName,
         providerMessageId: providerMessageId(response),
-        remoteJid: `${input.phoneNumber}@s.whatsapp.net`,
-        phoneNumber: input.phoneNumber,
+        remoteJid,
+        phoneNumber: normalizePhoneNumber(remoteJid) || input.phoneNumber,
         direction: "outbound",
         messageType: "text",
         text,

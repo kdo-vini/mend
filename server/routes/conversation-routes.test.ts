@@ -103,9 +103,11 @@ class FakeSupabase {
   }
 }
 
-function fakeProvider() {
+function fakeProvider(sendTextResponse?: Row) {
   return {
-    sendText: vi.fn(async () => ({ key: { id: "provider-message-1" } })),
+    sendText: vi.fn(
+      async () => sendTextResponse ?? { key: { id: "provider-message-1" } },
+    ),
     sendMedia: vi.fn(async () => ({ key: { id: "provider-message-2" } })),
     sendAudio: vi.fn(async () => ({ key: { id: "provider-message-3" } })),
     markAsRead: vi.fn(async () => undefined),
@@ -121,6 +123,7 @@ function createHarness(
     channelStatus?: string;
     contacts?: (ids: Workspaces) => Row[];
     conversations?: (ids: Workspaces) => Row[];
+    sendTextResponse?: Row;
   } = {},
 ) {
   const workspaceId = randomUUID();
@@ -145,7 +148,7 @@ function createHarness(
     conversations: options.conversations?.(ids) ?? [],
     ai_outbound_messages: [],
   });
-  const provider = fakeProvider();
+  const provider = fakeProvider(options.sendTextResponse);
   const app = express();
   app.use(express.json());
   // server/index.ts builds the router and its adapters inside a per-request
@@ -381,6 +384,53 @@ describe("POST /api/conversations", () => {
       p_direction: "outbound",
       p_message_type: "text",
       p_text: "Hi, this is Téchne support.",
+    });
+  });
+
+  it("records the number WhatsApp resolved rather than the digits typed", async () => {
+    const { app, client, provider, workspaceId } = createHarness({
+      sendTextResponse: {
+        key: {
+          id: "provider-message-1",
+          remoteJid: "551188887777@s.whatsapp.net",
+        },
+      },
+    });
+
+    const response = await startConversation(app, workspaceId, {
+      channelId,
+      phoneNumber: "+55 (11) 98888-7777",
+      message: "Hello",
+    });
+
+    expect(response.status).toBe(201);
+    // The provider is still dialled with what the founder typed.
+    expect(provider.sendText).toHaveBeenCalledWith({
+      instanceName: "techne-support",
+      number: "5511988887777",
+      text: "Hello",
+    });
+    // The contact is stored under the resolved number, so the customer's reply
+    // arriving under that JID joins this conversation instead of opening a
+    // second one.
+    expect(client.rpcCalls[0].args).toMatchObject({
+      p_phone_number: "551188887777",
+      p_direction: "outbound",
+    });
+  });
+
+  it("falls back to the typed digits when the provider reports no resolved number", async () => {
+    const { app, client, workspaceId } = createHarness();
+
+    const response = await startConversation(app, workspaceId, {
+      channelId,
+      phoneNumber: "+55 (11) 98888-7777",
+      message: "Hello",
+    });
+
+    expect(response.status).toBe(201);
+    expect(client.rpcCalls[0].args).toMatchObject({
+      p_phone_number: "5511988887777",
     });
   });
 

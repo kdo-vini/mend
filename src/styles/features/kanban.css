@@ -991,8 +991,12 @@
   .security-facts dd {
     text-align: left;
   }
+  /* The 220px covers the topbar, page padding and the Inbox toolbar above the
+     layout. The bottom tab bar was never subtracted, so the rail ran under the
+     nav and pushed the page into a short scroll. The conversation-open state
+     below already accounts for it. */
   .inbox-layout {
-    height: calc(100dvh - 220px);
+    height: calc(100dvh - 220px - var(--mobile-bottom-nav-clearance));
     min-height: 430px;
   }
   .inbox-layout:not(.mobile-conversation-open) .conversation-panel {

@@ -144,3 +144,35 @@ test("compact Inbox traps and restores focus while case context is modal", async
   await expect(context).toBeHidden();
   await expect(trigger).toBeFocused();
 });
+
+test("mobile Inbox conversation list uses the rail height and clears the bottom nav", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/inbox?demo=1");
+
+  const rail = page.locator(".conversation-rail");
+  const list = page.locator(".conversation-list");
+  const nav = page.locator(".mobile-bottom-nav");
+  await expect(rail).toBeVisible();
+  await expect(nav).toBeVisible();
+
+  const railBox = await rail.boundingBox();
+  const listBox = await list.boundingBox();
+  const navBox = await nav.boundingBox();
+  if (!railBox || !listBox || !navBox)
+    throw new Error("inbox rail not laid out");
+
+  // The list must scroll inside the rail rather than stop at a fixed cap that
+  // leaves most of the rail unusable and hides conversations below it.
+  expect(listBox.height).toBeGreaterThan(railBox.height * 0.6);
+  // Conversations must not run under the bottom tab bar.
+  expect(listBox.y + listBox.height).toBeLessThanOrEqual(navBox.y);
+  expect(railBox.y + railBox.height).toBeLessThanOrEqual(navBox.y);
+  // The Inbox is a fixed-height surface: the page itself must not scroll.
+  const pageScroll = await page.evaluate(() => ({
+    scrollHeight: document.scrollingElement?.scrollHeight ?? 0,
+    innerHeight: window.innerHeight,
+  }));
+  expect(pageScroll.scrollHeight).toBeLessThanOrEqual(pageScroll.innerHeight);
+});

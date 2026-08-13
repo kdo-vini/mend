@@ -318,6 +318,19 @@ export function InboxPage({
     setNewChatStarting(true);
     try {
       const result = await startConversation({ workspaceId, ...input });
+      // Selecting an id that is not in `conversations` renders conversations[0]
+      // instead, dropping the founder into an unrelated thread until realtime
+      // catches up, so the conversation is loaded before it is selected. The
+      // message is already sent by now: a snapshot failure must not be reported
+      // as a failed start, and realtime still heals the list.
+      const snapshot = await loadLiveConversationSnapshot(
+        workspaceId,
+        result.conversationId,
+      ).catch(() => undefined);
+      if (snapshot)
+        setConversations((current) =>
+          mergeConversationSnapshot(current, snapshot),
+        );
       setNewChatOpen(false);
       setSelectedConversationId(result.conversationId);
       setMobileConversationOpen(true);

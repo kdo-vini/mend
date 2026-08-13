@@ -455,7 +455,7 @@
       "title": "Agentes e modelos",
       "description": "Controle o acesso aos providers e escolha como cada etapa de engenharia é executada.",
       "sections": "Configurações de agentes e modelos",
-      "providers": "Providers",
+      "providers": "Provedores",
       "runPolicy": "Política de execução",
       "connection": "Conexão",
       "authentication": "Autenticação",
@@ -463,7 +463,7 @@
       "automation": "Automação",
       "status": "Status",
       "actions": "Ações",
-      "automationNotRequired": "Disponível"
+      "automationNotRequired": "Não necessário"
     },
     "overview": {
       "title": "Configurações do espaço de trabalho",
