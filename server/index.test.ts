@@ -10,33 +10,50 @@ import {
 } from "vitest";
 import request from "supertest";
 import type { Express } from "express";
-import { app } from "./index.js";
+
+async function loadApp(): Promise<Express> {
+  const loaded = (await import("./index.js")) as { app: Express };
+  return loaded.app;
+}
 
 beforeEach(() => {
   process.env.WHATSMIAU_WEBHOOK_SECRET = "test-secret";
 });
 
 describe("API boundary", () => {
+  it("allows Supabase media and local blob previews through CSP", async () => {
+    const cspSupabaseUrl = "https://csp.test.supabase.co";
+    const previousSupabaseUrl = process.env.SUPABASE_URL;
+    const previousViteSupabaseUrl = process.env.VITE_SUPABASE_URL;
+    try {
+      process.env.SUPABASE_URL = cspSupabaseUrl;
+      delete process.env.VITE_SUPABASE_URL;
+      vi.resetModules();
+      const server = await loadApp();
+      const response = await request(server).get("/api/health");
+      const csp = response.headers["content-security-policy"];
+      const supabaseOrigin = new URL(cspSupabaseUrl).origin;
+
+      expect(csp).toContain(`img-src 'self' data: blob: ${supabaseOrigin}`);
+      expect(csp).toContain(`media-src 'self' blob: ${supabaseOrigin}`);
+    } finally {
+      if (previousSupabaseUrl === undefined) delete process.env.SUPABASE_URL;
+      else process.env.SUPABASE_URL = previousSupabaseUrl;
+      if (previousViteSupabaseUrl === undefined)
+        delete process.env.VITE_SUPABASE_URL;
+      else process.env.VITE_SUPABASE_URL = previousViteSupabaseUrl;
+      vi.resetModules();
+    }
+  });
+
   it("returns health without exposing configuration", async () => {
-    const response = await request(app).get("/api/health");
+    const response = await request(await loadApp()).get("/api/health");
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ ok: true, service: "mend-api" });
   });
 
-  it("allows Supabase media and local blob previews through CSP", async () => {
-    const response = await request(app).get("/api/health");
-    const csp = response.headers["content-security-policy"];
-    const supabaseUrl =
-      process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-    expect(supabaseUrl).toBeTruthy();
-    const supabaseOrigin = new URL(supabaseUrl as string).origin;
-
-    expect(csp).toContain(`img-src 'self' data: blob: ${supabaseOrigin}`);
-    expect(csp).toContain(`media-src 'self' blob: ${supabaseOrigin}`);
-  });
-
   it("reports readiness as booleans without exposing secret values", async () => {
-    const response = await request(app).get("/api/ready");
+    const response = await request(await loadApp()).get("/api/ready");
     expect([200, 503]).toContain(response.status);
     expect(response.body).toEqual({
       ready: expect.any(Boolean),
@@ -52,7 +69,7 @@ describe("API boundary", () => {
   });
 
   it("rejects an invalid Whatsmiau webhook", async () => {
-    const response = await request(app)
+    const response = await request(await loadApp())
       .post("/webhooks/whatsmiau")
       .set("Authorization", "Bearer wrong")
       .send({ event: "messages.upsert" });
@@ -60,7 +77,7 @@ describe("API boundary", () => {
   });
 
   it("acknowledges a valid webhook without running AI inline", async () => {
-    const response = await request(app)
+    const response = await request(await loadApp())
       .post("/webhooks/whatsmiau")
       .set("Authorization", "Bearer test-secret")
       .send({ event: "messages.upsert", instance: "mend-test", data: {} });
@@ -69,10 +86,11 @@ describe("API boundary", () => {
   });
 
   it("does not expose paid AI endpoints without a Supabase bearer token", async () => {
-    const draft = await request(app)
+    const server = await loadApp();
+    const draft = await request(server)
       .post("/api/ai/draft")
       .send({ conversation: "hello" });
-    const triage = await request(app)
+    const triage = await request(server)
       .post("/api/ai/triage")
       .send({ conversation: "hello" });
     expect(draft.status).toBe(401);
