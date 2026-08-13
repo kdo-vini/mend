@@ -108,6 +108,9 @@
   }
 }
 @media (max-width: 650px) {
+  .view-tabs a {
+    min-height: var(--mobile-touch-target);
+  }
   .automation-route-grid {
     grid-template-columns: 1fr;
   }

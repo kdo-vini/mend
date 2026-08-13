@@ -83,45 +83,23 @@ test("uses the explicit Portuguese interface choice after reload", async ({
   ).toBeVisible();
 });
 
-test("operator can open the shared and personal Kanban views", async ({
+test("operator can open the shared issues board and personal work", async ({
   page,
-}, testInfo) => {
-  await page.goto("/kanban?demo=1");
+}) => {
+  await page.goto("/issues?demo=1&view=board");
   await expect(page.getByRole("heading", { name: "Kanban" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Personal" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "New issue", exact: true }),
+  ).toBeVisible();
 
-  if (testInfo.project.name === "mobile") {
-    await expect(page.getByRole("tab", { name: "Personal" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(
-      page
-        .getByRole("button", {
-          name: /Review onboarding checklist|Revisar lista de onboarding/,
-        })
-        .first(),
-    ).toBeVisible();
-    await expect(
-      page.locator(".mobile-bottom-nav").getByRole("link", { name: "Kanban" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "New task", exact: true }).click();
-    await expect(
-      page.getByRole("textbox", { name: "New personal task" }),
-    ).toBeFocused();
-  } else {
-    await expect(
-      page.locator(".kanban-column-heading").filter({ hasText: "Triage" }),
-    ).toBeVisible();
-    await expect(
-      page.locator(".kanban-column-heading").filter({ hasText: "In progress" }),
-    ).toBeVisible();
-    await page.getByRole("tab", { name: "Personal" }).click();
-    await expect(page.getByPlaceholder("Add a task…")).toBeVisible();
-    await page.getByRole("button", { name: "New task", exact: true }).click();
-    await expect(
-      page.getByRole("textbox", { name: "New personal task" }),
-    ).toBeFocused();
-  }
+  await page.goto("/my-work?demo=1");
+  await expect(page.getByRole("tab", { name: "Shared" })).toHaveCount(0);
+  await expect(page.getByPlaceholder("Add a task…")).toBeVisible();
+  await page.getByRole("button", { name: "New task", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "New personal task" }),
+  ).toBeFocused();
 });
 
 test("operator can move from inbox to issues and create an issue", async ({

@@ -186,6 +186,7 @@ function initialMode(): Mode {
 }
 
 interface KanbanPageProps {
+  fixedMode?: "shared" | "personal";
   workspaceId: string;
   currentUserId: string;
   issues: Issue[];
@@ -198,6 +199,7 @@ interface KanbanPageProps {
 }
 
 export function KanbanPage({
+  fixedMode,
   workspaceId,
   currentUserId,
   issues,
@@ -209,7 +211,8 @@ export function KanbanPage({
   onToast,
 }: KanbanPageProps) {
   const { t } = useTranslation("kanban");
-  const [mode, setMode] = useState<Mode>(initialMode);
+  const [localMode, setLocalMode] = useState<Mode>(initialMode);
+  const mode = fixedMode ?? localMode;
   const [range, setRange] = useState<PersonalRange>("today");
   const [showCanceled, setShowCanceled] = useState(false);
   const [tasks, setTasks] = useState<PersonalTask[]>(demoMode ? demoTasks : []);
@@ -614,30 +617,32 @@ export function KanbanPage({
           </p>
         </div>
         <div className="kanban-header-actions">
-          <div
-            className="kanban-mode-switch"
-            role="tablist"
-            aria-label={t("ui.view")}
-          >
-            <button
-              className={mode === "shared" ? "active" : ""}
-              type="button"
-              role="tab"
-              aria-selected={mode === "shared"}
-              onClick={() => setMode("shared")}
+          {fixedMode === undefined && (
+            <div
+              className="kanban-mode-switch"
+              role="tablist"
+              aria-label={t("ui.view")}
             >
-              {t("ui.shared")}
-            </button>
-            <button
-              className={mode === "personal" ? "active" : ""}
-              type="button"
-              role="tab"
-              aria-selected={mode === "personal"}
-              onClick={() => setMode("personal")}
-            >
-              {t("ui.personal")}
-            </button>
-          </div>
+              <button
+                className={mode === "shared" ? "active" : ""}
+                type="button"
+                role="tab"
+                aria-selected={mode === "shared"}
+                onClick={() => setLocalMode("shared")}
+              >
+                {t("ui.shared")}
+              </button>
+              <button
+                className={mode === "personal" ? "active" : ""}
+                type="button"
+                role="tab"
+                aria-selected={mode === "personal"}
+                onClick={() => setLocalMode("personal")}
+              >
+                {t("ui.personal")}
+              </button>
+            </div>
+          )}
           {mode === "shared" && (
             <button
               className={`button button-ghost ${showCanceled ? "active" : ""}`}

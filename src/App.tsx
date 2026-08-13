@@ -1024,7 +1024,6 @@ function App() {
       />
       <main className="main-shell">
         <ShellMobileTopbar
-          operator={operatorIdentity}
           onOpenCommand={() => setCommandOpen(true)}
           notifications={notifications}
           unreadNotificationCount={unreadNotificationCount}
@@ -1089,7 +1088,7 @@ function App() {
                   />
                 </FeatureBoundary>
               }
-              issues={
+              issuesList={
                 <FeatureBoundary label={t("states.loadingIssues")}>
                   <FeatureIssuesPage
                     issues={issues}
@@ -1102,9 +1101,26 @@ function App() {
                   />
                 </FeatureBoundary>
               }
-              kanban={
+              issuesBoard={
                 <FeatureBoundary label={t("states.loadingKanban")}>
                   <FeatureKanbanPage
+                    fixedMode="shared"
+                    workspaceId={workspaceId ?? ""}
+                    currentUserId={operatorIdentity.id}
+                    issues={issues}
+                    assigneeLabel={assigneeLabel}
+                    demoMode={demoMode}
+                    onUpdateIssue={updateIssue}
+                    onOpenIssue={setInspectorIssueId}
+                    onNewIssue={() => setCreateIssueOpen(true)}
+                    onToast={setToast}
+                  />
+                </FeatureBoundary>
+              }
+              myWork={
+                <FeatureBoundary label={t("states.loadingKanban")}>
+                  <FeatureKanbanPage
+                    fixedMode="personal"
                     workspaceId={workspaceId ?? ""}
                     currentUserId={operatorIdentity.id}
                     issues={issues}
@@ -1215,7 +1231,19 @@ function App() {
           )}
         </ErrorBoundary>
       </main>
-      <ShellMobileBottomNav />
+      <ShellMobileBottomNav
+        theme={theme}
+        onToggleTheme={() =>
+          setTheme((current) => (current === "dark" ? "light" : "dark"))
+        }
+        onSignOut={() => {
+          if (demoMode) {
+            setToast(t("toasts.demoNoSession"));
+            return;
+          }
+          void supabase?.auth.signOut().then(() => window.location.reload());
+        }}
+      />
       {inspectorIssueId && (
         <FeatureIssueInspector
           issue={issues.find((item) => item.id === inspectorIssueId)}

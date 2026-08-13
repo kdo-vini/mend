@@ -2,16 +2,21 @@ import {
   BookOpen,
   CircleDot,
   Inbox as InboxIcon,
-  KanbanSquare,
   Settings as SettingsIcon,
   TerminalSquare,
 } from "lucide-react";
 
+export type WorkspaceNavigationId =
+  | "inbox"
+  | "issues"
+  | "runs"
+  | "knowledge"
+  | "settings";
+
 export const navItems = [
-  { to: "/inbox", label: "Inbox", icon: InboxIcon },
-  { to: "/issues", label: "Issues", icon: CircleDot },
-  { to: "/kanban", label: "Kanban", icon: KanbanSquare },
-  { to: "/agent-runs", label: "Agent runs", icon: TerminalSquare },
-  { to: "/knowledge", label: "Knowledge", icon: BookOpen },
-  { to: "/settings", label: "Settings", icon: SettingsIcon },
+  { id: "inbox", to: "/inbox", icon: InboxIcon },
+  { id: "issues", to: "/issues", icon: CircleDot },
+  { id: "runs", to: "/agent-runs", icon: TerminalSquare },
+  { id: "knowledge", to: "/knowledge", icon: BookOpen },
+  { id: "settings", to: "/settings", icon: SettingsIcon },
 ] as const;

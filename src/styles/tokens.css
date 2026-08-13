@@ -37,6 +37,11 @@
   --settings-mobile-gap: 18px;
   --settings-content-max-width: 720px;
   --control-height: 32px;
+  --mobile-touch-target: 44px;
+  --mobile-bottom-nav-height: 62px;
+  --mobile-bottom-nav-clearance: calc(
+    var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom)
+  );
   --radius: 0.625rem;
   --radius-small: 5px;
   --radius-control: 5px;

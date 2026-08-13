@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   ChevronRight,
@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   Moon,
   Search,
-  Settings as SettingsIcon,
   Sun,
 } from "lucide-react";
 import type {
@@ -19,26 +18,6 @@ import type {
 import { BrandMark } from "../../components/BrandLockup";
 import { formatActivityTime, identityInitials } from "../../shared/lib/format";
 import { navItems } from "./navigation";
-
-function translatedNavLabel(
-  label: (typeof navItems)[number]["label"],
-  t: (key: string, options?: Record<string, unknown>) => string,
-) {
-  switch (label) {
-    case "Inbox":
-      return t("navigation.inbox", { ns: "common" });
-    case "Issues":
-      return t("navigation.issues", { ns: "common" });
-    case "Kanban":
-      return t("navigation.kanban", { ns: "common" });
-    case "Agent runs":
-      return t("navigation.agentRuns", { ns: "common" });
-    case "Knowledge":
-      return t("navigation.knowledge", { ns: "common" });
-    case "Settings":
-      return t("navigation.settings", { ns: "common" });
-  }
-}
 
 export function NotificationCenter({
   notifications,
@@ -315,14 +294,14 @@ export function Sidebar({
         aria-label={t("navigation.primaryNavigation")}
       >
         <div className="nav-section-label">{t("navigation.workspace")}</div>
-        {navItems.map(({ to, label, icon: Icon }) => (
+        {navItems.map(({ id, to, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
             <Icon size={16} strokeWidth={1.7} />
-            <span>{translatedNavLabel(label, t)}</span>
+            <span>{t(`navigation.${id}`)}</span>
           </NavLink>
         ))}
       </nav>
@@ -344,7 +323,11 @@ export function Sidebar({
               className="icon-button subtle"
               type="button"
               aria-label={t("navigation.useTheme", {
-                theme: theme === "dark" ? "light" : "dark",
+                theme: t(
+                  theme === "dark"
+                    ? "navigation.themeLight"
+                    : "navigation.themeDark",
+                ),
               })}
               onClick={onToggleTheme}
             >
@@ -384,7 +367,6 @@ export function Sidebar({
 }
 
 export function MobileTopbar({
-  operator,
   onOpenCommand,
   notifications,
   unreadNotificationCount,
@@ -393,7 +375,6 @@ export function MobileTopbar({
   onDismissNotification,
   onDismissAllNotifications,
 }: {
-  operator: { name: string; email: string };
   onOpenCommand: () => void;
   notifications: WorkspaceNotification[];
   unreadNotificationCount: number;
@@ -430,31 +411,37 @@ export function MobileTopbar({
         >
           <Search size={17} />
         </button>
-        <NavLink
-          className="mobile-profile-link"
-          to="/profile"
-          aria-label={t("navigation.openProfile")}
-        >
-          <span className="avatar avatar-small avatar-violet">
-            {identityInitials(operator.name)}
-          </span>
-        </NavLink>
       </div>
     </header>
   );
 }
 
-export function MobileBottomNav() {
+export function MobileBottomNav({
+  theme,
+  onToggleTheme,
+  onSignOut,
+}: {
+  theme: "dark" | "light";
+  onToggleTheme: () => void;
+  onSignOut: () => void;
+}) {
   const { t } = useTranslation("common");
-  const primary = navItems.filter(({ to }) =>
-    ["/inbox", "/kanban", "/issues", "/agent-runs"].includes(to),
+  const { search } = useLocation();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const primary = navItems.filter(({ id }) =>
+    ["inbox", "issues", "runs"].includes(id),
   );
+  const secondarySearch = new URLSearchParams(search);
+  secondarySearch.delete("mode");
+  secondarySearch.delete("view");
+  const secondaryQuery = secondarySearch.toString();
+  const myWorkHref = `/my-work${secondaryQuery ? `?${secondaryQuery}` : ""}`;
   return (
     <nav
       className="mobile-bottom-nav"
       aria-label={t("navigation.mobileNavigation")}
     >
-      {primary.map(({ to, label, icon: Icon }) => (
+      {primary.map(({ id, to, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
@@ -463,31 +450,58 @@ export function MobileBottomNav() {
           }
         >
           <Icon size={19} strokeWidth={1.8} />
-          <span>
-            {label === "Agent runs"
-              ? t("navigation.agentRunsShort")
-              : translatedNavLabel(label, t)}
-          </span>
+          <span>{t(`navigation.${id}`)}</span>
         </NavLink>
       ))}
-      <details className="mobile-more-menu">
-        <summary className="mobile-nav-item">
+      <div className={`mobile-more-menu ${moreOpen ? "is-open" : ""}`}>
+        <button
+          className="mobile-nav-item"
+          type="button"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((current) => !current)}
+        >
           <MoreHorizontal size={19} strokeWidth={1.8} />
           <span>{t("navigation.more")}</span>
-        </summary>
-        <div className="mobile-more-popover">
-          <NavLink to="/knowledge">
-            <span>{t("navigation.knowledge")}</span>
-          </NavLink>
-          <NavLink to="/settings">
-            <SettingsIcon size={16} />
-            <span>{t("navigation.settings")}</span>
-          </NavLink>
-          <NavLink to="/profile">
-            <span>{t("navigation.profile")}</span>
-          </NavLink>
-        </div>
-      </details>
+        </button>
+        {moreOpen && (
+          <div className="mobile-more-popover">
+            <NavLink to="/knowledge" onClick={() => setMoreOpen(false)}>
+              {t("navigation.knowledge")}
+            </NavLink>
+            <NavLink to={myWorkHref} onClick={() => setMoreOpen(false)}>
+              {t("navigation.myWork")}
+            </NavLink>
+            <NavLink to="/settings" onClick={() => setMoreOpen(false)}>
+              {t("navigation.settings")}
+            </NavLink>
+            <NavLink to="/profile" onClick={() => setMoreOpen(false)}>
+              {t("navigation.profile")}
+            </NavLink>
+            <div className="mobile-more-actions">
+              <button
+                type="button"
+                aria-label={t("navigation.useTheme", {
+                  theme: t(
+                    theme === "dark"
+                      ? "navigation.themeLight"
+                      : "navigation.themeDark",
+                  ),
+                })}
+                onClick={onToggleTheme}
+              >
+                {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+              </button>
+              <button
+                type="button"
+                aria-label={t("navigation.logout")}
+                onClick={onSignOut}
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </nav>
   );
 }

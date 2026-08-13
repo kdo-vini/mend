@@ -229,6 +229,29 @@ kbd {
 .mobile-conversation-back {
   display: none;
 }
+.mobile-more-actions {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--line);
+}
+.mobile-more-actions button {
+  min-width: var(--mobile-touch-target);
+  min-height: var(--mobile-touch-target);
+  display: grid;
+  flex: 1;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--muted);
+}
+.mobile-more-actions button:hover,
+.mobile-more-actions button:focus-visible {
+  background: var(--surface-3);
+  color: var(--ink);
+}
 
 /* Control Room v2: a quieter frame for the evidence-first workflow. */
 .app-shell {
