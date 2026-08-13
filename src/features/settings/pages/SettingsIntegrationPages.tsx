@@ -45,18 +45,32 @@ import {
   SettingsStatus,
   SettingsWorkspaceRequired,
 } from "../components/SettingsShared";
-import { formatSettingsDate } from "../settings-utils";
+import {
+  formatSettingsDate,
+  resolveIntegrationDirectoryStatuses,
+  type IntegrationDirectoryStatus,
+  type IntegrationDirectoryStatuses,
+} from "../settings-utils";
 
-type IntegrationDirectoryStatus = "connected" | "attention" | "unconfigured";
+const checkingDirectoryStatuses: IntegrationDirectoryStatuses = {
+  github: "checking",
+  google: "checking",
+  supabase: "checking",
+  mcp: "checking",
+};
 
-const directoryStatusFor = (
-  records: Array<{ status: string }>,
-): IntegrationDirectoryStatus =>
-  records.some((record) => record.status === "connected")
-    ? "connected"
-    : records.length
-      ? "attention"
-      : "unconfigured";
+// No workspace means there is nothing to check yet, not an in-flight
+// request — "unconfigured" ("Not configured") is the accurate terminal
+// state here, distinct from "checking" (a real fetch is running for a real
+// workspace). This is also the state a fresh mount without a workspace
+// starts in, so there is no flash of "Checking" for founders who have not
+// selected a workspace at all.
+const unconfiguredDirectoryStatuses: IntegrationDirectoryStatuses = {
+  github: "unconfigured",
+  google: "unconfigured",
+  supabase: "unconfigured",
+  mcp: "unconfigured",
+};
 
 export function SettingsIntegrationsPage({
   workspaceId,
@@ -64,53 +78,24 @@ export function SettingsIntegrationsPage({
   workspaceId: string | null;
 }) {
   const { t } = useTranslation("settings");
-  const [statuses, setStatuses] = useState<
-    Record<"github" | "google" | "supabase" | "mcp", IntegrationDirectoryStatus>
-  >({
-    github: "unconfigured",
-    google: "unconfigured",
-    supabase: "unconfigured",
-    mcp: "unconfigured",
-  });
+  const [statuses, setStatuses] = useState<IntegrationDirectoryStatuses>(() =>
+    workspaceId ? checkingDirectoryStatuses : unconfiguredDirectoryStatuses,
+  );
 
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      setStatuses(unconfiguredDirectoryStatuses);
+      return;
+    }
     let active = true;
+    setStatuses(checkingDirectoryStatuses);
     void Promise.allSettled([
       getLiveGitHubConnection(workspaceId),
       listLiveGoogleConnections(workspaceId),
       listLiveMcpConnections(workspaceId),
-    ]).then(([github, google, mcp]) => {
+    ]).then((results) => {
       if (!active) return;
-      const mcpConnections = mcp.status === "fulfilled" ? mcp.value : [];
-      setStatuses({
-        github:
-          github.status === "rejected"
-            ? "attention"
-            : github.value.connected
-              ? "connected"
-              : "unconfigured",
-        google:
-          google.status === "rejected"
-            ? "attention"
-            : directoryStatusFor(google.value),
-        supabase:
-          mcp.status === "rejected"
-            ? "attention"
-            : directoryStatusFor(
-                mcpConnections.filter(
-                  (connection) => connection.provider === "supabase",
-                ),
-              ),
-        mcp:
-          mcp.status === "rejected"
-            ? "attention"
-            : directoryStatusFor(
-                mcpConnections.filter(
-                  (connection) => connection.provider === "custom",
-                ),
-              ),
-      });
+      setStatuses(resolveIntegrationDirectoryStatuses(results));
     });
     return () => {
       active = false;
@@ -162,7 +147,7 @@ export function SettingsIntegrationsPage({
   );
 }
 
-function IntegrationLink({
+export function IntegrationLink({
   to,
   icon,
   title,
@@ -181,7 +166,9 @@ function IntegrationLink({
       ? t("v2.integrations.statusConnected")
       : status === "attention"
         ? t("v2.integrations.statusNeedsAttention")
-        : t("v2.integrations.statusNotConfigured");
+        : status === "checking"
+          ? t("v2.integrations.statusChecking")
+          : t("v2.integrations.statusNotConfigured");
   return (
     <Link className="settings-integration-link" to={to}>
       <span className="settings-integration-icon">{icon}</span>

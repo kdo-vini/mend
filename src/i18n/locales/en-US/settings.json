@@ -319,8 +319,6 @@
       "agent": "Agent",
       "mcp": "MCP plugins"
     },
-    "title": "AI behavior",
-    "description": "Manage the mode stored on live conversations. This control never seeds a policy or pretends to update an empty workspace.",
     "loading": "Loading conversation policy…",
     "applyMode": "Apply mode to current conversations",
     "modeSummary": "{{total}} live conversation(s) · {{off}} off · {{drafts}} drafts · {{autoReply}} auto-replies",
@@ -359,8 +357,6 @@
     "saveTriageRules": "Save AI triage rules"
   },
   "flow": {
-    "title": "Support flow",
-    "description": "Build the first WhatsApp steps visually. Mend sends the menu and follows the customer's choice before AI or a human takes over.",
     "stepsCount": "{{count}} step(s)",
     "stepsCount_one": "{{count}} step",
     "stepsCount_other": "{{count}} steps",
@@ -588,7 +584,6 @@
       "models_other": "{{count}} models",
       "verified": "verified {{date}}",
       "catalogNotVerified": "Catalog not verified",
-      "catalogVerificationRequired": "Verify the provider and refresh the catalog before using it in the run policy",
       "allowAutomation": "Allow this subscription in automations",
       "automationRequiresCatalog": "Verify the connection and refresh its model catalog before enabling automation",
       "catalog": "Catalog",
@@ -691,6 +686,7 @@
       "statusConnected": "Connected",
       "statusNeedsAttention": "Needs attention",
       "statusNotConfigured": "Not configured",
+      "statusChecking": "Checking",
       "connectedDate": "Connected {{date}}",
       "disconnect": "Disconnect",
       "connectGithub": "Connect GitHub",
@@ -911,11 +907,7 @@
       "integrationsDescription": "Connect the services Mend needs, and keep every external permission visible.",
       "integrationDirectory": "Connection directory",
       "integrationDirectoryDescription": "Each integration has its own page, lifecycle and access boundary.",
-      "githubDescription": "Connect GitHub once, then choose repositories from the installation available to this workspace.",
-      "codingConnectionsTitle": "Providers",
-      "codingConnectionsDescription": "Connect providers, subscriptions and official model catalogs for controlled engineering runs.",
-      "codingRoutingTitle": "Run policy",
-      "codingRoutingDescription": "Choose the provider, model and limits for each stage of the controlled engineering loop."
+      "githubDescription": "Connect GitHub once, then choose repositories from the installation available to this workspace."
     }
   }
 }

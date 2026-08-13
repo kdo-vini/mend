@@ -319,8 +319,6 @@
       "agent": "Agent",
       "mcp": "Plugins MCP"
     },
-    "title": "Comportamento da IA",
-    "description": "Gerencie o modo salvo nas conversas ao vivo. Este controle não cria políticas nem simula atualizações em um espaço vazio.",
     "loading": "Carregando política de conversas…",
     "applyMode": "Aplicar modo às conversas atuais",
     "modeSummary": "{{total}} conversa(s) ao vivo · {{off}} desligada(s) · {{drafts}} rascunho(s) · {{autoReply}} resposta(s) automática(s)",
@@ -359,8 +357,6 @@
     "saveTriageRules": "Salvar regras de triagem da IA"
   },
   "flow": {
-    "title": "Fluxo de suporte",
-    "description": "Monte visualmente os primeiros passos do WhatsApp. O Mend envia o menu e segue a escolha do cliente antes da IA ou de uma pessoa assumir.",
     "stepsCount": "{{count}} etapa(s)",
     "stepsCount_one": "{{count}} etapa",
     "stepsCount_other": "{{count}} etapas",
@@ -588,7 +584,6 @@
       "models_other": "{{count}} modelos",
       "verified": "verificado em {{date}}",
       "catalogNotVerified": "Cat\u00e1logo n\u00e3o verificado",
-      "catalogVerificationRequired": "Verifique o provider e atualize o cat\u00e1logo antes de us\u00e1-lo na pol\u00edtica de execu\u00e7\u00e3o",
       "allowAutomation": "Permitir esta assinatura em automa\u00e7\u00f5es",
       "automationRequiresCatalog": "Verifique a conex\u00e3o e atualize o cat\u00e1logo de modelos antes de ativar automa\u00e7\u00f5es",
       "catalog": "Cat\u00e1logo",
@@ -691,6 +686,7 @@
       "statusConnected": "Conectado",
       "statusNeedsAttention": "Precisa de aten\u00e7\u00e3o",
       "statusNotConfigured": "N\u00e3o configurado",
+      "statusChecking": "Verificando",
       "connectedDate": "Conectado em {{date}}",
       "disconnect": "Desconectar",
       "connectGithub": "Conectar GitHub",
@@ -911,11 +907,7 @@
       "integrationsDescription": "Conecte os serviços que o Mend precisa e mantenha cada permissão externa visível.",
       "integrationDirectory": "Diretório de integrações",
       "integrationDirectoryDescription": "Cada integração tem sua própria página, ciclo de vida e limite de acesso.",
-      "githubDescription": "Conecte o GitHub uma vez e escolha os repositórios disponíveis para este espaço de trabalho.",
-      "codingConnectionsTitle": "Conexões de coding",
-      "codingConnectionsDescription": "Conecte providers, assinaturas e catálogos oficiais de modelos para execuções de engenharia controladas.",
-      "codingRoutingTitle": "Roteamento de coding",
-      "codingRoutingDescription": "Escolha a conexão, o modelo e os limites para cada etapa do loop de engenharia controlado."
+      "githubDescription": "Conecte o GitHub uma vez e escolha os repositórios disponíveis para este espaço de trabalho."
     }
   }
 }
