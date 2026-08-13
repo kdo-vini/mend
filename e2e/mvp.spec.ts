@@ -29,14 +29,35 @@ test("public landing makes the support-to-fix loop visible", async ({
       name: "Your support loop, finally off your plate.",
     }),
   ).toBeVisible();
-  await expect(
-    page.getByLabel(
-      "Mend workspace showing a customer conversation connected to evidence and a verified next step",
-    ),
-  ).toBeVisible();
+  await expect(page.getByLabel("Interactive Mend case playback")).toBeVisible();
   await expect(
     page.locator("#product").getByRole("link", { name: "See Mend at work" }),
   ).toBeVisible();
+});
+
+test("landing product proof can play and select support-loop scenes", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const playback = page.getByLabel("Interactive Mend case playback");
+  await expect(playback).toHaveAttribute("data-scene", "signal");
+  await page.getByRole("button", { name: "Investigate" }).click();
+  await expect(playback).toHaveAttribute("data-scene", "investigate");
+  await page.getByRole("button", { name: "Pause playback" }).click();
+  await expect(playback).toHaveAttribute("data-playing", "false");
+});
+
+test("reduced motion keeps playback static and manually selectable", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const playback = page.getByLabel("Interactive Mend case playback");
+  await expect(playback).toHaveAttribute("data-playing", "false");
+  await page.waitForTimeout(3400);
+  await expect(playback).toHaveAttribute("data-scene", "signal");
+  await page.getByRole("button", { name: "Verified reply" }).click();
+  await expect(playback).toHaveAttribute("data-scene", "verify");
 });
 
 test("explicit auth link renders the sign-in form while the session probe runs", async ({

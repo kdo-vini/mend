@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FocusEvent } from "react";
 import {
   ArrowRight,
   Bell,
@@ -16,6 +16,8 @@ import {
   LockKeyhole,
   Menu,
   MessageCircle,
+  Pause,
+  Play,
   Plus,
   Search,
   ShieldCheck,
@@ -30,6 +32,11 @@ import {
 } from "../../i18n/preferences";
 import { normalizeLocale } from "../../i18n/resources";
 import { supabase } from "../../lib/supabase";
+import {
+  nextPlaybackScene,
+  playbackScenes,
+  type PlaybackSceneId,
+} from "./playback";
 
 const featureCards = [
   { key: "triage", icon: Inbox },
@@ -59,12 +66,56 @@ const specimenNavigation = [
 
 function ProductWindow() {
   const { t } = useTranslation("marketing");
+  const [scene, setScene] = useState<PlaybackSceneId>("signal");
+  const [reducedMotion, setReducedMotion] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  const [playing, setPlaying] = useState(() => !reducedMotion);
+  const [interacting, setInteracting] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      setReducedMotion(event.matches);
+      if (event.matches) setPlaying(false);
+    };
+    query.addEventListener("change", handleChange);
+    return () => query.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!playing || interacting || reducedMotion) return undefined;
+    const timer = window.setInterval(
+      () => setScene((current) => nextPlaybackScene(current)),
+      3200,
+    );
+    return () => window.clearInterval(timer);
+  }, [interacting, playing, reducedMotion]);
+
+  const stepIndex = playbackScenes.indexOf(scene);
+
+  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setInteracting(false);
+    }
+  };
 
   return (
     <div
       className="marketing-product-window"
-      aria-label={t("specimen.ariaLabel")}
+      aria-label={t("playback.ariaLabel")}
+      aria-describedby="marketing-playback-description"
+      data-scene={scene}
+      data-playing={playing ? "true" : "false"}
+      onPointerEnter={() => setInteracting(true)}
+      onPointerLeave={() => setInteracting(false)}
+      onFocus={() => setInteracting(true)}
+      onBlur={handleBlur}
     >
+      <p id="marketing-playback-description" className="sr-only">
+        {t("playback.description")}
+      </p>
+      <span className="marketing-playback-cursor" aria-hidden="true" />
       <div className="marketing-browser-bar">
         <span className="marketing-browser-dots" aria-hidden="true">
           <i />
@@ -150,18 +201,24 @@ function ProductWindow() {
                 <span>{t("specimen.channel")}</span>
               </div>
               <div className="marketing-messages">
-                <div className="marketing-message is-inbound">
+                <div
+                  className={`marketing-message is-inbound${scene === "signal" ? " is-focus" : ""}`}
+                >
                   <span>{t("specimen.inboundLabel")}</span>
                   <p>{t("specimen.inboundMessage")}</p>
                   <small>{t("specimen.inboundTime")}</small>
                 </div>
-                <div className="marketing-message is-outbound">
+                <div
+                  className={`marketing-message is-outbound${scene === "verify" ? " is-focus" : ""}`}
+                >
                   <span>{t("specimen.outboundLabel")}</span>
                   <p>{t("specimen.outboundMessage")}</p>
                   <small>{t("specimen.outboundTime")}</small>
                 </div>
               </div>
-              <div className="marketing-linked-issue">
+              <div
+                className={`marketing-linked-issue${scene === "investigate" ? " is-focus" : ""}`}
+              >
                 <CircleDot size={14} />
                 <span>
                   <strong>{t("specimen.issueTitle")}</strong>
@@ -178,24 +235,60 @@ function ProductWindow() {
               </div>
               <div className="marketing-evidence-list">
                 {(["context", "evidence", "next"] as const).map(
-                  (item, index) => (
-                    <div key={item} className={index === 2 ? "is-next" : ""}>
-                      <i>{index < 2 ? <Check size={9} /> : <span />}</i>
-                      <span>
-                        <strong>{t(`specimen.spine.${item}.title`)}</strong>
-                        <small>{t(`specimen.spine.${item}.detail`)}</small>
-                      </span>
-                    </div>
-                  ),
+                  (item, index) => {
+                    const status =
+                      index < stepIndex
+                        ? "is-done"
+                        : index === stepIndex
+                          ? "is-next"
+                          : "is-upcoming";
+                    return (
+                      <div key={item} className={status}>
+                        <i>
+                          {index < stepIndex ? <Check size={9} /> : <span />}
+                        </i>
+                        <span>
+                          <strong>{t(`specimen.spine.${item}.title`)}</strong>
+                          <small>{t(`specimen.spine.${item}.detail`)}</small>
+                        </span>
+                      </div>
+                    );
+                  },
                 )}
               </div>
-              <div className="marketing-review-gate">
+              <div
+                className={`marketing-review-gate${scene === "verify" ? " is-ready" : ""}`}
+              >
                 <ShieldCheck size={13} />
                 {t("specimen.reviewGate")}
               </div>
             </aside>
           </div>
         </div>
+      </div>
+
+      <div className="marketing-playback-controls">
+        <div className="marketing-playback-scenes">
+          {playbackScenes.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={id === scene ? "is-active" : ""}
+              aria-current={id === scene ? "true" : undefined}
+              onClick={() => setScene(id)}
+            >
+              {t(`playback.scenes.${id}`)}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="marketing-playback-toggle"
+          onClick={() => setPlaying((current) => !current)}
+        >
+          {playing ? <Pause size={13} /> : <Play size={13} />}
+          {playing ? t("playback.pause") : t("playback.play")}
+        </button>
       </div>
     </div>
   );

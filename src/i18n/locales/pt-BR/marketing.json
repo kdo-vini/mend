@@ -21,8 +21,19 @@
     "primaryCta": "Ver o Mend trabalhando",
     "secondaryCta": "Explorar o loop"
   },
+  "playback": {
+    "ariaLabel": "Reprodução interativa de um caso do Mend",
+    "description": "Workspace do Mend mostrando uma conversa conectada a evidências e a um próximo passo verificado",
+    "scenes": {
+      "signal": "Sinal",
+      "context": "Contexto",
+      "investigate": "Investigar",
+      "verify": "Resposta verificada"
+    },
+    "play": "Iniciar reprodução",
+    "pause": "Pausar reprodução"
+  },
   "specimen": {
-    "ariaLabel": "Workspace do Mend mostrando uma conversa conectada a evidências e a um próximo passo verificado",
     "address": "app.mend.so/inbox/MEND-184",
     "nav": {
       "inbox": "Inbox",

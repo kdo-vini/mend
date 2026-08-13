@@ -21,8 +21,19 @@
     "primaryCta": "See Mend at work",
     "secondaryCta": "Explore the loop"
   },
+  "playback": {
+    "ariaLabel": "Interactive Mend case playback",
+    "description": "Mend workspace showing a customer conversation connected to evidence and a verified next step",
+    "scenes": {
+      "signal": "Signal",
+      "context": "Context",
+      "investigate": "Investigate",
+      "verify": "Verified reply"
+    },
+    "play": "Play playback",
+    "pause": "Pause playback"
+  },
   "specimen": {
-    "ariaLabel": "Mend workspace showing a customer conversation connected to evidence and a verified next step",
     "address": "app.mend.so/inbox/MEND-184",
     "nav": {
       "inbox": "Inbox",
