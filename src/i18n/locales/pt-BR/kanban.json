@@ -1,6 +1,10 @@
 {
   "title": "Kanban",
   "ui": {
+    "sharedTitle": "Casos",
+    "personalTitle": "Meu trabalho",
+    "list": "Lista",
+    "board": "Quadro",
     "eyebrow": "Fluxo do espaço de trabalho",
     "sharedDescription": "Uma visão compartilhada do trabalho que precisa de atenção.",
     "personalDescription": "Seu plano pessoal conectado ao espaço de trabalho.",

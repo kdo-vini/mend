@@ -21,8 +21,11 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import type { Issue, IssueStatus } from "../../../types";
 import { currentInterfaceLanguage } from "../../../i18n/preferences";
+import { issueViewHref } from "../../../app/routes/workspace-routing";
+import { ViewTabs } from "../../../shared/ui/ViewTabs";
 import {
   createPersonalEvent,
   createPersonalTask,
@@ -211,6 +214,7 @@ export function KanbanPage({
   onToast,
 }: KanbanPageProps) {
   const { t } = useTranslation("kanban");
+  const location = useLocation();
   const [localMode, setLocalMode] = useState<Mode>(initialMode);
   const mode = fixedMode ?? localMode;
   const [range, setRange] = useState<PersonalRange>("today");
@@ -600,7 +604,9 @@ export function KanbanPage({
   };
 
   return (
-    <section className="kanban-page">
+    <section
+      className={`kanban-page ${mode === "shared" ? "issue-workspace" : ""}`}
+    >
       {!online && (
         <div className="kanban-offline-banner" role="status">
           {t("ui.offline")}
@@ -609,7 +615,9 @@ export function KanbanPage({
       <header className="kanban-header">
         <div className="page-heading">
           <span className="page-kicker">{t("ui.eyebrow")}</span>
-          <h1>{t("title")}</h1>
+          <h1>
+            {mode === "shared" ? t("ui.sharedTitle") : t("ui.personalTitle")}
+          </h1>
           <p>
             {mode === "shared"
               ? t("ui.sharedDescription")
@@ -617,6 +625,25 @@ export function KanbanPage({
           </p>
         </div>
         <div className="kanban-header-actions">
+          {fixedMode === "shared" && (
+            <ViewTabs
+              label={t("ui.sharedTitle")}
+              items={[
+                {
+                  id: "list",
+                  label: t("ui.list"),
+                  href: issueViewHref("list", location.search),
+                  active: false,
+                },
+                {
+                  id: "board",
+                  label: t("ui.board"),
+                  href: issueViewHref("board", location.search),
+                  active: true,
+                },
+              ]}
+            />
+          )}
           {fixedMode === undefined && (
             <div
               className="kanban-mode-switch"
@@ -789,27 +816,33 @@ export function KanbanPage({
         {mode === "personal" && (
           <AgendaStrip events={events} onRemove={removeEvent} />
         )}
-        {loading ? (
-          <KanbanSkeleton label={t("ui.loading")} />
-        ) : (
-          <DesktopBoard
-            mode={mode}
-            issues={visibleIssues}
-            showCanceled={showCanceled}
-            personalItems={personalItems}
-            tasks={visibleTasks}
-            drag={drag}
-            setDrag={setDrag}
-            onMoveIssue={moveIssue}
-            onMoveTask={updateTaskStatus}
-            onOpenIssue={onOpenIssue}
-            assigneeLabel={assigneeLabel}
-            setIssueDueDate={setIssueDueDate}
-            removeTask={removeTask}
-            onAddCard={mode === "shared" ? onNewIssue : focusTaskInput}
-            online={online}
-          />
-        )}
+        <div
+          className="kanban-board-scroll"
+          tabIndex={0}
+          aria-label={t("ui.board")}
+        >
+          {loading ? (
+            <KanbanSkeleton label={t("ui.loading")} />
+          ) : (
+            <DesktopBoard
+              mode={mode}
+              issues={visibleIssues}
+              showCanceled={showCanceled}
+              personalItems={personalItems}
+              tasks={visibleTasks}
+              drag={drag}
+              setDrag={setDrag}
+              onMoveIssue={moveIssue}
+              onMoveTask={updateTaskStatus}
+              onOpenIssue={onOpenIssue}
+              assigneeLabel={assigneeLabel}
+              setIssueDueDate={setIssueDueDate}
+              removeTask={removeTask}
+              onAddCard={mode === "shared" ? onNewIssue : focusTaskInput}
+              online={online}
+            />
+          )}
+        </div>
       </div>
 
       <div className="kanban-mobile-view">
@@ -829,6 +862,7 @@ export function KanbanPage({
             issues={visibleIssues}
             showCanceled={showCanceled}
             onOpenIssue={onOpenIssue}
+            onMoveIssue={moveIssue}
           />
         )}
       </div>
@@ -1476,10 +1510,12 @@ function MobileSharedList({
   issues,
   showCanceled,
   onOpenIssue,
+  onMoveIssue,
 }: {
   issues: Issue[];
   showCanceled: boolean;
   onOpenIssue: (id: string) => void;
+  onMoveIssue: (issue: Issue, status: IssueStatus) => void;
 }) {
   const { t } = useTranslation(["kanban", "common"]);
   const issueStatusLabel = (status: IssueStatus) =>
@@ -1511,7 +1547,7 @@ function MobileSharedList({
       : []),
   ];
   return (
-    <div className="mobile-shared-list">
+    <div className="mobile-shared-list kanban-mobile-status-list">
       {columns.map((column) => {
         const items = issues.filter((issue) => issue.status === column.status);
         return (
@@ -1521,26 +1557,45 @@ function MobileSharedList({
               <strong>{items.length}</strong>
             </header>
             {items.map((issue) => (
-              <button
-                className="mobile-agenda-row mobile-agenda-action"
-                type="button"
+              <div
+                className="mobile-agenda-row mobile-shared-issue-row"
                 key={issue.id}
-                onClick={() => onOpenIssue(issue.id)}
               >
-                <span
-                  className={`priority-dot ${priorityTone[issue.priority] ?? "none"}`}
-                />
-                <span>
-                  <strong>{issue.title}</strong>
-                  <small>
-                    {issue.identifier} ·{" "}
-                    {issue.assignee === "Unassigned"
-                      ? t("app.unassigned", { ns: "common" })
-                      : issue.assignee}
-                  </small>
-                </span>
-                <ChevronDown size={14} />
-              </button>
+                <button
+                  className="mobile-shared-issue-main mobile-agenda-action"
+                  type="button"
+                  onClick={() => onOpenIssue(issue.id)}
+                >
+                  <span
+                    className={`priority-dot ${priorityTone[issue.priority] ?? "none"}`}
+                  />
+                  <span>
+                    <strong>{issue.title}</strong>
+                    <small>
+                      {issue.identifier} ·{" "}
+                      {issue.assignee === "Unassigned"
+                        ? t("app.unassigned", { ns: "common" })
+                        : issue.assignee}
+                    </small>
+                  </span>
+                </button>
+                <select
+                  className="kanban-mobile-status-select"
+                  aria-label={t("ui.moveIssue", {
+                    identifier: issue.identifier,
+                  })}
+                  value={issue.status}
+                  onChange={(event) =>
+                    onMoveIssue(issue, event.target.value as IssueStatus)
+                  }
+                >
+                  {columns.map((option) => (
+                    <option key={option.status} value={option.status}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             ))}
           </section>
         );

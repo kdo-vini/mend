@@ -87,13 +87,14 @@ test("operator can open the shared issues board and personal work", async ({
   page,
 }) => {
   await page.goto("/issues?demo=1&view=board");
-  await expect(page.getByRole("heading", { name: "Kanban" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Personal" })).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "New issue", exact: true }),
   ).toBeVisible();
 
   await page.goto("/my-work?demo=1");
+  await expect(page.getByRole("heading", { name: "My work" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Shared" })).toHaveCount(0);
   await expect(page.getByPlaceholder("Add a task…")).toBeVisible();
   await page.getByRole("button", { name: "New task", exact: true }).click();
@@ -130,10 +131,16 @@ test("operator can move from inbox to issues and create an issue", async ({
     await page.getByRole("button", { name: "Browse issues" }).click();
   }
   await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
-  await expect(page.getByText("E2E issue from Mend")).toBeVisible();
+  const issueCollection =
+    testInfo.project.name === "mobile"
+      ? page.locator(".issues-mobile-list")
+      : page.locator(".issues-desktop-table");
+  await expect(
+    issueCollection.getByText("E2E issue from Mend", { exact: true }),
+  ).toBeVisible();
 
-  const createdIssueRow = page
-    .locator("tr")
+  const createdIssueRow = issueCollection
+    .locator(testInfo.project.name === "mobile" ? ".issue-mobile-item" : "tr")
     .filter({ hasText: "E2E issue from Mend" });
   await createdIssueRow.getByRole("button", { name: /Actions for/ }).click();
   const issueMenu = page.getByRole("menu");
@@ -142,10 +149,12 @@ test("operator can move from inbox to issues and create an issue", async ({
   await expect(page.getByRole("heading", { name: "Edit issue" })).toBeVisible();
   await page.getByLabel("Title").fill("Edited E2E issue from Mend");
   await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page.getByText("Edited E2E issue from Mend")).toBeVisible();
+  await expect(
+    issueCollection.getByText("Edited E2E issue from Mend", { exact: true }),
+  ).toBeVisible();
 
-  const editedIssueRow = page
-    .locator("tr")
+  const editedIssueRow = issueCollection
+    .locator(testInfo.project.name === "mobile" ? ".issue-mobile-item" : "tr")
     .filter({ hasText: "Edited E2E issue from Mend" });
   await editedIssueRow.getByRole("button", { name: /Actions for/ }).click();
   page.once("dialog", (dialog) => void dialog.accept());

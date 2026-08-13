@@ -1,6 +1,10 @@
 {
   "title": "Kanban",
   "ui": {
+    "sharedTitle": "Issues",
+    "personalTitle": "My work",
+    "list": "List",
+    "board": "Board",
     "eyebrow": "Workspace flow",
     "sharedDescription": "A shared view of the work that needs attention.",
     "personalDescription": "Your private plan, linked to the workspace.",

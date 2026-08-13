@@ -1,5 +1,6 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import {
   Filter,
   Keyboard,
@@ -22,6 +23,8 @@ import {
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { Select } from "../../../shared/ui/Select";
+import { ViewTabs } from "../../../shared/ui/ViewTabs";
+import { issueViewHref } from "../../../app/routes/workspace-routing";
 
 const issueStatuses: IssueStatus[] = [
   "Triage",
@@ -89,6 +92,7 @@ export function IssuesPage({
   onDeleteIssue: (id: string) => void;
 }) {
   const { t } = useTranslation(["issues", "common"]);
+  const location = useLocation();
   const statusLabel = (status: IssueStatus) =>
     status === "Triage"
       ? t("data.issueStatus.triage", { ns: "common" })
@@ -147,6 +151,7 @@ export function IssuesPage({
   const [agentFilter, setAgentFilter] = useState<
     "All" | "With runs" | "Without runs"
   >("All");
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const labelOptions = [
     ...new Set(issues.flatMap((issue) => issue.labels)),
@@ -167,6 +172,13 @@ export function IssuesPage({
           ? issue.agentRuns > 0
           : issue.agentRuns === 0)),
   );
+  const activeAdvancedFilterCount = [
+    priorityFilter,
+    typeFilter,
+    sourceFilter,
+    labelFilter,
+    agentFilter,
+  ].filter((value) => value !== "All").length;
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("All");
@@ -186,21 +198,62 @@ export function IssuesPage({
       onOpenIssue(id);
     }
   };
+  const emptyState = (
+    <EmptyState
+      title={issues.length ? t("ui.noMatching") : t("empty")}
+      description={issues.length ? t("ui.tryDifferent") : t("ui.firstIssue")}
+      action={
+        issues.length ? (
+          <button className="text-button" type="button" onClick={clearFilters}>
+            {t("ui.clearFilters")}
+          </button>
+        ) : (
+          <button
+            className="button button-ghost button-small"
+            type="button"
+            onClick={onNewIssue}
+          >
+            <Plus size={13} /> {t("create")}
+          </button>
+        )
+      }
+      search={Boolean(search)}
+    />
+  );
 
   return (
-    <div className="page">
+    <div className="page issue-workspace">
       <PageHeader
         eyebrow={`${t("ui.eyebrow")} · ${issues.length}`}
         title={t("title")}
         description={t("ui.description")}
         actions={
-          <button
-            className="button button-primary"
-            type="button"
-            onClick={onNewIssue}
-          >
-            <Plus size={15} /> {t("create")} <kbd>C</kbd>
-          </button>
+          <>
+            <ViewTabs
+              label={t("title")}
+              items={[
+                {
+                  id: "list",
+                  label: t("ui.list"),
+                  href: issueViewHref("list", location.search),
+                  active: true,
+                },
+                {
+                  id: "board",
+                  label: t("ui.board"),
+                  href: issueViewHref("board", location.search),
+                  active: false,
+                },
+              ]}
+            />
+            <button
+              className="button button-primary"
+              type="button"
+              onClick={onNewIssue}
+            >
+              <Plus size={15} /> {t("create")} <kbd>C</kbd>
+            </button>
+          </>
         }
       />
       <div className="issue-toolbar">
@@ -232,32 +285,6 @@ export function IssuesPage({
           />
         </div>
         <FilterSelect
-          label={t("ui.filterPriority")}
-          value={priorityFilter}
-          onChange={(value) => setPriorityFilter(value as Priority | "All")}
-          options={[
-            { value: "All", label: t("ui.all") },
-            ...(
-              ["Urgent", "High", "Medium", "Low", "No priority"] as Priority[]
-            ).map((priority) => ({
-              value: priority,
-              label: priorityLabel(priority),
-            })),
-          ]}
-        />
-        <FilterSelect
-          label={t("ui.filterType")}
-          value={typeFilter}
-          onChange={(value) => setTypeFilter(value as IssueType | "All")}
-          options={[
-            { value: "All", label: t("ui.all") },
-            ...issueTypes.map((type) => ({
-              value: type,
-              label: typeLabel(type),
-            })),
-          ]}
-        />
-        <FilterSelect
           label={t("ui.filterAssignee")}
           value={assigneeFilter}
           onChange={setAssigneeFilter}
@@ -266,37 +293,18 @@ export function IssuesPage({
             ...assigneeOptions,
           ]}
         />
-        <FilterSelect
-          label={t("ui.filterSource")}
-          value={sourceFilter}
-          onChange={(value) =>
-            setSourceFilter(value as Issue["source"] | "All")
-          }
-          options={[
-            { value: "All", label: t("ui.all") },
-            { value: "Conversation", label: t("ui.conversation") },
-            { value: "Internal", label: t("ui.internal") },
-          ]}
-        />
-        <FilterSelect
-          label={t("ui.filterLabel")}
-          value={labelFilter}
-          onChange={setLabelFilter}
-          options={[
-            { value: "All", label: t("ui.allLabels") },
-            ...labelOptions,
-          ]}
-        />
-        <FilterSelect
-          label={t("ui.filterRuns")}
-          value={agentFilter}
-          onChange={(value) => setAgentFilter(value as typeof agentFilter)}
-          options={[
-            { value: "All", label: t("ui.all") },
-            { value: "With runs", label: t("ui.withRuns") },
-            { value: "Without runs", label: t("ui.withoutRuns") },
-          ]}
-        />
+        <button
+          className="button button-ghost"
+          type="button"
+          aria-expanded={advancedFiltersOpen}
+          aria-controls="issue-advanced-filters"
+          onClick={() => setAdvancedFiltersOpen((open) => !open)}
+        >
+          <ListFilter size={14} /> {t("ui.moreFilters")}
+          {activeAdvancedFilterCount > 0 ? (
+            <span className="filter-count">{activeAdvancedFilterCount}</span>
+          ) : null}
+        </button>
         <button
           className="button button-ghost"
           type="button"
@@ -313,7 +321,72 @@ export function IssuesPage({
           <MoreHorizontal size={17} />
         </button>
       </div>
-      <div className="issue-table-wrap">
+      <div
+        id="issue-advanced-filters"
+        className="issue-advanced-filters"
+        role="region"
+        aria-label={t("ui.advancedFilters")}
+        hidden={!advancedFiltersOpen}
+      >
+        <FilterSelect
+          label={t("ui.priority")}
+          value={priorityFilter}
+          onChange={(value) => setPriorityFilter(value as Priority | "All")}
+          options={[
+            { value: "All", label: t("ui.all") },
+            ...(
+              ["Urgent", "High", "Medium", "Low", "No priority"] as Priority[]
+            ).map((priority) => ({
+              value: priority,
+              label: priorityLabel(priority),
+            })),
+          ]}
+        />
+        <FilterSelect
+          label={t("ui.type")}
+          value={typeFilter}
+          onChange={(value) => setTypeFilter(value as IssueType | "All")}
+          options={[
+            { value: "All", label: t("ui.all") },
+            ...issueTypes.map((type) => ({
+              value: type,
+              label: typeLabel(type),
+            })),
+          ]}
+        />
+        <FilterSelect
+          label={t("ui.source")}
+          value={sourceFilter}
+          onChange={(value) =>
+            setSourceFilter(value as Issue["source"] | "All")
+          }
+          options={[
+            { value: "All", label: t("ui.all") },
+            { value: "Conversation", label: t("ui.conversation") },
+            { value: "Internal", label: t("ui.internal") },
+          ]}
+        />
+        <FilterSelect
+          label={t("ui.labels")}
+          value={labelFilter}
+          onChange={setLabelFilter}
+          options={[
+            { value: "All", label: t("ui.allLabels") },
+            ...labelOptions,
+          ]}
+        />
+        <FilterSelect
+          label={t("ui.runs")}
+          value={agentFilter}
+          onChange={(value) => setAgentFilter(value as typeof agentFilter)}
+          options={[
+            { value: "All", label: t("ui.all") },
+            { value: "With runs", label: t("ui.withRuns") },
+            { value: "Without runs", label: t("ui.withoutRuns") },
+          ]}
+        />
+      </div>
+      <div className="issue-table-wrap issues-desktop-table">
         {filtered.length ? (
           <table className="issue-table">
             <thead>
@@ -407,33 +480,49 @@ export function IssuesPage({
             </tbody>
           </table>
         ) : (
-          <EmptyState
-            title={issues.length ? t("ui.noMatching") : t("empty")}
-            description={
-              issues.length ? t("ui.tryDifferent") : t("ui.firstIssue")
-            }
-            action={
-              issues.length ? (
-                <button
-                  className="text-button"
-                  type="button"
-                  onClick={clearFilters}
-                >
-                  {t("ui.clearFilters")}
-                </button>
-              ) : (
-                <button
-                  className="button button-ghost button-small"
-                  type="button"
-                  onClick={onNewIssue}
-                >
-                  <Plus size={13} /> {t("create")}
-                </button>
-              )
-            }
-            search={Boolean(search)}
-          />
+          emptyState
         )}
+      </div>
+      <div className="issues-mobile-list" aria-label={t("ui.issueList")}>
+        {filtered.length
+          ? filtered.map((issue) => (
+              <div className="issue-mobile-item" key={issue.id}>
+                <button
+                  className="issue-mobile-row"
+                  type="button"
+                  onClick={() => onOpenIssue(issue.id)}
+                >
+                  <span className="issue-mobile-row-top">
+                    <code>{issue.identifier}</code>
+                    <StatusPill status={issue.status} />
+                  </span>
+                  <strong>{issue.title}</strong>
+                  <span className="issue-mobile-row-meta">
+                    <PriorityDot priority={issue.priority} showLabel />
+                    <span>{assigneeLabel(issue.assignee)}</span>
+                    <time>{issue.updatedAt}</time>
+                  </span>
+                </button>
+                <ActionMenu label={issue.identifier}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => onEditIssue(issue.id)}
+                  >
+                    <PenLine size={14} /> {t("ui.edit")}
+                  </button>
+                  <button
+                    className="danger"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => onDeleteIssue(issue.id)}
+                  >
+                    <Trash2 size={14} /> {t("ui.delete")}
+                  </button>
+                </ActionMenu>
+              </div>
+            ))
+          : emptyState}
       </div>
       <div className="table-footer">
         <span>
