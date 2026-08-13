@@ -22,6 +22,7 @@ import {
   ListFilter,
   LockKeyhole,
   Paperclip,
+  PanelRight,
   PenLine,
   Plus,
   Search,
@@ -95,6 +96,7 @@ import {
   type AiCardDismissals,
   type AiCardKind,
 } from "../ai-card-dismissals";
+import { InboxCaseContext } from "../components/InboxCaseContext";
 
 interface AssigneeOption {
   value: string;
@@ -247,6 +249,7 @@ export function InboxPage({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All conversations");
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const [draftInsertRequest, setDraftInsertRequest] = useState<{
     text: string;
     requestId: number;
@@ -355,6 +358,7 @@ export function InboxPage({
 
   useEffect(() => {
     setAiDetailsOpen(shouldShowConversationAiDetails());
+    setContextOpen(false);
   }, [selected?.id]);
 
   useEffect(() => {
@@ -513,6 +517,7 @@ export function InboxPage({
   const selectConversation = (conversation: Conversation) => {
     setSelectedConversationId(conversation.id);
     setMobileConversationOpen(true);
+    setContextOpen(false);
     if (conversation.unread)
       setConversations((current) =>
         current.map((item) =>
@@ -1299,7 +1304,10 @@ export function InboxPage({
           <button
             className="mobile-conversation-back"
             type="button"
-            onClick={() => setMobileConversationOpen(false)}
+            onClick={() => {
+              setContextOpen(false);
+              setMobileConversationOpen(false);
+            }}
           >
             <ArrowLeft size={15} /> {t("ui.conversations")}
           </button>
@@ -1320,35 +1328,9 @@ export function InboxPage({
             assigneeOptions={assigneeOptions}
             aiDetailsOpen={aiDetailsOpen}
             onToggleAiDetails={() => setAiDetailsOpen((current) => !current)}
+            contextOpen={contextOpen}
+            onOpenContext={() => setContextOpen(true)}
           />
-          <div
-            className={
-              "conversation-insights " +
-              (aiDetailsOpen ? "ai-details-open" : "")
-            }
-          >
-            {showAiDecision && (
-              <AiDecisionSummary
-                conversation={selected}
-                onDismiss={() =>
-                  dismissSelectedAiCard("decision", decisionSignature)
-                }
-              />
-            )}
-            {showAiDraft && selected.aiDraft && (
-              <AiDraftCard
-                draft={selected.aiDraft}
-                onInsert={(text) =>
-                  setDraftInsertRequest({
-                    text,
-                    requestId: Date.now(),
-                    conversationId: selected.id,
-                  })
-                }
-                onDismiss={() => dismissSelectedAiCard("draft", draftSignature)}
-              />
-            )}
-          </div>
           <div className="message-canvas-shell">
             <ScrollArea
               className="message-canvas-scroll-area"
@@ -1488,6 +1470,45 @@ export function InboxPage({
             }}
           />
         </section>
+        <InboxCaseContext
+          conversation={selected}
+          issue={activeIssue}
+          open={contextOpen}
+          onClose={() => setContextOpen(false)}
+          onOpenIssue={(issueId) => {
+            setContextOpen(false);
+            onOpenIssue(issueId);
+          }}
+        >
+          <div
+            className={
+              "conversation-insights " +
+              (aiDetailsOpen ? "ai-details-open" : "")
+            }
+          >
+            {showAiDecision && (
+              <AiDecisionSummary
+                conversation={selected}
+                onDismiss={() =>
+                  dismissSelectedAiCard("decision", decisionSignature)
+                }
+              />
+            )}
+            {showAiDraft && selected.aiDraft && (
+              <AiDraftCard
+                draft={selected.aiDraft}
+                onInsert={(text) =>
+                  setDraftInsertRequest({
+                    text,
+                    requestId: Date.now(),
+                    conversationId: selected.id,
+                  })
+                }
+                onDismiss={() => dismissSelectedAiCard("draft", draftSignature)}
+              />
+            )}
+          </div>
+        </InboxCaseContext>
       </div>
       <MediaLightbox
         items={lightboxMedia}
@@ -1919,6 +1940,8 @@ function ConversationHeader({
   assigneeOptions,
   aiDetailsOpen,
   onToggleAiDetails,
+  contextOpen,
+  onOpenContext,
 }: {
   conversation: Conversation;
   onNewIssue: () => void;
@@ -1933,6 +1956,8 @@ function ConversationHeader({
   assigneeOptions: AssigneeOption[];
   aiDetailsOpen: boolean;
   onToggleAiDetails: () => void;
+  contextOpen: boolean;
+  onOpenContext: () => void;
 }) {
   const { t } = useTranslation("inbox");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -2045,6 +2070,15 @@ function ConversationHeader({
             {conversation.humanTakeoverReason.replaceAll("_", " ")}
           </span>
         )}
+        <button
+          className="icon-button inbox-context-trigger"
+          type="button"
+          aria-label={t("context.open")}
+          aria-expanded={contextOpen}
+          onClick={onOpenContext}
+        >
+          <PanelRight size={16} />
+        </button>
         <button
           className="icon-button conversation-desktop-control"
           type="button"

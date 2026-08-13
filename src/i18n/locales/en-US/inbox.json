@@ -10,6 +10,18 @@
     "unassigned": "Unassigned",
     "resolved": "Resolved"
   },
+  "context": {
+    "eyebrow": "Active case",
+    "title": "Case context",
+    "open": "Open case context",
+    "close": "Close case context",
+    "dismiss": "Dismiss case context",
+    "nextAction": "Next action",
+    "followIssue": "Follow the linked issue to a verified outcome",
+    "reviewTriage": "Review the conversation and choose the next safe step",
+    "human": "Human handling · AI paused",
+    "ai": "AI active for this conversation"
+  },
   "ui": {
     "newWillAppear": "New conversations will appear here.",
     "createIssue": "Create an internal issue",

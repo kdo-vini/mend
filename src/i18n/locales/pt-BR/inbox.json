@@ -10,6 +10,18 @@
     "unassigned": "Sem responsável",
     "resolved": "Resolvidas"
   },
+  "context": {
+    "eyebrow": "Caso ativo",
+    "title": "Contexto do caso",
+    "open": "Abrir contexto do caso",
+    "close": "Fechar contexto do caso",
+    "dismiss": "Dispensar contexto do caso",
+    "nextAction": "Próxima ação",
+    "followIssue": "Acompanhe o chamado vinculado até um resultado verificado",
+    "reviewTriage": "Revise a conversa e escolha o próximo passo seguro",
+    "human": "Atendimento humano · IA pausada",
+    "ai": "IA ativa nesta conversa"
+  },
   "ui": {
     "newWillAppear": "Novas conversas vão aparecer aqui.",
     "createIssue": "Criar chamado interno",
