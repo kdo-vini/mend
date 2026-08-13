@@ -62,6 +62,33 @@
     "refreshing": "Refreshing engineering runs...",
     "emptyDescription": "Start a run from an issue when engineering context is ready."
   },
+  "mobile": {
+    "currentStage": "Current stage",
+    "latestEvent": "Latest event",
+    "elapsedTime": "Elapsed time",
+    "decisionRequired": "Decision required",
+    "noDecision": "No decision needed",
+    "nextAuthorizedAction": "Next authorized action",
+    "progressLabel": "Case progress",
+    "stages": {
+      "signal": "signal",
+      "suspicion": "suspicion",
+      "evidence": "evidence",
+      "investigation": "investigation",
+      "verdict": "verdict",
+      "decision": "decision",
+      "fix": "fix",
+      "verification": "verification",
+      "pull_request": "pull request",
+      "approval": "approval",
+      "merge": "merge",
+      "deploy": "deploy",
+      "health_check": "health check",
+      "customer_response": "customer response",
+      "completed": "completed",
+      "failed": "failed"
+    }
+  },
   "loop": {
     "kicker": "Complaint to fix",
     "title": "Case chain",

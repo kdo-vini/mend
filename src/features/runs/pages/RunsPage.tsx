@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   Bot,
@@ -29,6 +30,7 @@ import {
   canImplementProposedFix,
   canProposeFromInvestigation,
 } from "../run-actions";
+import { selectRun } from "../run-selection";
 
 const stageOrder = [
   "signal",
@@ -94,9 +96,50 @@ function BugLoopOverview({ run }: { run: CodingRun }) {
       run.healthStatus ||
       run.customerResponseStatus,
   );
+  const latestEvent = run.events[run.events.length - 1];
+  const decisionRequired =
+    run.caseStatus === "awaiting_human" ||
+    (run.status === "completed" && run.mode === "Implement fix") ||
+    (run.status === "approved" &&
+      run.published &&
+      Boolean(
+        (run.pullRequest && !run.mergeSha) ||
+          ((!run.pullRequest || run.mergeSha) && !run.deployed) ||
+          (run.deployed && run.healthStatus !== "healthy"),
+      ));
 
   return (
     <section className="run-loop-overview" aria-labelledby="run-loop-title">
+      <div className="run-mobile-summary">
+        <dl>
+          <div>
+            <dt>{run.issueIdentifier}</dt>
+            <dd>
+              <strong>{run.progress}%</strong> {t("stats.complete")}
+            </dd>
+          </div>
+          <div>
+            <dt>{t("mobile.currentStage")}</dt>
+            <dd>{t(`mobile.stages.${stage}`)}</dd>
+          </div>
+          <div>
+            <dt>{t("mobile.elapsedTime")}</dt>
+            <dd>{run.duration}</dd>
+          </div>
+          <div>
+            <dt>{t("loop.decision")}</dt>
+            <dd>
+              {decisionRequired
+                ? t("mobile.decisionRequired")
+                : t("mobile.noDecision")}
+            </dd>
+          </div>
+          <div className="run-mobile-latest-event">
+            <dt>{t("mobile.latestEvent")}</dt>
+            <dd>{latestEvent?.detail ?? t("sections.noTimeline")}</dd>
+          </div>
+        </dl>
+      </div>
       <div className="run-loop-heading">
         <div>
           <div className="page-kicker">{t("loop.kicker")}</div>
@@ -149,7 +192,10 @@ function BugLoopOverview({ run }: { run: CodingRun }) {
         </div>
       )}
 
-      <ol className="run-loop-track" aria-label={t("loop.progressLabel")}>
+      <ol
+        className="run-loop-track run-loop-track-mobile"
+        aria-label={t("mobile.progressLabel")}
+      >
         {loopMilestones.map(({ key, lastStage, icon: Icon }, index) => {
           const lastIndex = stageOrder.indexOf(lastStage);
           const previousLastIndex =
@@ -307,10 +353,10 @@ export function RunsPage({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation("runs");
-  const [selectedRunId, setSelectedRunId] = useState(runs[0]?.id ?? "");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimer = useRef<number | null>(null);
-  const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
+  const selectedRun = selectRun(runs, searchParams.get("run"));
   const runModeLabel = (mode: CodingRun["mode"]) =>
     t(
       `common:data.runMode.${
@@ -371,6 +417,79 @@ export function RunsPage({
       </div>
     );
 
+  const mobileDecisionAction =
+    selectedRun.status === "queued" || selectedRun.status === "running" ? (
+      <button
+        className="button button-danger"
+        type="button"
+        onClick={() => onUpdateRun(selectedRun.id, "cancel")}
+      >
+        {t("actions.cancel")}
+      </button>
+    ) : selectedRun.status === "completed" &&
+      selectedRun.mode === "Implement fix" ? (
+      <>
+        <button
+          className="button button-ghost"
+          type="button"
+          onClick={() => onUpdateRun(selectedRun.id, "reject")}
+        >
+          {t("actions.reject")}
+        </button>
+        <button
+          className="button button-primary"
+          type="button"
+          disabled={
+            !selectedRun.diff?.trim() ||
+            selectedRun.checks?.some((check) => check.exitCode !== 0)
+          }
+          onClick={() => onUpdateRun(selectedRun.id, "approve")}
+        >
+          <Check size={14} /> {t("actions.approve")}
+        </button>
+      </>
+    ) : selectedRun.status === "failed" ? (
+      <button
+        className="button button-primary"
+        type="button"
+        onClick={() => onStartRun(selectedRun.issueId)}
+      >
+        <RefreshCw size={14} /> {t("failure.retry")}
+      </button>
+    ) : selectedRun.status === "approved" &&
+      selectedRun.published &&
+      selectedRun.pullRequest &&
+      !selectedRun.mergeSha ? (
+      <button
+        className="button button-primary"
+        type="button"
+        onClick={() => onUpdateRun(selectedRun.id, "merge")}
+      >
+        {t("actions.merge")}
+      </button>
+    ) : selectedRun.status === "approved" &&
+      selectedRun.published &&
+      (!selectedRun.pullRequest || selectedRun.mergeSha) &&
+      !selectedRun.deployed ? (
+      <button
+        className="button button-primary"
+        type="button"
+        onClick={() => onUpdateRun(selectedRun.id, "deploy")}
+      >
+        {t("actions.deploy")}
+      </button>
+    ) : selectedRun.status === "approved" &&
+      selectedRun.deployed &&
+      selectedRun.healthStatus !== "healthy" ? (
+      <button
+        className="button button-primary"
+        type="button"
+        onClick={() => onUpdateRun(selectedRun.id, "health")}
+      >
+        {t("actions.health")}
+      </button>
+    ) : null;
+
   return (
     <div className="page">
       <PageHeader
@@ -400,7 +519,11 @@ export function RunsPage({
                 type="button"
                 key={run.id}
                 aria-pressed={run.id === selectedRun.id}
-                onClick={() => setSelectedRunId(run.id)}
+                onClick={() => {
+                  const nextParams = new URLSearchParams(searchParams);
+                  nextParams.set("run", run.id);
+                  setSearchParams(nextParams);
+                }}
               >
                 <div className={`run-status-dot ${run.status.toLowerCase()}`} />
                 <div>
@@ -456,7 +579,7 @@ export function RunsPage({
                 ) : selectedRun.status === "queued" ||
                   selectedRun.status === "running" ? (
                   <button
-                    className="button button-danger"
+                    className="button button-danger run-desktop-decision"
                     type="button"
                     onClick={() => onUpdateRun(selectedRun.id, "cancel")}
                   >
@@ -474,6 +597,12 @@ export function RunsPage({
               </div>
             </div>
             <BugLoopOverview run={selectedRun} />
+            {mobileDecisionAction && (
+              <div className="run-mobile-decision-bar">
+                <span>{t("mobile.nextAuthorizedAction")}</span>
+                <div>{mobileDecisionAction}</div>
+              </div>
+            )}
             {hasContinuation && (
               <div className="run-review-actions run-implement-actions">
                 <span>
@@ -601,7 +730,7 @@ export function RunsPage({
             )}
             {selectedRun.status === "completed" &&
               selectedRun.mode === "Implement fix" && (
-                <div className="run-review-actions">
+                <div className="run-review-actions run-desktop-decision">
                   <span>{t("actions.reviewDescription")}</span>
                   <button
                     className="button button-ghost"
@@ -624,7 +753,7 @@ export function RunsPage({
                 </div>
               )}
             {selectedRun.status === "failed" && (
-              <div className="run-review-actions run-failure-actions">
+              <div className="run-review-actions run-failure-actions run-desktop-decision">
                 <span>{t("failure.retryDescription")}</span>
                 <button
                   className="button button-primary"
@@ -658,7 +787,7 @@ export function RunsPage({
               selectedRun.published &&
               selectedRun.pullRequest &&
               !selectedRun.mergeSha && (
-                <div className="run-review-actions">
+                <div className="run-review-actions run-desktop-decision">
                   <span>{t("actions.mergeDescription")}</span>
                   <button
                     className="button button-primary"
@@ -673,7 +802,7 @@ export function RunsPage({
               selectedRun.published &&
               (!selectedRun.pullRequest || selectedRun.mergeSha) &&
               !selectedRun.deployed && (
-                <div className="run-review-actions">
+                <div className="run-review-actions run-desktop-decision">
                   <span>{t("actions.deployDescription")}</span>
                   <button
                     className="button button-primary"
@@ -687,7 +816,7 @@ export function RunsPage({
             {selectedRun.status === "approved" &&
               selectedRun.deployed &&
               selectedRun.healthStatus !== "healthy" && (
-                <div className="run-review-actions">
+                <div className="run-review-actions run-desktop-decision">
                   <span>{t("actions.healthDescription")}</span>
                   <button
                     className="button button-primary"

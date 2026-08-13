@@ -62,6 +62,33 @@
     "refreshing": "Atualizando execuções de engenharia...",
     "emptyDescription": "Inicie uma execução a partir de uma issue quando o contexto estiver pronto."
   },
+  "mobile": {
+    "currentStage": "Etapa atual",
+    "latestEvent": "Evento mais recente",
+    "elapsedTime": "Tempo decorrido",
+    "decisionRequired": "Decisão necessária",
+    "noDecision": "Nenhuma decisão necessária",
+    "nextAuthorizedAction": "Próxima ação autorizada",
+    "progressLabel": "Progresso do caso",
+    "stages": {
+      "signal": "sinal",
+      "suspicion": "suspeita",
+      "evidence": "evidência",
+      "investigation": "investigação",
+      "verdict": "veredito",
+      "decision": "decisão",
+      "fix": "correção",
+      "verification": "verificação",
+      "pull_request": "pull request",
+      "approval": "aprovação",
+      "merge": "merge",
+      "deploy": "deploy",
+      "health_check": "health check",
+      "customer_response": "resposta ao cliente",
+      "completed": "concluída",
+      "failed": "falhou"
+    }
+  },
   "loop": {
     "kicker": "Da reclamação ao fix",
     "title": "Cadeia do caso",
