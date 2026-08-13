@@ -917,7 +917,7 @@ export function KanbanPage({
           <MobileSharedList
             issues={visibleIssues}
             statusOptions={visibleSharedStatusOptions}
-            movableStatusOptions={movableSharedStatusOptions}
+            movableStatusOptions={visibleSharedStatusOptions}
             onOpenIssue={onOpenIssue}
             onMoveIssue={moveIssue}
             assigneeLabel={assigneeLabel}

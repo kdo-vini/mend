@@ -95,6 +95,39 @@ test("mobile issues use compact rows and a grouped board", async ({ page }) => {
   ).toBeLessThanOrEqual(390);
 });
 
+test("shown canceled mobile issue keeps Canceled as a valid status option", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/issues?demo=1");
+
+  const issueRow = page
+    .locator(".issue-mobile-item")
+    .filter({ hasText: "TEC-24" });
+  await issueRow.getByRole("button", { name: "Actions for TEC-24" }).click();
+  await page.getByRole("menuitem", { name: "Edit issue" }).click();
+  await page.getByRole("combobox", { name: "Status", exact: true }).click();
+  await page.getByRole("option", { name: "Canceled", exact: true }).click();
+  await page.getByRole("button", { name: "Save changes" }).click();
+
+  await page.getByRole("link", { name: "Board" }).click();
+  await page.getByRole("button", { name: "Canceled", exact: true }).click();
+  const canceledGroup = page
+    .locator(".kanban-mobile-status-list section")
+    .filter({ has: page.locator("header", { hasText: "Canceled" }) });
+  const canceledIssue = canceledGroup.locator(".mobile-shared-issue-row", {
+    hasText: "TEC-24",
+  });
+  await expect(canceledIssue).toBeVisible();
+  const statusSelect = canceledIssue.getByRole("combobox", {
+    name: "Move TEC-24",
+  });
+  await expect(statusSelect).toHaveValue("Canceled");
+  await expect(
+    statusSelect.getByRole("option", { name: "Canceled", exact: true }),
+  ).toHaveCount(1);
+});
+
 test("mobile critical issue controls meet the touch target", async ({
   page,
 }) => {
