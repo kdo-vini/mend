@@ -20,8 +20,20 @@ const phoneNumberDigits = { minimum: 10, maximum: 15 };
  * user about, so they are capped per workspace rather than per IP. The app-wide
  * limiter is shared with every other route and cannot express that. Replying
  * inside threads a customer opened is unaffected.
+ *
+ * The window lives at module scope on purpose: server/index.ts builds a fresh
+ * router for every /api/ request, so anything held per router instance would be
+ * discarded between requests and could never reject.
  */
 const outboundFirstSends = { limit: 20, windowMs: 3_600_000 };
+const outboundFirstSendsByWorkspace = new Map<string, number[]>();
+
+function recentOutboundFirstSends(workspaceId: string): number[] {
+  const now = Date.now();
+  return (outboundFirstSendsByWorkspace.get(workspaceId) ?? []).filter(
+    (sentAt) => now - sentAt < outboundFirstSends.windowMs,
+  );
+}
 
 export function registerConversationRoutes(context: ApiRouteModuleContext) {
   const {
@@ -39,13 +51,9 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
     ApiHttpError,
   } = context;
 
-  const outboundFirstSendsByWorkspace = new Map<string, number[]>();
   /** Reserves one cold-send slot, or throws once the workspace window is full. */
   const reserveOutboundFirstSend = (workspaceId: string) => {
-    const now = Date.now();
-    const recent = (
-      outboundFirstSendsByWorkspace.get(workspaceId) ?? []
-    ).filter((sentAt) => now - sentAt < outboundFirstSends.windowMs);
+    const recent = recentOutboundFirstSends(workspaceId);
     if (recent.length >= outboundFirstSends.limit) {
       outboundFirstSendsByWorkspace.set(workspaceId, recent);
       throw new ApiHttpError(
@@ -54,7 +62,15 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
         "This workspace has started too many new conversations in the last hour.",
       );
     }
-    outboundFirstSendsByWorkspace.set(workspaceId, [...recent, now]);
+    outboundFirstSendsByWorkspace.set(workspaceId, [...recent, Date.now()]);
+  };
+
+  /** Returns a slot for a failure that provably never reached the provider. */
+  const releaseOutboundFirstSend = (workspaceId: string) => {
+    outboundFirstSendsByWorkspace.set(
+      workspaceId,
+      recentOutboundFirstSends(workspaceId).slice(0, -1),
+    );
   };
 
   router.get(
@@ -99,25 +115,35 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
       // provider is counted.
       reserveOutboundFirstSend(context.workspaceId);
       try {
-        const started = requireFound(
-          await dependencies.conversations.start(context, {
-            channelId: input.channelId,
-            phoneNumber,
-            message: input.message,
-          }),
-          "channel",
-        );
+        const started = await dependencies.conversations.start(context, {
+          channelId: input.channelId,
+          phoneNumber,
+          message: input.message,
+        });
+        // The adapter resolves the channel before it sends, so a channel this
+        // workspace does not own never reached the provider and its slot goes
+        // back rather than burning the window.
+        if (!started) releaseOutboundFirstSend(context.workspaceId);
+        const conversation = requireFound(started, "channel");
         send(response, 201, {
-          conversationId: started.conversationId,
+          conversationId: conversation.conversationId,
           created: true,
         });
       } catch (error) {
-        if (error instanceof Error && error.message === "channel_not_connected")
+        if (
+          error instanceof Error &&
+          error.message === "channel_not_connected"
+        ) {
+          // Same: a disconnected channel is refused before the provider call.
+          releaseOutboundFirstSend(context.workspaceId);
           throw new ApiHttpError(
             409,
             "channel_not_connected",
             "Connect the WhatsApp channel before starting a conversation.",
           );
+        }
+        // Any other failure may have happened after the provider accepted the
+        // message, so it keeps its slot and fails closed.
         throw error;
       }
     }),

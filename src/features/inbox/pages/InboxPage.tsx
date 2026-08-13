@@ -321,16 +321,17 @@ export function InboxPage({
       setNewChatOpen(false);
       setSelectedConversationId(result.conversationId);
       setMobileConversationOpen(true);
+      // Either branch navigates to a conversation the active rail filter or
+      // search can exclude — a new one lands at attention_state 'none' — so the
+      // rail is cleared before the thread is shown.
+      setSearch("");
+      setFilter("All conversations");
       if (result.created) {
         onToast(t("toasts.chatStarted"));
         return;
       }
-      // The number already has a thread. Clear the rail filters first, or the
-      // thread the toast points at can be hidden behind the active filter, then
-      // hand the typed text to the composer so the founder decides whether that
-      // thread should receive it.
-      setSearch("");
-      setFilter("All conversations");
+      // The number already has a thread. Hand the typed text to the composer so
+      // the founder decides whether that thread should receive it.
       setDraftInsertRequest({
         text: input.message,
         requestId: Date.now(),

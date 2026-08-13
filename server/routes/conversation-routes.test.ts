@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -11,11 +12,15 @@ import type {
 import type { WhatsAppProvider } from "../whatsapp-service.js";
 
 type Row = Record<string, unknown>;
+interface Workspaces {
+  workspaceId: string;
+  otherWorkspaceId: string;
+}
 
 const userId = "11111111-1111-4111-8111-111111111111";
-const workspaceId = "22222222-2222-4222-8222-222222222222";
-const otherWorkspaceId = "33333333-3333-4333-8333-333333333333";
 const channelId = "44444444-4444-4444-8444-444444444444";
+const disconnectedChannelId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const unknownChannelId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const contactId = "55555555-5555-4555-8555-555555555555";
 const existingConversationId = "66666666-6666-4666-8666-666666666666";
 const foreignConversationId = "77777777-7777-4777-8777-777777777777";
@@ -107,13 +112,20 @@ function fakeProvider() {
   } satisfies WhatsAppProvider;
 }
 
+/**
+ * Each harness owns a fresh workspace id because the route's cold-send window
+ * lives at module scope, exactly as it does in the running server.
+ */
 function createHarness(
   options: {
     channelStatus?: string;
-    contacts?: Row[];
-    conversations?: Row[];
+    contacts?: (ids: Workspaces) => Row[];
+    conversations?: (ids: Workspaces) => Row[];
   } = {},
 ) {
+  const workspaceId = randomUUID();
+  const otherWorkspaceId = randomUUID();
+  const ids: Workspaces = { workspaceId, otherWorkspaceId };
   const client = new FakeSupabase({
     channel_connections: [
       {
@@ -122,20 +134,29 @@ function createHarness(
         provider_instance_name: "techne-support",
         status: options.channelStatus ?? "open",
       },
+      {
+        id: disconnectedChannelId,
+        workspace_id: workspaceId,
+        provider_instance_name: "techne-support-spare",
+        status: "closed",
+      },
     ],
-    contacts: options.contacts ?? [],
-    conversations: options.conversations ?? [],
+    contacts: options.contacts?.(ids) ?? [],
+    conversations: options.conversations?.(ids) ?? [],
     ai_outbound_messages: [],
   });
   const provider = fakeProvider();
-  const conversations = new SupabaseConversationAdapter(
-    client as unknown as SupabaseClient,
-    provider,
-    undefined,
-  );
   const app = express();
   app.use(express.json());
-  app.use(
+  // server/index.ts builds the router and its adapters inside a per-request
+  // middleware. Mounting once here would let per-router state survive in a way
+  // production never does, so the harness rebuilds both on every request.
+  app.use((request, response, next) => {
+    const conversations = new SupabaseConversationAdapter(
+      client as unknown as SupabaseClient,
+      provider,
+      undefined,
+    );
     createApiRouter({
       auth: { authenticate: async () => user },
       membership: {
@@ -145,27 +166,40 @@ function createHarness(
             : null,
       },
       conversations,
-    } as unknown as ApiRouterDependencies),
-  );
-  return { app, client, provider };
+    } as unknown as ApiRouterDependencies)(request, response, next);
+  });
+  return { app, client, provider, workspaceId, otherWorkspaceId };
 }
 
 function startConversation(
   app: express.Express,
+  workspaceId: string,
   body: Record<string, unknown>,
-  headerWorkspaceId = workspaceId,
 ) {
   return request(app)
     .post("/api/conversations")
-    .set("x-mend-workspace-id", headerWorkspaceId)
+    .set("x-mend-workspace-id", workspaceId)
     .send(body);
 }
 
+const existingThread = {
+  contacts: ({ workspaceId }: Workspaces, phoneNumber: string) => [
+    { id: contactId, workspace_id: workspaceId, phone_number: phoneNumber },
+  ],
+  conversations: ({ workspaceId }: Workspaces) => [
+    {
+      id: existingConversationId,
+      workspace_id: workspaceId,
+      contact_id: contactId,
+    },
+  ],
+};
+
 describe("POST /api/conversations", () => {
   it("rejects a phone number with fewer digits than a dial code, area code and subscriber number", async () => {
-    const { app, client, provider } = createHarness();
+    const { app, client, provider, workspaceId } = createHarness();
 
-    const response = await startConversation(app, {
+    const response = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "+55 11",
       message: "Hello",
@@ -178,24 +212,12 @@ describe("POST /api/conversations", () => {
   });
 
   it("returns the existing conversation and sends nothing when the phone already has one", async () => {
-    const { app, client, provider } = createHarness({
-      contacts: [
-        {
-          id: contactId,
-          workspace_id: workspaceId,
-          phone_number: "5511988887777",
-        },
-      ],
-      conversations: [
-        {
-          id: existingConversationId,
-          workspace_id: workspaceId,
-          contact_id: contactId,
-        },
-      ],
+    const { app, client, provider, workspaceId } = createHarness({
+      contacts: (ids) => existingThread.contacts(ids, "5511988887777"),
+      conversations: existingThread.conversations,
     });
 
-    const response = await startConversation(app, {
+    const response = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "+55 (11) 98888-7777",
       message: "Following up on your order",
@@ -211,24 +233,12 @@ describe("POST /api/conversations", () => {
   });
 
   it("matches a Brazilian contact stored without the ninth digit", async () => {
-    const { app, client, provider } = createHarness({
-      contacts: [
-        {
-          id: contactId,
-          workspace_id: workspaceId,
-          phone_number: "551188887777",
-        },
-      ],
-      conversations: [
-        {
-          id: existingConversationId,
-          workspace_id: workspaceId,
-          contact_id: contactId,
-        },
-      ],
+    const { app, client, provider, workspaceId } = createHarness({
+      contacts: (ids) => existingThread.contacts(ids, "551188887777"),
+      conversations: existingThread.conversations,
     });
 
-    const response = await startConversation(app, {
+    const response = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "+55 (11) 98888-7777",
       message: "Following up on your order",
@@ -244,24 +254,12 @@ describe("POST /api/conversations", () => {
   });
 
   it("matches a Brazilian contact stored with the ninth digit when the founder omits it", async () => {
-    const { app, client, provider } = createHarness({
-      contacts: [
-        {
-          id: contactId,
-          workspace_id: workspaceId,
-          phone_number: "5511988887777",
-        },
-      ],
-      conversations: [
-        {
-          id: existingConversationId,
-          workspace_id: workspaceId,
-          contact_id: contactId,
-        },
-      ],
+    const { app, client, provider, workspaceId } = createHarness({
+      contacts: (ids) => existingThread.contacts(ids, "5511988887777"),
+      conversations: existingThread.conversations,
     });
 
-    const response = await startConversation(app, {
+    const response = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "+55 (11) 8888-7777",
       message: "Following up on your order",
@@ -277,10 +275,10 @@ describe("POST /api/conversations", () => {
   });
 
   it("stops cold first contacts once the workspace hourly limit is reached", async () => {
-    const { app, provider } = createHarness();
+    const { app, provider, workspaceId } = createHarness();
 
     for (let index = 0; index < 20; index += 1) {
-      const allowed = await startConversation(app, {
+      const allowed = await startConversation(app, workspaceId, {
         channelId,
         phoneNumber: `5511${900000000 + index}`,
         message: "Hello",
@@ -288,7 +286,7 @@ describe("POST /api/conversations", () => {
       expect(allowed.status).toBe(201);
     }
 
-    const blocked = await startConversation(app, {
+    const blocked = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "5511900000099",
       message: "Hello",
@@ -300,25 +298,13 @@ describe("POST /api/conversations", () => {
   });
 
   it("does not spend cold-send quota on a number that already has a conversation", async () => {
-    const { app, provider } = createHarness({
-      contacts: [
-        {
-          id: contactId,
-          workspace_id: workspaceId,
-          phone_number: "5511988887777",
-        },
-      ],
-      conversations: [
-        {
-          id: existingConversationId,
-          workspace_id: workspaceId,
-          contact_id: contactId,
-        },
-      ],
+    const { app, provider, workspaceId } = createHarness({
+      contacts: (ids) => existingThread.contacts(ids, "5511988887777"),
+      conversations: existingThread.conversations,
     });
 
     for (let index = 0; index < 20; index += 1) {
-      const existing = await startConversation(app, {
+      const existing = await startConversation(app, workspaceId, {
         channelId,
         phoneNumber: "5511988887777",
         message: "Hello again",
@@ -326,7 +312,7 @@ describe("POST /api/conversations", () => {
       expect(existing.status).toBe(200);
     }
 
-    const response = await startConversation(app, {
+    const response = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "5521977776666",
       message: "Hello",
@@ -336,10 +322,41 @@ describe("POST /api/conversations", () => {
     expect(provider.sendText).toHaveBeenCalledTimes(1);
   });
 
-  it("sends through the provider and records the first message as outbound", async () => {
-    const { app, client, provider } = createHarness();
+  it("returns the reserved slot when the channel fails before the provider", async () => {
+    const { app, provider, workspaceId } = createHarness();
 
-    const response = await startConversation(app, {
+    for (let index = 0; index < 10; index += 1) {
+      const missing = await startConversation(app, workspaceId, {
+        channelId: unknownChannelId,
+        phoneNumber: `5511${900000000 + index}`,
+        message: "Hello",
+      });
+      expect(missing.status).toBe(404);
+    }
+    for (let index = 0; index < 10; index += 1) {
+      const disconnected = await startConversation(app, workspaceId, {
+        channelId: disconnectedChannelId,
+        phoneNumber: `5511${910000000 + index}`,
+        message: "Hello",
+      });
+      expect(disconnected.status).toBe(409);
+    }
+    expect(provider.sendText).not.toHaveBeenCalled();
+
+    const response = await startConversation(app, workspaceId, {
+      channelId,
+      phoneNumber: "5511999999999",
+      message: "Hello",
+    });
+
+    expect(response.status).toBe(201);
+    expect(provider.sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends through the provider and records the first message as outbound", async () => {
+    const { app, client, provider, workspaceId } = createHarness();
+
+    const response = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "+55 (11) 99999-9999",
       message: "  Hi, this is Téchne support.  ",
@@ -368,11 +385,11 @@ describe("POST /api/conversations", () => {
   });
 
   it("reports a disconnected channel instead of sending", async () => {
-    const { app, client, provider } = createHarness({
+    const { app, client, provider, workspaceId } = createHarness({
       channelStatus: "closed",
     });
 
-    const response = await startConversation(app, {
+    const response = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "5511999999999",
       message: "Hello",
@@ -385,15 +402,15 @@ describe("POST /api/conversations", () => {
   });
 
   it("never resolves a conversation that belongs to another workspace", async () => {
-    const { app, provider } = createHarness({
-      contacts: [
+    const { app, provider, workspaceId } = createHarness({
+      contacts: ({ otherWorkspaceId }) => [
         {
           id: contactId,
           workspace_id: otherWorkspaceId,
           phone_number: "5511999999999",
         },
       ],
-      conversations: [
+      conversations: ({ otherWorkspaceId }) => [
         {
           id: foreignConversationId,
           workspace_id: otherWorkspaceId,
@@ -402,7 +419,7 @@ describe("POST /api/conversations", () => {
       ],
     });
 
-    const response = await startConversation(app, {
+    const response = await startConversation(app, workspaceId, {
       channelId,
       phoneNumber: "5511999999999",
       message: "Hello",
@@ -414,13 +431,13 @@ describe("POST /api/conversations", () => {
   });
 
   it("refuses a workspace the caller does not belong to before reaching the send path", async () => {
-    const { app, client, provider } = createHarness();
+    const { app, client, provider, otherWorkspaceId } = createHarness();
 
-    const response = await startConversation(
-      app,
-      { channelId, phoneNumber: "5511999999999", message: "Hello" },
-      otherWorkspaceId,
-    );
+    const response = await startConversation(app, otherWorkspaceId, {
+      channelId,
+      phoneNumber: "5511999999999",
+      message: "Hello",
+    });
 
     expect(response.status).toBe(404);
     expect(provider.sendText).not.toHaveBeenCalled();
