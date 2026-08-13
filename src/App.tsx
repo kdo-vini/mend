@@ -1079,7 +1079,6 @@ function App() {
                     setSelectedConversationId={setSelectedConversationId}
                     issues={issues}
                     onOpenIssue={setInspectorIssueId}
-                    onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
                     onConfirm={requestConfirmation}
                     liveMode={!demoMode}
@@ -1219,7 +1218,6 @@ function App() {
                     setSelectedConversationId={setSelectedConversationId}
                     issues={issues}
                     onOpenIssue={setInspectorIssueId}
-                    onNewIssue={() => setCreateIssueOpen(true)}
                     onToast={setToast}
                     onConfirm={requestConfirmation}
                     liveMode={!demoMode}

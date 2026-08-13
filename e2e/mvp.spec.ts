@@ -175,6 +175,17 @@ test("operator can move from inbox to issues and create an issue", async ({
   await page.goto("/inbox?demo=1");
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
 
+  if (testInfo.project.name === "mobile") {
+    await page
+      .locator(".mobile-bottom-nav")
+      .getByRole("link", { name: "Issues" })
+      .click();
+  } else {
+    await openCommandPalette(page, testInfo.project.name);
+    await page.getByRole("button", { name: "Browse issues" }).click();
+  }
+  await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
+
   await page
     .getByRole("button", { name: /New issue/ })
     .first()
@@ -187,16 +198,6 @@ test("operator can move from inbox to issues and create an issue", async ({
   await expect(page.getByRole("status")).toContainText(/TEC-\d+ created/);
   await page.getByRole("button", { name: "Close issue inspector" }).click();
 
-  if (testInfo.project.name === "mobile") {
-    await page
-      .locator(".mobile-bottom-nav")
-      .getByRole("link", { name: "Issues" })
-      .click();
-  } else {
-    await openCommandPalette(page, testInfo.project.name);
-    await page.getByRole("button", { name: "Browse issues" }).click();
-  }
-  await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
   const issueCollection =
     testInfo.project.name === "mobile"
       ? page.locator(".issues-mobile-list")

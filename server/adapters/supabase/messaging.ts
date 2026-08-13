@@ -9,6 +9,7 @@ import {
   type ConversationPatchInput,
   type ConversationPort,
   type ConversationSnoozeInput,
+  type ConversationStartInput,
   type RequestContext,
   type SendMessageInput,
 } from "../../contracts/api-ports.js";
@@ -347,6 +348,55 @@ export class SupabaseConversationAdapter implements ConversationPort {
       ...row(data),
       messages: rows(checked("messages.list", messages)),
     });
+  }
+
+  async findByPhone(context: RequestContext, phoneNumber: string) {
+    const contactResult = await this.client
+      .from("contacts")
+      .select("id")
+      .eq("workspace_id", context.workspaceId)
+      .eq("phone_number", phoneNumber)
+      .maybeSingle();
+    const contact = checked("contacts.by_phone", contactResult);
+    if (!contact) return null;
+    const result = await this.client
+      .from("conversations")
+      .select("id")
+      .eq("workspace_id", context.workspaceId)
+      .eq("contact_id", str(row(contact).id))
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const data = checked("conversations.by_phone", result);
+    return data ? { id: str(row(data).id) } : null;
+  }
+
+  async start(context: RequestContext, input: ConversationStartInput) {
+    const result = await this.client
+      .from("channel_connections")
+      .select("id, provider_instance_name, status")
+      .eq("id", input.channelId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const data = checked("channel_connections.start_conversation", result);
+    if (!data) return null;
+    const connection = row(data);
+    if (str(connection.status) !== "open")
+      throw new Error("channel_not_connected");
+    const message = await this.whatsapp.startConversation(
+      {
+        workspaceId: context.workspaceId,
+        actorUserId: context.userId,
+        actorType: "user",
+      },
+      {
+        channelConnectionId: str(connection.id),
+        instanceName: str(connection.provider_instance_name),
+        phoneNumber: input.phoneNumber,
+        text: input.message,
+      },
+    );
+    return { conversationId: message.conversationId };
   }
 
   async delete(context: RequestContext, conversationId: string) {

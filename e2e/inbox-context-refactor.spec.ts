@@ -67,6 +67,56 @@ test("mobile founder can open context and return to the reply composer", async (
   ).toBeLessThanOrEqual(390);
 });
 
+for (const viewport of [
+  { label: "desktop", width: 1440, height: 900 },
+  { label: "mobile", width: 390, height: 844 },
+]) {
+  test(`${viewport.label} Inbox starts a chat instead of an issue`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({
+      width: viewport.width,
+      height: viewport.height,
+    });
+    await page.goto("/inbox?demo=1");
+    await expect(page.getByRole("button", { name: "New issue" })).toHaveCount(
+      0,
+    );
+
+    const trigger = page.getByRole("button", { name: "New chat" });
+    await expect(trigger).toBeVisible();
+    const triggerBox = await trigger.boundingBox();
+    expect(triggerBox?.height).toBeGreaterThanOrEqual(
+      viewport.label === "mobile" ? 44 : 32,
+    );
+
+    await trigger.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Messaging a number that never wrote to you first can get your WhatsApp account restricted.",
+      ),
+    ).toBeVisible();
+
+    const submit = dialog.getByRole("button", { name: "Start conversation" });
+    await expect(submit).toBeDisabled();
+    await dialog.getByLabel("Phone number").fill("+55 11 99999-9999");
+    await expect(submit).toBeDisabled();
+    await dialog.getByLabel("First message").fill("Hello from Téchne");
+    await expect(submit).toBeEnabled();
+    await dialog.getByLabel("Phone number").fill("+55 11");
+    await expect(submit).toBeDisabled();
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    expect(
+      await page.evaluate(() => document.body.scrollWidth),
+    ).toBeLessThanOrEqual(viewport.width);
+  });
+}
+
 test("compact Inbox traps and restores focus while case context is modal", async ({
   page,
 }) => {

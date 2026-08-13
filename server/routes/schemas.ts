@@ -132,6 +132,13 @@ export const conversationPatchSchema = z
     (value) => Object.keys(value).length > 0,
     "At least one field is required",
   );
+export const conversationStartSchema = z
+  .object({
+    channelId: uuid,
+    phoneNumber: z.string().trim().min(1).max(40),
+    message: z.string().trim().min(1).max(4_000),
+  })
+  .strict();
 export const conversationSnoozeSchema = z
   .object({ until: z.string().datetime({ offset: true }) })
   .strict();

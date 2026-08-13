@@ -22,10 +22,23 @@
     "human": "Human handling · AI paused",
     "ai": "AI active for this conversation"
   },
+  "newChat": {
+    "eyebrow": "Start a conversation",
+    "title": "New chat",
+    "trigger": "New chat",
+    "close": "Close new chat",
+    "channel": "WhatsApp channel",
+    "phone": "Phone number",
+    "phonePlaceholder": "+55 11 99999-9999",
+    "phoneHint": "Country code, area code and number, for example +55 11 99999-9999.",
+    "message": "First message",
+    "messagePlaceholder": "Write the first message…",
+    "advisory": "Messaging a number that never wrote to you first can get your WhatsApp account restricted.",
+    "submit": "Start conversation",
+    "starting": "Starting…"
+  },
   "ui": {
     "newWillAppear": "New conversations will appear here.",
-    "createIssue": "Create an internal issue",
-    "newIssue": "New issue",
     "conversations": "Conversations",
     "search": "Search conversations",
     "filters": "Conversation filters",
@@ -137,6 +150,9 @@
     "sent": "sent"
   },
   "toasts": {
+    "chatStarted": "Conversation started",
+    "chatLiveOnly": "Starting a conversation is available only for a live WhatsApp workspace.",
+    "chatExists": "This number already has a conversation. Your message is waiting in the composer.",
     "messageSent": "Message sent",
     "messageAccepted": "Message accepted by WhatsApp",
     "messageSentAiPaused": "Message sent. AI paused after your reply — choose Resume AI in the three dots menu to continue.",
@@ -157,6 +173,8 @@
     "draftFallback": "I understand the impact. I’ll investigate this now and update you as soon as I have a next step."
   },
   "errors": {
+    "startChat": "The conversation could not be started.",
+    "channelNotConnected": "Connect a WhatsApp channel in Settings before starting a conversation.",
     "markRead": "Could not mark the conversation as read.",
     "sendMessage": "Message could not be sent.",
     "sendAttachment": "Attachment could not be sent.",

@@ -1033,6 +1033,51 @@
     10px "DM Mono",
     monospace;
 }
+.new-chat-dialog {
+  position: fixed;
+  z-index: var(--z-modal);
+  top: 50%;
+  left: 50%;
+  width: min(475px, calc(100vw - var(--space-5)));
+  max-height: calc(100dvh - var(--space-5));
+  overflow-y: auto;
+  transform: translate(-50%, -50%);
+}
+.new-chat-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.new-chat-field input,
+.new-chat-field textarea {
+  min-height: var(--control-height);
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.new-chat-field textarea {
+  min-height: 74px;
+  resize: vertical;
+}
+.new-chat-field input:focus,
+.new-chat-field textarea:focus {
+  border-color: var(--accent);
+}
+.new-chat-field input::placeholder,
+.new-chat-field textarea::placeholder {
+  color: var(--muted-2);
+}
+.new-chat-hint {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
 @media (max-width: 650px) {
   .media-lightbox-dialog {
     width: calc(100vw - var(--space-4));
@@ -1359,6 +1404,14 @@
   .inbox-page .mobile-conversation-back,
   .conversation-header .inbox-context-trigger,
   .inbox-case-context .inbox-context-close {
+    min-width: var(--mobile-touch-target);
+    min-height: var(--mobile-touch-target);
+  }
+  .inbox-new-chat,
+  .new-chat-dialog .modal-footer .button {
+    min-height: var(--mobile-touch-target);
+  }
+  .new-chat-dialog .modal-header .icon-button {
     min-width: var(--mobile-touch-target);
     min-height: var(--mobile-touch-target);
   }

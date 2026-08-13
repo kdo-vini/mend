@@ -231,9 +231,25 @@ export interface AiDraftInput {
   instruction?: string;
 }
 
+export interface ConversationStartInput {
+  channelId: string;
+  /** Digits only: dial code, area code and subscriber number. */
+  phoneNumber: string;
+  message: string;
+}
+
 export interface ConversationPort {
   list(context: RequestContext, query: ConversationListQuery): Promise<unknown>;
   get(context: RequestContext, conversationId: string): Promise<unknown | null>;
+  /** Workspace-scoped lookup that keeps a first message out of an existing thread. */
+  findByPhone(
+    context: RequestContext,
+    phoneNumber: string,
+  ): Promise<{ id: string } | null>;
+  start(
+    context: RequestContext,
+    input: ConversationStartInput,
+  ): Promise<{ conversationId: string } | null>;
   delete(context: RequestContext, conversationId: string): Promise<boolean>;
   deleteMessage(
     context: RequestContext,

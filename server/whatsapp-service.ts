@@ -181,6 +181,44 @@ export class WhatsAppService {
     return { message, providerMessageId: id };
   }
 
+  /**
+   * First message to a phone number that has no conversation yet. Sends first
+   * and records afterwards, the same ordering sendText uses, so the contact,
+   * conversation and message are created by the RPC that handles inbound.
+   */
+  async startConversation(
+    context: InboxContext,
+    input: {
+      channelConnectionId: string;
+      instanceName: string;
+      phoneNumber: string;
+      text: string;
+    },
+  ): Promise<InboxMessageRecord> {
+    const text = input.text.trim();
+    if (!text || text.length > 20_000) throw new Error("message_text_invalid");
+    const response = await this.provider.sendText({
+      instanceName: input.instanceName,
+      number: input.phoneNumber,
+      text,
+    });
+    return this.inbox.persistNormalizedMessage(
+      context,
+      input.channelConnectionId,
+      {
+        instanceName: input.instanceName,
+        providerMessageId: providerMessageId(response),
+        remoteJid: `${input.phoneNumber}@s.whatsapp.net`,
+        phoneNumber: input.phoneNumber,
+        direction: "outbound",
+        messageType: "text",
+        text,
+        chatType: "direct",
+        raw: {},
+      },
+    );
+  }
+
   async sendMedia(
     context: InboxContext,
     conversationId: string,

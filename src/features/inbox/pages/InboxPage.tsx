@@ -50,6 +50,8 @@ import type {
 import {
   deleteLiveConversation,
   deleteLiveMessage,
+  listConnectedChannels,
+  LiveActionError,
   loadLiveConversationSnapshot,
   markLiveConversationRead,
   reactToLiveMessage,
@@ -62,6 +64,7 @@ import {
   sendLiveMessage,
   sendLivePresence,
   snoozeLiveConversation,
+  startConversation,
   updateLiveContact,
   updateLiveConversation,
   uploadLiveMediaAsset,
@@ -100,6 +103,12 @@ import {
   INBOX_CASE_CONTEXT_ID,
   InboxCaseContext,
 } from "../components/InboxCaseContext";
+import {
+  NEW_CHAT_DIALOG_ID,
+  NewChatDialog,
+  type NewChatChannel,
+  type NewChatInput,
+} from "../components/NewChatDialog";
 
 interface AssigneeOption {
   value: string;
@@ -221,7 +230,6 @@ export function InboxPage({
   setSelectedConversationId,
   issues,
   onOpenIssue,
-  onNewIssue,
   onToast,
   onConfirm,
   liveMode,
@@ -237,7 +245,6 @@ export function InboxPage({
   setSelectedConversationId: (id: string) => void;
   issues: Issue[];
   onOpenIssue: (id: string) => void;
-  onNewIssue: () => void;
   onToast: (message: string) => void;
   onConfirm: Confirm;
   liveMode: boolean;
@@ -280,10 +287,76 @@ export function InboxPage({
   const failedMediaRefreshIdsRef = useRef(new Set<string>());
   const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null);
   const [conversationDeleting, setConversationDeleting] = useState(false);
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newChatChannels, setNewChatChannels] = useState<NewChatChannel[]>([]);
+  const [newChatStarting, setNewChatStarting] = useState(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const openNewChat = () => {
+    setNewChatOpen(true);
+    if (!liveMode || !workspaceId) return;
+    void listConnectedChannels(workspaceId)
+      .then(setNewChatChannels)
+      .catch((error) =>
+        onToast(localizedError(error, t("errors.channelNotConnected"))),
+      );
+  };
+
+  const startNewChat = async (input: NewChatInput) => {
+    if (!liveMode || !workspaceId) {
+      setNewChatOpen(false);
+      onToast(t("toasts.chatLiveOnly"));
+      return;
+    }
+    if (!input.channelId) {
+      onToast(t("errors.channelNotConnected"));
+      return;
+    }
+    setNewChatStarting(true);
+    try {
+      const result = await startConversation({ workspaceId, ...input });
+      setNewChatOpen(false);
+      setSelectedConversationId(result.conversationId);
+      setMobileConversationOpen(true);
+      if (result.created) {
+        onToast(t("toasts.chatStarted"));
+        return;
+      }
+      // The number already has a thread. Hand the typed text to the composer
+      // so the founder decides whether that thread should receive it.
+      setDraftInsertRequest({
+        text: input.message,
+        requestId: Date.now(),
+        conversationId: result.conversationId,
+      });
+      onToast(t("toasts.chatExists"));
+    } catch (error) {
+      onToast(
+        localizedError(
+          error,
+          error instanceof LiveActionError &&
+            error.code === "channel_not_connected"
+            ? t("errors.channelNotConnected")
+            : t("errors.startChat"),
+        ),
+      );
+    } finally {
+      setNewChatStarting(false);
+    }
+  };
+
+  const newChatDialog = newChatOpen ? (
+    <NewChatDialog
+      channels={newChatChannels}
+      submitting={newChatStarting}
+      onClose={() => setNewChatOpen(false)}
+      onStart={(input) => void startNewChat(input)}
+    />
+  ) : null;
+
   const selected =
     conversations.find((item) => item.id === selectedConversationId) ??
     conversations[0];
@@ -416,14 +489,17 @@ export function InboxPage({
           description={t("ui.newWillAppear")}
           action={
             <button
-              className="button button-ghost"
+              className="button button-ghost inbox-new-chat"
               type="button"
-              onClick={onNewIssue}
+              aria-expanded={newChatOpen}
+              aria-controls={NEW_CHAT_DIALOG_ID}
+              onClick={openNewChat}
             >
-              <Plus size={14} /> {t("ui.createIssue")}
+              <Plus size={14} /> {t("newChat.trigger")}
             </button>
           }
         />
+        {newChatDialog}
       </div>
     );
   }
@@ -1209,11 +1285,13 @@ export function InboxPage({
             <Filter size={15} /> {t("filters.all")}
           </button>
           <button
-            className="button button-primary"
+            className="button button-primary inbox-new-chat"
             type="button"
-            onClick={onNewIssue}
+            aria-expanded={newChatOpen}
+            aria-controls={NEW_CHAT_DIALOG_ID}
+            onClick={openNewChat}
           >
-            <Plus size={15} /> {t("ui.newIssue")}
+            <Plus size={15} /> {t("newChat.trigger")}
           </button>
         </div>
       </div>
@@ -1316,10 +1394,9 @@ export function InboxPage({
           </button>
           <ConversationHeader
             conversation={selected}
-            onNewIssue={() => {
-              if (activeIssue) onOpenIssue(activeIssue.id);
-              else onNewIssue();
-            }}
+            onOpenLinkedIssue={
+              activeIssue ? () => onOpenIssue(activeIssue.id) : undefined
+            }
             onSetAiMode={setAiMode}
             onSetAiPause={(paused) => void setAiPause(paused)}
             onSnooze={() => void setConversationState("snoozed")}
@@ -1519,6 +1596,7 @@ export function InboxPage({
         onIndexChange={setMediaViewerIndex}
         onClose={() => setMediaViewerIndex(null)}
       />
+      {newChatDialog}
     </div>
   );
 }
@@ -1931,7 +2009,7 @@ function AiDraftCard({
 
 function ConversationHeader({
   conversation,
-  onNewIssue,
+  onOpenLinkedIssue,
   onSetAiMode,
   onSetAiPause,
   onSnooze,
@@ -1947,7 +2025,7 @@ function ConversationHeader({
   onOpenContext,
 }: {
   conversation: Conversation;
-  onNewIssue: () => void;
+  onOpenLinkedIssue?: () => void;
   onSetAiMode: (mode: AiMode) => void;
   onSetAiPause: (paused: boolean) => void;
   onSnooze: () => void;
@@ -2083,14 +2161,16 @@ function ConversationHeader({
         >
           <PanelRight size={16} />
         </button>
-        <button
-          className="icon-button conversation-desktop-control"
-          type="button"
-          onClick={onNewIssue}
-          aria-label={t("ui.openLinkedIssue")}
-        >
-          <CircleDot size={16} />
-        </button>
+        {onOpenLinkedIssue && (
+          <button
+            className="icon-button conversation-desktop-control"
+            type="button"
+            onClick={onOpenLinkedIssue}
+            aria-label={t("ui.openLinkedIssue")}
+          >
+            <CircleDot size={16} />
+          </button>
+        )}
         <div className="menu-wrap">
           <button
             className="icon-button"
@@ -2127,17 +2207,19 @@ function ConversationHeader({
                   }}
                 />
               </label>
-              <button
-                className="mobile-menu-control"
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onNewIssue();
-                  setMenuOpen(false);
-                }}
-              >
-                <CircleDot size={14} /> {t("ui.openLinkedIssue")}
-              </button>
+              {onOpenLinkedIssue && (
+                <button
+                  className="mobile-menu-control"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onOpenLinkedIssue();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <CircleDot size={14} /> {t("ui.openLinkedIssue")}
+                </button>
+              )}
               <hr className="mobile-menu-control" />
               <button
                 type="button"

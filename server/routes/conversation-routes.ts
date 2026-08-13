@@ -1,14 +1,19 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
+import { normalizePhoneNumber } from "../whatsmiau.js";
 import {
   aiDraftSchema,
   conversationAiPauseSchema,
   conversationListQuerySchema,
   conversationPatchSchema,
   conversationSnoozeSchema,
+  conversationStartSchema,
   messageReactionSchema,
   messagePresenceSchema,
   sendMessageSchema,
 } from "./schemas.js";
+
+/** Dial code, area code and subscriber number, within the E.164 maximum. */
+const phoneNumberDigits = { minimum: 10, maximum: 15 };
 
 export function registerConversationRoutes(context: ApiRouteModuleContext) {
   const {
@@ -23,6 +28,7 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
     requireFound,
     mediaApiError,
     uuid,
+    ApiHttpError,
   } = context;
   router.get(
     "/api/conversations",
@@ -33,6 +39,56 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
           parse(conversationListQuerySchema, request.query),
         ),
       });
+    }),
+  );
+  router.post(
+    "/api/conversations",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      const input = parse(conversationStartSchema, request.body);
+      const phoneNumber = normalizePhoneNumber(input.phoneNumber);
+      if (
+        phoneNumber.length < phoneNumberDigits.minimum ||
+        phoneNumber.length > phoneNumberDigits.maximum
+      )
+        throw new ApiHttpError(
+          400,
+          "invalid_phone_number",
+          "The phone number must include the dial code, area code and subscriber number.",
+        );
+      // An existing thread already belongs to the customer. Return it instead
+      // of sending, so New chat can never open a second conversation or push
+      // an unexpected message into a live one.
+      const existing = await dependencies.conversations.findByPhone(
+        context,
+        phoneNumber,
+      );
+      if (existing) {
+        send(response, 200, { conversationId: existing.id, created: false });
+        return;
+      }
+      try {
+        const started = requireFound(
+          await dependencies.conversations.start(context, {
+            channelId: input.channelId,
+            phoneNumber,
+            message: input.message,
+          }),
+          "channel",
+        );
+        send(response, 201, {
+          conversationId: started.conversationId,
+          created: true,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === "channel_not_connected")
+          throw new ApiHttpError(
+            409,
+            "channel_not_connected",
+            "Connect the WhatsApp channel before starting a conversation.",
+          );
+        throw error;
+      }
     }),
   );
   router.get(

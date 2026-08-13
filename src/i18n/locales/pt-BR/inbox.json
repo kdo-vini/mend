@@ -22,10 +22,23 @@
     "human": "Atendimento humano · IA pausada",
     "ai": "IA ativa nesta conversa"
   },
+  "newChat": {
+    "eyebrow": "Iniciar uma conversa",
+    "title": "Nova conversa",
+    "trigger": "Nova conversa",
+    "close": "Fechar nova conversa",
+    "channel": "Canal do WhatsApp",
+    "phone": "Número de telefone",
+    "phonePlaceholder": "+55 11 99999-9999",
+    "phoneHint": "DDI, DDD e número, por exemplo +55 11 99999-9999.",
+    "message": "Primeira mensagem",
+    "messagePlaceholder": "Escreva a primeira mensagem…",
+    "advisory": "Enviar mensagem para um número que nunca escreveu para você pode restringir sua conta do WhatsApp.",
+    "submit": "Iniciar conversa",
+    "starting": "Iniciando…"
+  },
   "ui": {
     "newWillAppear": "Novas conversas vão aparecer aqui.",
-    "createIssue": "Criar chamado interno",
-    "newIssue": "Novo chamado",
     "conversations": "Conversas",
     "search": "Buscar conversas",
     "filters": "Filtros de conversas",
@@ -137,6 +150,9 @@
     "sent": "enviada"
   },
   "toasts": {
+    "chatStarted": "Conversa iniciada",
+    "chatLiveOnly": "Iniciar uma conversa está disponível apenas em um workspace ao vivo do WhatsApp.",
+    "chatExists": "Esse número já tem uma conversa. Sua mensagem está esperando no campo de resposta.",
     "messageSent": "Mensagem enviada",
     "messageAccepted": "Mensagem aceita pelo WhatsApp",
     "messageSentAiPaused": "Mensagem enviada. A IA foi pausada após sua resposta; use Retomar IA no menu de três pontos para continuar.",
@@ -157,6 +173,8 @@
     "draftFallback": "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um próximo passo."
   },
   "errors": {
+    "startChat": "Não foi possível iniciar a conversa.",
+    "channelNotConnected": "Conecte um canal do WhatsApp em Configurações antes de iniciar uma conversa.",
     "markRead": "Não foi possível marcar a conversa como lida.",
     "sendMessage": "Não foi possível enviar a mensagem.",
     "sendAttachment": "Não foi possível enviar o anexo.",
