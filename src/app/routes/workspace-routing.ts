@@ -15,6 +15,12 @@ export function issueViewHref(
   return `/issues${query ? `?${query}` : ""}`;
 }
 
+export function agentRunDestination(runId: string, search: string): string {
+  const params = new URLSearchParams(search);
+  params.set("run", runId);
+  return `/agent-runs?${params.toString()}`;
+}
+
 export function legacyKanbanDestination(search: string): string {
   const params = new URLSearchParams(search);
   const personal = params.get("mode") === "personal";

@@ -1401,6 +1401,15 @@
   .inbox-case-context {
     width: 100vw;
   }
+  /* The linked-issue card is a shrink-to-fit button, so its untruncated
+     intrinsic width widened the whole message canvas and pushed outbound
+     bubbles past the visible right edge. Size it from the canvas instead. */
+  .issue-event {
+    width: 100%;
+  }
+  .issue-event > span:nth-child(2) {
+    width: 0;
+  }
   .inbox-page .mobile-conversation-back,
   .conversation-header .inbox-context-trigger,
   .inbox-case-context .inbox-context-close {

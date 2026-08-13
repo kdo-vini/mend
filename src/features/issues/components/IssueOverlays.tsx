@@ -27,6 +27,7 @@ import type {
   IssueType,
   Priority,
 } from "../../../types";
+import { agentRunDestination } from "../../../app/routes/workspace-routing";
 import { formatActivityTime } from "../../../shared/lib/format";
 import type { SupportedLocale } from "../../../i18n/resources";
 import {
@@ -531,7 +532,7 @@ export function IssueDetailPage({
                   key={run.id}
                   run={run}
                   onClick={() =>
-                    navigate(`/agent-runs?run=${encodeURIComponent(run.id)}`)
+                    navigate(agentRunDestination(run.id, location.search))
                   }
                 />
               ))

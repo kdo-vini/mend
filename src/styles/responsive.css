@@ -108,6 +108,12 @@
   }
 }
 @media (max-width: 650px) {
+  /* The inspector is the surface a mobile founder lands on, not a drawer
+     docked beside a page they can no longer see. */
+  .issue-inspector {
+    width: 100%;
+    border-left: 0;
+  }
   .automation-route-grid {
     grid-template-columns: 1fr;
   }

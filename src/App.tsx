@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorState, LoadingState } from "./shared/ui/ResourceState";
 import { useConfirmation } from "./shared/ui/useConfirmation";
@@ -195,7 +194,6 @@ function mergeConversationSnapshot(
 
 function App() {
   const { t } = useTranslation(["common", "issues"]);
-  const navigate = useNavigate();
   const [demoMode] = useState(() => isDemoModeRequested() || !isLiveConfigured);
   const [conversations, setConversations] = useState<Conversation[]>(
     demoMode ? seedConversations : [],
@@ -711,14 +709,6 @@ function App() {
     notification: WorkspaceNotification,
   ) => notificationDestination(notification, issues);
 
-  // A run already owns the full screen, so its issue opens as the next full
-  // surface instead of a drawer stacked on top of it. A run whose issue is not
-  // loaded has no surface to open, exactly as before.
-  const openIssueFromRun = (issueId: string) => {
-    const issue = issues.find((item) => item.id === issueId);
-    if (issue) navigate(`/issues/${encodeURIComponent(issue.identifier)}`);
-  };
-
   const updateIssue = (issueId: string, patch: Partial<Issue>) => {
     const previous = issues.find((item) => item.id === issueId);
     if (!demoMode && workspaceId) {
@@ -1186,7 +1176,7 @@ function App() {
                 <FeatureBoundary label={t("states.loadingAgentRuns")}>
                   <FeatureRunsPage
                     runs={runs}
-                    onOpenIssue={openIssueFromRun}
+                    onOpenIssue={setInspectorIssueId}
                     onStartRun={openRunDialog}
                     onUpdateRun={updateRun}
                     pendingRunIds={pendingRunIds}

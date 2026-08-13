@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  agentRunDestination,
   issueViewHref,
   issueWorkspaceView,
   legacyKanbanDestination,
@@ -17,6 +18,18 @@ describe("workspace routing", () => {
       "/issues?demo=1&status=open&view=board",
     );
     expect(issueViewHref("list", "?demo=1&view=board")).toBe("/issues?demo=1");
+  });
+
+  it("opens a run without dropping unrelated query state", () => {
+    expect(agentRunDestination("run-204", "?demo=1")).toBe(
+      "/agent-runs?demo=1&run=run-204",
+    );
+    expect(agentRunDestination("run-204", "?run=run-201&source=review")).toBe(
+      "/agent-runs?run=run-204&source=review",
+    );
+    expect(agentRunDestination("run 204/a", "")).toBe(
+      "/agent-runs?run=run+204%2Fa",
+    );
   });
 
   it("redirects legacy shared and personal Kanban routes", () => {

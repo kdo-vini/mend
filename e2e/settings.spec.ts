@@ -110,6 +110,51 @@ test("settings navigation becomes a compact mobile selector", async ({
   expect(bodyWidth).toBeLessThanOrEqual(390);
 });
 
+test("the mobile settings selector sits directly above its content", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/settings?demo=1");
+  await expect(page.getByLabel("Settings section")).toBeVisible();
+
+  const gap = await page.evaluate(() => {
+    const shell = document.querySelector(".settings-v2-shell");
+    const sidebar = shell?.querySelector(".settings-v2-sidebar");
+    const content = shell?.querySelector(".settings-v2-content");
+    if (!shell || !sidebar || !content) return null;
+    return (
+      content.getBoundingClientRect().top -
+      sidebar.getBoundingClientRect().bottom
+    );
+  });
+  expect(gap, "the settings sidebar and content are rendered").not.toBeNull();
+  expect(gap!).toBeGreaterThan(0);
+  expect(gap!).toBeLessThanOrEqual(32);
+});
+
+test("desktop settings keeps its two-column layout", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/settings?demo=1");
+
+  const columns = await page
+    .locator(".settings-v2-shell")
+    .evaluate((element) => getComputedStyle(element).gridTemplateColumns);
+  expect(columns.split(" ")).toHaveLength(2);
+
+  const rows = await page.evaluate(() => {
+    const shell = document.querySelector(".settings-v2-shell");
+    const sidebar = shell?.querySelector(".settings-v2-sidebar");
+    const content = shell?.querySelector(".settings-v2-content");
+    if (!sidebar || !content) return null;
+    return {
+      sidebarTop: sidebar.getBoundingClientRect().top,
+      contentTop: content.getBoundingClientRect().top,
+    };
+  });
+  expect(rows).not.toBeNull();
+  expect(rows!.sidebarTop).toBe(rows!.contentTop);
+});
+
 test("settings uses the selected language for providers", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("mend.interface-language", "pt-BR");
