@@ -146,6 +146,48 @@ test("legacy coding connections redirects to the canonical agents route", async 
   ).toBeVisible();
 });
 
+test("canonical automation routes render their matching existing bodies", async ({
+  page,
+}) => {
+  await page.goto("/settings/automation/replies?demo=1");
+  await expect(
+    page.getByRole("heading", { name: "AI behavior" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Support flow" })).toHaveCount(
+    0,
+  );
+
+  await page.goto("/settings/automation/intake?demo=1");
+  await expect(
+    page.getByRole("heading", { name: "Support flow" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI behavior" })).toHaveCount(
+    0,
+  );
+
+  await page.goto("/settings/automation/flows?demo=1&source=bookmark");
+  await expect(page).toHaveURL(
+    /\/settings\/automation\/intake\?demo=1&source=bookmark/,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Support flow" }),
+  ).toBeVisible();
+});
+
+test("nested sibling routes expose their computed navigation item as current", async ({
+  page,
+}) => {
+  const currentItem = page.locator(
+    ".settings-v2-nav-item[aria-current='page']",
+  );
+
+  await page.goto("/settings/automation/intake?demo=1");
+  await expect(currentItem).toHaveText("Automation");
+
+  await page.goto("/settings/engineering/agents/run-policy?demo=1");
+  await expect(currentItem).toHaveText("Agents & models");
+});
+
 test("settings taxonomy remains usable in light and dark themes", async ({
   page,
 }) => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Save, Trash2 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { AiMode } from "../../../types";
 import {
   aiPolicyActionValues,
@@ -42,8 +42,10 @@ import {
 } from "../components/SettingsShared";
 import type { SettingsWorkspacePageProps } from "./SettingsWorkspacePage";
 
-export function SettingsAutomationPage(props: SettingsWorkspacePageProps) {
-  const { section } = useParams();
+export function SettingsAutomationPage({
+  section,
+  ...props
+}: SettingsWorkspacePageProps & { section: "replies" | "intake" }) {
   return section === "intake" ? (
     <SettingsFlowsPage {...props} />
   ) : (

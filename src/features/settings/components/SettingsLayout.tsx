@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   findSettingsNavItem,
   settingsNavigation,
@@ -65,16 +65,15 @@ export function SettingsLayout() {
                 {groupLabels[group.id]}
               </span>
               {group.items.map(({ id, path, icon: Icon }) => (
-                <NavLink
+                <Link
                   key={id}
                   to={`${path}${search}`}
-                  end={path === "/settings"}
                   aria-current={id === active.id ? "page" : undefined}
                   className={`settings-v2-nav-item ${id === active.id ? "selected" : ""}`.trim()}
                 >
                   <Icon size={15} aria-hidden="true" />
                   <span>{itemLabels[id]}</span>
-                </NavLink>
+                </Link>
               ))}
             </div>
           ))}

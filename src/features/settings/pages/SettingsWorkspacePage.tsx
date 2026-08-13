@@ -90,11 +90,11 @@ export function SettingsWorkspaceRoutes(props: SettingsWorkspacePageProps) {
         />
         <Route
           path="automation/replies"
-          element={<SettingsAutomationPage {...props} />}
+          element={<SettingsAutomationPage {...props} section="replies" />}
         />
         <Route
           path="automation/intake"
-          element={<SettingsAutomationPage {...props} />}
+          element={<SettingsAutomationPage {...props} section="intake" />}
         />
         <Route path="integrations" element={<SettingsIntegrationsPage />} />
         <Route
