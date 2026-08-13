@@ -63,7 +63,17 @@ app.use(
             ? [supabaseOrigin.replace(/^https:/, "wss:")]
             : []),
         ],
-        mediaSrc: ["'self'", ...(supabaseOrigin ? [supabaseOrigin] : [])],
+        imgSrc: [
+          "'self'",
+          "data:",
+          "blob:",
+          ...(supabaseOrigin ? [supabaseOrigin] : []),
+        ],
+        mediaSrc: [
+          "'self'",
+          "blob:",
+          ...(supabaseOrigin ? [supabaseOrigin] : []),
+        ],
       },
     },
   }),

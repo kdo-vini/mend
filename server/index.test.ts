@@ -23,11 +23,16 @@ describe("API boundary", () => {
     expect(response.body).toEqual({ ok: true, service: "mend-api" });
   });
 
-  it("allows audio playback from the configured Supabase origin", async () => {
+  it("allows Supabase media and local blob previews through CSP", async () => {
     const response = await request(app).get("/api/health");
-    expect(response.headers["content-security-policy"]).toContain(
-      "media-src 'self'",
-    );
+    const csp = response.headers["content-security-policy"];
+    const supabaseUrl =
+      process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+    expect(supabaseUrl).toBeTruthy();
+    const supabaseOrigin = new URL(supabaseUrl as string).origin;
+
+    expect(csp).toContain(`img-src 'self' data: blob: ${supabaseOrigin}`);
+    expect(csp).toContain(`media-src 'self' blob: ${supabaseOrigin}`);
   });
 
   it("reports readiness as booleans without exposing secret values", async () => {
