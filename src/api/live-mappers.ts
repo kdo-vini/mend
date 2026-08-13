@@ -733,6 +733,7 @@ export function toUiRun(
           label: event.event_type,
           detail: event.message,
           time: displayTime(event.created_at),
+          occurredAt: event.created_at,
           tone: event.event_type.includes("fail")
             ? ("danger" as const)
             : event.event_type.includes("complete")
@@ -806,6 +807,7 @@ function toUiBugCaseEvent(event: BugCaseEventRecord) {
     label: event.event_type,
     detail: event.message,
     time: displayTime(event.created_at),
+    occurredAt: event.created_at,
     tone: event.event_type.includes("fail")
       ? ("danger" as const)
       : event.stage === "completed" || event.event_type.includes("complete")

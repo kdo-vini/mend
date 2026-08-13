@@ -27,9 +27,13 @@ import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { SectionTitle, StatusRun } from "../../../shared/ui/DataDisplay";
 import {
+  authorizedRunActions,
   canImplementProposedFix,
   canProposeFromInvestigation,
+  type RunAction,
+  type RunUpdateAction,
 } from "../run-actions";
+import { runEventLabelKey, selectLatestRunEvent } from "../run-events";
 import { selectRun } from "../run-selection";
 
 const stageOrder = [
@@ -67,6 +71,59 @@ const loopMilestones = [
   { key: "customer", lastStage: "completed", icon: MessageSquare },
 ] as const;
 
+function RunActionButtons({
+  run,
+  actions,
+  pending,
+  onUpdateRun,
+  onRetry,
+}: {
+  run: CodingRun;
+  actions: RunAction[];
+  pending: boolean;
+  onUpdateRun: (runId: string, action: RunUpdateAction) => void;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation("runs");
+
+  return actions.map((action) => {
+    const disabled =
+      pending ||
+      (action === "approve" &&
+        (!run.diff?.trim() ||
+          run.checks?.some((check) => check.exitCode !== 0)));
+    const className =
+      action === "cancel"
+        ? "button button-danger"
+        : action === "reject"
+          ? "button button-ghost"
+          : "button button-primary";
+    const label =
+      action === "retry"
+        ? run.status === "failed"
+          ? t("failure.retry")
+          : t("actions.runAgain")
+        : t(`actions.${action}`);
+
+    return (
+      <button
+        className={className}
+        type="button"
+        key={action}
+        disabled={disabled}
+        aria-busy={pending}
+        onClick={() =>
+          action === "retry" ? onRetry() : onUpdateRun(run.id, action)
+        }
+      >
+        {action === "retry" && <RefreshCw size={14} />}
+        {action === "approve" && <Check size={14} />}
+        {label}
+      </button>
+    );
+  });
+}
+
 function BugLoopOverview({ run }: { run: CodingRun }) {
   const { t } = useTranslation("runs");
   const isFailed =
@@ -96,17 +153,12 @@ function BugLoopOverview({ run }: { run: CodingRun }) {
       run.healthStatus ||
       run.customerResponseStatus,
   );
-  const latestEvent = run.events[run.events.length - 1];
+  const latestEvent = selectLatestRunEvent(run.events);
   const decisionRequired =
     run.caseStatus === "awaiting_human" ||
-    (run.status === "completed" && run.mode === "Implement fix") ||
-    (run.status === "approved" &&
-      run.published &&
-      Boolean(
-        (run.pullRequest && !run.mergeSha) ||
-          ((!run.pullRequest || run.mergeSha) && !run.deployed) ||
-          (run.deployed && run.healthStatus !== "healthy"),
-      ));
+    authorizedRunActions(run).some((action) =>
+      ["approve", "reject", "merge", "deploy", "health"].includes(action),
+    );
 
   return (
     <section className="run-loop-overview" aria-labelledby="run-loop-title">
@@ -136,7 +188,20 @@ function BugLoopOverview({ run }: { run: CodingRun }) {
           </div>
           <div className="run-mobile-latest-event">
             <dt>{t("mobile.latestEvent")}</dt>
-            <dd>{latestEvent?.detail ?? t("sections.noTimeline")}</dd>
+            <dd>
+              {latestEvent ? (
+                <>
+                  <strong>
+                    {t(
+                      `mobile.eventLabels.${runEventLabelKey(latestEvent.label)}`,
+                    )}
+                  </strong>
+                  <span>{latestEvent.detail}</span>
+                </>
+              ) : (
+                t("sections.noTimeline")
+              )}
+            </dd>
           </div>
         </dl>
       </div>
@@ -325,6 +390,7 @@ export function RunsPage({
   onOpenIssue,
   onStartRun,
   onUpdateRun,
+  pendingRunIds,
   onRefresh,
 }: {
   runs: CodingRun[];
@@ -339,17 +405,8 @@ export function RunsPage({
       researchArtifactId?: string;
     },
   ) => void;
-  onUpdateRun: (
-    runId: string,
-    action:
-      | "cancel"
-      | "approve"
-      | "reject"
-      | "publish"
-      | "merge"
-      | "deploy"
-      | "health",
-  ) => void;
+  onUpdateRun: (runId: string, action: RunUpdateAction) => void;
+  pendingRunIds: ReadonlySet<string>;
   onRefresh: () => void;
 }) {
   const { t } = useTranslation("runs");
@@ -374,6 +431,12 @@ export function RunsPage({
     ? canImplementProposedFix(selectedRun)
     : false;
   const hasContinuation = canProposeFix || canImplementProposal;
+  const authorizedActions = selectedRun
+    ? authorizedRunActions(selectedRun)
+    : [];
+  const runActionPending = selectedRun
+    ? pendingRunIds.has(selectedRun.id)
+    : false;
 
   useEffect(
     () => () => {
@@ -417,78 +480,15 @@ export function RunsPage({
       </div>
     );
 
-  const mobileDecisionAction =
-    selectedRun.status === "queued" || selectedRun.status === "running" ? (
-      <button
-        className="button button-danger"
-        type="button"
-        onClick={() => onUpdateRun(selectedRun.id, "cancel")}
-      >
-        {t("actions.cancel")}
-      </button>
-    ) : selectedRun.status === "completed" &&
-      selectedRun.mode === "Implement fix" ? (
-      <>
-        <button
-          className="button button-ghost"
-          type="button"
-          onClick={() => onUpdateRun(selectedRun.id, "reject")}
-        >
-          {t("actions.reject")}
-        </button>
-        <button
-          className="button button-primary"
-          type="button"
-          disabled={
-            !selectedRun.diff?.trim() ||
-            selectedRun.checks?.some((check) => check.exitCode !== 0)
-          }
-          onClick={() => onUpdateRun(selectedRun.id, "approve")}
-        >
-          <Check size={14} /> {t("actions.approve")}
-        </button>
-      </>
-    ) : selectedRun.status === "failed" ? (
-      <button
-        className="button button-primary"
-        type="button"
-        onClick={() => onStartRun(selectedRun.issueId)}
-      >
-        <RefreshCw size={14} /> {t("failure.retry")}
-      </button>
-    ) : selectedRun.status === "approved" &&
-      selectedRun.published &&
-      selectedRun.pullRequest &&
-      !selectedRun.mergeSha ? (
-      <button
-        className="button button-primary"
-        type="button"
-        onClick={() => onUpdateRun(selectedRun.id, "merge")}
-      >
-        {t("actions.merge")}
-      </button>
-    ) : selectedRun.status === "approved" &&
-      selectedRun.published &&
-      (!selectedRun.pullRequest || selectedRun.mergeSha) &&
-      !selectedRun.deployed ? (
-      <button
-        className="button button-primary"
-        type="button"
-        onClick={() => onUpdateRun(selectedRun.id, "deploy")}
-      >
-        {t("actions.deploy")}
-      </button>
-    ) : selectedRun.status === "approved" &&
-      selectedRun.deployed &&
-      selectedRun.healthStatus !== "healthy" ? (
-      <button
-        className="button button-primary"
-        type="button"
-        onClick={() => onUpdateRun(selectedRun.id, "health")}
-      >
-        {t("actions.health")}
-      </button>
-    ) : null;
+  const mobileActions = authorizedActions.filter(
+    (action) => action !== "publish",
+  );
+  const runActionButtonProps = {
+    run: selectedRun,
+    pending: runActionPending,
+    onUpdateRun,
+    onRetry: () => onStartRun(selectedRun.issueId),
+  };
 
   return (
     <div className="page">
@@ -576,31 +576,35 @@ export function RunsPage({
                   >
                     <Bot size={15} /> {t("loop.startInvestigation")}
                   </button>
-                ) : selectedRun.status === "queued" ||
-                  selectedRun.status === "running" ? (
-                  <button
-                    className="button button-danger run-desktop-decision"
-                    type="button"
-                    onClick={() => onUpdateRun(selectedRun.id, "cancel")}
-                  >
-                    {t("actions.cancel")}
-                  </button>
-                ) : hasContinuation ? null : (
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    onClick={() => onStartRun(selectedRun.issueId)}
-                  >
-                    <RefreshCw size={15} /> {t("actions.runAgain")}
-                  </button>
-                )}
+                ) : authorizedActions.includes("cancel") ? (
+                  <span className="run-desktop-decision">
+                    <RunActionButtons
+                      {...runActionButtonProps}
+                      actions={["cancel"]}
+                    />
+                  </span>
+                ) : authorizedActions.includes("retry") &&
+                  selectedRun.status !== "failed" ? (
+                  <RunActionButtons
+                    {...runActionButtonProps}
+                    actions={["retry"]}
+                  />
+                ) : null}
               </div>
             </div>
             <BugLoopOverview run={selectedRun} />
-            {mobileDecisionAction && (
-              <div className="run-mobile-decision-bar">
+            {mobileActions.length > 0 && (
+              <div
+                className="run-mobile-decision-bar"
+                aria-busy={runActionPending}
+              >
                 <span>{t("mobile.nextAuthorizedAction")}</span>
-                <div>{mobileDecisionAction}</div>
+                <div>
+                  <RunActionButtons
+                    {...runActionButtonProps}
+                    actions={mobileActions}
+                  />
+                </div>
               </div>
             )}
             {hasContinuation && (
@@ -728,105 +732,66 @@ export function RunsPage({
                 ))}
               </div>
             )}
-            {selectedRun.status === "completed" &&
-              selectedRun.mode === "Implement fix" && (
-                <div className="run-review-actions run-desktop-decision">
-                  <span>{t("actions.reviewDescription")}</span>
-                  <button
-                    className="button button-ghost"
-                    type="button"
-                    onClick={() => onUpdateRun(selectedRun.id, "reject")}
-                  >
-                    {t("actions.reject")}
-                  </button>
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    disabled={
-                      !selectedRun.diff?.trim() ||
-                      selectedRun.checks?.some((check) => check.exitCode !== 0)
-                    }
-                    onClick={() => onUpdateRun(selectedRun.id, "approve")}
-                  >
-                    <Check size={14} /> {t("actions.approve")}
-                  </button>
-                </div>
-              )}
-            {selectedRun.status === "failed" && (
-              <div className="run-review-actions run-failure-actions run-desktop-decision">
-                <span>{t("failure.retryDescription")}</span>
-                <button
-                  className="button button-primary"
-                  type="button"
-                  onClick={() => onStartRun(selectedRun.issueId)}
-                >
-                  <RefreshCw size={14} /> {t("failure.retry")}
-                </button>
+            {authorizedActions.includes("approve") && (
+              <div className="run-review-actions run-desktop-decision">
+                <span>{t("actions.reviewDescription")}</span>
+                <RunActionButtons
+                  {...runActionButtonProps}
+                  actions={["reject", "approve"]}
+                />
               </div>
             )}
+            {authorizedActions.includes("retry") &&
+              selectedRun.status === "failed" && (
+                <div className="run-review-actions run-failure-actions run-desktop-decision">
+                  <span>{t("failure.retryDescription")}</span>
+                  <RunActionButtons
+                    {...runActionButtonProps}
+                    actions={["retry"]}
+                  />
+                </div>
+              )}
             {selectedRun.decision === "notify" && (
               <div className="run-review-actions run-notify-actions">
                 <span>{t("actions.notifyDescription")}</span>
               </div>
             )}
-            {selectedRun.status === "approved" &&
-              selectedRun.branch &&
-              !selectedRun.published && (
-                <div className="run-review-actions">
-                  <span>{t("actions.publishDescription")}</span>
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    onClick={() => onUpdateRun(selectedRun.id, "publish")}
-                  >
-                    {t("actions.publish")}
-                  </button>
-                </div>
-              )}
-            {selectedRun.status === "approved" &&
-              selectedRun.published &&
-              selectedRun.pullRequest &&
-              !selectedRun.mergeSha && (
-                <div className="run-review-actions run-desktop-decision">
-                  <span>{t("actions.mergeDescription")}</span>
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    onClick={() => onUpdateRun(selectedRun.id, "merge")}
-                  >
-                    {t("actions.merge")}
-                  </button>
-                </div>
-              )}
-            {selectedRun.status === "approved" &&
-              selectedRun.published &&
-              (!selectedRun.pullRequest || selectedRun.mergeSha) &&
-              !selectedRun.deployed && (
-                <div className="run-review-actions run-desktop-decision">
-                  <span>{t("actions.deployDescription")}</span>
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    onClick={() => onUpdateRun(selectedRun.id, "deploy")}
-                  >
-                    {t("actions.deploy")}
-                  </button>
-                </div>
-              )}
-            {selectedRun.status === "approved" &&
-              selectedRun.deployed &&
-              selectedRun.healthStatus !== "healthy" && (
-                <div className="run-review-actions run-desktop-decision">
-                  <span>{t("actions.healthDescription")}</span>
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    onClick={() => onUpdateRun(selectedRun.id, "health")}
-                  >
-                    {t("actions.health")}
-                  </button>
-                </div>
-              )}
+            {authorizedActions.includes("publish") && (
+              <div className="run-review-actions">
+                <span>{t("actions.publishDescription")}</span>
+                <RunActionButtons
+                  {...runActionButtonProps}
+                  actions={["publish"]}
+                />
+              </div>
+            )}
+            {authorizedActions.includes("merge") && (
+              <div className="run-review-actions run-desktop-decision">
+                <span>{t("actions.mergeDescription")}</span>
+                <RunActionButtons
+                  {...runActionButtonProps}
+                  actions={["merge"]}
+                />
+              </div>
+            )}
+            {authorizedActions.includes("deploy") && (
+              <div className="run-review-actions run-desktop-decision">
+                <span>{t("actions.deployDescription")}</span>
+                <RunActionButtons
+                  {...runActionButtonProps}
+                  actions={["deploy"]}
+                />
+              </div>
+            )}
+            {authorizedActions.includes("health") && (
+              <div className="run-review-actions run-desktop-decision">
+                <span>{t("actions.healthDescription")}</span>
+                <RunActionButtons
+                  {...runActionButtonProps}
+                  actions={["health"]}
+                />
+              </div>
+            )}
             <section className="run-section">
               <SectionTitle
                 title={t("sections.timeline")}

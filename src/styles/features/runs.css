@@ -735,6 +735,16 @@
     overflow-wrap: anywhere;
   }
 
+  .run-mobile-summary dd strong,
+  .run-mobile-summary dd span {
+    display: block;
+  }
+
+  .run-mobile-summary dd span {
+    margin-top: var(--space-1);
+    color: var(--muted);
+  }
+
   .run-mobile-summary .run-mobile-latest-event {
     grid-column: 1 / -1;
   }

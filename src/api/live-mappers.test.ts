@@ -419,7 +419,13 @@ describe("live Agent run mapper", () => {
       stage: "evidence",
       suspicionScore: 0.82,
       evidence: [{ kind: "trace", label: "Checkout error" }],
-      events: [{ label: "evidence.collected", detail: "Trace attached" }],
+      events: [
+        {
+          label: "evidence.collected",
+          detail: "Trace attached",
+          occurredAt: "2026-08-07T14:01:00.000Z",
+        },
+      ],
     });
   });
 

@@ -67,6 +67,10 @@ import {
   IssueDetailPage as FeatureIssueDetailPage,
   IssueInspector as FeatureIssueInspector,
 } from "./features/issues/components/IssueOverlays";
+import {
+  canDispatchRunAction,
+  type RunUpdateAction,
+} from "./features/runs/run-actions";
 const FeatureInboxPage = lazy(() =>
   import("./features/inbox/pages/InboxPage").then(({ InboxPage }) => ({
     default: InboxPage,
@@ -227,7 +231,10 @@ function App() {
   });
   const [commandOpen, setCommandOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const pendingRunActions = useRef(new Set<string>());
+  const pendingRunIdsRef = useRef(new Set<string>());
+  const [pendingRunIds, setPendingRunIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [selectedConversationId, setSelectedConversationId] = useState(
     demoMode ? (seedConversations[0]?.id ?? "") : "",
   );
@@ -925,17 +932,13 @@ function App() {
     setToast(t("toasts.agentRunStarted", { identifier: issue.identifier }));
   };
 
-  const updateRun = (
-    runId: string,
-    action:
-      | "cancel"
-      | "approve"
-      | "reject"
-      | "publish"
-      | "merge"
-      | "deploy"
-      | "health",
-  ) => {
+  const updateRun = (runId: string, action: RunUpdateAction) => {
+    const run = runs.find((candidate) => candidate.id === runId);
+    if (
+      !run ||
+      !canDispatchRunAction(run, action, pendingRunIdsRef.current.has(runId))
+    )
+      return;
     const nextStatus: CodingRun["status"] =
       action === "cancel"
         ? "canceled"
@@ -978,9 +981,8 @@ function App() {
     };
     if (!demoMode) {
       if (!workspaceId) return;
-      const pendingKey = `${runId}:${action}`;
-      if (pendingRunActions.current.has(pendingKey)) return;
-      pendingRunActions.current.add(pendingKey);
+      pendingRunIdsRef.current.add(runId);
+      setPendingRunIds(new Set(pendingRunIdsRef.current));
       void updateLiveAgentRun({ workspaceId, runId, action })
         .then(() => {
           commitLocalAction();
@@ -991,7 +993,10 @@ function App() {
             error instanceof Error ? error.message : t("errors.agentRunUpdate"),
           ),
         )
-        .finally(() => pendingRunActions.current.delete(pendingKey));
+        .finally(() => {
+          pendingRunIdsRef.current.delete(runId);
+          setPendingRunIds(new Set(pendingRunIdsRef.current));
+        });
       return;
     }
     commitLocalAction();
@@ -1169,6 +1174,7 @@ function App() {
                     onOpenIssue={setInspectorIssueId}
                     onStartRun={openRunDialog}
                     onUpdateRun={updateRun}
+                    pendingRunIds={pendingRunIds}
                     onRefresh={() => setLiveDataRetry((current) => current + 1)}
                   />
                 </FeatureBoundary>

@@ -281,6 +281,7 @@ export interface RunEvent {
   label: string;
   detail: string;
   time: string;
+  occurredAt?: string;
   tone: "neutral" | "accent" | "success" | "warning" | "danger";
 }
 

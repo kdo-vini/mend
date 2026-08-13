@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { CodingRun } from "../../types";
 import {
+  authorizedRunActions,
+  canDispatchRunAction,
   canImplementProposedFix,
   canProposeFromInvestigation,
 } from "./run-actions";
@@ -66,5 +68,98 @@ describe("run continuations", () => {
     expect(
       canImplementProposedFix({ ...proposedFixRun, mode: "Implement fix" }),
     ).toBe(false);
+  });
+});
+
+describe("authorizedRunActions", () => {
+  it("never offers agent actions for a case-only record", () => {
+    expect(
+      authorizedRunActions({
+        ...proposedFixRun,
+        id: "case:case-1",
+        caseOnly: true,
+        status: "running",
+      }),
+    ).toEqual([]);
+    expect(
+      authorizedRunActions({
+        ...proposedFixRun,
+        id: "case:case-1",
+        caseOnly: true,
+        status: "failed",
+      }),
+    ).toEqual([]);
+  });
+
+  it("returns the existing actions authorized by an agent run state", () => {
+    expect(
+      authorizedRunActions({ ...proposedFixRun, status: "running" }),
+    ).toEqual(["cancel"]);
+    expect(
+      authorizedRunActions({ ...proposedFixRun, status: "failed" }),
+    ).toEqual(["retry"]);
+    const implementation = {
+      ...proposedFixRun,
+      mode: "Implement fix" as const,
+    };
+    expect(authorizedRunActions(implementation)).toEqual(["reject", "approve"]);
+  });
+
+  it("blocks every mutually exclusive decision while that run is pending", () => {
+    const implementation = {
+      ...proposedFixRun,
+      mode: "Implement fix" as const,
+    };
+    expect(canDispatchRunAction(implementation, "approve", false)).toBe(true);
+    expect(canDispatchRunAction(implementation, "approve", true)).toBe(false);
+    expect(canDispatchRunAction(implementation, "reject", true)).toBe(false);
+  });
+
+  it.each([
+    [{ status: "approved", branch: "fix/run-1" }, ["publish"]],
+    [
+      {
+        status: "approved",
+        published: true,
+        pullRequest: { number: 1, url: "https://example.com/pr/1" },
+      },
+      ["merge"],
+    ],
+    [{ status: "approved", published: true }, ["deploy"]],
+    [{ status: "approved", published: true, deployed: true }, ["health"]],
+  ] as const)(
+    "keeps release actions behind their existing gates",
+    (patch, expected) => {
+      expect(
+        authorizedRunActions({
+          ...proposedFixRun,
+          ...patch,
+          status: patch.status,
+        }),
+      ).toEqual(expected);
+    },
+  );
+
+  it("preserves retry for terminal agent runs without a continuation", () => {
+    expect(
+      authorizedRunActions({
+        ...proposedFixRun,
+        status: "canceled",
+        researchArtifactId: undefined,
+      }),
+    ).toEqual(["retry"]);
+    expect(
+      authorizedRunActions({
+        ...proposedFixRun,
+        status: "completed",
+        mode: "Investigate",
+        verdict: "not_reproduced",
+        researchArtifactId: undefined,
+      }),
+    ).toEqual(["retry"]);
+  });
+
+  it("does not replace a verified continuation with retry", () => {
+    expect(authorizedRunActions(proposedFixRun)).toEqual([]);
   });
 });
