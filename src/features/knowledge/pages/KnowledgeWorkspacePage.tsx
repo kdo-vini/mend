@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  BookOpen,
   PenLine,
   Plus,
   RefreshCw,
@@ -18,12 +17,11 @@ import {
   saveKnowledgeArticle,
 } from "../api";
 import { normalizeSearch } from "../../../shared/lib/format";
-import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { EmptyState, Skeleton } from "../../../shared/ui/ResourceState";
-import { StatusArticle } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
 import { localizedError } from "../../../shared/ui/localizedError";
+import { KnowledgeCollection } from "../components/KnowledgeCollection";
 
 function KnowledgeSkeletonPreview({ label }: { label: string }) {
   return (
@@ -59,6 +57,9 @@ export function KnowledgeWorkspacePage({
 }) {
   const { t } = useTranslation("knowledge");
   const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(
+    null,
+  );
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<KnowledgeDraft>({
     title: "",
@@ -115,6 +116,7 @@ export function KnowledgeWorkspacePage({
           ? current.map((item) => (item.id === article.id ? article : item))
           : [article, ...current],
       );
+      setSelectedArticleId(article.id);
       setEditorOpen(false);
       setEditing({ title: "", category: "Suporte", body: "", status: "draft" });
       onToast(
@@ -134,6 +136,11 @@ export function KnowledgeWorkspacePage({
     try {
       await removeKnowledgeArticle(workspaceId, id);
       setArticles((current) => current.filter((item) => item.id !== id));
+      if (selectedArticleId === id) {
+        setSelectedArticleId(
+          articles.find((article) => article.id !== id)?.id ?? null,
+        );
+      }
       onToast(t("toasts.deleted", { ns: "knowledge" }));
     } catch (error) {
       onToast(localizedError(error, t("errors.delete", { ns: "knowledge" })));
@@ -141,7 +148,7 @@ export function KnowledgeWorkspacePage({
   };
 
   return (
-    <div className="page">
+    <div className="page knowledge-page">
       <PageHeader
         eyebrow={t("ui.eyebrow")}
         title={t("title")}
@@ -188,60 +195,48 @@ export function KnowledgeWorkspacePage({
               {loading ? t("ui.loading") : t("ui.refresh")}
             </button>
           </div>
-          <div className="knowledge-list">
-            {loading ? (
+          {loading ? (
+            <div className="knowledge-collection">
               <KnowledgeSkeletonPreview label={t("ui.loading")} />
-            ) : filtered.length ? (
-              filtered.map((article) => (
-                <article className="knowledge-row" key={article.id}>
-                  <div className="knowledge-icon">
-                    <BookOpen size={17} />
-                  </div>
-                  <div className="knowledge-copy">
-                    <div className="knowledge-row-title">
-                      <h3>{article.title}</h3>
-                      <StatusArticle status={article.status} />
-                    </div>
-                    <p>{article.excerpt}</p>
-                    <div className="knowledge-meta">
-                      <span>{article.category}</span>
-                      <span>
-                        {t("ui.updated", { date: article.updatedAt })}
-                      </span>
-                    </div>
-                  </div>
-                  <ActionMenu label={article.title}>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setEditing({
-                          id: article.id,
-                          title: article.title,
-                          category: article.category,
-                          body: article.excerpt,
-                          status:
-                            article.status === "Published"
-                              ? "published"
-                              : "draft",
-                        });
-                        setEditorOpen(true);
-                      }}
-                    >
-                      <PenLine size={14} /> {t("ui.edit")}
-                    </button>
-                    <button
-                      className="danger"
-                      type="button"
-                      role="menuitem"
-                      onClick={() => void remove(article.id)}
-                    >
-                      <Trash2 size={14} /> {t("ui.delete")}
-                    </button>
-                  </ActionMenu>
-                </article>
-              ))
-            ) : (
+            </div>
+          ) : filtered.length ? (
+            <KnowledgeCollection
+              articles={filtered}
+              selectedId={selectedArticleId}
+              onSelect={setSelectedArticleId}
+              actionsFor={(article) => (
+                <>
+                  <button
+                    className="button button-ghost"
+                    type="button"
+                    onClick={() => {
+                      setEditing({
+                        id: article.id,
+                        title: article.title,
+                        category: article.category,
+                        body: article.excerpt,
+                        status:
+                          article.status === "Published"
+                            ? "published"
+                            : "draft",
+                      });
+                      setEditorOpen(true);
+                    }}
+                  >
+                    <PenLine size={14} /> {t("ui.edit")}
+                  </button>
+                  <button
+                    className="button button-danger"
+                    type="button"
+                    onClick={() => void remove(article.id)}
+                  >
+                    <Trash2 size={14} /> {t("ui.delete")}
+                  </button>
+                </>
+              )}
+            />
+          ) : (
+            <div className="knowledge-collection knowledge-collection-empty">
               <EmptyState
                 title={t("ui.noArticles")}
                 description={t("ui.createReviewedAnswer")}
@@ -256,8 +251,8 @@ export function KnowledgeWorkspacePage({
                   </button>
                 }
               />
-            )}
-          </div>
+            </div>
+          )}
           <div className="knowledge-note">
             <ShieldCheck size={15} />
             <span>{t("ui.publishedOnly")}</span>

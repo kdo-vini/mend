@@ -3,6 +3,11 @@
   "empty": "Nenhum artigo ainda",
   "create": "Novo artigo",
   "ui": {
+    "articleList": "Artigos da base de conhecimento",
+    "preview": "Visualização do artigo",
+    "availableToAi": "Disponível para a IA",
+    "internalDraft": "Rascunho interno",
+    "backToArticles": "Voltar aos artigos",
     "eyebrow": "Contexto de suporte",
     "description": "Respostas pequenas e confiáveis que suporte e IA podem usar.",
     "search": "Buscar conhecimento",

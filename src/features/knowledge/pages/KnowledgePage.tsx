@@ -1,24 +1,20 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  BookOpen,
-  ChevronRight,
-  ListFilter,
-  Plus,
-  Search,
-  ShieldCheck,
-} from "lucide-react";
+import { ListFilter, Plus, Search, ShieldCheck } from "lucide-react";
 import type { KnowledgeArticle } from "../../../types";
 import { seedKnowledge } from "../../../data";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { PageHeader } from "../../../shared/ui/PageHeader";
-import { StatusArticle } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
+import { KnowledgeCollection } from "../components/KnowledgeCollection";
 
 export function KnowledgePage() {
   const { t } = useTranslation("knowledge");
   const [articles, setArticles] = useState<KnowledgeArticle[]>(seedKnowledge);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(
+    null,
+  );
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -33,10 +29,11 @@ export function KnowledgePage() {
       ).includes(normalizeSearch(search)) &&
       (categoryFilter === "All" || article.category === categoryFilter),
   );
-  const addArticle = () =>
+  const addArticle = () => {
+    const id = `kb-${Date.now()}`;
     setArticles((current) => [
       {
-        id: `kb-${Date.now()}`,
+        id,
         title: "Novo artigo de conhecimento",
         category: "Suporte",
         updatedAt: "agora",
@@ -46,9 +43,11 @@ export function KnowledgePage() {
       },
       ...current,
     ]);
+    setSelectedArticleId(id);
+  };
 
   return (
-    <div className="page">
+    <div className="page knowledge-page">
       <PageHeader
         eyebrow={t("ui.eyebrow")}
         title={t("title")}
@@ -88,28 +87,14 @@ export function KnowledgePage() {
           />
         </div>
       </div>
-      <div className="knowledge-list">
-        {filtered.length ? (
-          filtered.map((article) => (
-            <article className="knowledge-row" key={article.id}>
-              <div className="knowledge-icon">
-                <BookOpen size={17} />
-              </div>
-              <div className="knowledge-copy">
-                <div className="knowledge-row-title">
-                  <h3>{article.title}</h3>
-                  <StatusArticle status={article.status} />
-                </div>
-                <p>{article.excerpt}</p>
-                <div className="knowledge-meta">
-                  <span>{article.category}</span>
-                  <span>{t("ui.updated", { date: article.updatedAt })}</span>
-                </div>
-              </div>
-              <ChevronRight size={17} />
-            </article>
-          ))
-        ) : (
+      {filtered.length ? (
+        <KnowledgeCollection
+          articles={filtered}
+          selectedId={selectedArticleId}
+          onSelect={setSelectedArticleId}
+        />
+      ) : (
+        <div className="knowledge-collection knowledge-collection-empty">
           <EmptyState
             title={articles.length ? t("ui.noMatching") : t("empty")}
             description={
@@ -139,8 +124,8 @@ export function KnowledgePage() {
             }
             search={Boolean(search)}
           />
-        )}
-      </div>
+        </div>
+      )}
       <div className="knowledge-note">
         <ShieldCheck size={15} />
         <span>{t("ui.publishedOnly")}</span>

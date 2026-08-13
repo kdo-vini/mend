@@ -3,6 +3,11 @@
   "empty": "No articles yet",
   "create": "New article",
   "ui": {
+    "articleList": "Knowledge articles",
+    "preview": "Article preview",
+    "availableToAi": "Available to AI",
+    "internalDraft": "Internal draft",
+    "backToArticles": "Back to articles",
     "eyebrow": "Support context",
     "description": "Small, trusted answers the support agent and AI can use.",
     "search": "Search knowledge",
