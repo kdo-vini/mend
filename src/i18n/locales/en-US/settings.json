@@ -448,6 +448,27 @@
       "title": "No workspace selected",
       "description": "Select a workspace from the app switcher before changing operational settings."
     },
+    "automation": {
+      "title": "Automation",
+      "description": "Decide how Mend replies to customers and gathers context before triage.",
+      "sections": "Automation settings",
+      "replies": "Replies",
+      "intake": "Intake"
+    },
+    "agents": {
+      "title": "Agents & models",
+      "description": "Control provider access and choose how each engineering stage runs.",
+      "sections": "Agents and models settings",
+      "providers": "Providers",
+      "runPolicy": "Run policy",
+      "connection": "Connection",
+      "authentication": "Authentication",
+      "catalog": "Catalog",
+      "automation": "Automation",
+      "status": "Status",
+      "actions": "Actions",
+      "automationNotRequired": "Available"
+    },
     "overview": {
       "title": "Workspace settings",
       "description": "Keep channels, automation and engineering access ready for the next customer case.",
@@ -478,9 +499,9 @@
       "memberCount_one": "{{count}} member",
       "memberCount_other": "{{count}} members",
       "nextActionsTitle": "Separate support automation from code automation",
-      "nextActionsDescriptionText": "AI behavior controls customer replies. Coding routing controls research, implementation, review and verification.",
+      "nextActionsDescriptionText": "Automation controls customer replies. Run policy controls research, implementation, review and verification.",
       "reviewAi": "Review AI policy",
-      "reviewCoding": "Review coding routes"
+      "reviewCoding": "Review run policy"
     },
     "repositories": {
       "refresh": "Refresh",
@@ -500,7 +521,7 @@
       "emptyDescription": "Add the first codebase below, then choose its default branch.",
       "editTitle": "Edit repository",
       "addTitle": "Add a repository",
-      "formDescription": "Routing, models and coding connections are managed separately so repository identity stays simple.",
+      "formDescription": "Run policy, models and providers are managed separately so repository identity stays simple.",
       "name": "Name",
       "namePlaceholder": "Support app",
       "defaultBranch": "Default branch",
@@ -523,7 +544,7 @@
       "confirmLabel": "Remove repository"
     },
     "codingConnections": {
-      "loading": "Loading coding connections…",
+      "loading": "Loading providers…",
       "addTitle": "Add a connection",
       "addDescription": "API keys are encrypted server-side and never returned after saving.",
       "label": "Connection label",
@@ -557,8 +578,8 @@
       "startOfficialLogin": "Start official login",
       "saveConnection": "Save connection",
       "connectedTitle": "Connected providers",
-      "connectedDescription": "Verify access and refresh the catalog before using a connection in routing.",
-      "emptyTitle": "No coding connections yet",
+      "connectedDescription": "Verify access and refresh the catalog before using a provider in the run policy.",
+      "emptyTitle": "No providers yet",
       "emptyDescription": "Add an API key or connect your ChatGPT subscription above.",
       "personalSubscription": "Personal subscription",
       "apiKeyShort": "API key",
@@ -567,7 +588,7 @@
       "models_other": "{{count}} models",
       "verified": "verified {{date}}",
       "catalogNotVerified": "Catalog not verified",
-      "catalogVerificationRequired": "Verify the connection and refresh the catalog before routing",
+      "catalogVerificationRequired": "Verify the provider and refresh the catalog before using it in the run policy",
       "allowAutomation": "Allow this subscription in automations",
       "automationRequiresCatalog": "Verify the connection and refresh its model catalog before enabling automation",
       "catalog": "Catalog",
@@ -591,13 +612,13 @@
       },
       "subscriptionConnected": "Subscription connected.",
       "officialLoginStarted": "Official subscription login started.",
-      "apiKeySaved": "Coding API key saved securely.",
-      "verifiedToast": "Coding connection verified.",
-      "needsAttentionToast": "Coding connection needs attention.",
+      "apiKeySaved": "Provider API key saved securely.",
+      "verifiedToast": "Provider connection verified.",
+      "needsAttentionToast": "Provider connection needs attention.",
       "catalogRefreshed": "Model catalog refreshed.",
-      "revokedToast": "Coding connection revoked.",
+      "revokedToast": "Provider connection revoked.",
       "errors": {
-        "load": "Coding connections are unavailable.",
+        "load": "Provider connections are unavailable.",
         "googleSave": "Calendar selection could not be saved.",
         "anthropicSubscription": "Claude.ai login is unavailable on hosted Mend runners for compliance reasons. Use an Anthropic API key.",
         "providerSubscription": "Subscription login is not available for this provider on the hosted runner.",
@@ -610,14 +631,14 @@
         "poll": "The login status could not be refreshed.",
         "loginFailed": "The official login could not be completed."
       },
-      "confirmTitle": "Revoke coding connection?",
+      "confirmTitle": "Revoke provider connection?",
       "confirmDescription": "This disables the connection for future runs and removes its server-side secret.",
       "confirmLabel": "Revoke connection"
     },
     "codingRouting": {
-      "loading": "Loading coding routes…",
-      "loadError": "Coding routing is unavailable.",
-      "scopeTitle": "Routing scope",
+      "loading": "Loading run policy…",
+      "loadError": "Run policy is unavailable.",
+      "scopeTitle": "Policy scope",
       "scopeDescription": "Workspace defaults apply unless a repository override is selected.",
       "scope": "Scope",
       "workspaceDefault": "Workspace default",
@@ -650,8 +671,8 @@
       "fallbackConnections": "{{stage}} fallback connections",
       "saving": "Saving…",
       "saveStage": "Save stage",
-      "saved": "{{stage}} routing saved.",
-      "saveError": "Routing policy for {{stage}} could not be saved."
+      "saved": "{{stage}} run policy saved.",
+      "saveError": "Run policy for {{stage}} could not be saved."
     },
     "integrations": {
       "directoryTitle": "Integration directory",
@@ -667,6 +688,9 @@
       "workspaceGithub": "Workspace GitHub space",
       "connected": "Connected",
       "notConnected": "Not connected",
+      "statusConnected": "Connected",
+      "statusNeedsAttention": "Needs attention",
+      "statusNotConfigured": "Not configured",
       "connectedDate": "Connected {{date}}",
       "disconnect": "Disconnect",
       "connectGithub": "Connect GitHub",
@@ -888,10 +912,10 @@
       "integrationDirectory": "Connection directory",
       "integrationDirectoryDescription": "Each integration has its own page, lifecycle and access boundary.",
       "githubDescription": "Connect GitHub once, then choose repositories from the installation available to this workspace.",
-      "codingConnectionsTitle": "Coding connections",
+      "codingConnectionsTitle": "Providers",
       "codingConnectionsDescription": "Connect providers, subscriptions and official model catalogs for controlled engineering runs.",
-      "codingRoutingTitle": "Coding routing",
-      "codingRoutingDescription": "Choose the connection, model and limits for each stage of the controlled engineering loop."
+      "codingRoutingTitle": "Run policy",
+      "codingRoutingDescription": "Choose the provider, model and limits for each stage of the controlled engineering loop."
     }
   }
 }

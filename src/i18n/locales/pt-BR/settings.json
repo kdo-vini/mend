@@ -448,6 +448,27 @@
       "title": "Nenhum espaço de trabalho selecionado",
       "description": "Selecione um espaço de trabalho no seletor do aplicativo antes de alterar configurações operacionais."
     },
+    "automation": {
+      "title": "Automação",
+      "description": "Decida como o Mend responde aos clientes e coleta contexto antes da triagem.",
+      "sections": "Configurações de automação",
+      "replies": "Respostas",
+      "intake": "Coleta inicial"
+    },
+    "agents": {
+      "title": "Agentes e modelos",
+      "description": "Controle o acesso aos providers e escolha como cada etapa de engenharia é executada.",
+      "sections": "Configurações de agentes e modelos",
+      "providers": "Providers",
+      "runPolicy": "Política de execução",
+      "connection": "Conexão",
+      "authentication": "Autenticação",
+      "catalog": "Catálogo",
+      "automation": "Automação",
+      "status": "Status",
+      "actions": "Ações",
+      "automationNotRequired": "Disponível"
+    },
     "overview": {
       "title": "Configurações do espaço de trabalho",
       "description": "Mantenha canais, automações e acesso de engenharia prontos para o próximo caso de cliente.",
@@ -478,9 +499,9 @@
       "memberCount_one": "{{count}} membro",
       "memberCount_other": "{{count}} membros",
       "nextActionsTitle": "Separe automação de suporte de automação de código",
-      "nextActionsDescriptionText": "O comportamento da IA controla respostas aos clientes. O roteamento de coding controla pesquisa, implementação, revisão e verificação.",
+      "nextActionsDescriptionText": "A automação controla respostas aos clientes. A política de execução controla pesquisa, implementação, revisão e verificação.",
       "reviewAi": "Revisar política da IA",
-      "reviewCoding": "Revisar rotas de coding"
+      "reviewCoding": "Revisar pol\u00edtica de execu\u00e7\u00e3o"
     },
     "repositories": {
       "refresh": "Atualizar",
@@ -500,7 +521,7 @@
       "emptyDescription": "Adicione a primeira base de c\u00f3digo abaixo e escolha sua branch padr\u00e3o.",
       "editTitle": "Editar reposit\u00f3rio",
       "addTitle": "Adicionar um reposit\u00f3rio",
-      "formDescription": "Roteamento, modelos e conex\u00f5es de coding s\u00e3o gerenciados separadamente para manter a identidade do reposit\u00f3rio simples.",
+      "formDescription": "Pol\u00edtica de execu\u00e7\u00e3o, modelos e providers s\u00e3o gerenciados separadamente para manter a identidade do reposit\u00f3rio simples.",
       "name": "Nome",
       "namePlaceholder": "Aplicativo de suporte",
       "defaultBranch": "Branch padr\u00e3o",
@@ -523,7 +544,7 @@
       "confirmLabel": "Remover reposit\u00f3rio"
     },
     "codingConnections": {
-      "loading": "Carregando conex\u00f5es de coding\u2026",
+      "loading": "Carregando providers\u2026",
       "addTitle": "Adicionar uma conex\u00e3o",
       "addDescription": "As chaves de API s\u00e3o criptografadas no servidor e nunca retornam depois de salvas.",
       "label": "Nome da conex\u00e3o",
@@ -557,8 +578,8 @@
       "startOfficialLogin": "Iniciar login oficial",
       "saveConnection": "Salvar conex\u00e3o",
       "connectedTitle": "Provedores conectados",
-      "connectedDescription": "Verifique o acesso e atualize o cat\u00e1logo antes de usar uma conex\u00e3o no roteamento.",
-      "emptyTitle": "Nenhuma conex\u00e3o de coding ainda",
+      "connectedDescription": "Verifique o acesso e atualize o cat\u00e1logo antes de usar um provider na pol\u00edtica de execu\u00e7\u00e3o.",
+      "emptyTitle": "Nenhum provider ainda",
       "emptyDescription": "Adicione uma chave de API ou conecte sua assinatura do ChatGPT acima.",
       "personalSubscription": "Assinatura pessoal",
       "apiKeyShort": "Chave de API",
@@ -567,7 +588,7 @@
       "models_other": "{{count}} modelos",
       "verified": "verificado em {{date}}",
       "catalogNotVerified": "Cat\u00e1logo n\u00e3o verificado",
-      "catalogVerificationRequired": "Verifique a conex\u00e3o e atualize o cat\u00e1logo antes de usar no roteamento",
+      "catalogVerificationRequired": "Verifique o provider e atualize o cat\u00e1logo antes de us\u00e1-lo na pol\u00edtica de execu\u00e7\u00e3o",
       "allowAutomation": "Permitir esta assinatura em automa\u00e7\u00f5es",
       "automationRequiresCatalog": "Verifique a conex\u00e3o e atualize o cat\u00e1logo de modelos antes de ativar automa\u00e7\u00f5es",
       "catalog": "Cat\u00e1logo",
@@ -591,14 +612,14 @@
       },
       "subscriptionConnected": "Assinatura conectada.",
       "officialLoginStarted": "Login oficial de assinatura iniciado.",
-      "apiKeySaved": "Chave de API de coding salva com seguran\u00e7a.",
-      "verifiedToast": "Conex\u00e3o de coding verificada.",
-      "needsAttentionToast": "A conex\u00e3o de coding precisa de aten\u00e7\u00e3o.",
+      "apiKeySaved": "Chave de API do provider salva com seguran\u00e7a.",
+      "verifiedToast": "Conex\u00e3o do provider verificada.",
+      "needsAttentionToast": "A conex\u00e3o do provider precisa de aten\u00e7\u00e3o.",
       "catalogRefreshed": "Cat\u00e1logo de modelos atualizado.",
-      "revokedToast": "Conex\u00e3o de coding revogada.",
+      "revokedToast": "Conex\u00e3o do provider revogada.",
       "errors": {
         "googleSave": "N\u00e3o foi poss\u00edvel salvar a sele\u00e7\u00e3o de calend\u00e1rios.",
-        "load": "As conex\u00f5es de coding est\u00e3o indispon\u00edveis.",
+        "load": "As conex\u00f5es de providers est\u00e3o indispon\u00edveis.",
         "anthropicSubscription": "O login do Claude.ai n\u00e3o est\u00e1 dispon\u00edvel nos runners hospedados do Mend por motivos de compliance. Use uma chave de API da Anthropic.",
         "providerSubscription": "O login por assinatura n\u00e3o est\u00e1 dispon\u00edvel para este provedor no runner hospedado.",
         "create": "N\u00e3o foi poss\u00edvel criar a conex\u00e3o.",
@@ -610,14 +631,14 @@
         "poll": "N\u00e3o foi poss\u00edvel atualizar o status do login.",
         "loginFailed": "O login oficial n\u00e3o foi conclu\u00eddo."
       },
-      "confirmTitle": "Revogar conex\u00e3o de coding?",
+      "confirmTitle": "Revogar conex\u00e3o do provider?",
       "confirmDescription": "Isso desativa a conex\u00e3o para futuras execu\u00e7\u00f5es e remove o segredo armazenado no servidor.",
       "confirmLabel": "Revogar conex\u00e3o"
     },
     "codingRouting": {
-      "loading": "Carregando rotas de coding\u2026",
-      "loadError": "O roteamento de coding est\u00e1 indispon\u00edvel.",
-      "scopeTitle": "Escopo do roteamento",
+      "loading": "Carregando pol\u00edtica de execu\u00e7\u00e3o\u2026",
+      "loadError": "A pol\u00edtica de execu\u00e7\u00e3o est\u00e1 indispon\u00edvel.",
+      "scopeTitle": "Escopo da pol\u00edtica",
       "scopeDescription": "Os padr\u00f5es do espa\u00e7o de trabalho se aplicam, exceto quando um override de reposit\u00f3rio \u00e9 selecionado.",
       "scope": "Escopo",
       "workspaceDefault": "Padr\u00e3o do espa\u00e7o de trabalho",
@@ -650,8 +671,8 @@
       "fallbackConnections": "Conex\u00f5es de fallback da etapa {{stage}}",
       "saving": "Salvando\u2026",
       "saveStage": "Salvar etapa",
-      "saved": "Pol\u00edtica de {{stage}} salva.",
-      "saveError": "N\u00e3o foi poss\u00edvel salvar a pol\u00edtica de {{stage}}."
+      "saved": "Pol\u00edtica de execu\u00e7\u00e3o de {{stage}} salva.",
+      "saveError": "N\u00e3o foi poss\u00edvel salvar a pol\u00edtica de execu\u00e7\u00e3o de {{stage}}."
     },
     "integrations": {
       "directoryTitle": "Diret\u00f3rio de integra\u00e7\u00f5es",
@@ -667,6 +688,9 @@
       "workspaceGithub": "Espa\u00e7o GitHub do workspace",
       "connected": "Conectado",
       "notConnected": "N\u00e3o conectado",
+      "statusConnected": "Conectado",
+      "statusNeedsAttention": "Precisa de aten\u00e7\u00e3o",
+      "statusNotConfigured": "N\u00e3o configurado",
       "connectedDate": "Conectado em {{date}}",
       "disconnect": "Desconectar",
       "connectGithub": "Conectar GitHub",

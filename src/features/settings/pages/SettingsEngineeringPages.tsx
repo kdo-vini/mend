@@ -8,10 +8,20 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
+import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
+import { ViewTabs } from "../../../shared/ui/ViewTabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../../components/ui/table";
 import {
   createLiveRepository,
   createLiveAgentConnection,
@@ -45,6 +55,7 @@ import {
   SettingsWorkspaceRequired,
 } from "../components/SettingsShared";
 import { formatSettingsDate, providerLabel } from "../settings-utils";
+import type { SettingsWorkspacePageProps } from "./SettingsWorkspacePage";
 
 export function SettingsRepositoriesPage({
   workspaceId,
@@ -375,15 +386,232 @@ export function SettingsRepositoriesPage({
   );
 }
 
-export function SettingsCodingConnectionsPage({
+export function SettingsAgentsPage({
+  section,
+  ...props
+}: SettingsWorkspacePageProps & { section: "providers" | "run-policy" }) {
+  const { search } = useLocation();
+  const { t } = useTranslation("settings");
+  return (
+    <div className="settings-v2-page">
+      <SettingsPageHeader
+        title={t("v2.agents.title")}
+        description={t("v2.agents.description")}
+      />
+      <ViewTabs
+        label={t("v2.agents.sections")}
+        items={[
+          {
+            id: "providers",
+            label: t("v2.agents.providers"),
+            href: `/settings/engineering/agents/providers${search}`,
+            active: section === "providers",
+          },
+          {
+            id: "run-policy",
+            label: t("v2.agents.runPolicy"),
+            href: `/settings/engineering/agents/run-policy${search}`,
+            active: section === "run-policy",
+          },
+        ]}
+      />
+      {section === "providers" ? (
+        <CodingProvidersContent {...props} />
+      ) : (
+        <CodingRunPolicyContent {...props} />
+      )}
+    </div>
+  );
+}
+
+export function ProviderComparisonTable({
+  connections,
+  action,
+  onCatalog,
+  onVerify,
+  onRevoke,
+  onAutomationConsent,
+}: {
+  connections: LiveAgentConnection[];
+  action: string | null;
+  onCatalog: (connection: LiveAgentConnection) => void;
+  onVerify: (connection: LiveAgentConnection) => void;
+  onRevoke: (connection: LiveAgentConnection) => void;
+  onAutomationConsent: (
+    connection: LiveAgentConnection,
+    value: boolean,
+  ) => void;
+}) {
+  const { t } = useTranslation("settings");
+  return (
+    <Table className="settings-provider-table">
+      <TableHeader>
+        <TableRow>
+          <TableHead>{t("v2.agents.connection")}</TableHead>
+          <TableHead>{t("v2.agents.authentication")}</TableHead>
+          <TableHead>{t("v2.agents.catalog")}</TableHead>
+          <TableHead>{t("v2.agents.automation")}</TableHead>
+          <TableHead>{t("v2.agents.status")}</TableHead>
+          <TableHead className="settings-provider-actions">
+            {t("v2.agents.actions")}
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {connections.map((connection) => {
+          const statusLabel = t(
+            `v2.codingConnections.statuses.${connection.status}`,
+            { defaultValue: connection.status },
+          );
+          const statusTone =
+            connection.status === "connected"
+              ? "success"
+              : ["pending", "awaiting_user"].includes(connection.status)
+                ? "warning"
+                : "danger";
+          const pending = action === connection.id;
+          return (
+            <TableRow key={connection.id}>
+              <TableCell data-label={t("v2.agents.connection")}>
+                <span className="settings-provider-primary">
+                  <strong>{connection.label}</strong>
+                  <small>{providerLabel(connection.provider)}</small>
+                </span>
+              </TableCell>
+              <TableCell data-label={t("v2.agents.authentication")}>
+                {connection.authMethod === "subscription"
+                  ? t("v2.codingConnections.personalSubscription")
+                  : t("v2.codingConnections.apiKeyShort")}
+              </TableCell>
+              <TableCell data-label={t("v2.agents.catalog")}>
+                <span className="settings-provider-catalog">
+                  {connection.catalog ? (
+                    <>
+                      <strong>
+                        {t("v2.codingConnections.models", {
+                          count: connection.catalog.models.length,
+                        })}
+                      </strong>
+                      <small>
+                        {t("v2.codingConnections.verified", {
+                          date: formatSettingsDate(
+                            connection.catalog.lastVerifiedAt,
+                          ),
+                        })}
+                      </small>
+                    </>
+                  ) : (
+                    t("v2.codingConnections.catalogNotVerified")
+                  )}
+                </span>
+              </TableCell>
+              <TableCell data-label={t("v2.agents.automation")}>
+                {connection.authMethod === "subscription" ? (
+                  <label className="coding-consent">
+                    <input
+                      type="checkbox"
+                      checked={connection.automationConsent}
+                      disabled={
+                        connection.status !== "connected" || !connection.catalog
+                      }
+                      title={
+                        connection.status === "connected" && connection.catalog
+                          ? undefined
+                          : t("v2.codingConnections.automationRequiresCatalog")
+                      }
+                      onChange={(event) =>
+                        onAutomationConsent(connection, event.target.checked)
+                      }
+                    />
+                    <span className="sr-only">
+                      {t("v2.codingConnections.allowAutomation")}
+                    </span>
+                  </label>
+                ) : (
+                  <span className="settings-provider-muted">
+                    {t("v2.agents.automationNotRequired")}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell data-label={t("v2.agents.status")}>
+                <SettingsStatus tone={statusTone}>{statusLabel}</SettingsStatus>
+              </TableCell>
+              <TableCell
+                className="settings-provider-actions"
+                data-label={t("v2.agents.actions")}
+              >
+                <div className="settings-provider-desktop-actions">
+                  <button
+                    className="button button-ghost button-small"
+                    type="button"
+                    onClick={() => onCatalog(connection)}
+                    disabled={pending}
+                  >
+                    {t("v2.codingConnections.catalog")}
+                  </button>
+                  <button
+                    className="button button-secondary button-small"
+                    type="button"
+                    onClick={() => onVerify(connection)}
+                    disabled={pending}
+                  >
+                    {t("v2.codingConnections.verify")}
+                  </button>
+                  <button
+                    className="button button-danger button-small"
+                    type="button"
+                    onClick={() => onRevoke(connection)}
+                    disabled={pending}
+                  >
+                    {t("v2.codingConnections.revoke")}
+                  </button>
+                </div>
+                <div className="settings-provider-mobile-actions">
+                  <ActionMenu label={connection.label}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => onCatalog(connection)}
+                      disabled={pending}
+                    >
+                      <RefreshCw size={14} />
+                      {t("v2.codingConnections.catalog")}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => onVerify(connection)}
+                      disabled={pending}
+                    >
+                      <BookOpenCheck size={14} />
+                      {t("v2.codingConnections.verify")}
+                    </button>
+                    <button
+                      className="danger"
+                      type="button"
+                      role="menuitem"
+                      onClick={() => onRevoke(connection)}
+                      disabled={pending}
+                    >
+                      <Trash2 size={14} />
+                      {t("v2.codingConnections.revoke")}
+                    </button>
+                  </ActionMenu>
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
+function CodingProvidersContent({
   workspaceId,
   onToast,
   onConfirm,
-}: {
-  workspaceId: string | null;
-  onToast: (message: string) => void;
-  onConfirm: Confirm;
-}) {
+}: SettingsWorkspacePageProps) {
   const { t } = useTranslation("settings");
   const [connections, setConnections] = useState<LiveAgentConnection[]>([]);
   const [label, setLabel] = useState("");
@@ -630,11 +858,7 @@ export function SettingsCodingConnectionsPage({
   const loginActive =
     loginJob && ["pending", "awaiting_user"].includes(loginJob.status);
   return (
-    <div className="settings-v2-page">
-      <SettingsPageHeader
-        title={t("v2.pages.codingConnectionsTitle")}
-        description={t("v2.pages.codingConnectionsDescription")}
-      />
+    <div className="settings-v2-content">
       {error && <SettingsError message={error} onRetry={() => void load()} />}
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
@@ -832,91 +1056,16 @@ export function SettingsCodingConnectionsPage({
                 description={t("v2.codingConnections.emptyDescription")}
               />
             ) : (
-              <div className="settings-v2-list">
-                {connections.map((connection) => (
-                  <div
-                    className="settings-v2-row settings-v2-row-stack"
-                    key={connection.id}
-                  >
-                    <div className="settings-v2-row-main">
-                      <strong>{connection.label}</strong>
-                      <span>
-                        {providerLabel(connection.provider)} ·{" "}
-                        {connection.authMethod === "subscription"
-                          ? t("v2.codingConnections.personalSubscription")
-                          : t("v2.codingConnections.apiKeyShort")}{" "}
-                        ·{" "}
-                        {t(
-                          `v2.codingConnections.statuses.${connection.status}`,
-                          {
-                            defaultValue: connection.status,
-                          },
-                        )}
-                      </span>
-                      <small>
-                        {connection.catalog
-                          ? `${t("v2.codingConnections.models", { count: connection.catalog.models.length })} · ${t("v2.codingConnections.verified", { date: formatSettingsDate(connection.catalog.lastVerifiedAt) })}`
-                          : t(
-                              "v2.codingConnections.catalogVerificationRequired",
-                            )}
-                      </small>
-                      {connection.authMethod === "subscription" && (
-                        <label className="coding-consent">
-                          <input
-                            type="checkbox"
-                            checked={connection.automationConsent}
-                            disabled={
-                              connection.status !== "connected" ||
-                              !connection.catalog
-                            }
-                            title={
-                              connection.status === "connected" &&
-                              connection.catalog
-                                ? undefined
-                                : t(
-                                    "v2.codingConnections.automationRequiresCatalog",
-                                  )
-                            }
-                            onChange={(event) =>
-                              void updateConsent(
-                                connection,
-                                event.target.checked,
-                              )
-                            }
-                          />
-                          {t("v2.codingConnections.allowAutomation")}
-                        </label>
-                      )}
-                    </div>
-                    <div className="settings-v2-row-actions">
-                      <button
-                        className="button button-ghost button-small"
-                        type="button"
-                        onClick={() => void catalog(connection)}
-                        disabled={action === connection.id}
-                      >
-                        {t("v2.codingConnections.catalog")}
-                      </button>
-                      <button
-                        className="button button-secondary button-small"
-                        type="button"
-                        onClick={() => void verify(connection)}
-                        disabled={action === connection.id}
-                      >
-                        {t("v2.codingConnections.verify")}
-                      </button>
-                      <button
-                        className="button button-danger button-small"
-                        type="button"
-                        onClick={() => void revoke(connection)}
-                        disabled={action === connection.id}
-                      >
-                        {t("v2.codingConnections.revoke")}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <ProviderComparisonTable
+                connections={connections}
+                action={action}
+                onCatalog={(connection) => void catalog(connection)}
+                onVerify={(connection) => void verify(connection)}
+                onRevoke={(connection) => void revoke(connection)}
+                onAutomationConsent={(connection, value) =>
+                  void updateConsent(connection, value)
+                }
+              />
             )}
           </SettingsSection>
         </>
@@ -932,13 +1081,10 @@ const codingStages: CodingStage[] = [
   "verify",
 ];
 
-export function SettingsCodingRoutingPage({
+function CodingRunPolicyContent({
   workspaceId,
   onToast,
-}: {
-  workspaceId: string | null;
-  onToast: (message: string) => void;
-}) {
+}: SettingsWorkspacePageProps) {
   const { t } = useTranslation("settings");
   const [connections, setConnections] = useState<LiveAgentConnection[]>([]);
   const [repositories, setRepositories] = useState<LiveRepository[]>([]);
@@ -1019,11 +1165,7 @@ export function SettingsCodingRoutingPage({
   const connectionFor = (id?: string) =>
     connections.find((connection) => connection.id === id);
   return (
-    <div className="settings-v2-page">
-      <SettingsPageHeader
-        title={t("v2.pages.codingRoutingTitle")}
-        description={t("v2.pages.codingRoutingDescription")}
-      />
+    <div className="settings-v2-content">
       {error && <SettingsError message={error} onRetry={() => void load()} />}
       {!workspaceId ? (
         <SettingsWorkspaceRequired />

@@ -35,8 +35,7 @@ import {
 } from "./SettingsIntegrationPages";
 import {
   SettingsRepositoriesPage,
-  SettingsCodingConnectionsPage,
-  SettingsCodingRoutingPage,
+  SettingsAgentsPage,
 } from "./SettingsEngineeringPages";
 import { SettingsAuditPage } from "./SettingsAuditPage";
 import { useTranslation } from "react-i18next";
@@ -96,7 +95,10 @@ export function SettingsWorkspaceRoutes(props: SettingsWorkspacePageProps) {
           path="automation/intake"
           element={<SettingsAutomationPage {...props} section="intake" />}
         />
-        <Route path="integrations" element={<SettingsIntegrationsPage />} />
+        <Route
+          path="integrations"
+          element={<SettingsIntegrationsPage workspaceId={props.workspaceId} />}
+        />
         <Route
           path="integrations/github"
           element={
@@ -139,22 +141,11 @@ export function SettingsWorkspaceRoutes(props: SettingsWorkspacePageProps) {
         />
         <Route
           path="engineering/agents/providers"
-          element={
-            <SettingsCodingConnectionsPage
-              workspaceId={props.workspaceId}
-              onToast={props.onToast}
-              onConfirm={props.onConfirm}
-            />
-          }
+          element={<SettingsAgentsPage {...props} section="providers" />}
         />
         <Route
           path="engineering/agents/run-policy"
-          element={
-            <SettingsCodingRoutingPage
-              workspaceId={props.workspaceId}
-              onToast={props.onToast}
-            />
-          }
+          element={<SettingsAgentsPage {...props} section="run-policy" />}
         />
         <Route
           path="audit"

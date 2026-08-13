@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Save, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type { AiMode } from "../../../types";
 import {
   aiPolicyActionValues,
@@ -22,6 +22,7 @@ import {
 } from "../../../shared/support-flow";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
+import { ViewTabs } from "../../../shared/ui/ViewTabs";
 import {
   loadLiveChannelFlow,
   listLiveChannels,
@@ -46,14 +47,41 @@ export function SettingsAutomationPage({
   section,
   ...props
 }: SettingsWorkspacePageProps & { section: "replies" | "intake" }) {
-  return section === "intake" ? (
-    <SettingsFlowsPage {...props} />
-  ) : (
-    <SettingsAiPage {...props} />
+  const { search } = useLocation();
+  const { t } = useTranslation("settings");
+  return (
+    <div className="settings-v2-page">
+      <SettingsPageHeader
+        title={t("v2.automation.title")}
+        description={t("v2.automation.description")}
+      />
+      <ViewTabs
+        label={t("v2.automation.sections")}
+        items={[
+          {
+            id: "replies",
+            label: t("v2.automation.replies"),
+            href: `/settings/automation/replies${search}`,
+            active: section === "replies",
+          },
+          {
+            id: "intake",
+            label: t("v2.automation.intake"),
+            href: `/settings/automation/intake${search}`,
+            active: section === "intake",
+          },
+        ]}
+      />
+      {section === "intake" ? (
+        <IntakeSettings {...props} />
+      ) : (
+        <ReplySettings {...props} />
+      )}
+    </div>
   );
 }
 
-function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
+function ReplySettings({ workspaceId, onToast }: SettingsWorkspacePageProps) {
   const { t } = useTranslation("settings");
   const [policy, setPolicy] = useState<LiveWorkspaceAiPolicy | null>(null);
   const [mode, setMode] = useState<AiMode>("draft");
@@ -103,11 +131,7 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
   };
 
   return (
-    <div className="settings-v2-page">
-      <SettingsPageHeader
-        title={t("ai.title")}
-        description={t("ai.description")}
-      />
+    <div className="settings-v2-content">
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (
@@ -301,10 +325,7 @@ function SettingsAiPage({ workspaceId, onToast }: SettingsWorkspacePageProps) {
   );
 }
 
-function SettingsFlowsPage({
-  workspaceId,
-  onToast,
-}: SettingsWorkspacePageProps) {
+function IntakeSettings({ workspaceId, onToast }: SettingsWorkspacePageProps) {
   const { t } = useTranslation("settings");
   const [channels, setChannels] = useState<WhatsAppInstance[]>([]);
   const [flow, setFlow] = useState<SupportFlow | null>(null);
@@ -383,11 +404,7 @@ function SettingsFlowsPage({
   };
 
   return (
-    <div className="settings-v2-page">
-      <SettingsPageHeader
-        title={t("flow.title")}
-        description={t("flow.description")}
-      />
+    <div className="settings-v2-content">
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (

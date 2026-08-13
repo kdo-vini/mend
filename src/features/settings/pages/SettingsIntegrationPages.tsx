@@ -47,8 +47,76 @@ import {
 } from "../components/SettingsShared";
 import { formatSettingsDate } from "../settings-utils";
 
-export function SettingsIntegrationsPage() {
+type IntegrationDirectoryStatus = "connected" | "attention" | "unconfigured";
+
+const directoryStatusFor = (
+  records: Array<{ status: string }>,
+): IntegrationDirectoryStatus =>
+  records.some((record) => record.status === "connected")
+    ? "connected"
+    : records.length
+      ? "attention"
+      : "unconfigured";
+
+export function SettingsIntegrationsPage({
+  workspaceId,
+}: {
+  workspaceId: string | null;
+}) {
   const { t } = useTranslation("settings");
+  const [statuses, setStatuses] = useState<
+    Record<"github" | "google" | "supabase" | "mcp", IntegrationDirectoryStatus>
+  >({
+    github: "unconfigured",
+    google: "unconfigured",
+    supabase: "unconfigured",
+    mcp: "unconfigured",
+  });
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    let active = true;
+    void Promise.allSettled([
+      getLiveGitHubConnection(workspaceId),
+      listLiveGoogleConnections(workspaceId),
+      listLiveMcpConnections(workspaceId),
+    ]).then(([github, google, mcp]) => {
+      if (!active) return;
+      const mcpConnections = mcp.status === "fulfilled" ? mcp.value : [];
+      setStatuses({
+        github:
+          github.status === "rejected"
+            ? "attention"
+            : github.value.connected
+              ? "connected"
+              : "unconfigured",
+        google:
+          google.status === "rejected"
+            ? "attention"
+            : directoryStatusFor(google.value),
+        supabase:
+          mcp.status === "rejected"
+            ? "attention"
+            : directoryStatusFor(
+                mcpConnections.filter(
+                  (connection) => connection.provider === "supabase",
+                ),
+              ),
+        mcp:
+          mcp.status === "rejected"
+            ? "attention"
+            : directoryStatusFor(
+                mcpConnections.filter(
+                  (connection) => connection.provider === "custom",
+                ),
+              ),
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
+
   return (
     <div className="settings-v2-page">
       <SettingsPageHeader
@@ -65,24 +133,28 @@ export function SettingsIntegrationsPage() {
             icon={<Github size={17} />}
             title="GitHub"
             description={t("v2.integrations.githubDescription")}
+            status={statuses.github}
           />
           <IntegrationLink
             to="/settings/integrations/google"
             icon={<span className="integration-letter">G</span>}
             title="Google Calendar"
             description={t("v2.integrations.googleDescription")}
+            status={statuses.google}
           />
           <IntegrationLink
             to="/settings/integrations/mcp"
             icon={<span className="integration-letter">S</span>}
             title="Supabase"
             description={t("v2.integrations.supabaseDescription")}
+            status={statuses.supabase}
           />
           <IntegrationLink
             to="/settings/integrations/mcp"
             icon={<Link2 size={17} />}
             title={t("v2.integrations.mcpTitle")}
             description={t("v2.integrations.mcpDescription")}
+            status={statuses.mcp}
           />
         </div>
       </SettingsSection>
@@ -95,18 +167,38 @@ function IntegrationLink({
   icon,
   title,
   description,
+  status,
 }: {
   to: string;
   icon: import("react").ReactNode;
   title: string;
   description: string;
+  status: IntegrationDirectoryStatus;
 }) {
+  const { t } = useTranslation("settings");
+  const statusLabel =
+    status === "connected"
+      ? t("v2.integrations.statusConnected")
+      : status === "attention"
+        ? t("v2.integrations.statusNeedsAttention")
+        : t("v2.integrations.statusNotConfigured");
   return (
     <Link className="settings-integration-link" to={to}>
       <span className="settings-integration-icon">{icon}</span>
       <span>
         <strong>{title}</strong>
         <small>{description}</small>
+        <SettingsStatus
+          tone={
+            status === "connected"
+              ? "success"
+              : status === "attention"
+                ? "warning"
+                : "muted"
+          }
+        >
+          {statusLabel}
+        </SettingsStatus>
       </span>
       <ExternalLink size={14} aria-hidden="true" />
     </Link>

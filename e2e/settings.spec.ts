@@ -70,11 +70,12 @@ test("settings opens as a compact outcome-oriented hub", async ({ page }) => {
     /\/settings\/engineering\/agents\/providers\?demo=1/,
   );
   await expect(
-    page.getByRole("heading", { name: "Coding connections" }),
+    page.getByRole("heading", { name: "Agents & models" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Routing by coding stage" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Providers" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
 });
 
 test("legacy repository tab links to the focused repository route", async ({
@@ -109,16 +110,14 @@ test("settings navigation becomes a compact mobile selector", async ({
   expect(bodyWidth).toBeLessThanOrEqual(390);
 });
 
-test("settings uses the selected language for coding connections", async ({
-  page,
-}) => {
+test("settings uses the selected language for providers", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("mend.interface-language", "pt-BR");
   });
   await page.goto("/settings/engineering/agents/providers?demo=1");
 
   await expect(
-    page.getByRole("heading", { name: "Conexões de coding" }),
+    page.getByRole("heading", { name: "Agentes e modelos" }),
   ).toBeVisible();
   await expect(
     page.getByText("Connected providers", { exact: true }),
@@ -131,7 +130,7 @@ test("settings uses the selected language for coding connections", async ({
   ).toHaveCount(0);
 });
 
-test("legacy coding connections redirects to the canonical agents route", async ({
+test("legacy provider connections redirects to the canonical agents route", async ({
   page,
 }) => {
   await page.goto(
@@ -142,36 +141,33 @@ test("legacy coding connections redirects to the canonical agents route", async 
     /\/settings\/engineering\/agents\/providers\?demo=1&source=bookmark/,
   );
   await expect(
-    page.getByRole("heading", { name: "Coding connections" }),
+    page.getByRole("heading", { name: "Agents & models" }),
   ).toBeVisible();
 });
 
-test("canonical automation routes render their matching existing bodies", async ({
+test("canonical automation routes select their matching decision tabs", async ({
   page,
 }) => {
   await page.goto("/settings/automation/replies?demo=1");
-  await expect(
-    page.getByRole("heading", { name: "AI behavior" }),
-  ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Support flow" })).toHaveCount(
-    0,
+  await expect(page.getByRole("link", { name: "Replies" })).toHaveAttribute(
+    "aria-current",
+    "page",
   );
 
   await page.goto("/settings/automation/intake?demo=1");
-  await expect(
-    page.getByRole("heading", { name: "Support flow" }),
-  ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "AI behavior" })).toHaveCount(
-    0,
+  await expect(page.getByRole("link", { name: "Intake" })).toHaveAttribute(
+    "aria-current",
+    "page",
   );
 
   await page.goto("/settings/automation/flows?demo=1&source=bookmark");
   await expect(page).toHaveURL(
     /\/settings\/automation\/intake\?demo=1&source=bookmark/,
   );
-  await expect(
-    page.getByRole("heading", { name: "Support flow" }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Intake" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
 });
 
 test("nested sibling routes expose their computed navigation item as current", async ({
