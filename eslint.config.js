@@ -10,6 +10,10 @@ export default tseslint.config(
       "dist",
       "dist-server",
       "node_modules",
+      // Git worktrees live under .worktrees/ and carry their own build output.
+      // The patterns above are root-relative, so without this a build run inside
+      // a worktree floods the global lint with thousands of dist-server errors.
+      ".worktrees",
       "supabase",
       "test-results",
       "playwright-report",
