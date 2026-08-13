@@ -42,6 +42,22 @@ The runner should use the same internal port but remain private on the
 Dokploy network. Mount a writable temporary volume at `/workspace/runs` on the
 runner. The image runs as the non-root `node` user.
 
+## Scaling constraint: cold-send cap
+
+`POST /api/conversations` (the Inbox "New chat" action) sends a first WhatsApp
+message to a number that has never written to the workspace. Cold outreach on
+an unofficial WhatsApp transport risks account restriction, so the route is
+capped at 20 outbound-first sends per workspace per hour.
+
+That counter is held **in process memory**. It resets when the service
+restarts, and it is per replica, not per workspace globally. Running
+`mend-control-plane` with N replicas multiplies the effective cap to 20xN per
+hour.
+
+Keep `mend-control-plane` at a single replica, or move the counter to a durable
+store before scaling it. Requests that resolve to an existing conversation send
+nothing and do not consume the quota.
+
 ## Build arguments
 
 Set these on both services. Leave `VITE_MEND_API_URL` empty so the browser uses
