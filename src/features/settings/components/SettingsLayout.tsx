@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   findSettingsNavItem,
   settingsNavigation,
+  type SettingsNavGroupId,
   type SettingsRouteId,
 } from "../settings-navigation";
 
@@ -12,26 +13,21 @@ export function SettingsLayout() {
   const navigate = useNavigate();
   const { t } = useTranslation("settings");
   const active = findSettingsNavItem(pathname);
-  const groupLabels: Record<string, string> = {
+  const groupLabels: Record<SettingsNavGroupId, string> = {
     workspace: t("v2.layout.groups.workspace"),
-    automation: t("v2.layout.groups.automation"),
-    integrations: t("v2.layout.groups.integrations"),
+    support: t("v2.layout.groups.support"),
     engineering: t("v2.layout.groups.engineering"),
+    connections: t("v2.layout.groups.connections"),
   };
   const itemLabels: Record<SettingsRouteId, string> = {
     overview: t("v2.layout.items.overview"),
     whatsapp: t("v2.layout.items.whatsapp"),
     team: t("v2.layout.items.team"),
     audit: t("v2.layout.items.audit"),
-    ai: t("v2.layout.items.ai"),
-    flows: t("v2.layout.items.flows"),
-    integrations: t("v2.layout.items.integrations"),
-    github: t("v2.layout.items.github"),
-    google: t("v2.layout.items.google"),
-    mcp: t("v2.layout.items.mcp"),
+    automation: t("v2.layout.items.automation"),
     repositories: t("v2.layout.items.repositories"),
-    "coding-connections": t("v2.layout.items.codingConnections"),
-    "coding-routing": t("v2.layout.items.codingRouting"),
+    agents: t("v2.layout.items.agents"),
+    integrations: t("v2.layout.items.integrations"),
   };
 
   return (
@@ -52,10 +48,7 @@ export function SettingsLayout() {
             onChange={(event) => navigate(`${event.target.value}${search}`)}
           >
             {settingsNavigation.map((group) => (
-              <optgroup
-                key={group.id}
-                label={groupLabels[group.id] ?? group.label}
-              >
+              <optgroup key={group.id} label={groupLabels[group.id]}>
                 {group.items.map((item) => (
                   <option key={item.id} value={item.path}>
                     {itemLabels[item.id]}
@@ -69,19 +62,18 @@ export function SettingsLayout() {
           {settingsNavigation.map((group) => (
             <div className="settings-v2-nav-group" key={group.id}>
               <span className="settings-v2-nav-group-label">
-                {groupLabels[group.id] ?? group.label}
+                {groupLabels[group.id]}
               </span>
-              {group.items.map(({ id, label, path, icon: Icon }) => (
+              {group.items.map(({ id, path, icon: Icon }) => (
                 <NavLink
                   key={id}
                   to={`${path}${search}`}
                   end={path === "/settings"}
-                  className={({ isActive }) =>
-                    `settings-v2-nav-item ${isActive ? "selected" : ""}`.trim()
-                  }
+                  aria-current={id === active.id ? "page" : undefined}
+                  className={`settings-v2-nav-item ${id === active.id ? "selected" : ""}`.trim()}
                 >
                   <Icon size={15} aria-hidden="true" />
-                  <span>{itemLabels[id] ?? label}</span>
+                  <span>{itemLabels[id]}</span>
                 </NavLink>
               ))}
             </div>
@@ -95,7 +87,7 @@ export function SettingsLayout() {
         >
           <span>{t("v2.layout.title")}</span>
           <ChevronRight size={13} aria-hidden="true" />
-          <strong>{itemLabels[active.id] ?? active.label}</strong>
+          <strong>{itemLabels[active.id]}</strong>
         </div>
         <Outlet />
       </main>

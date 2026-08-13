@@ -30,9 +30,7 @@ test("settings keeps the standard workspace page frame", async ({ page }) => {
   expect(settingsFrame).toEqual(standardFrame);
 });
 
-test("settings opens as a domain hub and keeps repositories focused", async ({
-  page,
-}) => {
+test("settings opens as a compact outcome-oriented hub", async ({ page }) => {
   await page.goto("/settings?demo=1");
 
   await expect(
@@ -50,7 +48,7 @@ test("settings opens as a domain hub and keeps repositories focused", async ({
     await expect(page.getByLabel("Settings section")).toBeVisible();
     await page
       .getByLabel("Settings section")
-      .selectOption("/settings/engineering/repositories");
+      .selectOption("/settings/engineering/agents/providers");
   } else {
     await expect(page.locator(".settings-v2-shell")).toHaveCSS(
       "padding-left",
@@ -61,17 +59,19 @@ test("settings opens as a domain hub and keeps repositories focused", async ({
       "29px",
     );
     await expect(
-      page.getByRole("link", { name: "Coding connections", exact: true }),
+      page.getByRole("link", { name: "Agents & models", exact: true }),
     ).toBeVisible();
-    await page.getByRole("link", { name: "Repositories", exact: true }).click();
+    await expect(page.getByRole("link", { name: "GitHub" })).toHaveCount(0);
+    await page
+      .getByRole("link", { name: "Agents & models", exact: true })
+      .click();
   }
-  await expect(page).toHaveURL(/\/settings\/engineering\/repositories\?demo=1/);
-  await expect(
-    page.getByRole("heading", { name: "Repositories" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(
+    /\/settings\/engineering\/agents\/providers\?demo=1/,
+  );
   await expect(
     page.getByRole("heading", { name: "Coding connections" }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Routing by coding stage" }),
   ).toHaveCount(0);
@@ -95,10 +95,15 @@ test("settings navigation becomes a compact mobile selector", async ({
 
   await page
     .getByLabel("Settings section")
-    .selectOption("/settings/engineering/repositories");
-  await expect(page).toHaveURL(/\/settings\/engineering\/repositories\?demo=1/);
+    .selectOption("/settings/automation/replies");
+  await expect(page).toHaveURL(/\/settings\/automation\/replies\?demo=1/);
   await expect(page.getByText("No workspace selected")).toBeVisible();
-  await expect(page.getByText("Loading repositories…")).toHaveCount(0);
+  await expect(page.getByText("Loading AI policy…")).toHaveCount(0);
+
+  const selectorHeight = await page
+    .getByLabel("Settings section")
+    .evaluate((element) => element.getBoundingClientRect().height);
+  expect(selectorHeight).toBeGreaterThanOrEqual(44);
 
   const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
   expect(bodyWidth).toBeLessThanOrEqual(390);
@@ -110,7 +115,7 @@ test("settings uses the selected language for coding connections", async ({
   await page.addInitScript(() => {
     window.localStorage.setItem("mend.interface-language", "pt-BR");
   });
-  await page.goto("/settings/engineering/coding/connections?demo=1");
+  await page.goto("/settings/engineering/agents/providers?demo=1");
 
   await expect(
     page.getByRole("heading", { name: "Conexões de coding" }),
@@ -124,4 +129,40 @@ test("settings uses the selected language for coding connections", async ({
       { exact: true },
     ),
   ).toHaveCount(0);
+});
+
+test("legacy coding connections redirects to the canonical agents route", async ({
+  page,
+}) => {
+  await page.goto(
+    "/settings/engineering/coding/connections?demo=1&source=bookmark",
+  );
+
+  await expect(page).toHaveURL(
+    /\/settings\/engineering\/agents\/providers\?demo=1&source=bookmark/,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Coding connections" }),
+  ).toBeVisible();
+});
+
+test("settings taxonomy remains usable in light and dark themes", async ({
+  page,
+}) => {
+  for (const theme of ["light", "dark"] as const) {
+    await page.goto("/settings?demo=1");
+    await page.evaluate((nextTheme) => {
+      window.localStorage.setItem("mend.theme", nextTheme);
+    }, theme);
+    await page.reload();
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    if (test.info().project.name === "mobile") {
+      await expect(page.getByLabel("Settings section")).toBeVisible();
+    } else {
+      await expect(
+        page.getByRole("link", { name: "Automation", exact: true }),
+      ).toBeVisible();
+    }
+  }
 });

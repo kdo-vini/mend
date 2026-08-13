@@ -1748,7 +1748,7 @@
   }
   .settings-v2-mobile-nav select {
     width: 100%;
-    min-height: var(--control-height);
+    min-height: var(--mobile-touch-target);
     padding: 0 9px;
     border: 1px solid var(--line);
     border-radius: var(--radius-control);

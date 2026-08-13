@@ -13,7 +13,10 @@ import {
   type LiveRepository,
   type WhatsAppInstance,
 } from "../api";
-import { legacySettingsPath } from "../settings-navigation";
+import {
+  legacySettingsPath,
+  legacySettingsRoute,
+} from "../settings-navigation";
 import { SettingsLayout } from "../components/SettingsLayout";
 import { SettingsOverviewRow } from "../components/SettingsOverviewRow";
 import {
@@ -57,6 +60,9 @@ export function SettingsWorkspacePage(props: SettingsWorkspacePageProps) {
     return <Navigate replace to={`${legacyPath}${query ? `?${query}` : ""}`} />;
   }
 
+  const legacyRoute = legacySettingsRoute(location.pathname, location.search);
+  if (legacyRoute) return <Navigate replace to={legacyRoute} />;
+
   return <SettingsWorkspaceRoutes {...props} />;
 }
 
@@ -83,7 +89,11 @@ export function SettingsWorkspaceRoutes(props: SettingsWorkspacePageProps) {
           }
         />
         <Route
-          path="automation/:section"
+          path="automation/replies"
+          element={<SettingsAutomationPage {...props} />}
+        />
+        <Route
+          path="automation/intake"
           element={<SettingsAutomationPage {...props} />}
         />
         <Route path="integrations" element={<SettingsIntegrationsPage />} />
@@ -128,7 +138,7 @@ export function SettingsWorkspaceRoutes(props: SettingsWorkspacePageProps) {
           }
         />
         <Route
-          path="engineering/coding/connections"
+          path="engineering/agents/providers"
           element={
             <SettingsCodingConnectionsPage
               workspaceId={props.workspaceId}
@@ -138,7 +148,7 @@ export function SettingsWorkspaceRoutes(props: SettingsWorkspacePageProps) {
           }
         />
         <Route
-          path="engineering/coding/routing"
+          path="engineering/agents/run-policy"
           element={
             <SettingsCodingRoutingPage
               workspaceId={props.workspaceId}
@@ -254,7 +264,7 @@ export function SettingsOverviewPage({
                 description={t("v2.overview.externalAccessDescription")}
                 status={
                   githubConnected
-                    ? `${t("v2.layout.items.github")} ${t("v2.overview.connected").toLowerCase()}`
+                    ? `${t("v2.integrations.githubTitle")} ${t("v2.overview.connected").toLowerCase()}`
                     : t("v2.overview.reviewConnections")
                 }
                 tone={githubConnected ? "success" : "warning"}
@@ -273,7 +283,7 @@ export function SettingsOverviewPage({
                     ? "success"
                     : "warning"
                 }
-                to="/settings/engineering/coding/connections"
+                to="/settings/engineering/agents/providers"
               >
                 <span className="settings-overview-meta">
                   {t("v2.overview.connectionCount", {
@@ -313,13 +323,13 @@ export function SettingsOverviewPage({
               <div className="settings-v2-inline-actions">
                 <Link
                   className="button button-secondary button-small"
-                  to="/settings/automation/ai"
+                  to="/settings/automation/replies"
                 >
                   {t("v2.overview.reviewAi")}
                 </Link>
                 <Link
                   className="button button-primary button-small"
-                  to="/settings/engineering/coding/routing"
+                  to="/settings/engineering/agents/run-policy"
                 >
                   {t("v2.overview.reviewCoding")}
                 </Link>

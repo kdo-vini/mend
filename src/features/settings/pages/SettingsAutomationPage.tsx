@@ -44,7 +44,7 @@ import type { SettingsWorkspacePageProps } from "./SettingsWorkspacePage";
 
 export function SettingsAutomationPage(props: SettingsWorkspacePageProps) {
   const { section } = useParams();
-  return section === "flows" ? (
+  return section === "intake" ? (
     <SettingsFlowsPage {...props} />
   ) : (
     <SettingsAiPage {...props} />

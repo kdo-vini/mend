@@ -429,24 +429,19 @@
       "sectionSelect": "Settings section",
       "groups": {
         "workspace": "Workspace",
-        "automation": "Automation",
-        "integrations": "Integrations",
-        "engineering": "Engineering"
+        "support": "Support",
+        "engineering": "Engineering",
+        "connections": "Connections"
       },
       "items": {
         "overview": "Overview",
         "whatsapp": "WhatsApp",
-        "team": "Team & access",
+        "team": "Team",
         "audit": "Audit log",
-        "ai": "AI behavior",
-        "flows": "Support flows",
-        "integrations": "All integrations",
-        "github": "GitHub",
-        "google": "Google Calendar",
-        "mcp": "MCP plugins",
+        "automation": "Automation",
         "repositories": "Repositories",
-        "codingConnections": "Coding connections",
-        "codingRouting": "Coding routing"
+        "agents": "Agents & models",
+        "integrations": "Integrations"
       }
     },
     "workspaceRequired": {
@@ -661,6 +656,8 @@
     "integrations": {
       "directoryTitle": "Integration directory",
       "directoryDescription": "Each integration has its own page, lifecycle and access boundary.",
+      "githubTitle": "GitHub",
+      "mcpTitle": "MCP plugins",
       "githubDescription": "Connect GitHub once, then choose repositories from the installation available to this workspace.",
       "googleDescription": "Choose which calendars authorized actions can use.",
       "supabaseDescription": "Connect one Supabase project through OAuth, then choose its feature groups and individual MCP tools.",

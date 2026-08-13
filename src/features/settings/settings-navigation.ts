@@ -1,14 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Bot,
-  BookOpenCheck,
-  Boxes,
   FileClock,
   GitBranch,
-  Github,
   Link2,
   MessageCircle,
-  Network,
   Settings2,
   ShieldCheck,
   UsersRound,
@@ -16,146 +12,98 @@ import {
 
 export type SettingsRouteId =
   | "overview"
-  | "whatsapp"
   | "team"
-  | "ai"
-  | "flows"
-  | "integrations"
-  | "github"
-  | "google"
-  | "mcp"
+  | "audit"
+  | "whatsapp"
+  | "automation"
   | "repositories"
-  | "coding-connections"
-  | "coding-routing"
-  | "audit";
+  | "agents"
+  | "integrations";
+
+export type SettingsNavGroupId =
+  | "workspace"
+  | "support"
+  | "engineering"
+  | "connections";
 
 export interface SettingsNavItem {
   id: SettingsRouteId;
-  label: string;
-  description: string;
   path: string;
+  matchPrefix: string;
   icon: LucideIcon;
 }
 
 export interface SettingsNavGroup {
-  id: string;
-  label: string;
+  id: SettingsNavGroupId;
   items: SettingsNavItem[];
 }
 
 export const settingsNavigation: SettingsNavGroup[] = [
   {
     id: "workspace",
-    label: "Workspace",
     items: [
       {
         id: "overview",
-        label: "Overview",
-        description: "Health and next actions across the workspace.",
         path: "/settings",
+        matchPrefix: "/settings",
         icon: Settings2,
       },
       {
-        id: "whatsapp",
-        label: "WhatsApp",
-        description: "Numbers, pairing and live channel health.",
-        path: "/settings/channels/whatsapp",
-        icon: MessageCircle,
-      },
-      {
         id: "team",
-        label: "Team & access",
-        description: "Members, invitations and workspace roles.",
         path: "/settings/team",
+        matchPrefix: "/settings/team",
         icon: UsersRound,
       },
       {
         id: "audit",
-        label: "Audit log",
-        description: "Immutable activity for this workspace.",
         path: "/settings/audit",
+        matchPrefix: "/settings/audit",
         icon: FileClock,
       },
     ],
   },
   {
-    id: "automation",
-    label: "Automation",
+    id: "support",
     items: [
       {
-        id: "ai",
-        label: "AI behavior",
-        description: "Triage, autonomy and approval boundaries.",
-        path: "/settings/automation/ai",
+        id: "whatsapp",
+        path: "/settings/channels/whatsapp",
+        matchPrefix: "/settings/channels/whatsapp",
+        icon: MessageCircle,
+      },
+      {
+        id: "automation",
+        path: "/settings/automation/replies",
+        matchPrefix: "/settings/automation",
         icon: Bot,
-      },
-      {
-        id: "flows",
-        label: "Support flows",
-        description: "The first steps a customer sees on WhatsApp.",
-        path: "/settings/automation/flows",
-        icon: Network,
-      },
-    ],
-  },
-  {
-    id: "integrations",
-    label: "Integrations",
-    items: [
-      {
-        id: "integrations",
-        label: "All integrations",
-        description: "Connected services and external access.",
-        path: "/settings/integrations",
-        icon: Link2,
-      },
-      {
-        id: "github",
-        label: "GitHub",
-        description: "Source, branches and publishing access.",
-        path: "/settings/integrations/github",
-        icon: Github,
-      },
-      {
-        id: "google",
-        label: "Google Calendar",
-        description: "Calendars available to authorized actions.",
-        path: "/settings/integrations/google",
-        icon: Boxes,
-      },
-      {
-        id: "mcp",
-        label: "MCP plugins",
-        description: "Trusted tools with explicit write controls.",
-        path: "/settings/integrations/mcp",
-        icon: Link2,
       },
     ],
   },
   {
     id: "engineering",
-    label: "Engineering",
     items: [
       {
         id: "repositories",
-        label: "Repositories",
-        description: "Codebases Mend can work with.",
         path: "/settings/engineering/repositories",
+        matchPrefix: "/settings/engineering/repositories",
         icon: GitBranch,
       },
       {
-        id: "coding-connections",
-        label: "Coding connections",
-        description: "Providers, subscriptions and model catalogs.",
-        path: "/settings/engineering/coding/connections",
+        id: "agents",
+        path: "/settings/engineering/agents/providers",
+        matchPrefix: "/settings/engineering/agents",
         icon: ShieldCheck,
       },
+    ],
+  },
+  {
+    id: "connections",
+    items: [
       {
-        id: "coding-routing",
-        label: "Coding routing",
-        description: "Stage policies, budgets and fallbacks.",
-        path: "/settings/engineering/coding/routing",
-        icon: BookOpenCheck,
+        id: "integrations",
+        path: "/settings/integrations",
+        matchPrefix: "/settings/integrations",
+        icon: Link2,
       },
     ],
   },
@@ -165,23 +113,45 @@ const legacyTabPaths: Record<string, string> = {
   whatsapp: "/settings/channels/whatsapp",
   connections: "/settings/integrations",
   members: "/settings/team",
-  ai: "/settings/automation/ai",
-  flows: "/settings/automation/flows",
+  ai: "/settings/automation/replies",
+  flows: "/settings/automation/intake",
   repositories: "/settings/engineering/repositories",
   audit: "/settings/audit",
+};
+
+const legacyRoutePaths: Record<string, string> = {
+  "/settings/automation/ai": "/settings/automation/replies",
+  "/settings/automation/flows": "/settings/automation/intake",
+  "/settings/engineering/coding/connections":
+    "/settings/engineering/agents/providers",
+  "/settings/engineering/coding/routing":
+    "/settings/engineering/agents/run-policy",
 };
 
 export function legacySettingsPath(tab: string | null): string | null {
   return tab ? (legacyTabPaths[tab] ?? null) : null;
 }
 
+export function legacySettingsRoute(
+  pathname: string,
+  search: string,
+): string | null {
+  const canonicalPath = legacyRoutePaths[pathname];
+  return canonicalPath ? `${canonicalPath}${search}` : null;
+}
+
 export function findSettingsNavItem(pathname: string): SettingsNavItem {
-  const items = settingsNavigation
-    .flatMap((group) => group.items)
-    .sort((left, right) => right.path.length - left.path.length);
+  const items = settingsNavigation.flatMap((group) => group.items);
+  if (pathname === "/settings" || pathname === "/settings/") return items[0];
+
   return (
-    items.find(
-      (item) => item.path === pathname || pathname.startsWith(`${item.path}/`),
-    ) ?? items[0]
+    items
+      .filter((item) => item.id !== "overview")
+      .sort((left, right) => right.matchPrefix.length - left.matchPrefix.length)
+      .find(
+        (item) =>
+          pathname === item.matchPrefix ||
+          pathname.startsWith(`${item.matchPrefix}/`),
+      ) ?? items[0]
   );
 }

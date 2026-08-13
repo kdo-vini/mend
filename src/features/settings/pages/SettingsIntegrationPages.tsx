@@ -81,7 +81,7 @@ export function SettingsIntegrationsPage() {
           <IntegrationLink
             to="/settings/integrations/mcp"
             icon={<Link2 size={17} />}
-            title={t("v2.layout.items.mcp")}
+            title={t("v2.integrations.mcpTitle")}
             description={t("v2.integrations.mcpDescription")}
           />
         </div>
@@ -196,7 +196,7 @@ export function SettingsGithubPage({
   return (
     <div className="settings-v2-page">
       <SettingsPageHeader
-        title={t("v2.layout.items.github")}
+        title={t("v2.integrations.githubTitle")}
         description={t("v2.pages.githubDescription")}
         actions={
           <button

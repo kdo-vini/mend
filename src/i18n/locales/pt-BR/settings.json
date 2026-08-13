@@ -429,24 +429,19 @@
       "sectionSelect": "Seção de configurações",
       "groups": {
         "workspace": "Espaço de trabalho",
-        "automation": "Automação",
-        "integrations": "Integrações",
-        "engineering": "Engenharia"
+        "support": "Suporte",
+        "engineering": "Engenharia",
+        "connections": "Conexões"
       },
       "items": {
         "overview": "Visão geral",
         "whatsapp": "WhatsApp",
-        "team": "Equipe e acesso",
+        "team": "Equipe",
         "audit": "Registro de auditoria",
-        "ai": "Comportamento da IA",
-        "flows": "Fluxos de suporte",
-        "integrations": "Todas as integrações",
-        "github": "GitHub",
-        "google": "Google Calendar",
-        "mcp": "Plugins MCP",
+        "automation": "Automação",
         "repositories": "Repositórios",
-        "codingConnections": "Conexões de coding",
-        "codingRouting": "Roteamento de coding"
+        "agents": "Agentes e modelos",
+        "integrations": "Integrações"
       }
     },
     "workspaceRequired": {
@@ -661,6 +656,8 @@
     "integrations": {
       "directoryTitle": "Diret\u00f3rio de integra\u00e7\u00f5es",
       "directoryDescription": "Cada integra\u00e7\u00e3o tem sua pr\u00f3pria p\u00e1gina, ciclo de vida e limite de acesso.",
+      "githubTitle": "GitHub",
+      "mcpTitle": "Plugins MCP",
       "githubDescription": "Conecte o GitHub uma vez e escolha os reposit\u00f3rios dispon\u00edveis para este espa\u00e7o de trabalho.",
       "googleDescription": "Escolha quais calend\u00e1rios as a\u00e7\u00f5es autorizadas podem usar.",
       "supabaseDescription": "Conecte um projeto Supabase por OAuth e escolha seus grupos de recursos e ferramentas MCP individuais.",
