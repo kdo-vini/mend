@@ -60,6 +60,51 @@ test("reduced motion keeps playback static and manually selectable", async ({
   await expect(playback).toHaveAttribute("data-scene", "verify");
 });
 
+test("hovering the playback pauses autoplay and resumes on pointer leave", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const playback = page.getByLabel("Interactive Mend case playback");
+  await expect(playback).toHaveAttribute("data-scene", "signal");
+
+  await playback.hover();
+  await page.waitForTimeout(3400);
+  await expect(playback).toHaveAttribute("data-scene", "signal");
+
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(3400);
+  await expect(playback).toHaveAttribute("data-scene", "context");
+});
+
+test("a manual pause survives a focus change", async ({ page }) => {
+  await page.goto("/");
+  const playback = page.getByLabel("Interactive Mend case playback");
+
+  await page.getByRole("button", { name: "Pause playback" }).click();
+  await expect(playback).toHaveAttribute("data-playing", "false");
+  await expect(playback).toHaveAttribute("data-scene", "signal");
+
+  await page.getByRole("link", { name: "Sign in" }).first().focus();
+  await expect(playback).toHaveAttribute("data-playing", "false");
+
+  await page.waitForTimeout(3400);
+  await expect(playback).toHaveAttribute("data-scene", "signal");
+});
+
+test("toggling reduced motion mid-session stops live playback", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const playback = page.getByLabel("Interactive Mend case playback");
+  await expect(playback).toHaveAttribute("data-playing", "true");
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(playback).toHaveAttribute("data-playing", "false");
+
+  await page.waitForTimeout(3400);
+  await expect(playback).toHaveAttribute("data-scene", "signal");
+});
+
 test("explicit auth link renders the sign-in form while the session probe runs", async ({
   page,
 }) => {
