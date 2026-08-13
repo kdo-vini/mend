@@ -5,7 +5,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it } from "vitest";
 import i18n from "../../../i18n";
+import { LiveActionError } from "../../../api/transport";
 import type { LiveAgentConnection } from "../api";
+import { catalogFailurePresentation } from "../catalog-errors";
 import { ProviderComparisonTable } from "./SettingsEngineeringPages";
 
 const connections: LiveAgentConnection[] = [
@@ -132,4 +134,38 @@ describe("ProviderComparisonTable", () => {
 
     await act(async () => root.unmount());
   });
+});
+
+describe("catalogFailurePresentation", () => {
+  it.each([
+    [
+      new LiveActionError(
+        "credential rejected",
+        422,
+        "agent_catalog_credential_invalid",
+      ),
+      { status: "error", messageKey: "catalogCredential" },
+    ],
+    [
+      new LiveActionError(
+        "provider unavailable",
+        502,
+        "agent_catalog_provider_unavailable",
+      ),
+      { status: "error", messageKey: "catalogUnavailable" },
+    ],
+    [
+      new LiveActionError(
+        "connection revoked",
+        409,
+        "agent_connection_revoked",
+      ),
+      { status: "revoked", messageKey: "catalogRevoked" },
+    ],
+  ])(
+    "maps status and code to an actionable localized state",
+    (error, expected) => {
+      expect(catalogFailurePresentation(error)).toEqual(expected);
+    },
+  );
 });

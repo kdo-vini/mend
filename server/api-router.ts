@@ -101,6 +101,56 @@ function codingControlPlaneApiError(error: unknown): {
           ? "The research artifact is stale for this issue revision or repository base."
           : "A current research artifact is required for this implementation.",
     };
+  if (code === "agent_connection_revoked")
+    return {
+      status: 409,
+      code,
+      message:
+        "This coding connection was revoked. Reconnect it before refreshing models.",
+    };
+  if (code === "agent_catalog_credential_missing")
+    return {
+      status: 422,
+      code,
+      message: "Add a credential to this coding connection and try again.",
+    };
+  if (code === "agent_catalog_credential_invalid")
+    return {
+      status: 422,
+      code,
+      message:
+        "The coding connection credential was rejected. Update it and try again.",
+    };
+  if (code === "agent_catalog_empty")
+    return {
+      status: 502,
+      code,
+      message:
+        "The coding provider returned no coding models. Check the connection and try again.",
+    };
+  if (code === "agent_catalog_provider_unavailable")
+    return {
+      status: 502,
+      code,
+      message: "The coding provider is unavailable. Try again later.",
+    };
+  if (code === "agent_catalog_provider_not_supported")
+    return {
+      status: 422,
+      code,
+      message:
+        "This coding provider is not supported for model catalog refresh.",
+    };
+  if (
+    /^(agent_api_key_required|agent_api_key_missing|agent_connection_secret_missing)/.test(
+      code,
+    )
+  )
+    return {
+      status: 422,
+      code,
+      message: "The selected coding connection has no usable credential.",
+    };
   if (
     /^(agent_catalog_|agent_model_|agent_effort_|agent_route_|agent_connection_|agent_fallback_)/.test(
       code,
@@ -126,16 +176,6 @@ function codingControlPlaneApiError(error: unknown): {
       code,
       message:
         "This subscription is not authorized for the requested automation.",
-    };
-  if (
-    /^(agent_api_key_required|agent_api_key_missing|agent_connection_secret_missing)/.test(
-      code,
-    )
-  )
-    return {
-      status: 422,
-      code,
-      message: "The selected coding connection has no usable credential.",
     };
   if (/^agent_budget_/.test(code))
     return {

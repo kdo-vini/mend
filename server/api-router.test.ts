@@ -439,31 +439,97 @@ describe("Mend API router", () => {
     expect(createConnection).not.toHaveBeenCalled();
   });
 
-  it("returns actionable readiness details when the Agent runner cannot start", async () => {
-    const dependencies = createFakeDependencies();
-    dependencies.codingRuns.create = vi.fn(async () => {
-      throw new CodexServiceError(
-        "MEND_AGENT_WORKSPACE_ROOT must be a directory",
-      );
-    });
+  it.each([
+    {
+      message: "MEND_AGENT_WORKSPACE_ROOT must be a directory",
+      status: 422,
+      code: "agent_run_invalid",
+    },
+    {
+      message:
+        "Agent execution is disabled by the workspace AI integration policy",
+      status: 403,
+      code: "agent_policy_disabled",
+    },
+    {
+      message: "Repository not found: repository-secret-id",
+      status: 404,
+      code: "repository_not_found",
+    },
+    {
+      message:
+        "Timed out waiting for another worker to release the repository checkout",
+      status: 503,
+      code: "agent_unavailable",
+    },
+  ])(
+    "maps coding run failures by nature: $code",
+    async ({ message, status, code }) => {
+      const dependencies = createFakeDependencies();
+      dependencies.codingRuns.create = vi.fn(async () => {
+        throw new CodexServiceError(message);
+      });
 
-    const response = await request(makeApp(dependencies))
-      .post("/api/issues/TEC-1/agent-runs")
-      .set(scoped(true))
-      .send({ mode: "investigate", repositoryId });
+      const response = await request(makeApp(dependencies))
+        .post("/api/issues/TEC-1/agent-runs")
+        .set(scoped(true))
+        .send({ mode: "investigate", repositoryId });
 
-    expect(response.status).toBe(503);
-    expect(response.body).toEqual({
-      error: {
-        code: "agent_unavailable",
-        message:
-          "Agent run could not start: MEND_AGENT_WORKSPACE_ROOT must be a directory",
-        details: {
-          action: "Check /api/ready and the workspace repository settings.",
-        },
-      },
-    });
-  });
+      expect(response.status).toBe(status);
+      expect(response.body.error.code).toBe(code);
+      expect(response.body.error.message).not.toContain(message);
+    },
+  );
+
+  it.each([
+    {
+      message: "agent_api_key_missing",
+      status: 422,
+      code: "agent_api_key_missing",
+    },
+    {
+      message: "agent_catalog_credential_missing",
+      status: 422,
+      code: "agent_catalog_credential_missing",
+    },
+    {
+      message: "agent_catalog_credential_invalid",
+      status: 422,
+      code: "agent_catalog_credential_invalid",
+    },
+    {
+      message: "agent_catalog_provider_unavailable",
+      status: 502,
+      code: "agent_catalog_provider_unavailable",
+    },
+    {
+      message: "agent_catalog_empty",
+      status: 502,
+      code: "agent_catalog_empty",
+    },
+    {
+      message: "agent_connection_revoked",
+      status: 409,
+      code: "agent_connection_revoked",
+    },
+  ])(
+    "maps catalog refresh failures by nature: $code",
+    async ({ message, status, code }) => {
+      const dependencies = createFakeDependencies();
+      dependencies.codingControlPlane = {
+        listModels: vi.fn(async () => {
+          throw new Error(message);
+        }),
+      } as unknown as NonNullable<ApiRouterDependencies["codingControlPlane"]>;
+
+      const response = await request(makeApp(dependencies))
+        .get(`/api/agent-connections/${messageId}/models?refresh=true`)
+        .set(scoped());
+
+      expect(response.status).toBe(status);
+      expect(response.body.error.code).toBe(code);
+    },
+  );
 
   it("accepts an explicit parent run when continuing to implementation", async () => {
     const dependencies = createFakeDependencies();

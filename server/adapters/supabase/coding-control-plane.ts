@@ -43,6 +43,31 @@ function subscriptionLoginErrorCode(error: unknown): string {
   return "login_start_failed";
 }
 
+export type CatalogRefreshErrorCode =
+  | "agent_catalog_credential_missing"
+  | "agent_catalog_credential_invalid"
+  | "agent_catalog_empty"
+  | "agent_catalog_provider_not_supported"
+  | "agent_catalog_provider_unavailable";
+
+export function classifyCatalogRefreshError(
+  error: unknown,
+): CatalogRefreshErrorCode {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (
+    /^(agent_api_key_missing|agent_credential_missing|agent_connection_secret_missing)$/.test(
+      raw,
+    )
+  )
+    return "agent_catalog_credential_missing";
+  if (/^catalog_http_(401|403)$/.test(raw))
+    return "agent_catalog_credential_invalid";
+  if (raw === "agent_catalog_empty") return "agent_catalog_empty";
+  if (raw === "agent_catalog_provider_not_supported")
+    return "agent_catalog_provider_not_supported";
+  return "agent_catalog_provider_unavailable";
+}
+
 export class SupabaseCodingControlPlaneAdapter
   implements CodingControlPlanePort
 {
@@ -362,7 +387,8 @@ export class SupabaseCodingControlPlaneAdapter
         })
         .eq("id", connectionId)
         .eq("workspace_id", context.workspaceId);
-      throw new Error("agent_catalog_refresh_failed");
+      const code = classifyCatalogRefreshError(error);
+      throw new Error(code, { cause: error });
     }
     await this.privilegedClient
       .from("agent_connections")

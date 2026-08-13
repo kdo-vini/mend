@@ -55,6 +55,7 @@ import {
   SettingsWorkspaceRequired,
 } from "../components/SettingsShared";
 import { formatSettingsDate, providerLabel } from "../settings-utils";
+import { catalogFailurePresentation } from "../catalog-errors";
 import type { SettingsWorkspacePageProps } from "./SettingsWorkspacePage";
 
 export function SettingsRepositoriesPage({
@@ -799,11 +800,13 @@ function CodingProvidersContent({
       );
       onToast(t("v2.codingConnections.catalogRefreshed"));
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : t("v2.codingConnections.errors.catalog"),
+      const failure = catalogFailurePresentation(reason);
+      setConnections((rows) =>
+        rows.map((row) =>
+          row.id === connection.id ? { ...row, status: failure.status } : row,
+        ),
       );
+      setError(t(`v2.codingConnections.errors.${failure.messageKey}`));
     } finally {
       setAction(null);
     }

@@ -2,6 +2,64 @@ import type { ApiRouteModuleContext } from "../api-router.js";
 import { CodexServiceError } from "../codex-service.js";
 import { codingRunCreateSchema, codingRunListQuerySchema } from "./schemas.js";
 
+function classifyCodexServiceError(error: CodexServiceError): {
+  status: number;
+  code: string;
+  message: string;
+  details?: { action: string };
+} {
+  const raw = error.message;
+  if (
+    /^Timed out waiting for another worker/i.test(raw) ||
+    /^agent_run_runner_not_configured$/i.test(raw) ||
+    /^Agent runner unavailable$/i.test(raw)
+  )
+    return {
+      status: 503,
+      code: "agent_unavailable",
+      message: "The coding agent runner is unavailable. Try again later.",
+      details: {
+        action: "Check /api/ready and the runner heartbeat.",
+      },
+    };
+  if (/disabled by the workspace .*policy/i.test(raw))
+    return {
+      status: 403,
+      code: "agent_policy_disabled",
+      message: "The workspace policy does not allow this coding action.",
+    };
+  if (
+    /^Repository not found:/i.test(raw) ||
+    /^Repository no longer exists$/i.test(raw)
+  )
+    return {
+      status: 404,
+      code: "repository_not_found",
+      message: "The selected repository was not found.",
+    };
+  if (/belongs to another workspace/i.test(raw))
+    return {
+      status: 409,
+      code: "repository_workspace_conflict",
+      message: "The selected repository does not belong to this workspace.",
+    };
+  if (
+    /required|invalid|must be|outside the Agent workspace|not configured|configuration is incomplete|not a directory|no repository configured/i.test(
+      raw,
+    )
+  )
+    return {
+      status: 422,
+      code: "agent_run_invalid",
+      message: "The coding run configuration is invalid.",
+    };
+  return {
+    status: 500,
+    code: "agent_run_failed",
+    message: "The coding agent could not start the run.",
+  };
+}
+
 export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
   const {
     router,
@@ -39,15 +97,15 @@ export function registerCodingRunRoutes(context: ApiRouteModuleContext) {
           ),
         );
       } catch (error) {
-        if (error instanceof CodexServiceError)
+        if (error instanceof CodexServiceError) {
+          const classified = classifyCodexServiceError(error);
           throw new context.ApiHttpError(
-            503,
-            "agent_unavailable",
-            `Agent run could not start: ${error.message}`,
-            {
-              action: "Check /api/ready and the workspace repository settings.",
-            },
+            classified.status,
+            classified.code,
+            classified.message,
+            classified.details,
           );
+        }
         throw error;
       }
     }),
