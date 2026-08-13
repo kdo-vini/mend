@@ -41,8 +41,10 @@ and supervision surface for a solo founder away from a desk.
 
 ## 2. Why the current experience needs a structural refactor
 
-The current application already uses the approved identity, dark palette,
-shared page frame, product fonts, and bilingual catalogs. The observed
+The current application already uses the approved identity, theme-aware
+semantic palette, shared page frame, product fonts, and bilingual catalogs.
+Dark remains the canonical Midnight Control Room expression, while light mode
+must preserve the same hierarchy, state semantics, and legibility. The observed
 problems are structural rather than cosmetic:
 
 - Issues and Kanban expose the same shared work as separate top-level product
@@ -90,6 +92,8 @@ problems are structural rather than cosmetic:
   surfaces.
 - Preserve workspace scoping, authorization, and server-side secret handling.
 - Keep all product copy in matching `pt-BR` and `en-US` catalogs.
+- Preserve complete dark/light theme parity through the existing semantic
+  tokens and Profile theme control.
 - Retain stable legacy URLs through redirects or aliases.
 - Add no animation or UI dependency.
 
@@ -143,6 +147,18 @@ more consistently.
 
 Green remains channel/success semantics, amber remains warning, and red remains
 danger. State is never communicated by color alone.
+
+### 6.1.1 Theme parity
+
+- Dark mode is the canonical visual reference, not the only supported mode.
+- Light mode reuses the existing semantic variables; feature CSS must not
+  hardcode dark-only backgrounds, borders, text, or shadows.
+- Selected, hover, focus, disabled, success, warning, danger, and live states
+  retain their hierarchy and accessible contrast in both themes.
+- Theme switching updates every refactored surface without reload and does not
+  reset navigation, filters, selected records, drafts, or playback state.
+- Landing playback, product specimens, charts, overlays, menus, tables, drawers,
+  and mobile sticky actions are included in theme review.
 
 ### 6.2 Typography
 
@@ -606,6 +622,7 @@ Required automated coverage:
 - mobile issue/run navigation and decision-required action visibility;
 - landing playback scene selection, pause/resume, and reduced-motion fallback;
 - locale catalog parity and frontend translation guard.
+- dark/light theme switching without route or state loss.
 
 Required verification:
 
@@ -619,7 +636,7 @@ Required verification:
 - relevant Playwright scenarios and then `npm run test:e2e`;
 - real-browser screenshots and interaction review at desktop `1440×900` and
   mobile `390×844` for landing, Inbox, Issues List, Issues Board, Runs,
-  Knowledge, and representative Settings pages;
+  Knowledge, and representative Settings pages in both dark and light modes;
 - keyboard focus, reduced motion, long Portuguese copy, and horizontal overflow
   review.
 
@@ -651,5 +668,6 @@ The refactor succeeds when:
 - the desktop product remains dense and efficient for a SaaS team;
 - the complete mobile founder supervision journey is usable at 390×844;
 - the landing hero visibly demonstrates the message-to-verified-fix loop;
+- dark and light modes preserve equivalent hierarchy and usable contrast;
 - all existing backend/API/security contracts remain intact;
 - bilingual, accessibility, build, test, and visual review gates pass.
