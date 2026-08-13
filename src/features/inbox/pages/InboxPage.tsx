@@ -96,7 +96,10 @@ import {
   type AiCardDismissals,
   type AiCardKind,
 } from "../ai-card-dismissals";
-import { InboxCaseContext } from "../components/InboxCaseContext";
+import {
+  INBOX_CASE_CONTEXT_ID,
+  InboxCaseContext,
+} from "../components/InboxCaseContext";
 
 interface AssigneeOption {
   value: string;
@@ -2075,6 +2078,7 @@ function ConversationHeader({
           type="button"
           aria-label={t("context.open")}
           aria-expanded={contextOpen}
+          aria-controls={INBOX_CASE_CONTEXT_ID}
           onClick={onOpenContext}
         >
           <PanelRight size={16} />
