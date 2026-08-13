@@ -23,6 +23,7 @@ export function NotificationCenter({
   notifications,
   unreadNotificationCount,
   pushStatus,
+  resolveDestination,
   onEnablePush,
   onDismissNotification,
   onDismissAllNotifications,
@@ -30,6 +31,7 @@ export function NotificationCenter({
   notifications: WorkspaceNotification[];
   unreadNotificationCount: number;
   pushStatus: PushSetupResult | "idle";
+  resolveDestination: (notification: WorkspaceNotification) => string;
   onEnablePush: () => void;
   onDismissNotification: (id: string) => void;
   onDismissAllNotifications: () => void;
@@ -123,11 +125,7 @@ export function NotificationCenter({
   const openNotification = (notification: WorkspaceNotification) => {
     onDismissNotification(notification.id);
     setOpen(false);
-    if (notification.entity_type === "conversation" && notification.entity_id)
-      navigate(
-        `/inbox?conversation=${encodeURIComponent(notification.entity_id)}`,
-      );
-    else if (notification.entity_type === "issue") navigate("/issues");
+    navigate(resolveDestination(notification));
   };
 
   return (
@@ -242,6 +240,7 @@ export function Sidebar({
   notifications,
   unreadNotificationCount,
   pushStatus,
+  resolveNotificationDestination,
   onEnablePush,
   onDismissNotification,
   onDismissAllNotifications,
@@ -256,6 +255,9 @@ export function Sidebar({
   notifications: WorkspaceNotification[];
   unreadNotificationCount: number;
   pushStatus: PushSetupResult | "idle";
+  resolveNotificationDestination: (
+    notification: WorkspaceNotification,
+  ) => string;
   onEnablePush: () => void;
   onDismissNotification: (id: string) => void;
   onDismissAllNotifications: () => void;
@@ -315,6 +317,7 @@ export function Sidebar({
               notifications={notifications}
               unreadNotificationCount={unreadNotificationCount}
               pushStatus={pushStatus}
+              resolveDestination={resolveNotificationDestination}
               onEnablePush={onEnablePush}
               onDismissNotification={onDismissNotification}
               onDismissAllNotifications={onDismissAllNotifications}
@@ -371,6 +374,7 @@ export function MobileTopbar({
   notifications,
   unreadNotificationCount,
   pushStatus,
+  resolveNotificationDestination,
   onEnablePush,
   onDismissNotification,
   onDismissAllNotifications,
@@ -379,6 +383,9 @@ export function MobileTopbar({
   notifications: WorkspaceNotification[];
   unreadNotificationCount: number;
   pushStatus: PushSetupResult | "idle";
+  resolveNotificationDestination: (
+    notification: WorkspaceNotification,
+  ) => string;
   onEnablePush: () => void;
   onDismissNotification: (id: string) => void;
   onDismissAllNotifications: () => void;
@@ -399,6 +406,7 @@ export function MobileTopbar({
           notifications={notifications}
           unreadNotificationCount={unreadNotificationCount}
           pushStatus={pushStatus}
+          resolveDestination={resolveNotificationDestination}
           onEnablePush={onEnablePush}
           onDismissNotification={onDismissNotification}
           onDismissAllNotifications={onDismissAllNotifications}

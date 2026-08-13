@@ -125,4 +125,12 @@
   .app-shell .conversation-header {
     min-height: 64px;
   }
+
+  /* Notifications and search are the two entry points into the mobile founder
+     journey, so they answer to the shared touch-target token. */
+  .app-shell .mobile-topbar-actions .notification-trigger,
+  .app-shell .mobile-topbar-actions .mobile-command-button {
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+  }
 }

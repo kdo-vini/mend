@@ -59,7 +59,6 @@ export function IssueDetailPage({
   assigneeOptions,
   assigneeLabel,
   onToast,
-  onOpenIssue,
   onOpenConversation,
   onStartRun,
   onEditIssue,
@@ -75,7 +74,6 @@ export function IssueDetailPage({
   assigneeOptions: AssigneeOption[];
   assigneeLabel: (value: string) => string;
   onToast: (message: string) => void;
-  onOpenIssue: (id: string) => void;
   onOpenConversation: (id: string) => void;
   onStartRun: (id: string) => void;
   onEditIssue: (id: string) => void;
@@ -532,7 +530,9 @@ export function IssueDetailPage({
                 <RunRow
                   key={run.id}
                   run={run}
-                  onClick={() => onOpenIssue(issue.id)}
+                  onClick={() =>
+                    navigate(`/agent-runs?run=${encodeURIComponent(run.id)}`)
+                  }
                 />
               ))
             ) : (
