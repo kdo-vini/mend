@@ -148,6 +148,26 @@
 }
 
 @media (max-width: 650px) {
+  .issue-workspace .page-actions > .button,
+  .issue-toolbar > .button {
+    min-height: var(--mobile-touch-target);
+  }
+
+  .issue-toolbar > .icon-button,
+  .issue-mobile-item > .row-actions .icon-button {
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+  }
+
+  .issue-mobile-row {
+    padding-right: calc(var(--mobile-touch-target) + var(--space-4));
+  }
+
+  .issue-mobile-item > .row-actions {
+    top: var(--space-1);
+    right: var(--space-1);
+  }
+
   .issue-toolbar .search-field {
     max-width: none;
     flex-basis: 100%;

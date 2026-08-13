@@ -36,6 +36,7 @@
     },
     "allStatuses": "All statuses",
     "allAssignees": "All assignees",
+    "allCustomers": "All customers",
     "allLabels": "All labels",
     "clearFilters": "Clear filters",
     "focusSearch": "Focus issue search",

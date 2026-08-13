@@ -785,6 +785,10 @@
     display: grid;
     gap: var(--space-3);
   }
+
+  .kanban-primary-action {
+    min-height: var(--mobile-touch-target);
+  }
 }
 
 @media (max-width: 380px) {

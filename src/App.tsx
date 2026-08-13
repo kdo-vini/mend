@@ -382,12 +382,12 @@ function App() {
 
   const assigneeOptions: AssigneeOption[] = demoMode
     ? [
-        { value: "Unassigned", label: "Unassigned" },
+        { value: "Unassigned", label: t("app.unassigned") },
         { value: "Marina", label: "Marina" },
         { value: "João", label: "João" },
       ]
     : [
-        { value: "Unassigned", label: "Unassigned" },
+        { value: "Unassigned", label: t("app.unassigned") },
         ...Object.entries(workspaceMemberNames).map(([userId, name]) => ({
           value: userId,
           label: userId === operatorIdentity.id ? operatorIdentity.name : name,
@@ -395,7 +395,9 @@ function App() {
       ];
   const assigneeLabel = (value: string) =>
     assigneeOptions.find((option) => option.value === value)?.label ??
-    (value === "Unassigned" ? value : `User ${value.slice(0, 8)}`);
+    (value === "Unassigned"
+      ? t("app.unassigned")
+      : t("app.user", { id: value.slice(0, 8) }));
 
   useEffect(() => {
     if (demoMode || localOperatorMode) return;

@@ -147,6 +147,7 @@ export function IssuesPage({
   const [sourceFilter, setSourceFilter] = useState<Issue["source"] | "All">(
     "All",
   );
+  const [customerFilter, setCustomerFilter] = useState("All");
   const [labelFilter, setLabelFilter] = useState("All");
   const [agentFilter, setAgentFilter] = useState<
     "All" | "With runs" | "Without runs"
@@ -155,6 +156,13 @@ export function IssuesPage({
   const searchRef = useRef<HTMLInputElement>(null);
   const labelOptions = [
     ...new Set(issues.flatMap((issue) => issue.labels)),
+  ].sort();
+  const customerOptions = [
+    ...new Set(
+      issues
+        .map((issue) => issue.customer)
+        .filter((customer): customer is string => Boolean(customer)),
+    ),
   ].sort();
   const filtered = issues.filter(
     (issue) =>
@@ -166,6 +174,7 @@ export function IssuesPage({
       (typeFilter === "All" || issue.type === typeFilter) &&
       (assigneeFilter === "All" || issue.assignee === assigneeFilter) &&
       (sourceFilter === "All" || issue.source === sourceFilter) &&
+      (customerFilter === "All" || issue.customer === customerFilter) &&
       (labelFilter === "All" || issue.labels.includes(labelFilter)) &&
       (agentFilter === "All" ||
         (agentFilter === "With runs"
@@ -176,6 +185,7 @@ export function IssuesPage({
     priorityFilter,
     typeFilter,
     sourceFilter,
+    customerFilter,
     labelFilter,
     agentFilter,
   ].filter((value) => value !== "All").length;
@@ -186,6 +196,7 @@ export function IssuesPage({
     setTypeFilter("All");
     setAssigneeFilter("All");
     setSourceFilter("All");
+    setCustomerFilter("All");
     setLabelFilter("All");
     setAgentFilter("All");
   };
@@ -367,6 +378,15 @@ export function IssuesPage({
           ]}
         />
         <FilterSelect
+          label={t("ui.customer")}
+          value={customerFilter}
+          onChange={setCustomerFilter}
+          options={[
+            { value: "All", label: t("ui.allCustomers") },
+            ...customerOptions,
+          ]}
+        />
+        <FilterSelect
           label={t("ui.labels")}
           value={labelFilter}
           onChange={setLabelFilter}
@@ -453,7 +473,7 @@ export function IssuesPage({
                     </div>
                   </td>
                   <td className="customer-cell">
-                    {issue.customer ?? "Internal"}
+                    {issue.customer ?? t("ui.internal")}
                   </td>
                   <td className="updated-cell">{issue.updatedAt}</td>
                   <td className="actions-cell">

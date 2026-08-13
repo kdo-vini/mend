@@ -22,7 +22,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
-import type { Issue, IssueStatus } from "../../../types";
+import type { Issue, IssueStatus, IssueType } from "../../../types";
 import { currentInterfaceLanguage } from "../../../i18n/preferences";
 import { issueViewHref } from "../../../app/routes/workspace-routing";
 import { ViewTabs } from "../../../shared/ui/ViewTabs";
@@ -50,23 +50,19 @@ type Mode = "shared" | "personal";
 type PersonalRange = "today" | "week" | "all";
 type DragState = { id: string; kind: "issue" | "task"; status: string };
 
-const sharedColumns: Array<{ status: IssueStatus; label: string }> = [
-  { status: "Triage", label: "Triage" },
-  { status: "Backlog", label: "Backlog" },
-  { status: "Todo", label: "To do" },
-  { status: "In Progress", label: "In progress" },
-  { status: "Review", label: "Review" },
-  { status: "Done", label: "Done" },
+type StatusOption<T extends string> = { status: T; label: string };
+
+const sharedStatuses: IssueStatus[] = [
+  "Triage",
+  "Backlog",
+  "Todo",
+  "In Progress",
+  "Review",
+  "Done",
+  "Canceled",
 ];
 
-const personalColumns: Array<{
-  status: PersonalTaskStatus;
-  label: string;
-}> = [
-  { status: "todo", label: "To do" },
-  { status: "in_progress", label: "In progress" },
-  { status: "done", label: "Done" },
-];
+const personalStatuses: PersonalTaskStatus[] = ["todo", "in_progress", "done"];
 
 const dbStatus: Record<IssueStatus, string> = {
   Triage: "triage",
@@ -213,7 +209,7 @@ export function KanbanPage({
   onNewIssue,
   onToast,
 }: KanbanPageProps) {
-  const { t } = useTranslation("kanban");
+  const { t } = useTranslation(["kanban", "common", "issues"]);
   const location = useLocation();
   const [localMode, setLocalMode] = useState<Mode>(initialMode);
   const mode = fixedMode ?? localMode;
@@ -242,6 +238,63 @@ export function KanbanPage({
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
   const [now, setNow] = useState(() => Date.now());
+
+  const issueStatusLabel = (status: IssueStatus) =>
+    status === "Triage"
+      ? t("data.issueStatus.triage", { ns: "common" })
+      : status === "Backlog"
+        ? t("data.issueStatus.backlog", { ns: "common" })
+        : status === "Todo"
+          ? t("data.issueStatus.todo", { ns: "common" })
+          : status === "In Progress"
+            ? t("data.issueStatus.inProgress", { ns: "common" })
+            : status === "Review"
+              ? t("data.issueStatus.review", { ns: "common" })
+              : status === "Done"
+                ? t("data.issueStatus.done", { ns: "common" })
+                : t("data.issueStatus.canceled", { ns: "common" });
+  const personalStatusLabel = (status: PersonalTaskStatus) =>
+    status === "todo"
+      ? t("data.issueStatus.todo", { ns: "common" })
+      : status === "in_progress"
+        ? t("data.issueStatus.inProgress", { ns: "common" })
+        : t("data.issueStatus.done", { ns: "common" });
+  const issueTypeLabel = (type: IssueType) => {
+    switch (type) {
+      case "Production Bug":
+        return t("ui.types.productionBug", { ns: "issues" });
+      case "Bug":
+        return t("ui.types.bug", { ns: "issues" });
+      case "Incident":
+        return t("ui.types.incident", { ns: "issues" });
+      case "Feature":
+        return t("ui.types.feature", { ns: "issues" });
+      case "Task":
+        return t("ui.types.task", { ns: "issues" });
+      case "Billing":
+        return t("ui.types.billing", { ns: "issues" });
+      case "Commercial":
+        return t("ui.types.commercial", { ns: "issues" });
+      case "Question":
+        return t("ui.types.question", { ns: "issues" });
+      default:
+        return t("ui.types.other", { ns: "issues" });
+    }
+  };
+  const sharedStatusOptions: StatusOption<IssueStatus>[] = sharedStatuses.map(
+    (status) => ({ status, label: issueStatusLabel(status) }),
+  );
+  const visibleSharedStatusOptions = sharedStatusOptions.filter(
+    (option) => showCanceled || option.status !== "Canceled",
+  );
+  const movableSharedStatusOptions = sharedStatusOptions.filter(
+    (option) => option.status !== "Canceled",
+  );
+  const personalStatusOptions: StatusOption<PersonalTaskStatus>[] =
+    personalStatuses.map((status) => ({
+      status,
+      label: personalStatusLabel(status),
+    }));
 
   useEffect(() => {
     const handleOnline = () => setOnline(true);
@@ -827,7 +880,10 @@ export function KanbanPage({
             <DesktopBoard
               mode={mode}
               issues={visibleIssues}
-              showCanceled={showCanceled}
+              sharedStatusOptions={visibleSharedStatusOptions}
+              movableSharedStatusOptions={movableSharedStatusOptions}
+              personalStatusOptions={personalStatusOptions}
+              issueTypeLabel={issueTypeLabel}
               personalItems={personalItems}
               tasks={visibleTasks}
               drag={drag}
@@ -860,9 +916,11 @@ export function KanbanPage({
         ) : (
           <MobileSharedList
             issues={visibleIssues}
-            showCanceled={showCanceled}
+            statusOptions={visibleSharedStatusOptions}
+            movableStatusOptions={movableSharedStatusOptions}
             onOpenIssue={onOpenIssue}
             onMoveIssue={moveIssue}
+            assigneeLabel={assigneeLabel}
           />
         )}
       </div>
@@ -930,7 +988,10 @@ function AgendaStrip({
 function DesktopBoard({
   mode,
   issues,
-  showCanceled,
+  sharedStatusOptions,
+  movableSharedStatusOptions,
+  personalStatusOptions,
+  issueTypeLabel,
   personalItems,
   tasks,
   drag,
@@ -946,7 +1007,10 @@ function DesktopBoard({
 }: {
   mode: Mode;
   issues: Issue[];
-  showCanceled: boolean;
+  sharedStatusOptions: StatusOption<IssueStatus>[];
+  movableSharedStatusOptions: StatusOption<IssueStatus>[];
+  personalStatusOptions: StatusOption<PersonalTaskStatus>[];
+  issueTypeLabel: (type: IssueType) => string;
   personalItems: Array<
     { kind: "task"; task: PersonalTask } | { kind: "issue"; issue: Issue }
   >;
@@ -968,43 +1032,8 @@ function DesktopBoard({
   online: boolean;
 }) {
   const { t } = useTranslation("kanban");
-  const issueStatusLabel = (status: IssueStatus) =>
-    status === "Triage"
-      ? t("data.issueStatus.triage", { ns: "common" })
-      : status === "Backlog"
-        ? t("data.issueStatus.backlog", { ns: "common" })
-        : status === "Todo"
-          ? t("data.issueStatus.todo", { ns: "common" })
-          : status === "In Progress"
-            ? t("data.issueStatus.inProgress", { ns: "common" })
-            : status === "Review"
-              ? t("data.issueStatus.review", { ns: "common" })
-              : status === "Done"
-                ? t("data.issueStatus.done", { ns: "common" })
-                : t("data.issueStatus.canceled", { ns: "common" });
-  const personalStatusLabel = (status: PersonalTaskStatus) =>
-    status === "todo"
-      ? t("data.issueStatus.todo", { ns: "common" })
-      : status === "in_progress"
-        ? t("data.issueStatus.inProgress", { ns: "common" })
-        : t("data.issueStatus.done", { ns: "common" });
-  const localizedSharedColumns = sharedColumns.map((column) => ({
-    ...column,
-    label: issueStatusLabel(column.status),
-  }));
-  const localizedPersonalColumns = personalColumns.map((column) => ({
-    ...column,
-    label: personalStatusLabel(column.status),
-  }));
   const columns =
-    mode === "shared"
-      ? [
-          ...localizedSharedColumns,
-          ...(showCanceled
-            ? [{ status: "Canceled" as IssueStatus, label: t("ui.canceled") }]
-            : []),
-        ]
-      : localizedPersonalColumns;
+    mode === "shared" ? sharedStatusOptions : personalStatusOptions;
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>(
     {},
   );
@@ -1085,7 +1114,8 @@ function DesktopBoard({
                     <IssueCard
                       key={issue.id}
                       issue={issue}
-                      statusOptions={sharedColumns}
+                      statusOptions={movableSharedStatusOptions}
+                      typeLabel={issueTypeLabel(issue.type)}
                       drag={drag}
                       setDrag={setDrag}
                       onMove={(status) => onMoveIssue(issue, status)}
@@ -1111,7 +1141,8 @@ function DesktopBoard({
                     <IssueCard
                       key={personal.issue.id}
                       issue={personal.issue}
-                      statusOptions={sharedColumns}
+                      statusOptions={movableSharedStatusOptions}
+                      typeLabel={issueTypeLabel(personal.issue.type)}
                       drag={drag}
                       setDrag={setDrag}
                       onMove={(status) => onMoveIssue(personal.issue, status)}
@@ -1138,7 +1169,7 @@ function DesktopBoard({
                   <TaskCard
                     key={personal.task.id}
                     task={personal.task}
-                    statusOptions={personalColumns}
+                    statusOptions={personalStatusOptions}
                     drag={drag}
                     setDrag={setDrag}
                     onMove={(status) => onMoveTask(personal.task, status)}
@@ -1200,6 +1231,7 @@ function CardMenu({ children }: { children: ReactNode }) {
 function IssueCard({
   issue,
   statusOptions,
+  typeLabel,
   drag,
   setDrag,
   onMove,
@@ -1209,7 +1241,8 @@ function IssueCard({
   setDueDate,
 }: {
   issue: Issue;
-  statusOptions: typeof sharedColumns;
+  statusOptions: StatusOption<IssueStatus>[];
+  typeLabel: string;
   drag: DragState | null;
   setDrag: (value: DragState | null) => void;
   onMove: (status: IssueStatus) => void;
@@ -1266,7 +1299,7 @@ function IssueCard({
         {issue.title}
       </button>
       <div className="kanban-card-meta">
-        <span>{issue.type}</span>
+        <span>{typeLabel}</span>
         {issue.assignee !== "Unassigned" && (
           <span>{assigneeLabel(issue.assignee)}</span>
         )}
@@ -1303,7 +1336,7 @@ function TaskCard({
   onDelete,
 }: {
   task: PersonalTask;
-  statusOptions: typeof personalColumns;
+  statusOptions: StatusOption<PersonalTaskStatus>[];
   drag: DragState | null;
   setDrag: (value: DragState | null) => void;
   onMove: (status: PersonalTaskStatus) => void;
@@ -1508,47 +1541,23 @@ function MobileAgenda({
 
 function MobileSharedList({
   issues,
-  showCanceled,
+  statusOptions,
+  movableStatusOptions,
   onOpenIssue,
   onMoveIssue,
+  assigneeLabel,
 }: {
   issues: Issue[];
-  showCanceled: boolean;
+  statusOptions: StatusOption<IssueStatus>[];
+  movableStatusOptions: StatusOption<IssueStatus>[];
   onOpenIssue: (id: string) => void;
   onMoveIssue: (issue: Issue, status: IssueStatus) => void;
+  assigneeLabel: (value: string) => string;
 }) {
-  const { t } = useTranslation(["kanban", "common"]);
-  const issueStatusLabel = (status: IssueStatus) =>
-    status === "Triage"
-      ? t("data.issueStatus.triage", { ns: "common" })
-      : status === "Backlog"
-        ? t("data.issueStatus.backlog", { ns: "common" })
-        : status === "Todo"
-          ? t("data.issueStatus.todo", { ns: "common" })
-          : status === "In Progress"
-            ? t("data.issueStatus.inProgress", { ns: "common" })
-            : status === "Review"
-              ? t("data.issueStatus.review", { ns: "common" })
-              : status === "Done"
-                ? t("data.issueStatus.done", { ns: "common" })
-                : t("data.issueStatus.canceled", { ns: "common" });
-  const columns = [
-    ...sharedColumns.map((column) => ({
-      ...column,
-      label: issueStatusLabel(column.status),
-    })),
-    ...(showCanceled
-      ? [
-          {
-            status: "Canceled" as IssueStatus,
-            label: issueStatusLabel("Canceled"),
-          },
-        ]
-      : []),
-  ];
+  const { t } = useTranslation("kanban");
   return (
     <div className="mobile-shared-list kanban-mobile-status-list">
-      {columns.map((column) => {
+      {statusOptions.map((column) => {
         const items = issues.filter((issue) => issue.status === column.status);
         return (
           <section key={column.status}>
@@ -1572,10 +1581,7 @@ function MobileSharedList({
                   <span>
                     <strong>{issue.title}</strong>
                     <small>
-                      {issue.identifier} ·{" "}
-                      {issue.assignee === "Unassigned"
-                        ? t("app.unassigned", { ns: "common" })
-                        : issue.assignee}
+                      {issue.identifier} · {assigneeLabel(issue.assignee)}
                     </small>
                   </span>
                 </button>
@@ -1589,7 +1595,7 @@ function MobileSharedList({
                     onMoveIssue(issue, event.target.value as IssueStatus)
                   }
                 >
-                  {columns.map((option) => (
+                  {movableStatusOptions.map((option) => (
                     <option key={option.status} value={option.status}>
                       {option.label}
                     </option>
