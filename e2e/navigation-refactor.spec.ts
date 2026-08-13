@@ -40,3 +40,43 @@ test("mobile More keeps secondary work and controls reachable", async ({
   await page.getByRole("link", { name: "My work" }).click();
   await expect(page).toHaveURL(/\/my-work\?demo=1$/);
 });
+
+test("mobile view tabs and More actions meet the minimum touch target", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile");
+  await page.goto("/inbox?demo=1");
+  await page.evaluate(() => {
+    const tabs = document.createElement("nav");
+    tabs.className = "view-tabs";
+    tabs.setAttribute("aria-label", "Issue views");
+    const tab = document.createElement("a");
+    tab.href = "/issues";
+    tab.textContent = "List";
+    tabs.append(tab);
+    document.querySelector("main")?.append(tabs);
+  });
+
+  const viewTab = page.getByRole("link", { name: "List" });
+  await page.getByRole("button", { name: "More" }).click();
+  const controls = [
+    ["view tab", viewTab],
+    ["Knowledge", page.getByRole("link", { name: "Knowledge" })],
+    ["My work", page.getByRole("link", { name: "My work" })],
+    ["Settings", page.getByRole("link", { name: "Settings" })],
+    ["Profile", page.getByRole("link", { name: "Profile", exact: true })],
+    ["theme", page.getByRole("button", { name: /theme/i })],
+  ];
+  const heights: Record<string, number | undefined> = {};
+  for (const [name, control] of controls) {
+    heights[name] = (await control.boundingBox())?.height;
+  }
+  expect(heights).toEqual({
+    "view tab": 44,
+    Knowledge: 44,
+    "My work": 44,
+    Settings: 44,
+    Profile: 44,
+    theme: 44,
+  });
+});

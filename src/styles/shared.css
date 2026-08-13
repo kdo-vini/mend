@@ -32,6 +32,11 @@
   outline: var(--focus-ring);
   outline-offset: 1px;
 }
+@media (max-width: 650px) {
+  .view-tabs a {
+    min-height: var(--mobile-touch-target);
+  }
+}
 
 .resource-state {
   min-height: 190px;
