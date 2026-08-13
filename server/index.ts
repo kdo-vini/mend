@@ -144,65 +144,107 @@ app.get("/api/push/config", (_request, response) =>
   }),
 );
 
+interface RunnerHeartbeatQueryClient {
+  from(name: string): {
+    select(columns: string): {
+      order(
+        column: string,
+        options: { ascending: boolean },
+      ): {
+        limit(value: number): {
+          maybeSingle(): Promise<{
+            data: Record<string, unknown> | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+  };
+}
+
+// Docker's healthcheck targets /api/ready with a 5s timeout and kills the task
+// after three failures, so the heartbeat lookup must be bounded well under that
+// deadline. A single indexed row normally returns in tens of milliseconds; 2s is
+// far past normal latency while leaving the probe over 3s of headroom.
+const runnerHeartbeatTimeoutMs = 2_000;
+
+async function runnerHeartbeatIsReady(
+  client: RunnerHeartbeatQueryClient,
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // A thrown error, a rejection or a hung query must never turn readiness
+    // into a 500 or outlive the healthcheck: report the runner as not ready.
+    return await Promise.race([
+      (async () => {
+        const heartbeat = await client
+          .from("runner_heartbeats")
+          .select("worker_id, last_seen_at, current_job_type, current_job_id")
+          .order("last_seen_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return (
+          !heartbeat.error &&
+          runnerIsReady(
+            heartbeat.data
+              ? {
+                  workerId: String(heartbeat.data.worker_id),
+                  lastSeenAt: String(heartbeat.data.last_seen_at),
+                  currentJobType:
+                    typeof heartbeat.data.current_job_type === "string"
+                      ? heartbeat.data.current_job_type
+                      : null,
+                  currentJobId:
+                    typeof heartbeat.data.current_job_id === "string"
+                      ? heartbeat.data.current_job_id
+                      : null,
+                }
+              : null,
+          )
+        );
+      })(),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), runnerHeartbeatTimeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    logger.warn({ err: error }, "Runner heartbeat readiness lookup failed");
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 app.get("/api/ready", async (_request, response) => {
   const agentRoot = process.env.MEND_AGENT_WORKSPACE_ROOT?.trim() ?? "";
-  let runner =
-    processRole === "runner" && Boolean(agentRoot && existsSync(agentRoot));
-  if (processRole !== "runner" && workerSupabase) {
-    const heartbeat = await (
-      workerSupabase as unknown as {
-        from(name: string): {
-          select(columns: string): {
-            order(
-              column: string,
-              options: { ascending: boolean },
-            ): {
-              limit(value: number): {
-                maybeSingle(): Promise<{
-                  data: Record<string, unknown> | null;
-                  error: { message: string } | null;
-                }>;
-              };
-            };
-          };
-        };
-      }
-    )
-      .from("runner_heartbeats")
-      .select("worker_id, last_seen_at, current_job_type, current_job_id")
-      .order("last_seen_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    runner =
-      !heartbeat.error &&
-      runnerIsReady(
-        heartbeat.data
-          ? {
-              workerId: String(heartbeat.data.worker_id),
-              lastSeenAt: String(heartbeat.data.last_seen_at),
-              currentJobType:
-                typeof heartbeat.data.current_job_type === "string"
-                  ? heartbeat.data.current_job_type
-                  : null,
-              currentJobId:
-                typeof heartbeat.data.current_job_id === "string"
-                  ? heartbeat.data.current_job_id
-                  : null,
-            }
-          : null,
-      );
-  }
+  const agentWorkspaceUsable = Boolean(agentRoot && existsSync(agentRoot));
   const checks = {
     supabase: hasServerSupabaseConfig(),
     whatsMiau: Boolean(process.env.WHATSMIAU_API_KEY),
     webhook: Boolean(process.env.WHATSMIAU_WEBHOOK_SECRET),
-    agentWorkspace:
+    agentWorkspace: processRole === "runner" ? agentWorkspaceUsable : true,
+    runner:
       processRole === "runner"
-        ? Boolean(agentRoot && existsSync(agentRoot))
-        : true,
-    runner,
+        ? agentWorkspaceUsable
+        : workerSupabase
+          ? await runnerHeartbeatIsReady(
+              workerSupabase as unknown as RunnerHeartbeatQueryClient,
+            )
+          : false,
   };
-  const ready = Object.values(checks).every(Boolean);
+  // Readiness answers "can this instance serve traffic". The control plane
+  // serves the whole product surface without the agent runner, so the runner
+  // stays a reported signal there and only gates the runner process itself,
+  // whose entire purpose is running agents. A dead background worker must not
+  // be able to take the public app offline.
+  const gatingChecks = [
+    checks.supabase,
+    checks.whatsMiau,
+    checks.webhook,
+    checks.agentWorkspace,
+    ...(processRole === "runner" ? [checks.runner] : []),
+  ];
+  const ready = gatingChecks.every(Boolean);
   return response.status(ready ? 200 : 503).json({ ready, checks });
 });
 
