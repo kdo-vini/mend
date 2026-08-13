@@ -266,6 +266,24 @@ export class SupabaseChannelAdapter implements ChannelPort {
   }
 }
 
+/**
+ * WhatsApp stores a Brazilian mobile with or without the ninth digit depending
+ * on how the JID arrived, so `5511988887777` and `551188887777` are the same
+ * person. A phone lookup that missed the stored form would send a cold first
+ * message into a live thread, so both forms are probed. Scoped to +55 on
+ * purpose: no other dial plan in use here has this duplication.
+ */
+function brazilianPhoneVariants(phoneNumber: string): string[] {
+  const match = /^55(\d{2})(\d{8,9})$/.exec(phoneNumber);
+  if (!match) return [phoneNumber];
+  const [, areaCode, subscriber] = match;
+  if (subscriber.length === 9 && subscriber.startsWith("9"))
+    return [phoneNumber, `55${areaCode}${subscriber.slice(1)}`];
+  if (subscriber.length === 8)
+    return [phoneNumber, `55${areaCode}9${subscriber}`];
+  return [phoneNumber];
+}
+
 export class SupabaseConversationAdapter implements ConversationPort {
   private readonly inbox: InboxService;
   private readonly whatsapp: WhatsAppService;
@@ -351,24 +369,28 @@ export class SupabaseConversationAdapter implements ConversationPort {
   }
 
   async findByPhone(context: RequestContext, phoneNumber: string) {
-    const contactResult = await this.client
-      .from("contacts")
-      .select("id")
-      .eq("workspace_id", context.workspaceId)
-      .eq("phone_number", phoneNumber)
-      .maybeSingle();
-    const contact = checked("contacts.by_phone", contactResult);
-    if (!contact) return null;
-    const result = await this.client
-      .from("conversations")
-      .select("id")
-      .eq("workspace_id", context.workspaceId)
-      .eq("contact_id", str(row(contact).id))
-      .order("last_message_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const data = checked("conversations.by_phone", result);
-    return data ? { id: str(row(data).id) } : null;
+    // The typed form is probed first, so an exact contact always wins.
+    for (const candidate of brazilianPhoneVariants(phoneNumber)) {
+      const contactResult = await this.client
+        .from("contacts")
+        .select("id")
+        .eq("workspace_id", context.workspaceId)
+        .eq("phone_number", candidate)
+        .maybeSingle();
+      const contact = checked("contacts.by_phone", contactResult);
+      if (!contact) continue;
+      const result = await this.client
+        .from("conversations")
+        .select("id")
+        .eq("workspace_id", context.workspaceId)
+        .eq("contact_id", str(row(contact).id))
+        .order("last_message_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const data = checked("conversations.by_phone", result);
+      if (data) return { id: str(row(data).id) };
+    }
+    return null;
   }
 
   async start(context: RequestContext, input: ConversationStartInput) {

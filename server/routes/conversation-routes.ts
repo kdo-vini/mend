@@ -15,6 +15,14 @@ import {
 /** Dial code, area code and subscriber number, within the E.164 maximum. */
 const phoneNumberDigits = { minimum: 10, maximum: 15 };
 
+/**
+ * Cold first contacts are the WhatsApp account risk this endpoint warns the
+ * user about, so they are capped per workspace rather than per IP. The app-wide
+ * limiter is shared with every other route and cannot express that. Replying
+ * inside threads a customer opened is unaffected.
+ */
+const outboundFirstSends = { limit: 20, windowMs: 3_600_000 };
+
 export function registerConversationRoutes(context: ApiRouteModuleContext) {
   const {
     router,
@@ -30,6 +38,25 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
     uuid,
     ApiHttpError,
   } = context;
+
+  const outboundFirstSendsByWorkspace = new Map<string, number[]>();
+  /** Reserves one cold-send slot, or throws once the workspace window is full. */
+  const reserveOutboundFirstSend = (workspaceId: string) => {
+    const now = Date.now();
+    const recent = (
+      outboundFirstSendsByWorkspace.get(workspaceId) ?? []
+    ).filter((sentAt) => now - sentAt < outboundFirstSends.windowMs);
+    if (recent.length >= outboundFirstSends.limit) {
+      outboundFirstSendsByWorkspace.set(workspaceId, recent);
+      throw new ApiHttpError(
+        429,
+        "outbound_first_limit_exceeded",
+        "This workspace has started too many new conversations in the last hour.",
+      );
+    }
+    outboundFirstSendsByWorkspace.set(workspaceId, [...recent, now]);
+  };
+
   router.get(
     "/api/conversations",
     asyncRoute(async (request, response) => {
@@ -67,6 +94,10 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
         send(response, 200, { conversationId: existing.id, created: false });
         return;
       }
+      // Only the creating path is cold outreach, so only it consumes quota.
+      // The slot is taken before the send, so every request that can reach the
+      // provider is counted.
+      reserveOutboundFirstSend(context.workspaceId);
       try {
         const started = requireFound(
           await dependencies.conversations.start(context, {

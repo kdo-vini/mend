@@ -210,6 +210,132 @@ describe("POST /api/conversations", () => {
     expect(client.rpcCalls).toEqual([]);
   });
 
+  it("matches a Brazilian contact stored without the ninth digit", async () => {
+    const { app, client, provider } = createHarness({
+      contacts: [
+        {
+          id: contactId,
+          workspace_id: workspaceId,
+          phone_number: "551188887777",
+        },
+      ],
+      conversations: [
+        {
+          id: existingConversationId,
+          workspace_id: workspaceId,
+          contact_id: contactId,
+        },
+      ],
+    });
+
+    const response = await startConversation(app, {
+      channelId,
+      phoneNumber: "+55 (11) 98888-7777",
+      message: "Following up on your order",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      conversationId: existingConversationId,
+      created: false,
+    });
+    expect(provider.sendText).not.toHaveBeenCalled();
+    expect(client.rpcCalls).toEqual([]);
+  });
+
+  it("matches a Brazilian contact stored with the ninth digit when the founder omits it", async () => {
+    const { app, client, provider } = createHarness({
+      contacts: [
+        {
+          id: contactId,
+          workspace_id: workspaceId,
+          phone_number: "5511988887777",
+        },
+      ],
+      conversations: [
+        {
+          id: existingConversationId,
+          workspace_id: workspaceId,
+          contact_id: contactId,
+        },
+      ],
+    });
+
+    const response = await startConversation(app, {
+      channelId,
+      phoneNumber: "+55 (11) 8888-7777",
+      message: "Following up on your order",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      conversationId: existingConversationId,
+      created: false,
+    });
+    expect(provider.sendText).not.toHaveBeenCalled();
+    expect(client.rpcCalls).toEqual([]);
+  });
+
+  it("stops cold first contacts once the workspace hourly limit is reached", async () => {
+    const { app, provider } = createHarness();
+
+    for (let index = 0; index < 20; index += 1) {
+      const allowed = await startConversation(app, {
+        channelId,
+        phoneNumber: `5511${900000000 + index}`,
+        message: "Hello",
+      });
+      expect(allowed.status).toBe(201);
+    }
+
+    const blocked = await startConversation(app, {
+      channelId,
+      phoneNumber: "5511900000099",
+      message: "Hello",
+    });
+
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.error.code).toBe("outbound_first_limit_exceeded");
+    expect(provider.sendText).toHaveBeenCalledTimes(20);
+  });
+
+  it("does not spend cold-send quota on a number that already has a conversation", async () => {
+    const { app, provider } = createHarness({
+      contacts: [
+        {
+          id: contactId,
+          workspace_id: workspaceId,
+          phone_number: "5511988887777",
+        },
+      ],
+      conversations: [
+        {
+          id: existingConversationId,
+          workspace_id: workspaceId,
+          contact_id: contactId,
+        },
+      ],
+    });
+
+    for (let index = 0; index < 20; index += 1) {
+      const existing = await startConversation(app, {
+        channelId,
+        phoneNumber: "5511988887777",
+        message: "Hello again",
+      });
+      expect(existing.status).toBe(200);
+    }
+
+    const response = await startConversation(app, {
+      channelId,
+      phoneNumber: "5521977776666",
+      message: "Hello",
+    });
+
+    expect(response.status).toBe(201);
+    expect(provider.sendText).toHaveBeenCalledTimes(1);
+  });
+
   it("sends through the provider and records the first message as outbound", async () => {
     const { app, client, provider } = createHarness();
 

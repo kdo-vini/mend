@@ -108,6 +108,10 @@ for (const viewport of [
     await dialog.getByLabel("Phone number").fill("+55 11");
     await expect(submit).toBeDisabled();
 
+    expect(
+      await page.evaluate(() => document.body.scrollWidth),
+    ).toBeLessThanOrEqual(viewport.width);
+
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();

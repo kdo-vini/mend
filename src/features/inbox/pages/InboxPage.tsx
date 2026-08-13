@@ -325,8 +325,12 @@ export function InboxPage({
         onToast(t("toasts.chatStarted"));
         return;
       }
-      // The number already has a thread. Hand the typed text to the composer
-      // so the founder decides whether that thread should receive it.
+      // The number already has a thread. Clear the rail filters first, or the
+      // thread the toast points at can be hidden behind the active filter, then
+      // hand the typed text to the composer so the founder decides whether that
+      // thread should receive it.
+      setSearch("");
+      setFilter("All conversations");
       setDraftInsertRequest({
         text: input.message,
         requestId: Date.now(),
