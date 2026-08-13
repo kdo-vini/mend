@@ -54,22 +54,52 @@ test("mobile supervision follows the real Portuguese locale", async ({
   await expect(page.getByText("Arquivo lido", { exact: true })).toBeVisible();
 });
 
-test("case-only records expose investigation without agent run actions", async ({
+test("desktop keeps Run again as a secondary terminal action", async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop");
   await page.addInitScript(() => {
     window.localStorage.setItem("mend.interface-language", "en-US");
   });
-  await page.goto("/agent-runs?demo=1&run=case:case-198");
+  await page.goto("/agent-runs?demo=1&run=run-201");
+
+  await expect(page.getByRole("heading", { name: /TEC-19/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Run again", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Approve local commit", exact: true }),
+  ).toBeVisible();
+});
+
+test("mobile keeps only the current authorized terminal actions", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile");
+  await page.addInitScript(() => {
+    window.localStorage.setItem("mend.interface-language", "en-US");
+  });
+  await page.goto("/agent-runs?demo=1&run=run-201");
+
+  await expect(
+    page.getByRole("button", { name: "Run again", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Approve local commit", exact: true }),
+  ).toBeInViewport();
+});
+
+test("run-198 remains the failed agent run deep link", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("mend.interface-language", "en-US");
+  });
+  await page.goto("/agent-runs?demo=1&run=run-198");
 
   await expect(page.getByRole("heading", { name: /TEC-18/ })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Start investigation", exact: true }),
+    page.getByRole("button", { name: "Retry this run", exact: true }),
   ).toHaveCount(1);
   await expect(
-    page.getByRole("button", { name: "Retry this run", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Cancel run", exact: true }),
+    page.getByRole("button", { name: "Start investigation", exact: true }),
   ).toHaveCount(0);
 });

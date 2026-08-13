@@ -5,6 +5,7 @@ import {
   canDispatchRunAction,
   canImplementProposedFix,
   canProposeFromInvestigation,
+  canRestartRun,
 } from "./run-actions";
 
 const proposedFixRun: CodingRun = {
@@ -161,5 +162,30 @@ describe("authorizedRunActions", () => {
 
   it("does not replace a verified continuation with retry", () => {
     expect(authorizedRunActions(proposedFixRun)).toEqual([]);
+  });
+});
+
+describe("desktop secondary retry", () => {
+  it("preserves Run again beside terminal implementation and release actions", () => {
+    expect(
+      canRestartRun({
+        ...proposedFixRun,
+        mode: "Implement fix",
+        status: "completed",
+      }),
+    ).toBe(true);
+    expect(
+      canRestartRun({
+        ...proposedFixRun,
+        status: "approved",
+        branch: "fix/run-1",
+      }),
+    ).toBe(true);
+  });
+
+  it("excludes case-only, active, and continuable records", () => {
+    expect(canRestartRun({ ...proposedFixRun, caseOnly: true })).toBe(false);
+    expect(canRestartRun({ ...proposedFixRun, status: "running" })).toBe(false);
+    expect(canRestartRun(proposedFixRun)).toBe(false);
   });
 });

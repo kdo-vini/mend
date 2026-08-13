@@ -31,6 +31,16 @@ export function canImplementProposedFix(run: CodingRun): boolean {
   );
 }
 
+export function canRestartRun(run: CodingRun): boolean {
+  return (
+    !run.caseOnly &&
+    run.status !== "queued" &&
+    run.status !== "running" &&
+    !canProposeFromInvestigation(run) &&
+    !canImplementProposedFix(run)
+  );
+}
+
 export function authorizedRunActions(run: CodingRun): RunAction[] {
   if (run.caseOnly) return [];
   if (run.status === "queued" || run.status === "running") return ["cancel"];
@@ -60,8 +70,7 @@ export function authorizedRunActions(run: CodingRun): RunAction[] {
   )
     return ["health"];
   if (
-    !canProposeFromInvestigation(run) &&
-    !canImplementProposedFix(run) &&
+    canRestartRun(run) &&
     (run.status === "completed" ||
       run.status === "canceled" ||
       run.status === "rejected")

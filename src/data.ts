@@ -478,7 +478,7 @@ export const seedRuns: CodingRun[] = [
     ],
   },
   {
-    id: "case:case-198",
+    id: "run-198",
     issueId: "issue-18",
     issueIdentifier: "TEC-18",
     mode: "Investigate",
@@ -487,10 +487,6 @@ export const seedRuns: CodingRun[] = [
     startedAt: "01 de ago., 15:52",
     duration: "01:07",
     summary: "O runner não conseguiu acessar a pasta de trabalho configurada.",
-    caseId: "case-198",
-    caseStatus: "failed",
-    stage: "failed",
-    caseOnly: true,
     files: [],
     events: [
       {

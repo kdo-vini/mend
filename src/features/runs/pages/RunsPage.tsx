@@ -30,6 +30,7 @@ import {
   authorizedRunActions,
   canImplementProposedFix,
   canProposeFromInvestigation,
+  canRestartRun,
   type RunAction,
   type RunUpdateAction,
 } from "../run-actions";
@@ -431,6 +432,7 @@ export function RunsPage({
     ? canImplementProposedFix(selectedRun)
     : false;
   const hasContinuation = canProposeFix || canImplementProposal;
+  const hasSecondaryRetry = selectedRun ? canRestartRun(selectedRun) : false;
   const authorizedActions = selectedRun
     ? authorizedRunActions(selectedRun)
     : [];
@@ -583,12 +585,16 @@ export function RunsPage({
                       actions={["cancel"]}
                     />
                   </span>
-                ) : authorizedActions.includes("retry") &&
-                  selectedRun.status !== "failed" ? (
-                  <RunActionButtons
-                    {...runActionButtonProps}
-                    actions={["retry"]}
-                  />
+                ) : hasSecondaryRetry ? (
+                  <span className="run-desktop-decision">
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      onClick={() => onStartRun(selectedRun.issueId)}
+                    >
+                      <RefreshCw size={15} /> {t("actions.runAgain")}
+                    </button>
+                  </span>
                 ) : null}
               </div>
             </div>
