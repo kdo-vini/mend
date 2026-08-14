@@ -161,7 +161,7 @@ export function toUiMessage(
     senderUserId: record.sent_by_user_id ?? undefined,
     direction: record.direction === "outbound" ? "outbound" : "inbound",
     sender:
-      contactDisplayName ||
+      (record.direction === "inbound" ? contactDisplayName : undefined) ||
       record.participant_name ||
       (record.sender_type === "contact"
         ? "Customer"

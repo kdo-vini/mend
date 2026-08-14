@@ -67,9 +67,23 @@ describe("live message mapper", () => {
     );
   });
 
-  it("uses the workspace contact name for direct messages", () => {
+  it("uses the contact name for inbound messages but not outbound messages", () => {
     expect(toUiMessage(baseMessage, "João")).toMatchObject({
       sender: "João",
+      senderUserId: undefined,
+    });
+
+    expect(
+      toUiMessage(
+        {
+          ...baseMessage,
+          direction: "outbound",
+          sender_type: "user",
+        },
+        "João",
+      ),
+    ).toMatchObject({
+      sender: "Mend operator",
       senderUserId: undefined,
     });
   });
