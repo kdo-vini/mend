@@ -498,6 +498,41 @@ describe("live Whatsmiau worker", () => {
     expect(await store.listDeadLetters()).toHaveLength(0);
   });
 
+  it("logs heartbeat write failures without stopping the polling loop", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const logger = { warn: vi.fn() };
+    let beats = 0;
+    const worker = new LiveWorker({
+      jobStore: store,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      heartbeat: {
+        beat: vi.fn(async () => {
+          beats += 1;
+          throw new Error("heartbeat write failed");
+        }),
+      },
+      logger,
+      pollIntervalMs: 10,
+    });
+
+    worker.start();
+    await vi.waitFor(() => expect(beats).toBeGreaterThan(2), {
+      timeout: 1_000,
+    });
+    await worker.stop();
+
+    expect(worker.running).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.any(Error),
+        phase: "before_claim",
+        workerId: expect.any(String),
+      }),
+      "Runner heartbeat write failed",
+    );
+  });
+
   it("forwards issue and draft handoff results without sending anything", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const issues: string[] = [];

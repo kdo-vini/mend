@@ -24,7 +24,11 @@ import {
   createSupabaseApiAdapters,
   SupabaseCodingControlPlaneAdapter,
 } from "./supabase-api-adapters.js";
-import { createSupabaseLiveWorker, type LiveWorker } from "./live-worker.js";
+import {
+  createSupabaseLiveWorker,
+  type LiveWorker,
+  type LiveWorkerLogger,
+} from "./live-worker.js";
 import { getVapidPublicKey } from "./push.js";
 import { readGoogleOAuthConfig } from "./google-calendar.js";
 import { CodexService } from "./codex-service.js";
@@ -193,24 +197,28 @@ async function runnerHeartbeatIsReady(
           .order("last_seen_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        return (
-          !heartbeat.error &&
-          runnerIsReady(
-            heartbeat.data
-              ? {
-                  workerId: String(heartbeat.data.worker_id),
-                  lastSeenAt: String(heartbeat.data.last_seen_at),
-                  currentJobType:
-                    typeof heartbeat.data.current_job_type === "string"
-                      ? heartbeat.data.current_job_type
-                      : null,
-                  currentJobId:
-                    typeof heartbeat.data.current_job_id === "string"
-                      ? heartbeat.data.current_job_id
-                      : null,
-                }
-              : null,
-          )
+        if (heartbeat.error) {
+          logger.warn(
+            { err: heartbeat.error },
+            "Runner heartbeat readiness query failed",
+          );
+          return false;
+        }
+        return runnerIsReady(
+          heartbeat.data
+            ? {
+                workerId: String(heartbeat.data.worker_id),
+                lastSeenAt: String(heartbeat.data.last_seen_at),
+                currentJobType:
+                  typeof heartbeat.data.current_job_type === "string"
+                    ? heartbeat.data.current_job_type
+                    : null,
+                currentJobId:
+                  typeof heartbeat.data.current_job_id === "string"
+                    ? heartbeat.data.current_job_id
+                    : null,
+              }
+            : null,
         );
       })(),
       new Promise<boolean>((resolve) => {
@@ -620,6 +628,7 @@ if (workerSupabase && processRole === "runner") {
     client: workerSupabase,
     jobStore: messageJobs,
     whatsappProvider: new WhatsmiauMessagingProvider(),
+    logger: logger as LiveWorkerLogger,
     agentRunRunner: async (payload: AgentRunRequestedJobPayload) => {
       const repositories = new SupabaseRepositoryAdapter(workerSupabase);
       const store = new SupabaseCodexRunStore(workerSupabase);

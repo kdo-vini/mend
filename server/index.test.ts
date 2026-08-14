@@ -16,6 +16,12 @@ async function loadApp(): Promise<Express> {
   return loaded.app;
 }
 
+interface TestLogger {
+  warn: ReturnType<typeof vi.fn>;
+  info: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
+}
+
 beforeEach(() => {
   process.env.WHATSMIAU_WEBHOOK_SECRET = "test-secret";
 });
@@ -118,6 +124,7 @@ type ReadinessEnv = Partial<Record<(typeof readinessEnvKeys)[number], string>>;
 async function loadServer(options: {
   env: ReadinessEnv;
   heartbeat?: () => Promise<HeartbeatResponse>;
+  logger?: TestLogger;
 }): Promise<Express> {
   for (const key of readinessEnvKeys) delete process.env[key];
   Object.assign(process.env, options.env);
@@ -134,6 +141,9 @@ async function loadServer(options: {
       }),
       hasServerSupabaseConfig: () => Boolean(process.env.SUPABASE_URL),
     }));
+  }
+  if (options.logger) {
+    vi.doMock("pino", () => ({ default: () => options.logger }));
   }
   const loaded = (await import("./index.js")) as { app: Express };
   return loaded.app;
@@ -213,6 +223,31 @@ describe("readiness gating", () => {
     } finally {
       process.off("unhandledRejection", onUnhandled);
     }
+  });
+
+  it("logs heartbeat query errors while keeping readiness available", async () => {
+    const logger: TestLogger = {
+      warn: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+    };
+    const server = await loadServer({
+      env: controlPlaneEnv,
+      logger,
+      heartbeat: async () => ({
+        data: null,
+        error: { message: "permission denied" },
+      }),
+    });
+
+    const response = await request(server).get("/api/ready");
+
+    expect(response.status).toBe(200);
+    expect(response.body.checks.runner).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      { err: { message: "permission denied" } },
+      "Runner heartbeat readiness query failed",
+    );
   });
 
   it("keeps the control plane ready when the heartbeat lookup never settles", async () => {

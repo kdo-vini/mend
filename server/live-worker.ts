@@ -50,6 +50,10 @@ export type LiveWorkerSupabaseClient = SupabaseClient<Database>;
 export type KnowledgeArticleRow =
   Database["public"]["Tables"]["knowledge_articles"]["Row"];
 
+export interface LiveWorkerLogger {
+  warn(bindings: Record<string, unknown>, message: string): void;
+}
+
 export interface ProcessInboundMessageJobPayload {
   stage: "process_inbound_message";
   ingestionJobId: string;
@@ -252,6 +256,7 @@ export interface LiveWorkerOptions {
   /** Delay inbound automation so consecutive customer messages can be grouped. */
   inboundDebounceMs?: number;
   workerId?: string;
+  logger?: LiveWorkerLogger;
   heartbeat?: {
     beat(input: {
       workerId: string;
@@ -298,7 +303,7 @@ export class LiveWorker {
   async poll(): Promise<boolean> {
     await this.options.heartbeat
       ?.beat({ workerId: this.workerId })
-      .catch(() => undefined);
+      .catch((error) => this.reportHeartbeatFailure(error, "before_claim"));
     const job = await this.options.jobStore.claim(this.workerId);
     if (!job) return false;
 
@@ -308,7 +313,12 @@ export class LiveWorker {
         currentJobType: job.type,
         currentJobId: job.id,
       })
-      .catch(() => undefined);
+      .catch((error) =>
+        this.reportHeartbeatFailure(error, "after_claim", {
+          currentJobId: job.id,
+          currentJobType: job.type,
+        }),
+      );
 
     const typedJob = job as unknown as JobRecord<LiveWorkerJobPayload>;
     try {
@@ -348,8 +358,19 @@ export class LiveWorker {
     }
     await this.options.heartbeat
       ?.beat({ workerId: this.workerId })
-      .catch(() => undefined);
+      .catch((error) => this.reportHeartbeatFailure(error, "after_job"));
     return true;
+  }
+
+  private reportHeartbeatFailure(
+    error: unknown,
+    phase: "before_claim" | "after_claim" | "after_job",
+    details: Record<string, unknown> = {},
+  ): void {
+    this.options.logger?.warn(
+      { err: error, phase, workerId: this.workerId, ...details },
+      "Runner heartbeat write failed",
+    );
   }
 
   /** Start a single polling loop. Calling start repeatedly is safe. */
@@ -640,6 +661,7 @@ export interface CreateSupabaseLiveWorkerOptions {
   pollIntervalMs?: number;
   inboundDebounceMs?: number;
   workerId?: string;
+  logger?: LiveWorkerLogger;
 }
 
 /** Compose the production Supabase worker without changing server/index.ts. */
@@ -689,6 +711,7 @@ export function createSupabaseLiveWorker(
     knowledge,
     automation,
     heartbeat: new SupabaseRunnerHeartbeat(options.client),
+    ...(options.logger ? { logger: options.logger } : {}),
     ...(options.onDraftReady ? { onDraftReady: options.onDraftReady } : {}),
     ...(options.onIssueReady ? { onIssueReady: options.onIssueReady } : {}),
     ...(options.onUnmappedMessage
