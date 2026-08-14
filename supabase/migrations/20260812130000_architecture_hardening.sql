@@ -152,10 +152,10 @@ insert into public.knowledge_chunks (
   workspace_id, article_id, article_version, chunk_index, heading, content, content_hash
 )
 select article.workspace_id, article.id,
-  encode(digest(article.id::text || E'\n' || article.title || E'\n' || article.body || E'\n' || article.updated_at::text, 'sha256'), 'hex'),
+  encode(sha256(convert_to(article.id::text || E'\n' || article.title || E'\n' || article.body || E'\n' || article.updated_at::text, 'UTF8')), 'hex'),
   part.index - 1, article.title,
   substr(article.body, ((part.index - 1) * 6000) + 1, 6000),
-  encode(digest(substr(article.body, ((part.index - 1) * 6000) + 1, 6000), 'sha256'), 'hex')
+  encode(sha256(convert_to(substr(article.body, ((part.index - 1) * 6000) + 1, 6000), 'UTF8')), 'hex')
 from public.knowledge_articles article
 cross join lateral generate_series(1, greatest(1, ceil(length(article.body) / 6000.0)::integer)) as part(index)
 where article.status = 'published'

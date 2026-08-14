@@ -38,6 +38,12 @@ const codingLoginHardeningMigrationPath = fileURLToPath(
     import.meta.url,
   ),
 );
+const architectureHardeningMigrationPath = fileURLToPath(
+  new URL(
+    "../supabase/migrations/20260812130000_architecture_hardening.sql",
+    import.meta.url,
+  ),
+);
 
 describe("Supabase security migration contract", () => {
   it("keeps privileged implementations private and public RPCs invoker-only", async () => {
@@ -168,5 +174,17 @@ describe("Supabase security migration contract", () => {
     expect(sql).toContain(
       "grant execute on function public.complete_agent_subscription_login(uuid, uuid, text)\n  to service_role;",
     );
+  });
+
+  it("keeps architecture hardening hashes independent of the extension search path", async () => {
+    const sql = await readFile(architectureHardeningMigrationPath, "utf8");
+
+    expect(sql).toContain(
+      "encode(sha256(convert_to(article.id::text || E'\\n' || article.title || E'\\n' || article.body || E'\\n' || article.updated_at::text, 'UTF8')), 'hex')",
+    );
+    expect(sql).toContain(
+      "encode(sha256(convert_to(substr(article.body, ((part.index - 1) * 6000) + 1, 6000), 'UTF8')), 'hex')",
+    );
+    expect(sql).not.toMatch(/(?<![A-Za-z0-9_.])digest\s*\(/);
   });
 });
