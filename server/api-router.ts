@@ -151,15 +151,64 @@ function codingControlPlaneApiError(error: unknown): {
       code,
       message: "The selected coding connection has no usable credential.",
     };
-  if (
-    /^(agent_catalog_|agent_model_|agent_effort_|agent_route_|agent_connection_|agent_fallback_)/.test(
-      code,
-    )
-  )
+  if (/^agent_catalog_(expired|unverified)$/.test(code))
     return {
       status: 409,
       code,
-      message: "The selected coding route is unavailable or not verified.",
+      message:
+        "The coding model catalog needs verification. Refresh the connection and try again.",
+    };
+  if (/^(agent_model_|agent_effort_|agent_route_)/.test(code))
+    return {
+      status: 422,
+      code,
+      message: "Update the selected coding route and try again.",
+    };
+  if (code === "agent_connection_not_found")
+    return {
+      status: 422,
+      code,
+      message: "Select an available coding connection and try again.",
+    };
+  if (code === "agent_connection_forbidden")
+    return {
+      status: 403,
+      code,
+      message: "You cannot use that coding connection.",
+    };
+  if (/^agent_connection_(pending|expired|canceled|error)$/.test(code))
+    return {
+      status: 409,
+      code,
+      message:
+        "Reconnect or verify the selected coding connection before running.",
+    };
+  if (code === "agent_fallback_exhausted")
+    return {
+      status: 502,
+      code,
+      message:
+        "All configured coding providers were unavailable. Try again later.",
+    };
+  if (/^agent_fallback_/.test(code))
+    return {
+      status: 422,
+      code,
+      message: "Update the fallback coding connections and try again.",
+    };
+  if (/^agent_catalog_/.test(code))
+    return {
+      status: 409,
+      code,
+      message:
+        "The coding model catalog could not be verified. Refresh the connection and try again.",
+    };
+  if (/^agent_connection_/.test(code))
+    return {
+      status: 409,
+      code,
+      message:
+        "The selected coding connection is not ready. Verify it and try again.",
     };
   if (code === "agent_subscription_consent_requires_verified_connection")
     return {

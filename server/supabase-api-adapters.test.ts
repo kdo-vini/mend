@@ -6,10 +6,12 @@ import {
   SupabaseMcpConnectionAdapter,
   type WhatsmiauProviderPort,
 } from "./supabase-api-adapters.js";
+import type { CodingCatalogProvider } from "./coding-agent-catalog.js";
 import type {
   SubscriptionLoginChallenge,
   SubscriptionLoginResult,
 } from "./coding-agent-auth.js";
+import { encryptConnectionSecret } from "./connection-crypto.js";
 import { issueCreateSchema } from "./issue-service.js";
 import { decryptMcpSecret } from "./mcp.js";
 
@@ -258,6 +260,7 @@ function adapters(
     poll: (jobId: string) => SubscriptionLoginResult | null;
     cancel: (jobId: string) => Promise<boolean>;
   },
+  codingCatalogProvider?: CodingCatalogProvider,
 ) {
   return createSupabaseApiAdapters({
     client: client as unknown as SupabaseClient,
@@ -268,10 +271,161 @@ function adapters(
       triage: async () => "{}",
     },
     ...(subscriptionLogin ? { subscriptionLogin } : {}),
+    ...(codingCatalogProvider ? { codingCatalogProvider } : {}),
   });
 }
 
 describe("Supabase API adapters", () => {
+  it("refreshes an expired run catalog once and reuses it for the next run", async () => {
+    const connectionId = "connection-expired-catalog";
+    const expiredCatalog = {
+      connectionId,
+      provider: "openai" as const,
+      cliVersion: "1.0.0",
+      models: [{ id: "gpt-5", efforts: ["medium"] }],
+      source: "api" as const,
+      lastVerifiedAt: "2026-08-14T10:00:00.000Z",
+      expiresAt: "2026-08-14T10:14:00.000Z",
+    };
+    const refreshedCatalog = {
+      ...expiredCatalog,
+      cliVersion: "2.0.0",
+      lastVerifiedAt: "2026-08-14T10:15:00.000Z",
+      expiresAt: "2099-08-14T10:30:00.000Z",
+    };
+    const provider = {
+      list: vi.fn(async () => refreshedCatalog),
+    } satisfies CodingCatalogProvider;
+    const client = new FakeClient({
+      agent_connections: [
+        {
+          id: connectionId,
+          workspace_id: workspaceId,
+          owner_user_id: userId,
+          label: "OpenAI",
+          provider: "openai",
+          auth_method: "api_key",
+          purpose: "coding",
+          status: "connected",
+          catalog_json: expiredCatalog,
+        },
+      ],
+      agent_connection_secrets: [
+        {
+          connection_id: connectionId,
+          encrypted_bundle: encryptConnectionSecret(
+            JSON.stringify({ apiKey: "catalog-key" }),
+            "test-key",
+          ),
+        },
+      ],
+      agent_routing_policies: [
+        {
+          id: "policy-expired-catalog",
+          workspace_id: workspaceId,
+          repository_id: null,
+          stage: "research",
+          connection_id: connectionId,
+          model: "gpt-5",
+          effort: "medium",
+          budget_json: {},
+          fallback_enabled: false,
+          fallback_connection_ids_json: [],
+          preset: "Custom",
+        },
+      ],
+    });
+    const dependencies = adapters(client, fakeProvider(), undefined, provider);
+    const context = { userId, workspaceId, role: "agent" as const };
+
+    await expect(
+      dependencies.codingControlPlane.resolveRunConfig({
+        context,
+        stage: "research",
+        automation: false,
+      }),
+    ).resolves.toMatchObject({ connectionId, model: "gpt-5" });
+    await expect(
+      dependencies.codingControlPlane.resolveRunConfig({
+        context,
+        stage: "research",
+        automation: false,
+      }),
+    ).resolves.toMatchObject({ connectionId, model: "gpt-5" });
+
+    expect(provider.list).toHaveBeenCalledTimes(1);
+    expect(provider.list).toHaveBeenCalledWith(
+      expect.objectContaining({ id: connectionId, status: "connected" }),
+      { apiKey: "catalog-key" },
+    );
+  });
+
+  it("surfaces the specific catalog refresh failure instead of refusing an expired run generically", async () => {
+    const connectionId = "connection-failed-catalog";
+    const client = new FakeClient({
+      agent_connections: [
+        {
+          id: connectionId,
+          workspace_id: workspaceId,
+          owner_user_id: userId,
+          label: "OpenAI",
+          provider: "openai",
+          auth_method: "api_key",
+          purpose: "coding",
+          status: "connected",
+          catalog_json: {
+            connectionId,
+            provider: "openai",
+            cliVersion: "1.0.0",
+            models: [{ id: "gpt-5" }],
+            source: "api",
+            lastVerifiedAt: "2026-08-14T10:00:00.000Z",
+            expiresAt: "2026-08-14T10:14:00.000Z",
+          },
+        },
+      ],
+      agent_connection_secrets: [
+        {
+          connection_id: connectionId,
+          encrypted_bundle: encryptConnectionSecret(
+            JSON.stringify({ apiKey: "catalog-key" }),
+            "test-key",
+          ),
+        },
+      ],
+      agent_routing_policies: [
+        {
+          id: "policy-failed-catalog",
+          workspace_id: workspaceId,
+          repository_id: null,
+          stage: "research",
+          connection_id: connectionId,
+          model: "gpt-5",
+          effort: null,
+          budget_json: {},
+          fallback_enabled: false,
+          fallback_connection_ids_json: [],
+          preset: "Custom",
+        },
+      ],
+    });
+    const provider = {
+      list: vi.fn(async () => {
+        throw new Error("catalog_http_503");
+      }),
+    } satisfies CodingCatalogProvider;
+    const dependencies = adapters(client, fakeProvider(), undefined, provider);
+
+    await expect(
+      dependencies.codingControlPlane.resolveRunConfig({
+        context: { userId, workspaceId, role: "agent" },
+        stage: "research",
+        automation: false,
+      }),
+    ).rejects.toThrow("agent_catalog_provider_unavailable");
+    expect(provider.list).toHaveBeenCalledTimes(1);
+  });
+
   it("resolves support BYOK from a workspace-owned support connection", async () => {
     const client = new FakeClient({
       agent_connections: [],

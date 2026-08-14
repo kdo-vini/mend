@@ -512,6 +512,46 @@ describe("Mend API router", () => {
       status: 409,
       code: "agent_connection_revoked",
     },
+    {
+      message: "agent_catalog_expired",
+      status: 409,
+      code: "agent_catalog_expired",
+    },
+    {
+      message: "agent_catalog_unverified",
+      status: 409,
+      code: "agent_catalog_unverified",
+    },
+    {
+      message: "agent_model_unavailable:gpt-5",
+      status: 422,
+      code: "agent_model_unavailable",
+    },
+    {
+      message: "agent_effort_unavailable:gpt-5:high",
+      status: 422,
+      code: "agent_effort_unavailable",
+    },
+    {
+      message: "agent_route_missing:research",
+      status: 422,
+      code: "agent_route_missing",
+    },
+    {
+      message: "agent_connection_pending",
+      status: 409,
+      code: "agent_connection_pending",
+    },
+    {
+      message: "agent_fallback_connection_unavailable:connection-fallback",
+      status: 422,
+      code: "agent_fallback_connection_unavailable",
+    },
+    {
+      message: "agent_fallback_exhausted",
+      status: 502,
+      code: "agent_fallback_exhausted",
+    },
   ])(
     "maps catalog refresh failures by nature: $code",
     async ({ message, status, code }) => {

@@ -10,6 +10,7 @@ import {
   type CodingCatalogProvider,
 } from "../../coding-agent-catalog.js";
 import {
+  resolveRoutingPolicy,
   resolveEffectiveRunConfig,
   snapshotRoutingPolicy,
   type AgentConnection,
@@ -1027,6 +1028,25 @@ export class SupabaseCodingControlPlaneAdapter
       )
         throw new Error("agent_connection_forbidden");
     }
+    const { policy } = resolveRoutingPolicy({
+      stage: input.stage,
+      override: input.override,
+      repositoryPolicy,
+      workspacePolicy,
+    });
+    const catalogs = Object.fromEntries(
+      connections.map((connection) => [connection.id, connection.catalog]),
+    ) as Record<string, CatalogSnapshot | undefined>;
+    const selectedConnectionIds = [
+      policy.connectionId,
+      ...(policy.fallbackEnabled ? (policy.fallbackConnectionIds ?? []) : []),
+    ].filter((id): id is string => Boolean(id));
+    for (const connectionId of new Set(selectedConnectionIds)) {
+      const connection = connections.find((item) => item.id === connectionId);
+      if (!connection || connection.status !== "connected") continue;
+      const catalog = await this.listModels(input.context, connectionId);
+      if (catalog) catalogs[connectionId] = catalog;
+    }
     return resolveEffectiveRunConfig({
       stage: input.stage,
       override: input.override,
@@ -1035,9 +1055,7 @@ export class SupabaseCodingControlPlaneAdapter
       connections: Object.fromEntries(
         connections.map((connection) => [connection.id, connection]),
       ),
-      catalogs: Object.fromEntries(
-        connections.map((connection) => [connection.id, connection.catalog]),
-      ),
+      catalogs,
       automation: input.automation,
     });
   }

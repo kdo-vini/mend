@@ -225,6 +225,20 @@ function mergePolicy(
   return { policy: merged, source };
 }
 
+export function resolveRoutingPolicy(input: {
+  stage: CodingStage;
+  override?: StageRoutingPolicyOverride;
+  repositoryPolicy?: StageRoutingPolicy;
+  workspacePolicy?: StageRoutingPolicy;
+}): { policy: StageRoutingPolicy; source: PolicySource } {
+  return mergePolicy(
+    input.stage,
+    input.override,
+    input.repositoryPolicy,
+    input.workspacePolicy,
+  );
+}
+
 function assertCatalogModel(
   connection: AgentConnection,
   catalog: CatalogSnapshot | undefined,
@@ -246,12 +260,12 @@ export function resolveEffectiveRunConfig(
   input: RoutingResolutionInput,
 ): EffectiveRunConfig {
   const now = input.now ?? new Date();
-  const { policy, source } = mergePolicy(
-    input.stage,
-    input.override,
-    input.repositoryPolicy,
-    input.workspacePolicy,
-  );
+  const { policy, source } = resolveRoutingPolicy({
+    stage: input.stage,
+    override: input.override,
+    repositoryPolicy: input.repositoryPolicy,
+    workspacePolicy: input.workspacePolicy,
+  });
   if (!policy.connectionId)
     throw new Error(`agent_route_missing:${input.stage}`);
   const connection = input.connections[policy.connectionId];
