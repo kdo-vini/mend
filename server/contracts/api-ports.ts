@@ -15,6 +15,7 @@ import type {
   CodingProvider,
   CodingStage,
   EffectiveRunConfig,
+  SupportModelConfig,
   StageRoutingPolicy,
   StageRoutingPolicyOverride,
 } from "../coding-control-plane.js";
@@ -393,6 +394,10 @@ export interface AgentCredentialPort {
   ): Promise<{ apiKey: string; config: Record<string, unknown> } | null>;
 }
 
+export interface AgentConnectionSecretRotateInput {
+  apiKey: string;
+}
+
 export interface AgentConnectionCreateInput {
   label: string;
   provider: CodingProvider;
@@ -446,11 +451,24 @@ export interface CodingControlPlanePort {
     workspaceId: string,
     connectionId: string,
   ): Promise<{ apiKey?: string; bundle?: Record<string, string> } | null>;
-  listConnections(context: RequestContext): Promise<AgentConnection[]>;
+  listConnections(
+    context: RequestContext,
+    purpose?: "coding" | "support",
+  ): Promise<AgentConnection[]>;
   createConnection(
     context: RequestContext,
     input: AgentConnectionCreateInput,
   ): Promise<AgentConnection>;
+  rotateConnectionSecret(
+    context: RequestContext,
+    connectionId: string,
+    input: AgentConnectionSecretRotateInput,
+  ): Promise<AgentConnection | null>;
+  updateSupportConfig(
+    context: RequestContext,
+    connectionId: string,
+    config: SupportModelConfig,
+  ): Promise<AgentConnection | null>;
   updateConnection(
     context: RequestContext,
     connectionId: string,

@@ -104,6 +104,7 @@
     "intent": "Intenção: {{intent}}",
     "sources": "Fontes: {{sources}}",
     "humanTakeoverReason": "Motivo da transferência para humano",
+    "configureSupportAi": "Configurar IA do Support",
     "aiGenerated": "Gerado por IA",
     "messageDeleted": "Mensagem excluída",
     "messageReactions": "Reações da mensagem",

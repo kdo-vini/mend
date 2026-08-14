@@ -30,6 +30,7 @@ import {
 } from "../bug-loop.js";
 import type { AgentCredentialPort } from "../contracts/api-ports.js";
 import { InboxService, SupabaseInboxPort } from "../inbox-service.js";
+import type { MediaStorage } from "../media.js";
 import { type JobRecord, type JobStore } from "../jobs.js";
 import type {
   CodingRunContinuationJobPayload,
@@ -82,6 +83,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     private readonly codexStarter?: LiveWorkerCodexStarter,
     continuationJobStore?: JobStore<LiveWorkerJobPayload>,
     private readonly agentCredentials?: AgentCredentialPort,
+    private readonly mediaStorage?: MediaStorage,
   ) {
     this.inbox = inbox ?? new InboxService(new SupabaseInboxPort(client));
     this.bugLoop = new SupabaseBugLoopStore(client);
@@ -159,6 +161,16 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (current?.automationState === "human_paused") return;
     const modePolicy = await this.aiMode(input);
     if (modePolicy.mode === "off") return;
+    if (
+      input.message.messageType === "audio" &&
+      !input.persisted.transcript?.trim()
+    ) {
+      await this.markSupportConfigurationNeeded(
+        input,
+        "support_ai_transcription_failed",
+      );
+      return;
+    }
     await this.recordWorkflowFact(input, "eligible", "ai-mode-enabled");
     let provider: SupportAiProvider;
     try {
@@ -167,6 +179,24 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       if (!(error instanceof SupportAiConfigurationError)) throw error;
       await this.markSupportConfigurationNeeded(input, error.code);
       return;
+    }
+    if (
+      input.message.messageType === "image" ||
+      input.message.messageType === "document"
+    ) {
+      const mediaContext = await this.analyzeInboundMedia(input, provider);
+      if (mediaContext === null) return;
+      if (mediaContext) {
+        input = {
+          ...input,
+          message: {
+            ...input.message,
+            text: [input.message.text?.trim(), mediaContext]
+              .filter(Boolean)
+              .join("\n\n"),
+          },
+        };
+      }
     }
     const triage = await triageConversation(
       provider,
@@ -1378,7 +1408,64 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (this.agentCredentials)
       return resolveSupportAiProvider(workspaceId, this.agentCredentials);
     if (this.provider) return this.provider;
-    throw new Error("support_ai_credential_required");
+    throw new SupportAiConfigurationError("support_ai_configuration_required");
+  }
+
+  private async analyzeInboundMedia(
+    input: LiveWorkerAutomationInput,
+    provider: SupportAiProvider,
+  ): Promise<string | null> {
+    const mimeType = input.message.mimeType?.toLowerCase() ?? "";
+    const isPdf =
+      mimeType === "application/pdf" ||
+      (!mimeType && input.message.fileName?.toLowerCase().endsWith(".pdf"));
+    if (input.message.messageType === "document" && !isPdf) {
+      await this.markSupportConfigurationNeeded(
+        input,
+        "support_ai_vision_failed",
+      );
+      return null;
+    }
+    if (!this.mediaStorage || !input.persisted.mediaStoragePath) {
+      await this.markSupportConfigurationNeeded(
+        input,
+        "support_ai_vision_failed",
+      );
+      return null;
+    }
+    try {
+      const media = await this.mediaStorage.download(
+        input.persisted.mediaStoragePath,
+        {
+          mimeType: mimeType || (isPdf ? "application/pdf" : "image/jpeg"),
+          fileName:
+            input.message.fileName || (isPdf ? "document.pdf" : "image.jpg"),
+        },
+      );
+      return await provider.analyzeMedia({
+        conversation: input.message.caption?.trim() ?? "",
+        files: [
+          {
+            data: media.data,
+            mimeType: media.mimeType,
+            fileName: media.fileName,
+          },
+        ],
+      });
+    } catch {
+      await this.markSupportConfigurationNeeded(
+        input,
+        "support_ai_vision_failed",
+      );
+      return null;
+    }
+  }
+
+  async handleSupportConfigurationFailure(
+    input: LiveWorkerAutomationInput,
+    code: string,
+  ): Promise<void> {
+    await this.markSupportConfigurationNeeded(input, code);
   }
 
   private async markSupportConfigurationNeeded(
@@ -1413,6 +1500,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         body: "Configure the workspace support credential and models, then resume AI.",
         entity_type: "conversation",
         entity_id: input.persisted.conversationId,
+        payload_json: {
+          code,
+          settingsPath: "/settings/engineering/agents/support",
+        },
         dedupe_key: `support-ai-config:${input.persisted.conversationId}`,
       });
     if (

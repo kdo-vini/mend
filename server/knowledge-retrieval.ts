@@ -121,8 +121,8 @@ export class OpenAiKnowledgeEmbeddings implements KnowledgeEmbeddingPort {
     private readonly model: string,
     client?: KnowledgeEmbeddingsClient,
   ) {
-    if (!apiKey.trim()) throw new Error("support_ai_credential_required");
-    if (!model.trim()) throw new Error("support_ai_embedding_model_required");
+    if (!apiKey.trim()) throw new Error("support_ai_configuration_required");
+    if (!model.trim()) throw new Error("support_ai_model_missing");
     this.client =
       client ??
       (new OpenAI({ apiKey }) as unknown as KnowledgeEmbeddingsClient);
@@ -134,11 +134,18 @@ export class OpenAiKnowledgeEmbeddings implements KnowledgeEmbeddingPort {
 
   async embedMany(values: readonly string[]): Promise<readonly number[][]> {
     if (!values.length) return [];
-    const result = await this.client.embeddings.create({
-      model: this.model,
-      input: [...values],
-      dimensions: 1536,
-    });
+    let result: Awaited<
+      ReturnType<KnowledgeEmbeddingsClient["embeddings"]["create"]>
+    >;
+    try {
+      result = await this.client.embeddings.create({
+        model: this.model,
+        input: [...values],
+        dimensions: 1536,
+      });
+    } catch (error) {
+      throw new Error("support_ai_embedding_failed", { cause: error });
+    }
     const ordered = [...result.data].sort(
       (left, right) => left.index - right.index,
     );
@@ -146,7 +153,7 @@ export class OpenAiKnowledgeEmbeddings implements KnowledgeEmbeddingPort {
       ordered.length !== values.length ||
       ordered.some((item) => item.embedding.length !== 1536)
     )
-      throw new Error("support_ai_embedding_dimension_invalid");
+      throw new Error("support_ai_embedding_failed");
     return ordered.map((item) => item.embedding);
   }
 }

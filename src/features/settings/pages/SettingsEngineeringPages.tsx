@@ -34,9 +34,11 @@ import {
   listLiveRepositories,
   pollLiveAgentLogin,
   refreshLiveAgentModels,
+  rotateLiveSupportConnectionSecret,
   removeLiveRepository,
   revokeLiveAgentConnection,
   saveLiveAgentRoutingPolicy,
+  saveLiveSupportModelConfig,
   startLiveAgentLogin,
   updateLiveAgentConnection,
   updateLiveRepository,
@@ -45,6 +47,7 @@ import {
   type LiveAgentConnection,
   type LiveAgentLoginJob,
   type LiveRepository,
+  type LiveSupportModelConfig,
   type LiveStageRoutingPolicy,
 } from "../api";
 import {
@@ -390,36 +393,66 @@ export function SettingsRepositoriesPage({
 export function SettingsAgentsPage({
   section,
   ...props
-}: SettingsWorkspacePageProps & { section: "providers" | "run-policy" }) {
+}: SettingsWorkspacePageProps & {
+  section: "issues-providers" | "issues-run-policy" | "support";
+}) {
   const { search } = useLocation();
   const { t } = useTranslation("settings");
+  const issues = section !== "support";
   return (
     <div className="settings-v2-page">
       <SettingsPageHeader
         title={t("v2.agents.title")}
-        description={t("v2.agents.description")}
+        description={
+          section === "support"
+            ? t("v2.agents.supportDescription")
+            : t("v2.agents.description")
+        }
       />
       <ViewTabs
         label={t("v2.agents.sections")}
         items={[
           {
-            id: "providers",
-            label: t("v2.agents.providers"),
-            href: `/settings/engineering/agents/providers${search}`,
-            active: section === "providers",
+            id: "issues",
+            label: t("v2.agents.issues"),
+            href: `/settings/engineering/agents/issues/providers${search}`,
+            active: issues,
           },
           {
-            id: "run-policy",
-            label: t("v2.agents.runPolicy"),
-            href: `/settings/engineering/agents/run-policy${search}`,
-            active: section === "run-policy",
+            id: "support",
+            label: t("v2.agents.support"),
+            href: `/settings/engineering/agents/support${search}`,
+            active: section === "support",
           },
         ]}
       />
-      {section === "providers" ? (
-        <CodingProvidersContent {...props} />
+      {issues ? (
+        <>
+          <ViewTabs
+            label={t("v2.agents.issuesSections")}
+            items={[
+              {
+                id: "issues-providers",
+                label: t("v2.agents.providers"),
+                href: `/settings/engineering/agents/issues/providers${search}`,
+                active: section === "issues-providers",
+              },
+              {
+                id: "issues-run-policy",
+                label: t("v2.agents.runPolicy"),
+                href: `/settings/engineering/agents/issues/run-policy${search}`,
+                active: section === "issues-run-policy",
+              },
+            ]}
+          />
+          {section === "issues-providers" ? (
+            <CodingProvidersContent {...props} />
+          ) : (
+            <CodingRunPolicyContent {...props} />
+          )}
+        </>
       ) : (
-        <CodingRunPolicyContent {...props} />
+        <SupportAiContent {...props} />
       )}
     </div>
   );
@@ -633,7 +666,7 @@ function CodingProvidersContent({
     setError(null);
     try {
       const [nextConnections, activeJobs] = await Promise.all([
-        listLiveAgentConnections(workspaceId),
+        listLiveAgentConnections(workspaceId, "coding"),
         listLiveAgentLoginJobs(workspaceId),
       ]);
       setConnections(nextConnections);
@@ -1077,6 +1110,407 @@ function CodingProvidersContent({
   );
 }
 
+function SupportAiContent({
+  workspaceId,
+  onToast,
+  onConfirm,
+}: SettingsWorkspacePageProps) {
+  const { t } = useTranslation("settings");
+  const [connection, setConnection] = useState<LiveAgentConnection | null>(
+    null,
+  );
+  const [config, setConfig] = useState<LiveSupportModelConfig>({
+    supportModel: "",
+    visionModel: "",
+    transcriptionModel: "",
+    embeddingModel: "",
+  });
+  const [label, setLabel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [action, setAction] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const supportError = useCallback(
+    (reason: unknown, fallback: string) => {
+      const code =
+        reason && typeof reason === "object" && "code" in reason
+          ? String((reason as { code?: unknown }).code ?? "")
+          : "";
+      const key =
+        code === "support_ai_byok_required"
+          ? "v2.agents.supportErrors.byok"
+          : code === "support_ai_catalog_required"
+            ? "v2.agents.supportErrors.catalog"
+            : code === "support_ai_model_invalid"
+              ? "v2.agents.supportErrors.modelInvalid"
+              : code === "support_ai_embedding_failed"
+                ? "v2.agents.supportErrors.embedding"
+                : code === "support_ai_configuration_required"
+                  ? "v2.agents.supportErrors.configuration"
+                  : code === "support_ai_model_missing"
+                    ? "v2.agents.supportErrors.modelMissing"
+                    : undefined;
+      return key ? t(key) : reason instanceof Error ? reason.message : fallback;
+    },
+    [t],
+  );
+
+  const load = useCallback(async () => {
+    if (!workspaceId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = await listLiveAgentConnections(workspaceId, "support");
+      const next = rows[0] ?? null;
+      setConnection(next);
+      setLabel(next?.label ?? t("v2.agents.supportDefaultLabel"));
+      setConfig(
+        next?.supportConfig ?? {
+          supportModel: "",
+          visionModel: "",
+          transcriptionModel: "",
+          embeddingModel: "",
+        },
+      );
+    } catch (reason) {
+      setError(supportError(reason, t("v2.agents.supportLoadError")));
+    } finally {
+      setLoading(false);
+    }
+  }, [supportError, t, workspaceId]);
+  useEffect(() => void load(), [load]);
+
+  const refresh = async (target: LiveAgentConnection) => {
+    if (!workspaceId) return;
+    setAction("catalog");
+    setError(null);
+    try {
+      const catalog = await refreshLiveAgentModels({
+        workspaceId,
+        connectionId: target.id,
+      });
+      setConnection((current) =>
+        current ? { ...current, catalog, status: "connected" } : current,
+      );
+      onToast(t("v2.agents.supportCatalogRefreshed"));
+    } catch (reason) {
+      setConnection((current) =>
+        current ? { ...current, status: "error" } : current,
+      );
+      setError(supportError(reason, t("v2.agents.supportCatalogError")));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const createOrRotate = async () => {
+    if (!workspaceId || !apiKey.trim()) return;
+    setAction(connection ? "rotate" : "create");
+    setError(null);
+    try {
+      const next = connection
+        ? await rotateLiveSupportConnectionSecret({
+            workspaceId,
+            connectionId: connection.id,
+            apiKey,
+          })
+        : await createLiveAgentConnection({
+            workspaceId,
+            label: label || t("v2.agents.supportDefaultLabel"),
+            provider: "openai",
+            authMethod: "api_key",
+            purpose: "support",
+            apiKey,
+          });
+      setConnection(next);
+      setApiKey("");
+      setConfig({
+        supportModel: "",
+        visionModel: "",
+        transcriptionModel: "",
+        embeddingModel: "",
+      });
+      await refresh(next);
+    } catch (reason) {
+      setError(supportError(reason, t("v2.agents.supportSaveError")));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const save = async () => {
+    if (!workspaceId || !connection) return;
+    setAction("save");
+    setError(null);
+    try {
+      const next = await saveLiveSupportModelConfig({
+        workspaceId,
+        connectionId: connection.id,
+        config,
+      });
+      setConnection(next);
+      onToast(t("v2.agents.supportSaved"));
+    } catch (reason) {
+      setError(supportError(reason, t("v2.agents.supportSaveError")));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const revoke = async () => {
+    if (
+      !workspaceId ||
+      !connection ||
+      !(await onConfirm({
+        title: t("v2.agents.supportRevokeTitle"),
+        description: t("v2.agents.supportRevokeDescription"),
+        confirmLabel: t("v2.codingConnections.confirmLabel"),
+        destructive: true,
+      }))
+    )
+      return;
+    setAction("revoke");
+    try {
+      await revokeLiveAgentConnection({
+        workspaceId,
+        connectionId: connection.id,
+      });
+      setConnection(null);
+      setConfig({
+        supportModel: "",
+        visionModel: "",
+        transcriptionModel: "",
+        embeddingModel: "",
+      });
+      onToast(t("v2.agents.supportRevoked"));
+    } catch (reason) {
+      setError(supportError(reason, t("v2.agents.supportSaveError")));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const catalogModels = connection?.catalog?.models ?? [];
+  const optionsFor = (
+    capability: "text" | "vision" | "transcription" | "embedding",
+  ) => [
+    { value: "", label: t("v2.agents.supportSelectModel") },
+    ...catalogModels
+      .filter((model) => model.capabilities?.includes(capability))
+      .map((model) => ({
+        value: model.id,
+        label: model.label ? `${model.label} · ${model.id}` : model.id,
+      })),
+  ];
+  const status = !connection
+    ? "notConfigured"
+    : connection.status === "error"
+      ? "error"
+      : !connection.catalog
+        ? "needsVerification"
+        : !connection.supportConfig
+          ? "incomplete"
+          : "ready";
+  const statusTone =
+    status === "ready" ? "success" : status === "error" ? "danger" : "warning";
+
+  return (
+    <div className="settings-v2-content">
+      {error && <SettingsError message={error} onRetry={() => void load()} />}
+      {!workspaceId ? (
+        <SettingsWorkspaceRequired />
+      ) : loading ? (
+        <LoadingState label={t("v2.agents.supportLoading")} />
+      ) : (
+        <>
+          <SettingsSection
+            title={t("v2.agents.supportTitle")}
+            description={t("v2.agents.supportDescription")}
+            actions={
+              <SettingsStatus tone={statusTone}>
+                {t(`v2.agents.supportStatuses.${status}`)}
+              </SettingsStatus>
+            }
+          >
+            <div className="settings-v2-callout">
+              <div>
+                <strong>{t("v2.agents.supportOnlyByok")}</strong>
+                <p>{t("v2.agents.supportOnlyByokDescription")}</p>
+              </div>
+            </div>
+            <div className="settings-v2-form-grid">
+              <label>
+                {t("v2.agents.supportProvider")}
+                <input value="OpenAI" readOnly />
+              </label>
+              <label>
+                {t("v2.agents.supportAuthMethod")}
+                <input value={t("v2.agents.supportApiKeyMethod")} readOnly />
+              </label>
+              <label>
+                {t("v2.agents.supportLabel")}
+                <input
+                  value={label}
+                  onChange={(event) => setLabel(event.target.value)}
+                  disabled={Boolean(connection)}
+                />
+              </label>
+              <label>
+                {connection
+                  ? t("v2.agents.supportReplaceKey")
+                  : t("v2.agents.supportApiKey")}
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  placeholder={t("v2.agents.supportApiKeyPlaceholder")}
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+            <div className="settings-v2-form-actions">
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={() => void createOrRotate()}
+                disabled={!apiKey.trim() || Boolean(action)}
+              >
+                <KeyRound size={14} />{" "}
+                {connection
+                  ? t("v2.agents.supportReplaceKey")
+                  : t("v2.agents.supportConnect")}
+              </button>
+              {connection && (
+                <>
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={() => void refresh(connection)}
+                    disabled={Boolean(action)}
+                  >
+                    <RefreshCw size={14} />{" "}
+                    {t("v2.agents.supportRefreshCatalog")}
+                  </button>
+                  <button
+                    className="button button-danger"
+                    type="button"
+                    onClick={() => void revoke()}
+                    disabled={Boolean(action)}
+                  >
+                    <Trash2 size={14} /> {t("v2.agents.supportRevoke")}
+                  </button>
+                </>
+              )}
+            </div>
+          </SettingsSection>
+          {connection && (
+            <SettingsSection
+              title={t("v2.agents.supportModelsTitle")}
+              description={t("v2.agents.supportModelsDescription")}
+              actions={
+                connection.catalog ? (
+                  <span className="settings-provider-muted">
+                    {t("v2.agents.supportLastVerified", {
+                      date: formatSettingsDate(
+                        connection.catalog.lastVerifiedAt,
+                      ),
+                    })}
+                  </span>
+                ) : undefined
+              }
+            >
+              {!connection.catalog ? (
+                <div className="settings-v2-callout">
+                  <div>
+                    <strong>{t("v2.agents.supportCatalogRequired")}</strong>
+                    <p>{t("v2.agents.supportCatalogRequiredDescription")}</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="settings-v2-form-grid">
+                    <label>
+                      {t("v2.agents.supportModel")}
+                      <Select
+                        value={config.supportModel}
+                        onChange={(value) =>
+                          setConfig((current) => ({
+                            ...current,
+                            supportModel: value,
+                          }))
+                        }
+                        options={optionsFor("text")}
+                      />
+                    </label>
+                    <label>
+                      {t("v2.agents.visionModel")}
+                      <Select
+                        value={config.visionModel}
+                        onChange={(value) =>
+                          setConfig((current) => ({
+                            ...current,
+                            visionModel: value,
+                          }))
+                        }
+                        options={optionsFor("vision")}
+                      />
+                    </label>
+                    <label>
+                      {t("v2.agents.transcriptionModel")}
+                      <Select
+                        value={config.transcriptionModel}
+                        onChange={(value) =>
+                          setConfig((current) => ({
+                            ...current,
+                            transcriptionModel: value,
+                          }))
+                        }
+                        options={optionsFor("transcription")}
+                      />
+                    </label>
+                    <label>
+                      {t("v2.agents.embeddingModel")}
+                      <Select
+                        value={config.embeddingModel}
+                        onChange={(value) =>
+                          setConfig((current) => ({
+                            ...current,
+                            embeddingModel: value,
+                          }))
+                        }
+                        options={optionsFor("embedding")}
+                      />
+                    </label>
+                  </div>
+                  <p className="settings-v2-capability-note">
+                    {t("v2.agents.supportCapabilitiesNote")}
+                  </p>
+                  <div className="settings-v2-form-actions">
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      onClick={() => void save()}
+                      disabled={
+                        Boolean(action) ||
+                        Object.values(config).some((value) => !value)
+                      }
+                    >
+                      <Save size={14} /> {t("v2.agents.supportSave")}
+                    </button>
+                  </div>
+                </>
+              )}
+            </SettingsSection>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 const codingStages: CodingStage[] = [
   "research",
   "implement",
@@ -1102,7 +1536,7 @@ function CodingRunPolicyContent({
     setError(null);
     try {
       const [nextConnections, nextRepositories] = await Promise.all([
-        listLiveAgentConnections(workspaceId),
+        listLiveAgentConnections(workspaceId, "coding"),
         listLiveRepositories(workspaceId),
       ]);
       setConnections(nextConnections);

@@ -60,6 +60,29 @@ function openAiCodingModels(value: unknown): CatalogModel[] {
   );
 }
 
+function supportCapabilitiesForModel(
+  modelId: string,
+): CatalogModel["capabilities"] {
+  const id = modelId.toLowerCase();
+  if (id.includes("embedding")) return ["embedding"];
+  if (id.includes("transcrib") || id.includes("whisper"))
+    return ["transcription"];
+  if (!/(?:^|[-_.])(?:gpt|o[134]|codex)(?:$|[-_.])/i.test(id)) return [];
+  const capabilities: NonNullable<CatalogModel["capabilities"]> = ["text"];
+  if (/gpt-4o|gpt-4\.1|gpt-5|^o[134](?:$|[-_.])/i.test(id))
+    capabilities.push("vision");
+  return capabilities;
+}
+
+function openAiSupportModels(value: unknown): CatalogModel[] {
+  return responseModels(value)
+    .map((model) => ({
+      ...model,
+      capabilities: supportCapabilitiesForModel(model.id),
+    }))
+    .filter((model) => model.capabilities?.length);
+}
+
 function codexModels(value: unknown): CatalogModel[] {
   if (!value || typeof value !== "object") return [];
   const record = value as Record<string, unknown>;
@@ -242,7 +265,13 @@ export class DefaultCodingCatalogProvider implements CodingCatalogProvider {
       const value = await jsonRequest("https://api.openai.com/v1/models", {
         headers: { Authorization: `Bearer ${secret.apiKey}` },
       });
-      return apiCatalog(connection, openAiCodingModels(value), "api");
+      return apiCatalog(
+        connection,
+        connection.purpose === "support"
+          ? openAiSupportModels(value)
+          : openAiCodingModels(value),
+        "api",
+      );
     }
     const executable = await resolveCodingAgentExecutable("openai");
     const homeDirectory = await prepareCodingCatalogHome();

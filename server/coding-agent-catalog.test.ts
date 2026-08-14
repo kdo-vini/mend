@@ -91,4 +91,43 @@ describe("coding agent catalog", () => {
       }),
     ).rejects.toThrow("agent_catalog_empty");
   });
+
+  it("returns capability-tagged models for a Support OpenAI connection", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: [
+                { id: "gpt-4o" },
+                { id: "gpt-4o-mini-transcribe" },
+                { id: "text-embedding-3-small" },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    const catalog = await new DefaultCodingCatalogProvider().list(
+      { ...connection, purpose: "support" },
+      { apiKey: "workspace-openai-key" },
+    );
+
+    expect(catalog.models).toEqual([
+      expect.objectContaining({
+        id: "gpt-4o",
+        capabilities: ["text", "vision"],
+      }),
+      expect.objectContaining({
+        id: "gpt-4o-mini-transcribe",
+        capabilities: ["transcription"],
+      }),
+      expect.objectContaining({
+        id: "text-embedding-3-small",
+        capabilities: ["embedding"],
+      }),
+    ]);
+  });
 });

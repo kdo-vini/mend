@@ -12,6 +12,28 @@ export const codingStages = [
 export type CodingStage = (typeof codingStages)[number];
 
 export type CodingProvider = "openai" | "anthropic" | "google" | "verboo";
+export const supportModelCapabilities = [
+  "text",
+  "vision",
+  "transcription",
+  "embedding",
+] as const;
+export type SupportModelCapability = (typeof supportModelCapabilities)[number];
+export const supportModelRoles = [
+  "supportModel",
+  "visionModel",
+  "transcriptionModel",
+  "embeddingModel",
+] as const;
+export type SupportModelRole = (typeof supportModelRoles)[number];
+
+export interface SupportModelConfig {
+  supportModel: string;
+  visionModel: string;
+  transcriptionModel: string;
+  embeddingModel: string;
+}
+
 export type ConnectionStatus =
   | "pending"
   | "connected"
@@ -26,6 +48,7 @@ export interface CatalogModel {
   label?: string;
   efforts?: string[];
   supportsAuto?: boolean;
+  capabilities?: SupportModelCapability[];
 }
 
 export interface CatalogSnapshot {
@@ -53,9 +76,44 @@ export interface AgentConnection {
   lastValidatedAt?: string;
   quota?: Record<string, unknown>;
   catalog?: CatalogSnapshot;
+  supportConfig?: SupportModelConfig;
   metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+export function isSupportModelConfigReady(
+  config: SupportModelConfig,
+  catalogModels: readonly Pick<CatalogModel, "id" | "capabilities">[],
+): boolean {
+  const required: Array<[keyof SupportModelConfig, SupportModelCapability]> = [
+    ["supportModel", "text"],
+    ["visionModel", "vision"],
+    ["transcriptionModel", "transcription"],
+    ["embeddingModel", "embedding"],
+  ];
+  return required.every(([role, capability]) => {
+    const selected = config[role].trim();
+    const model = catalogModels.find((candidate) => candidate.id === selected);
+    return Boolean(model?.capabilities?.includes(capability));
+  });
+}
+
+export function parseSupportModelConfig(
+  value: unknown,
+): SupportModelConfig | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const candidate = value as Record<string, unknown>;
+  const values = supportModelRoles.map((role) => candidate[role]);
+  if (values.some((item) => typeof item !== "string" || !item.trim()))
+    return undefined;
+  return {
+    supportModel: String(candidate.supportModel).trim(),
+    visionModel: String(candidate.visionModel).trim(),
+    transcriptionModel: String(candidate.transcriptionModel).trim(),
+    embeddingModel: String(candidate.embeddingModel).trim(),
+  };
 }
 
 export interface StageBudget {

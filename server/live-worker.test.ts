@@ -659,6 +659,130 @@ describe("live Whatsmiau worker", () => {
     });
   });
 
+  it("pauses audio for human handling when transcription is unavailable", async () => {
+    const client = new FakeSupabaseHandoff();
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply: vi.fn(async () => "must not be called"),
+      triage: vi.fn(async () => "{}"),
+      analyzeMedia: vi.fn(async () => "must not be called"),
+    };
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+    );
+    await automation.process({
+      binding,
+      idempotencyKey: "audio-without-transcript",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "unused-audio",
+      ),
+      knowledge: [],
+      message: {
+        ...message,
+        messageType: "audio",
+        text: undefined,
+        mimeType: "audio/ogg",
+        fileName: "voice.ogg",
+      },
+      persisted: {
+        id: "message-audio",
+        workspaceId: binding.workspaceId,
+        conversationId: "conversation-audio",
+        contactId: "contact-1",
+        providerMessageId: message.providerMessageId,
+        direction: "inbound",
+        messageType: "audio",
+        unreadCount: 1,
+        inserted: true,
+      },
+    });
+    expect(provider.triage).not.toHaveBeenCalled();
+    expect(provider.draftReply).not.toHaveBeenCalled();
+    expect(client.state).toMatchObject({
+      automation_state: "human_paused",
+      needs_human_reason: "support_ai_transcription_failed",
+    });
+  });
+
+  it("uses server-loaded PDF media for vision before triage", async () => {
+    const client = new FakeSupabaseHandoff();
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply: vi.fn(async () => "draft"),
+      triage: vi.fn(async () =>
+        JSON.stringify({
+          intent: "question",
+          priority: "low",
+          confidence: 0.98,
+          summary: "The customer sent a PDF",
+          unsafe: false,
+        }),
+      ),
+      analyzeMedia: vi.fn(async (input) => {
+        expect(input.files[0]?.mimeType).toBe("application/pdf");
+        return "The PDF shows an invoice total.";
+      }),
+    };
+    const mediaStorage = {
+      upload: vi.fn(async () => undefined),
+      createSignedUrl: vi.fn(async () => "must not be used"),
+      download: vi.fn(async () => ({
+        data: new Uint8Array([37, 80, 68, 70]),
+        mimeType: "application/pdf",
+        fileName: "invoice.pdf",
+        size: 4,
+      })),
+    };
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      mediaStorage,
+    );
+    await automation.process({
+      binding,
+      idempotencyKey: "pdf-vision",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "unused-pdf",
+      ),
+      knowledge: [],
+      message: {
+        ...message,
+        messageType: "document",
+        text: undefined,
+        mimeType: "application/pdf",
+        fileName: "invoice.pdf",
+      },
+      persisted: {
+        id: "message-pdf",
+        workspaceId: binding.workspaceId,
+        conversationId: "conversation-pdf",
+        contactId: "contact-1",
+        providerMessageId: message.providerMessageId,
+        direction: "inbound",
+        messageType: "document",
+        unreadCount: 1,
+        inserted: true,
+        mediaStoragePath: `${binding.workspaceId}/conversation-pdf/invoice.pdf`,
+      },
+    });
+    expect(mediaStorage.download).toHaveBeenCalledWith(
+      `${binding.workspaceId}/conversation-pdf/invoice.pdf`,
+      expect.objectContaining({ mimeType: "application/pdf" }),
+    );
+    expect(provider.analyzeMedia).toHaveBeenCalledTimes(1);
+    expect(provider.triage).toHaveBeenCalledWith(
+      expect.stringContaining("The PDF shows an invoice total."),
+    );
+  });
+
   it("does not triage or create a draft while human takeover is active", async () => {
     const client = new FakeSupabaseHandoff();
     client.state = {

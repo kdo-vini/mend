@@ -1638,76 +1638,19 @@ export async function removeLiveRepository(input: {
   );
 }
 
-export type LiveAgentCredential = {
-  task: "support" | "agent";
-  provider: CodingAgentProvider;
-  configured: boolean;
-  updatedAt: string;
-};
-
-export async function listLiveAgentCredentials(
-  workspaceId: string,
-): Promise<LiveAgentCredential[]> {
-  return apiRequest<LiveAgentCredential[]>(
-    "/api/agent-credentials",
-    {},
-    workspaceId,
-  );
-}
-
-export async function saveLiveAgentCredential(input: {
-  workspaceId: string;
-  task: "support" | "agent";
-  provider: CodingAgentProvider;
-  apiKey: string;
-  model?: string;
-  transcriptionModel?: string;
-  embeddingModel?: string;
-}): Promise<LiveAgentCredential> {
-  if (
-    input.task === "support" &&
-    (!input.model?.trim() ||
-      !input.transcriptionModel?.trim() ||
-      !input.embeddingModel?.trim())
-  )
-    throw new Error("Support and transcription models must be selected.");
-  return apiRequest<LiveAgentCredential>(
-    "/api/agent-credentials",
-    {
-      method: "PUT",
-      body: JSON.stringify({
-        task: input.task,
-        provider: input.provider,
-        apiKey: input.apiKey,
-        ...(input.task === "support"
-          ? {
-              config: {
-                model: input.model?.trim(),
-                transcriptionModel: input.transcriptionModel?.trim(),
-                embeddingModel: input.embeddingModel?.trim(),
-              },
-            }
-          : {}),
-      }),
-    },
-    input.workspaceId,
-  );
-}
-
-export async function removeLiveAgentCredential(input: {
-  workspaceId: string;
-  task: "support" | "agent";
-  provider: CodingAgentProvider;
-}): Promise<void> {
-  await apiRequest<void>(
-    `/api/agent-credentials/${input.task}/${input.provider}`,
-    { method: "DELETE" },
-    input.workspaceId,
-  );
-}
-
 export type CodingStage = "research" | "implement" | "review" | "verify";
 export type CodingAuthMethod = "api_key" | "subscription";
+export type LiveSupportModelCapability =
+  | "text"
+  | "vision"
+  | "transcription"
+  | "embedding";
+export type LiveSupportModelConfig = {
+  supportModel: string;
+  visionModel: string;
+  transcriptionModel: string;
+  embeddingModel: string;
+};
 export type LiveAgentConnection = {
   id: string;
   workspaceId: string;
@@ -1724,11 +1667,17 @@ export type LiveAgentConnection = {
     connectionId: string;
     provider: CodingAgentProvider;
     cliVersion: string;
-    models: Array<{ id: string; label?: string; efforts?: string[] }>;
+    models: Array<{
+      id: string;
+      label?: string;
+      efforts?: string[];
+      capabilities?: LiveSupportModelCapability[];
+    }>;
     source: string;
     lastVerifiedAt: string;
     expiresAt: string;
   };
+  supportConfig?: LiveSupportModelConfig;
   metadata?: Record<string, unknown>;
 };
 
@@ -1746,9 +1695,11 @@ export type LiveStageRoutingPolicy = {
 
 export async function listLiveAgentConnections(
   workspaceId: string,
+  purpose?: "coding" | "support",
 ): Promise<LiveAgentConnection[]> {
+  const query = purpose ? `?purpose=${encodeURIComponent(purpose)}` : "";
   const result = await apiRequest<{ data: LiveAgentConnection[] }>(
-    "/api/agent-connections",
+    `/api/agent-connections${query}`,
     {},
     workspaceId,
   );
@@ -1829,6 +1780,36 @@ export async function refreshLiveAgentModels(input: {
   return apiRequest<LiveAgentConnection["catalog"]>(
     `/api/agent-connections/${input.connectionId}/models?refresh=true`,
     {},
+    input.workspaceId,
+  );
+}
+
+export async function rotateLiveSupportConnectionSecret(input: {
+  workspaceId: string;
+  connectionId: string;
+  apiKey: string;
+}): Promise<LiveAgentConnection> {
+  return apiRequest<LiveAgentConnection>(
+    `/api/agent-connections/${input.connectionId}/secret`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ apiKey: input.apiKey.trim() }),
+    },
+    input.workspaceId,
+  );
+}
+
+export async function saveLiveSupportModelConfig(input: {
+  workspaceId: string;
+  connectionId: string;
+  config: LiveSupportModelConfig;
+}): Promise<LiveAgentConnection> {
+  return apiRequest<LiveAgentConnection>(
+    `/api/agent-connections/${input.connectionId}/support-config`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input.config),
+    },
     input.workspaceId,
   );
 }

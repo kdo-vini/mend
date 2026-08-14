@@ -48,7 +48,7 @@ test("settings opens as a compact outcome-oriented hub", async ({ page }) => {
     await expect(page.getByLabel("Settings section")).toBeVisible();
     await page
       .getByLabel("Settings section")
-      .selectOption("/settings/engineering/agents/providers");
+      .selectOption("/settings/engineering/agents/issues/providers");
   } else {
     await expect(page.locator(".settings-v2-shell")).toHaveCSS(
       "padding-left",
@@ -67,7 +67,7 @@ test("settings opens as a compact outcome-oriented hub", async ({ page }) => {
       .click();
   }
   await expect(page).toHaveURL(
-    /\/settings\/engineering\/agents\/providers\?demo=1/,
+    /\/settings\/engineering\/agents\/issues\/providers\?demo=1/,
   );
   await expect(
     page.getByRole("heading", { name: "Agents & models" }),
@@ -183,7 +183,7 @@ test("legacy provider connections redirects to the canonical agents route", asyn
   );
 
   await expect(page).toHaveURL(
-    /\/settings\/engineering\/agents\/providers\?demo=1&source=bookmark/,
+    /\/settings\/engineering\/agents\/issues\/providers\?demo=1&source=bookmark/,
   );
   await expect(
     page.getByRole("heading", { name: "Agents & models" }),

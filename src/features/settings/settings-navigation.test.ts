@@ -68,7 +68,7 @@ describe("settings navigation", () => {
       },
       {
         id: "agents",
-        path: "/settings/engineering/agents/providers",
+        path: "/settings/engineering/agents/issues/providers",
         matchPrefix: "/settings/engineering/agents",
       },
       {
@@ -84,7 +84,7 @@ describe("settings navigation", () => {
       "automation",
     );
     expect(
-      findSettingsNavItem("/settings/engineering/agents/run-policy").id,
+      findSettingsNavItem("/settings/engineering/agents/issues/run-policy").id,
     ).toBe("agents");
     expect(findSettingsNavItem("/settings/integrations/mcp").id).toBe(
       "integrations",
@@ -98,7 +98,7 @@ describe("settings navigation", () => {
         "/settings/engineering/coding/connections",
         "?demo=1",
       ),
-    ).toBe("/settings/engineering/agents/providers?demo=1");
+    ).toBe("/settings/engineering/agents/issues/providers?demo=1");
     expect(legacySettingsRoute("/settings/automation/flows", "?demo=1")).toBe(
       "/settings/automation/intake?demo=1",
     );
@@ -112,11 +112,11 @@ describe("settings navigation", () => {
     ["/settings/automation/flows", "/settings/automation/intake"],
     [
       "/settings/engineering/coding/connections",
-      "/settings/engineering/agents/providers",
+      "/settings/engineering/agents/issues/providers",
     ],
     [
       "/settings/engineering/coding/routing",
-      "/settings/engineering/agents/run-policy",
+      "/settings/engineering/agents/issues/run-policy",
     ],
   ])("preserves the complete query when redirecting %s", (from, to) => {
     expect(legacySettingsRoute(from, "?demo=1&source=bookmark")).toBe(

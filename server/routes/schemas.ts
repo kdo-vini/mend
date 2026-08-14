@@ -440,6 +440,14 @@ export const agentConnectionProviderSchema = z.enum([
   "google",
   "verboo",
 ]);
+export const supportModelConfigSchema = z
+  .object({
+    supportModel: z.string().trim().min(1).max(160),
+    visionModel: z.string().trim().min(1).max(160),
+    transcriptionModel: z.string().trim().min(1).max(160),
+    embeddingModel: z.string().trim().min(1).max(160),
+  })
+  .strict();
 export const agentConnectionCreateSchema = z
   .object({
     label: z.string().trim().min(1).max(160),
@@ -470,6 +478,18 @@ export const agentConnectionCreateSchema = z
         message:
           "Claude.ai subscriptions are not available on the hosted runner",
       });
+    if (value.purpose === "support" && value.provider !== "openai")
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["provider"],
+        message: "Support AI currently requires OpenAI BYOK",
+      });
+    if (value.purpose === "support" && value.authMethod !== "api_key")
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["authMethod"],
+        message: "Support AI requires an API key",
+      });
   });
 export const agentConnectionPatchSchema = z
   .object({
@@ -482,6 +502,12 @@ export const agentConnectionPatchSchema = z
     "At least one field is required",
   );
 export const agentConnectionParamSchema = z.object({ id: uuid }).strict();
+export const agentConnectionSecretRotateSchema = z
+  .object({ apiKey: z.string().trim().min(1).max(500) })
+  .strict();
+export const agentConnectionPurposeQuerySchema = z
+  .object({ purpose: z.enum(["coding", "support"]).optional() })
+  .strict();
 export const agentLoginStartSchema = z
   .object({
     provider: z.enum(["openai", "google"]),

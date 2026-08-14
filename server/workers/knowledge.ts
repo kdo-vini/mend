@@ -26,16 +26,14 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
           "support",
           "openai",
         );
+        if (!credential) throw new Error("support_ai_configuration_required");
         const embeddingModel = credential?.config.embeddingModel;
-        if (
-          credential &&
-          typeof embeddingModel === "string" &&
-          embeddingModel.trim()
-        )
-          queryEmbedding = await new OpenAiKnowledgeEmbeddings(
-            credential.apiKey,
-            embeddingModel,
-          ).embed(query);
+        if (typeof embeddingModel !== "string" || !embeddingModel.trim())
+          throw new Error("support_ai_model_missing");
+        queryEmbedding = await new OpenAiKnowledgeEmbeddings(
+          credential.apiKey,
+          embeddingModel,
+        ).embed(query);
       }
       const result = await (
         this.client as unknown as {

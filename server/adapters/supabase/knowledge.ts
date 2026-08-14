@@ -55,16 +55,14 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
         "support",
         "openai",
       );
+      if (!credential) throw new Error("support_ai_configuration_required");
       const embeddingModel = credential?.config.embeddingModel;
-      if (
-        credential &&
-        typeof embeddingModel === "string" &&
-        embeddingModel.trim()
-      )
-        embeddings = await new OpenAiKnowledgeEmbeddings(
-          credential.apiKey,
-          embeddingModel,
-        ).embedMany(chunks.map((chunk) => chunk.content));
+      if (typeof embeddingModel !== "string" || !embeddingModel.trim())
+        throw new Error("support_ai_model_missing");
+      embeddings = await new OpenAiKnowledgeEmbeddings(
+        credential.apiKey,
+        embeddingModel,
+      ).embedMany(chunks.map((chunk) => chunk.content));
     }
 
     checked(

@@ -4,9 +4,12 @@ import {
   agentConnectionCreateSchema,
   agentConnectionParamSchema,
   agentConnectionPatchSchema,
+  agentConnectionPurposeQuerySchema,
+  agentConnectionSecretRotateSchema,
   agentLoginJobParamSchema,
   agentLoginStartSchema,
   agentRoutingPolicySchema,
+  supportModelConfigSchema,
 } from "./schemas.js";
 
 export function registerCodingControlPlaneRoutes(
@@ -23,6 +26,7 @@ export function registerCodingControlPlaneRoutes(
       send(response, 200, {
         data: await controlPlane.listConnections(
           await scoped(request, response),
+          parse(agentConnectionPurposeQuerySchema, request.query).purpose,
         ),
       });
     }),
@@ -53,6 +57,48 @@ export function registerCodingControlPlaneRoutes(
           parse(agentConnectionPatchSchema, request.body),
         ),
       );
+    }),
+  );
+  router.put(
+    "/api/agent-connections/:id/secret",
+    asyncRoute(async (request, response) => {
+      const input = parse(agentConnectionParamSchema, request.params);
+      const result = await controlPlane.rotateConnectionSecret(
+        await scoped(request, response, "admin"),
+        input.id,
+        parse(agentConnectionSecretRotateSchema, request.body),
+      );
+      if (!result) {
+        send(response, 404, {
+          error: {
+            code: "agent_connection_not_found",
+            message: "Connection not found",
+          },
+        });
+        return;
+      }
+      send(response, 200, result);
+    }),
+  );
+  router.put(
+    "/api/agent-connections/:id/support-config",
+    asyncRoute(async (request, response) => {
+      const input = parse(agentConnectionParamSchema, request.params);
+      const result = await controlPlane.updateSupportConfig(
+        await scoped(request, response, "admin"),
+        input.id,
+        parse(supportModelConfigSchema, request.body),
+      );
+      if (!result) {
+        send(response, 404, {
+          error: {
+            code: "agent_connection_not_found",
+            message: "Connection not found",
+          },
+        });
+        return;
+      }
+      send(response, 200, result);
     }),
   );
   router.delete(

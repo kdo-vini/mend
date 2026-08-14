@@ -228,6 +228,10 @@ export interface LiveWorkerAutomation {
   process(
     input: LiveWorkerAutomationInput,
   ): Promise<LiveWorkerAutomationResult | void>;
+  handleSupportConfigurationFailure?(
+    input: LiveWorkerAutomationInput,
+    code: string,
+  ): Promise<void>;
   sendAiReply?(input: LiveWorkerSendAiReplyInput): Promise<void>;
   processCodingRunContinuation?(
     input: CodingRunContinuationJobPayload,
@@ -588,12 +592,32 @@ export class LiveWorker {
     if (automation.isComplete && (await automation.isComplete(automationBase)))
       return;
 
-    const knowledge = this.options.knowledge
-      ? await this.options.knowledge.listPublished(
-          payload.binding.workspaceId,
-          messageText(payload.message),
-        )
-      : [];
+    let knowledge: readonly LiveWorkerKnowledgeArticle[] = [];
+    try {
+      knowledge = this.options.knowledge
+        ? await this.options.knowledge.listPublished(
+            payload.binding.workspaceId,
+            messageText(payload.message),
+          )
+        : [];
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        [
+          "support_ai_configuration_required",
+          "support_ai_model_missing",
+          "support_ai_embedding_failed",
+        ].includes(error.message) &&
+        automation.handleSupportConfigurationFailure
+      ) {
+        await automation.handleSupportConfigurationFailure(
+          { ...automationBase, knowledge },
+          error.message,
+        );
+        return;
+      }
+      throw error;
+    }
     const result = await automation.process({ ...automationBase, knowledge });
     if (result?.send) {
       await this.stageJobStore.enqueue({
@@ -701,6 +725,7 @@ export function createSupabaseLiveWorker(
       new SupabaseCodexStarter(options.client, options.agentCredentials),
     options.jobStore as unknown as JobStore<LiveWorkerJobPayload>,
     options.agentCredentials,
+    mediaStorage,
   );
   return new LiveWorker({
     jobStore: options.jobStore,

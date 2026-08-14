@@ -141,11 +141,35 @@ export function SettingsWorkspaceRoutes(props: SettingsWorkspacePageProps) {
         />
         <Route
           path="engineering/agents/providers"
-          element={<SettingsAgentsPage {...props} section="providers" />}
+          element={
+            <Navigate
+              replace
+              to="/settings/engineering/agents/issues/providers"
+            />
+          }
         />
         <Route
           path="engineering/agents/run-policy"
-          element={<SettingsAgentsPage {...props} section="run-policy" />}
+          element={
+            <Navigate
+              replace
+              to="/settings/engineering/agents/issues/run-policy"
+            />
+          }
+        />
+        <Route
+          path="engineering/agents/issues/providers"
+          element={<SettingsAgentsPage {...props} section="issues-providers" />}
+        />
+        <Route
+          path="engineering/agents/issues/run-policy"
+          element={
+            <SettingsAgentsPage {...props} section="issues-run-policy" />
+          }
+        />
+        <Route
+          path="engineering/agents/support"
+          element={<SettingsAgentsPage {...props} section="support" />}
         />
         <Route
           path="audit"
@@ -184,7 +208,7 @@ export function SettingsOverviewPage({
         listLiveChannels(workspaceId),
         listLiveRepositories(workspaceId),
         getLiveGitHubConnection(workspaceId),
-        listLiveAgentConnections(workspaceId),
+        listLiveAgentConnections(workspaceId, "coding"),
         listLiveAgentRoutingPolicies({ workspaceId }),
         listLiveWorkspaceMembers(workspaceId),
       ]);
@@ -274,7 +298,7 @@ export function SettingsOverviewPage({
                     ? "success"
                     : "warning"
                 }
-                to="/settings/engineering/agents/providers"
+                to="/settings/engineering/agents/issues/providers"
               >
                 <span className="settings-overview-meta">
                   {t("v2.overview.connectionCount", {
@@ -320,7 +344,7 @@ export function SettingsOverviewPage({
                 </Link>
                 <Link
                   className="button button-primary button-small"
-                  to="/settings/engineering/agents/run-policy"
+                  to="/settings/engineering/agents/issues/run-policy"
                 >
                   {t("v2.overview.reviewCoding")}
                 </Link>

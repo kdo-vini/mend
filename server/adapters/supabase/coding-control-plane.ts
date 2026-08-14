@@ -18,6 +18,9 @@ import {
   type CodingStage,
   type StageRoutingPolicy,
   type StageRoutingPolicyOverride,
+  isSupportModelConfigReady,
+  parseSupportModelConfig,
+  type SupportModelConfig,
 } from "../../coding-control-plane.js";
 import {
   decryptConnectionSecret,
@@ -25,6 +28,7 @@ import {
 } from "../../connection-crypto.js";
 import {
   type AgentConnectionCreateInput,
+  type AgentConnectionSecretRotateInput,
   type AgentConnectionPatchInput,
   type AgentLoginJob,
   type AgentLoginStartInput,
@@ -132,6 +136,9 @@ export class SupabaseCodingControlPlaneAdapter
         : {}),
       quota: row(value.quota_json),
       catalog,
+      ...(parseSupportModelConfig(value.support_config_json)
+        ? { supportConfig: parseSupportModelConfig(value.support_config_json) }
+        : {}),
       metadata: row(value.metadata_json),
       createdAt: str(value.created_at),
       updatedAt: str(value.updated_at),
@@ -188,13 +195,17 @@ export class SupabaseCodingControlPlaneAdapter
     );
   }
 
-  async listConnections(context: RequestContext): Promise<AgentConnection[]> {
+  async listConnections(
+    context: RequestContext,
+    purpose?: "coding" | "support",
+  ): Promise<AgentConnection[]> {
     const connections = await this.listWorkspaceConnections(
       context.workspaceId,
     );
     const visible = connections.filter(
       (connection) =>
-        !["pending", "revoked", "canceled"].includes(connection.status),
+        !["pending", "revoked", "canceled"].includes(connection.status) &&
+        (!purpose || connection.purpose === purpose),
     );
     return context.role === "owner" || context.role === "admin"
       ? visible
@@ -207,9 +218,24 @@ export class SupabaseCodingControlPlaneAdapter
     context: RequestContext,
     input: AgentConnectionCreateInput,
   ): Promise<AgentConnection> {
+    if (input.purpose === "support" && input.authMethod !== "api_key")
+      throw new Error("support_ai_byok_required");
     if (input.authMethod === "subscription")
       throw new Error("subscription_connection_requires_login");
     if (!input.apiKey?.trim()) throw new Error("agent_api_key_required");
+    if (input.purpose === "support" && input.provider !== "openai")
+      throw new Error("support_ai_provider_not_supported");
+    if (input.purpose === "support") {
+      const existing = await this.listWorkspaceConnections(context.workspaceId);
+      if (
+        existing.some(
+          (connection) =>
+            connection.purpose === "support" &&
+            connection.status === "connected",
+        )
+      )
+        throw new Error("support_connection_exists");
+    }
     const result = await this.privilegedClient
       .from("agent_connections")
       .insert({
@@ -220,10 +246,19 @@ export class SupabaseCodingControlPlaneAdapter
         provider: input.provider,
         auth_method: input.authMethod,
         status: "connected",
+        support_config_json: {},
         metadata_json: input.metadata ?? {},
       })
       .select("*")
       .single();
+    if (
+      result.error &&
+      input.purpose === "support" &&
+      /agent_connections_one_active_support_idx|duplicate key/i.test(
+        result.error.message,
+      )
+    )
+      throw new Error("support_connection_exists");
     const created = this.connection(
       row(checked("agent_connections.create", result)),
     );
@@ -244,6 +279,88 @@ export class SupabaseCodingControlPlaneAdapter
       throw new Error(`agent_connection_secret:${secret.error.message}`);
     }
     return created;
+  }
+
+  async rotateConnectionSecret(
+    context: RequestContext,
+    connectionId: string,
+    input: AgentConnectionSecretRotateInput,
+  ): Promise<AgentConnection | null> {
+    const current = await this.getConnection(connectionId, context.workspaceId);
+    if (!current) return null;
+    if (
+      current.ownerUserId !== context.userId &&
+      context.role !== "owner" &&
+      context.role !== "admin"
+    )
+      throw new Error("agent_connection_forbidden");
+    if (current.purpose !== "support" || current.provider !== "openai")
+      throw new Error("support_connection_required");
+    const apiKey = input.apiKey.trim();
+    if (!apiKey) throw new Error("agent_api_key_required");
+    const secret = await this.privilegedClient
+      .from("agent_connection_secrets")
+      .upsert(
+        {
+          connection_id: connectionId,
+          encrypted_bundle: encryptConnectionSecret(
+            JSON.stringify({ apiKey }),
+            connectionEncryptionKey(),
+          ),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "connection_id" },
+      );
+    checked("agent_connections.secret_rotate", secret);
+    const result = await this.privilegedClient
+      .from("agent_connections")
+      .update({
+        status: "connected",
+        catalog_json: null,
+        catalog_source: null,
+        catalog_expires_at: null,
+        last_validated_at: null,
+        support_config_json: {},
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connectionId)
+      .eq("workspace_id", context.workspaceId)
+      .select("*")
+      .maybeSingle();
+    const data = checked("agent_connections.secret_rotate_update", result);
+    return data ? this.connection(row(data)) : null;
+  }
+
+  async updateSupportConfig(
+    context: RequestContext,
+    connectionId: string,
+    config: SupportModelConfig,
+  ): Promise<AgentConnection | null> {
+    const current = await this.getConnection(connectionId, context.workspaceId);
+    if (!current) return null;
+    if (
+      current.ownerUserId !== context.userId &&
+      context.role !== "owner" &&
+      context.role !== "admin"
+    )
+      throw new Error("agent_connection_forbidden");
+    if (current.purpose !== "support" || current.provider !== "openai")
+      throw new Error("support_connection_required");
+    if (!current.catalog) throw new Error("support_ai_catalog_required");
+    if (!isSupportModelConfigReady(config, current.catalog.models))
+      throw new Error("support_ai_model_invalid");
+    const result = await this.privilegedClient
+      .from("agent_connections")
+      .update({
+        support_config_json: config,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connectionId)
+      .eq("workspace_id", context.workspaceId)
+      .select("*")
+      .maybeSingle();
+    const data = checked("agent_connections.support_config_update", result);
+    return data ? this.connection(row(data)) : null;
   }
 
   async updateConnection(

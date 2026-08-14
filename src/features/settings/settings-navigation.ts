@@ -90,7 +90,7 @@ export const settingsNavigation: SettingsNavGroup[] = [
       },
       {
         id: "agents",
-        path: "/settings/engineering/agents/providers",
+        path: "/settings/engineering/agents/issues/providers",
         matchPrefix: "/settings/engineering/agents",
         icon: ShieldCheck,
       },
@@ -123,9 +123,13 @@ const legacyRoutePaths: Record<string, string> = {
   "/settings/automation/ai": "/settings/automation/replies",
   "/settings/automation/flows": "/settings/automation/intake",
   "/settings/engineering/coding/connections":
-    "/settings/engineering/agents/providers",
+    "/settings/engineering/agents/issues/providers",
   "/settings/engineering/coding/routing":
-    "/settings/engineering/agents/run-policy",
+    "/settings/engineering/agents/issues/run-policy",
+  "/settings/engineering/agents/providers":
+    "/settings/engineering/agents/issues/providers",
+  "/settings/engineering/agents/run-policy":
+    "/settings/engineering/agents/issues/run-policy",
 };
 
 export function legacySettingsPath(tab: string | null): string | null {

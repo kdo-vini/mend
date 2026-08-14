@@ -427,13 +427,31 @@ describe("Supabase API adapters", () => {
   });
 
   it("resolves support BYOK from a workspace-owned support connection", async () => {
+    const supportCatalog = {
+      connectionId: "support-connection",
+      provider: "openai" as const,
+      cliVersion: "api",
+      models: [
+        { id: "gpt-support", capabilities: ["text"] as const },
+        { id: "gpt-vision", capabilities: ["text", "vision"] as const },
+        { id: "gpt-transcribe", capabilities: ["transcription"] as const },
+        {
+          id: "text-embedding-3-small",
+          capabilities: ["embedding"] as const,
+        },
+      ],
+      source: "api" as const,
+      lastVerifiedAt: "2026-08-14T10:00:00.000Z",
+      expiresAt: "2099-08-14T10:00:00.000Z",
+    };
     const client = new FakeClient({
       agent_connections: [],
       agent_connection_secrets: [],
-      workspace_agent_credentials: [],
     });
-    const dependencies = adapters(client, fakeProvider());
-    await dependencies.codingControlPlane.createConnection(
+    const dependencies = adapters(client, fakeProvider(), undefined, {
+      list: async () => supportCatalog,
+    });
+    const connection = await dependencies.codingControlPlane.createConnection(
       { userId, workspaceId, role: "admin" },
       {
         label: "Support OpenAI",
@@ -441,20 +459,40 @@ describe("Supabase API adapters", () => {
         authMethod: "api_key",
         purpose: "support",
         apiKey: "workspace-support-key",
-        metadata: {
-          model: "gpt-support",
-          transcriptionModel: "gpt-transcribe",
-        },
       },
     );
+    await dependencies.codingControlPlane.listModels(
+      { userId, workspaceId, role: "admin" },
+      connection.id,
+      true,
+    );
+    const configured =
+      await dependencies.codingControlPlane.updateSupportConfig(
+        { userId, workspaceId, role: "admin" },
+        connection.id,
+        {
+          supportModel: "gpt-support",
+          visionModel: "gpt-vision",
+          transcriptionModel: "gpt-transcribe",
+          embeddingModel: "text-embedding-3-small",
+        },
+      );
 
+    expect(configured?.supportConfig).toEqual({
+      supportModel: "gpt-support",
+      visionModel: "gpt-vision",
+      transcriptionModel: "gpt-transcribe",
+      embeddingModel: "text-embedding-3-small",
+    });
     await expect(
       dependencies.agentCredentials.resolve(workspaceId, "support", "openai"),
     ).resolves.toEqual({
       apiKey: "workspace-support-key",
       config: {
-        model: "gpt-support",
+        supportModel: "gpt-support",
+        visionModel: "gpt-vision",
         transcriptionModel: "gpt-transcribe",
+        embeddingModel: "text-embedding-3-small",
       },
     });
   });

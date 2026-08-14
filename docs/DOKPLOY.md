@@ -157,9 +157,12 @@ supabase db push --linked
 supabase gen types typescript --linked
 ```
 
-The migration creates the service-role-only `workspace_agent_credentials`
-table, renames run tables to `agent_runs`/`agent_run_events`, removes
-repository local paths, and updates the durable bug-loop RPC.
+The current agent control plane uses V2 `agent_connections` plus encrypted
+`agent_connection_secrets`. The P0 Inbox AI migration adds
+`support_config_json`, enforces OpenAI BYOK for Support, and removes the
+legacy `workspace_agent_credentials` table after old workers are drained. It
+also renames run tables to `agent_runs`/`agent_run_events`, removes repository
+local paths, and updates the durable bug-loop RPC.
 
 ## Verification
 

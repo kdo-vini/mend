@@ -23,6 +23,7 @@ import { SupabaseMediaPipeline } from "../../media-pipeline.js";
 import { SupabaseMediaStorage, validateRemoteMediaUrl } from "../../media.js";
 import {
   resolveSupportAiProvider,
+  SupportAiConfigurationError,
   type SupportAiProvider,
 } from "../../providers.js";
 import type { AnySupabaseClient, WhatsmiauProviderPort } from "./types.js";
@@ -813,7 +814,10 @@ export class SupabaseConversationAdapter implements ConversationPort {
           this.agentCredentials,
         )
       : this.ai;
-    if (!provider) throw new Error("support_ai_credential_required");
+    if (!provider)
+      throw new SupportAiConfigurationError(
+        "support_ai_configuration_required",
+      );
     const draft = await provider.draftReply(
       `${values}${input.instruction ? `\nOperator instruction: ${input.instruction}` : ""}`,
       knowledge,

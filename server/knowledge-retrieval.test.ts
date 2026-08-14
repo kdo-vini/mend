@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chunkPublishedArticle,
+  OpenAiKnowledgeEmbeddings,
   KnowledgeRetriever,
   type KnowledgeSearchPort,
 } from "./knowledge-retrieval.js";
@@ -86,5 +87,22 @@ describe("tenant-scoped hybrid knowledge retrieval", () => {
         query: "unknown",
       }),
     ).resolves.toMatchObject({ sufficient: false, chunks: [] });
+  });
+
+  it("normalizes embedding provider failures to an actionable code", async () => {
+    const embeddings = new OpenAiKnowledgeEmbeddings(
+      "workspace-key",
+      "text-embedding-3-small",
+      {
+        embeddings: {
+          create: async () => {
+            throw new Error("provider unavailable");
+          },
+        },
+      },
+    );
+    await expect(embeddings.embed("hello")).rejects.toThrow(
+      "support_ai_embedding_failed",
+    );
   });
 });

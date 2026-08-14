@@ -348,7 +348,9 @@ describe("Mend API router", () => {
   it("returns a controlled workspace configuration outcome when support BYOK is missing", async () => {
     const dependencies = createFakeDependencies();
     dependencies.conversations.aiDraft = vi.fn(async () => {
-      throw new SupportAiConfigurationError("support_ai_credential_required");
+      throw new SupportAiConfigurationError(
+        "support_ai_configuration_required",
+      );
     });
     const response = await request(makeApp(dependencies))
       .post(`/api/conversations/${conversationId}/ai-draft`)
@@ -357,7 +359,7 @@ describe("Mend API router", () => {
 
     expect(response.status).toBe(409);
     expect(response.body.error).toEqual({
-      code: "support_ai_credential_required",
+      code: "support_ai_configuration_required",
       message: "Configure a workspace support AI credential and model.",
     });
   });

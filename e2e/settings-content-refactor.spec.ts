@@ -28,7 +28,9 @@ test("Agents and models separates providers from run policy", async ({
     "page",
   );
   await page.getByRole("link", { name: "Run policy" }).click();
-  await expect(page).toHaveURL(/\/settings\/engineering\/agents\/run-policy/);
+  await expect(page).toHaveURL(
+    /\/settings\/engineering\/agents\/issues\/run-policy/,
+  );
 });
 
 test("integration providers remain details, not sidebar destinations", async ({

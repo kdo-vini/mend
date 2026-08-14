@@ -31,7 +31,6 @@ import { registerKanbanRoutes } from "./routes/kanban-routes.js";
 import { registerGoogleConnectionRoutes } from "./routes/google-connection-routes.js";
 import { registerMcpConnectionRoutes } from "./routes/mcp-connection-routes.js";
 import { registerGitHubConnectionRoutes } from "./routes/github-connection-routes.js";
-import { registerAgentCredentialRoutes } from "./routes/agent-credential-routes.js";
 import { registerCodingControlPlaneRoutes } from "./routes/coding-control-plane-routes.js";
 import { registerImpactRoutes } from "./routes/impact-routes.js";
 import { SupportAiConfigurationError } from "./providers.js";
@@ -107,6 +106,62 @@ function codingControlPlaneApiError(error: unknown): {
       code,
       message:
         "This coding connection was revoked. Reconnect it before refreshing models.",
+    };
+  if (code === "support_ai_byok_required")
+    return {
+      status: 422,
+      code,
+      message: "Inbox Support AI only accepts an OpenAI API key.",
+    };
+  if (code === "support_connection_exists")
+    return {
+      status: 409,
+      code,
+      message: "This workspace already has an active Support AI connection.",
+    };
+  if (code === "support_ai_provider_not_supported")
+    return {
+      status: 422,
+      code,
+      message: "Inbox Support AI requires OpenAI.",
+    };
+  if (code === "support_connection_required")
+    return {
+      status: 422,
+      code,
+      message: "Select the active Support AI connection.",
+    };
+  if (code === "support_ai_catalog_required")
+    return {
+      status: 409,
+      code,
+      message: "Verify the Support AI key and refresh its model catalog first.",
+    };
+  if (code === "support_ai_model_invalid")
+    return {
+      status: 422,
+      code,
+      message:
+        "Each Support AI role must use a verified model with the required capability.",
+    };
+  if (code === "support_ai_embedding_failed")
+    return {
+      status: 502,
+      code,
+      message: "Support AI knowledge search could not create embeddings.",
+    };
+  if (code === "support_ai_configuration_required")
+    return {
+      status: 409,
+      code,
+      message: "Configure Support AI in Settings before using Inbox AI.",
+    };
+  if (code === "support_ai_model_missing")
+    return {
+      status: 409,
+      code,
+      message:
+        "Select all four verified Support AI models before using Inbox AI.",
     };
   if (code === "agent_catalog_credential_missing")
     return {
@@ -624,7 +679,6 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerRepositoryRoutes(routeContext);
   registerGitHubConnectionRoutes(routeContext);
   registerCodingRunRoutes(routeContext);
-  registerAgentCredentialRoutes(routeContext);
   registerCodingControlPlaneRoutes(routeContext);
   registerGoogleConnectionRoutes(routeContext);
   registerMcpConnectionRoutes(routeContext);

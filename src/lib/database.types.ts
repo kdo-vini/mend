@@ -144,6 +144,7 @@ export type Database = {
           provider: string
           purpose: string
           quota_json: Json
+          support_config_json: Json
           status: string
           updated_at: string
           workspace_id: string
@@ -165,6 +166,7 @@ export type Database = {
           provider: string
           purpose?: string
           quota_json?: Json
+          support_config_json?: Json
           status?: string
           updated_at?: string
           workspace_id: string
@@ -186,6 +188,7 @@ export type Database = {
           provider?: string
           purpose?: string
           quota_json?: Json
+          support_config_json?: Json
           status?: string
           updated_at?: string
           workspace_id?: string
@@ -3605,47 +3608,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workflow_facts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_agent_credentials: {
-        Row: {
-          config_json: Json
-          created_at: string
-          encrypted_api_key: string
-          id: string
-          provider: string
-          task: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          config_json?: Json
-          created_at?: string
-          encrypted_api_key: string
-          id?: string
-          provider: string
-          task: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          config_json?: Json
-          created_at?: string
-          encrypted_api_key?: string
-          id?: string
-          provider?: string
-          task?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_agent_credentials_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"

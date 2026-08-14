@@ -36,7 +36,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type {
   AiMode,
@@ -2169,6 +2169,14 @@ function ConversationHeader({
             {conversation.humanTakeoverReason.replaceAll("_", " ")}
           </span>
         )}
+        {conversation.humanTakeoverReason?.startsWith("support_ai_") && (
+          <Link
+            className="text-button conversation-desktop-control"
+            to="/settings/engineering/agents/support"
+          >
+            {t("ui.configureSupportAi")}
+          </Link>
+        )}
         <button
           className="icon-button inbox-context-trigger"
           type="button"
@@ -2239,6 +2247,16 @@ function ConversationHeader({
                 </button>
               )}
               <hr className="mobile-menu-control" />
+              {conversation.humanTakeoverReason?.startsWith("support_ai_") && (
+                <Link
+                  className="mobile-menu-control"
+                  role="menuitem"
+                  to="/settings/engineering/agents/support"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <LockKeyhole size={14} /> {t("ui.configureSupportAi")}
+                </Link>
+              )}
               <button
                 type="button"
                 role="menuitem"

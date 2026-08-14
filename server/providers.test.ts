@@ -57,7 +57,7 @@ describe("support AI providers", () => {
       resolveSupportAiProvider("workspace-1", {
         resolve: async () => ({ apiKey: "workspace-key", config: {} }),
       }),
-    ).rejects.toMatchObject({ code: "support_ai_model_required" });
+    ).rejects.toMatchObject({ code: "support_ai_model_missing" });
   });
 
   it("resolves the workspace support key and selected model together", async () => {
@@ -71,7 +71,15 @@ describe("support AI providers", () => {
             "support",
             "openai",
           ]);
-          return { apiKey: "workspace-key", config: { model: "gpt-test" } };
+          return {
+            apiKey: "workspace-key",
+            config: {
+              supportModel: "gpt-test",
+              visionModel: "gpt-vision",
+              transcriptionModel: "gpt-transcribe",
+              embeddingModel: "text-embedding-3-small",
+            },
+          };
         },
       },
       () => ({
@@ -86,6 +94,49 @@ describe("support AI providers", () => {
 
     await provider.draftReply("hello", undefined, "en-US");
     expect(calls[0]?.model).toBe("gpt-test");
+  });
+
+  it("uses the V2 support roles for text and vision independently", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const provider = await resolveSupportAiProvider(
+      "workspace-1",
+      {
+        resolve: async () => ({
+          apiKey: "workspace-key",
+          config: {
+            supportModel: "gpt-support",
+            visionModel: "gpt-vision",
+            transcriptionModel: "gpt-transcribe",
+            embeddingModel: "text-embedding-3-small",
+          },
+        }),
+      },
+      () => ({
+        responses: {
+          async create(input) {
+            calls.push(input as Record<string, unknown>);
+            return { output_text: "grounded media summary" };
+          },
+        },
+      }),
+    );
+
+    await provider.draftReply("hello", undefined, "en-US");
+    await provider.analyzeMedia({
+      conversation: "The customer sent an image.",
+      files: [
+        {
+          data: new Uint8Array([137, 80, 78, 71]),
+          mimeType: "image/png",
+          fileName: "receipt.png",
+        },
+      ],
+    });
+
+    expect(calls.map((call) => call.model)).toEqual([
+      "gpt-support",
+      "gpt-vision",
+    ]);
   });
 
   it("transcribes audio with the configured model", async () => {

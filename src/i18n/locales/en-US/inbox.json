@@ -104,6 +104,7 @@
     "intent": "Intent: {{intent}}",
     "sources": "Sources: {{sources}}",
     "humanTakeoverReason": "Human takeover reason",
+    "configureSupportAi": "Configure Support AI",
     "aiGenerated": "AI generated",
     "messageDeleted": "Message deleted",
     "messageReactions": "Message reactions",
