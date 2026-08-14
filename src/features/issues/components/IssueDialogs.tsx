@@ -9,6 +9,7 @@ import {
   GitBranch,
   Info,
   Keyboard,
+  LoaderCircle,
   Plus,
   Save,
   Search,
@@ -611,7 +612,7 @@ export function RunAgentDialog({
       parentRunId?: string;
       researchArtifactId?: string;
     },
-  ) => void;
+  ) => void | Promise<void>;
 }) {
   const { t } = useTranslation("issues");
   const [mode, setMode] = useState<CodingRun["mode"]>(initialMode);
@@ -619,6 +620,7 @@ export function RunAgentDialog({
   const [repositories, setRepositories] = useState<LiveRepository[]>([]);
   const [instructions, setInstructions] = useState("");
   const [loadingRepositories, setLoadingRepositories] = useState(liveMode);
+  const [starting, setStarting] = useState(false);
   useEffect(() => {
     if (!liveMode || !workspaceId) {
       setLoadingRepositories(false);
@@ -640,6 +642,23 @@ export function RunAgentDialog({
   const canStart =
     (!liveMode || Boolean(repositoryId)) &&
     (initialStage !== "implement" || Boolean(initialResearchArtifactId));
+  const submit = async () => {
+    if (!canStart || loadingRepositories || starting) return;
+    setStarting(true);
+    try {
+      await onStart(issue.id, mode, {
+        repositoryId: repositoryId || undefined,
+        instructions: instructions.trim() || undefined,
+        ...(initialStage ? { stage: initialStage } : {}),
+        ...(initialParentRunId ? { parentRunId: initialParentRunId } : {}),
+        ...(initialResearchArtifactId
+          ? { researchArtifactId: initialResearchArtifactId }
+          : {}),
+      });
+    } finally {
+      setStarting(false);
+    }
+  };
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -776,22 +795,16 @@ export function RunAgentDialog({
           <button
             className="button button-primary"
             type="button"
-            disabled={!canStart || loadingRepositories}
-            onClick={() =>
-              onStart(issue.id, mode, {
-                repositoryId: repositoryId || undefined,
-                instructions: instructions.trim() || undefined,
-                ...(initialStage ? { stage: initialStage } : {}),
-                ...(initialParentRunId
-                  ? { parentRunId: initialParentRunId }
-                  : {}),
-                ...(initialResearchArtifactId
-                  ? { researchArtifactId: initialResearchArtifactId }
-                  : {}),
-              })
-            }
+            disabled={!canStart || loadingRepositories || starting}
+            aria-busy={starting}
+            onClick={submit}
           >
-            <TerminalSquare size={15} /> {t("dialogs.startRun")}
+            {starting ? (
+              <LoaderCircle className="spin" size={15} aria-hidden="true" />
+            ) : (
+              <TerminalSquare size={15} aria-hidden="true" />
+            )}{" "}
+            {starting ? t("dialogs.startingRun") : t("dialogs.startRun")}
           </button>
         </div>
       </div>

@@ -110,7 +110,8 @@
     "additionalInstructions": "Additional instructions",
     "instructionsPlaceholder": "Optional acceptance criteria or context…",
     "safetyNote": "Secrets are excluded. Push, merge, deploy, and unrestricted shell are disabled.",
-    "startRun": "Start run"
+    "startRun": "Start run",
+    "startingRun": "Starting…"
   },
   "detail": {
     "historyLoadError": "Issue history could not be loaded.",

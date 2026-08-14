@@ -37,6 +37,12 @@ export const workspaceRealtimeTables = [
   "issue_messages",
 ] as const;
 
+export function hasActiveRuns(runs: readonly { status: string }[]): boolean {
+  return runs.some(
+    (run) => run.status === "queued" || run.status === "running",
+  );
+}
+
 export function createRealtimeFallback(
   refresh: () => void,
   isHealthy: () => boolean,

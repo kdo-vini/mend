@@ -36,6 +36,7 @@ import {
 } from "../run-actions";
 import { runEventLabelKey, selectLatestRunEvent } from "../run-events";
 import { selectRun } from "../run-selection";
+import { isRunExecutionFailed } from "../run-state";
 
 const stageOrder = [
   "signal",
@@ -127,10 +128,7 @@ function RunActionButtons({
 
 function BugLoopOverview({ run }: { run: CodingRun }) {
   const { t } = useTranslation("runs");
-  const isFailed =
-    run.status === "failed" ||
-    run.stage === "failed" ||
-    run.caseStatus === "failed";
+  const isFailed = isRunExecutionFailed(run);
   const failureEvent = [...run.events]
     .reverse()
     .find(

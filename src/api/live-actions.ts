@@ -18,6 +18,7 @@ import {
   toUiKnowledge,
   toUiRun,
   toUiBugCase,
+  findBugCaseForRun,
   type WorkspaceData,
 } from "./live-mappers";
 import {
@@ -391,12 +392,7 @@ export async function loadLiveWorkspace(
           ),
         ),
       ...runs.map((run) => {
-        const bugCase = bugCases.find(
-          (item) =>
-            item.investigation_agent_run_id === run.id ||
-            item.fix_agent_run_id === run.id ||
-            item.issue_id === run.issue_id,
-        );
+        const bugCase = findBugCaseForRun(bugCases, run.id);
         return toUiRun(
           run,
           events,

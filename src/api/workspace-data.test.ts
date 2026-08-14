@@ -1,12 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createRealtimeFallback,
+  hasActiveRuns,
   subscribeToWorkspace,
   workspaceRealtimeTables,
 } from "./workspace-data";
 import type { MendSupabaseClient } from "../lib/supabase";
 
 describe("workspace realtime subscriptions", () => {
+  it("marks only queued and running executions for status reconciliation", () => {
+    expect(
+      hasActiveRuns([
+        { status: "completed" },
+        { status: "failed" },
+        { status: "canceled" },
+      ]),
+    ).toBe(false);
+    expect(
+      hasActiveRuns([{ status: "completed" }, { status: "running" }]),
+    ).toBe(true);
+  });
+
   it("subscribes to every live workspace surface and refetches after reconnect", () => {
     const registrations: Array<{
       options: Record<string, unknown>;

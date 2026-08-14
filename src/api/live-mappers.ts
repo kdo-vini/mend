@@ -106,6 +106,19 @@ const stageOrder: BugLoopStage[] = [
 ];
 const accents = ["#7c91ff", "#e9a75d", "#8ecb9c", "#b997e8", "#6fb6c8"];
 
+export function findBugCaseForRun<
+  T extends Pick<
+    BugCaseRecord,
+    "investigation_agent_run_id" | "fix_agent_run_id"
+  >,
+>(bugCases: readonly T[], runId: string): T | undefined {
+  return bugCases.find(
+    (bugCase) =>
+      bugCase.investigation_agent_run_id === runId ||
+      bugCase.fix_agent_run_id === runId,
+  );
+}
+
 const fallback = <T>(
   value: string | null | undefined,
   table: Record<string, T>,

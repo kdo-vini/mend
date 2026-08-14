@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  findBugCaseForRun,
   toUiBugCase,
   toUiConversation,
   toUiMessage,
@@ -292,6 +293,16 @@ const codingRunDefaults = {
 } as const;
 
 describe("live Agent run mapper", () => {
+  it("does not import a bug case from another run on the same issue", () => {
+    const linkedCase = {
+      investigation_agent_run_id: "run-old",
+      fix_agent_run_id: null,
+    };
+
+    expect(findBugCaseForRun([linkedCase], "run-new")).toBeUndefined();
+    expect(findBugCaseForRun([linkedCase], "run-old")).toBe(linkedCase);
+  });
+
   it("exposes persisted diff, files, checks and model summary for review", () => {
     const record = {
       ...codingRunDefaults,

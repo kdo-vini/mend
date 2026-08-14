@@ -110,7 +110,8 @@
     "additionalInstructions": "Instruções adicionais",
     "instructionsPlaceholder": "Critérios de aceite ou contexto opcionais…",
     "safetyNote": "Segredos são excluídos. Push, merge, deploy e shell irrestrito estão desativados.",
-    "startRun": "Iniciar execução"
+    "startRun": "Iniciar execução",
+    "startingRun": "Iniciando…"
   },
   "detail": {
     "historyLoadError": "Não foi possível carregar o histórico do chamado.",

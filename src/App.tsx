@@ -29,6 +29,7 @@ import {
 } from "./api/notifications";
 import {
   createRealtimeFallback,
+  hasActiveRuns,
   listWorkspaces,
   subscribeToWorkspace,
 } from "./api/workspace-data";
@@ -200,6 +201,8 @@ function App() {
   );
   const [issues, setIssues] = useState<Issue[]>(demoMode ? seedIssues : []);
   const [runs, setRuns] = useState<CodingRun[]>(demoMode ? seedRuns : []);
+  const runsRef = useRef(runs);
+  runsRef.current = runs;
   const [knowledgeArticles, setKnowledgeArticles] = useState<
     KnowledgeArticle[]
   >(demoMode ? seedKnowledge : []);
@@ -233,6 +236,7 @@ function App() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const pendingRunIdsRef = useRef(new Set<string>());
+  const pendingRunStartIssueIdsRef = useRef(new Set<string>());
   const [pendingRunIds, setPendingRunIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -416,6 +420,7 @@ function App() {
     let workspaceSubscribed = false;
     let reconcileQueue = Promise.resolve();
     let realtimeHealthy = false;
+    let runStatusTimer: ReturnType<typeof setInterval> | null = null;
     const hydrate = async (showLoading = true) => {
       try {
         if (showLoading) setWorkspaceLoading(true);
@@ -553,11 +558,26 @@ function App() {
       },
       () => realtimeHealthy,
     );
+    runStatusTimer = setInterval(() => {
+      if (!active || !realtimeHealthy || !hasActiveRuns(runsRef.current))
+        return;
+      reconcileQueue = reconcileQueue
+        .then(() => (active ? hydrate(false) : undefined))
+        .catch((error) => {
+          if (active)
+            setLiveDataError(
+              error instanceof Error
+                ? error.message
+                : t("errors.liveReconciliation"),
+            );
+        });
+    }, 5_000);
     void hydrate();
     return () => {
       active = false;
       unsubscribe();
       realtimeFallback.stop();
+      if (runStatusTimer) clearInterval(runStatusTimer);
     };
   }, [demoMode, liveDataRetry, t, workspaceId]);
 
@@ -867,7 +887,7 @@ function App() {
     }
   };
 
-  const startRun = (
+  const startRun = async (
     issueId: string,
     mode: CodingRun["mode"],
     options?: {
@@ -877,64 +897,69 @@ function App() {
       parentRunId?: string;
       researchArtifactId?: string;
     },
-  ) => {
+  ): Promise<void> => {
     const issue = issues.find((item) => item.id === issueId);
     if (!issue) return;
-    if (!demoMode && workspaceId) {
-      void startLiveAgentRun({
-        workspaceId,
+    if (!demoMode && !workspaceId) {
+      setToast(t("errors.agentRunQueue"));
+      return;
+    }
+    if (pendingRunStartIssueIdsRef.current.has(issueId)) return;
+    pendingRunStartIssueIdsRef.current.add(issueId);
+    try {
+      if (!demoMode) {
+        await startLiveAgentRun({
+          workspaceId: workspaceId!,
+          issueId,
+          issueIdentifier: issue.identifier,
+          mode,
+          ...(options?.stage
+            ? { stage: options.stage }
+            : mode === "Implement fix"
+              ? {}
+              : { stage: "research" as const }),
+          ...options,
+        });
+        setRunDialogIssueId(null);
+        setLiveDataRetry((current) => current + 1);
+        setToast(t("toasts.agentRunQueued", { identifier: issue.identifier }));
+        return;
+      }
+      const run: CodingRun = {
+        id: `run-${Date.now()}`,
         issueId,
         issueIdentifier: issue.identifier,
         mode,
-        ...(options?.stage
-          ? { stage: options.stage }
-          : mode === "Implement fix"
-            ? {}
-            : { stage: "research" as const }),
-        ...options,
-      })
-        .then(() => {
-          setRunDialogIssueId(null);
-          setLiveDataRetry((current) => current + 1);
-          setToast(
-            t("toasts.agentRunQueued", { identifier: issue.identifier }),
-          );
-        })
-        .catch((error) =>
-          setToast(
-            error instanceof Error ? error.message : t("errors.agentRunQueue"),
-          ),
-        );
-      return;
+        status: "queued",
+        progress: 8,
+        startedAt: t("states.justNow"),
+        duration: "00:00",
+        summary: t("app.agentRunPreparing"),
+        files: [],
+        events: [
+          {
+            id: `event-${Date.now()}`,
+            label: "run_started",
+            detail: t("app.agentRunStartedDetail"),
+            time: t("states.justNow"),
+            tone: "accent",
+          },
+        ],
+      };
+      setRuns((current) => [run, ...current]);
+      updateIssue(issueId, {
+        agentRuns: issue.agentRuns + 1,
+        status: issue.status === "Triage" ? "In Progress" : issue.status,
+      });
+      setRunDialogIssueId(null);
+      setToast(t("toasts.agentRunStarted", { identifier: issue.identifier }));
+    } catch (error) {
+      setToast(
+        error instanceof Error ? error.message : t("errors.agentRunQueue"),
+      );
+    } finally {
+      pendingRunStartIssueIdsRef.current.delete(issueId);
     }
-    const run: CodingRun = {
-      id: `run-${Date.now()}`,
-      issueId,
-      issueIdentifier: issue.identifier,
-      mode,
-      status: "queued",
-      progress: 8,
-      startedAt: t("states.justNow"),
-      duration: "00:00",
-      summary: t("app.agentRunPreparing"),
-      files: [],
-      events: [
-        {
-          id: `event-${Date.now()}`,
-          label: "run_started",
-          detail: t("app.agentRunStartedDetail"),
-          time: t("states.justNow"),
-          tone: "accent",
-        },
-      ],
-    };
-    setRuns((current) => [run, ...current]);
-    updateIssue(issueId, {
-      agentRuns: issue.agentRuns + 1,
-      status: issue.status === "Triage" ? "In Progress" : issue.status,
-    });
-    setRunDialogIssueId(null);
-    setToast(t("toasts.agentRunStarted", { identifier: issue.identifier }));
   };
 
   const updateRun = (runId: string, action: RunUpdateAction) => {
