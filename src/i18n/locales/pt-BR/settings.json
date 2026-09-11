@@ -229,6 +229,7 @@
     "provider": "Whatsmiau",
     "providerState": "Estado do provedor: {{state}}",
     "states": {
+      "unknown": "indisponível",
       "open": "aberto",
       "closed": "fechado",
       "connecting": "conectando",

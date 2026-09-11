@@ -80,7 +80,7 @@ export class SupabaseChannelAdapter implements ChannelPort {
 
   /**
    * Repairs channels created before webhook configuration existed. The
-   * provider endpoint is idempotent, so connect/refresh and repeated setup
+   * provider endpoint is idempotent, so connect and repeated setup
    * can safely call this without creating a second channel or persisting a
    * secret in Supabase.
    */
@@ -237,7 +237,6 @@ export class SupabaseChannelAdapter implements ChannelPort {
   async refresh(context: RequestContext, channelId: string) {
     const value = await this.getRow(context, channelId);
     if (!value) return null;
-    await this.ensureWebhook(value);
     const result = await this.provider.getConnectionState(
       str(value.provider_instance_name),
     );

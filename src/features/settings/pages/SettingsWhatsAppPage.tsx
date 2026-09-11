@@ -34,6 +34,9 @@ export function SettingsWhatsAppPage({
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const statusUnavailable = channels.some(
+    (channel) => channel.state === "unknown",
+  );
 
   const applyChannel = useCallback(
     (next: WhatsAppInstance | null) => {
@@ -59,12 +62,27 @@ export function SettingsWhatsAppPage({
     setLoading(true);
     setError(null);
     try {
-      const rows = await listLiveChannels(workspaceId);
+      const stored = await listLiveChannels(workspaceId);
+      const rows = await Promise.all(
+        stored.map(async (channel) => {
+          if (!channel.channelId) return { ...channel, state: "unknown" };
+          try {
+            return await refreshLiveChannel({
+              workspaceId,
+              channelId: channel.channelId,
+            });
+          } catch {
+            return { ...channel, state: "unknown" };
+          }
+        }),
+      );
       const next = rows.find((row) => row.state === "open") ?? rows[0] ?? null;
       setChannels(rows);
       applyChannel(next);
       if (next?.state === "open") setQr(null);
     } catch (reason) {
+      setChannels([]);
+      applyChannel(null);
       setError(
         reason instanceof Error ? reason.message : t("v2.whatsapp.errors.load"),
       );
@@ -76,37 +94,35 @@ export function SettingsWhatsAppPage({
   useEffect(() => void load(), [load]);
 
   useEffect(() => {
-    if (
-      !workspaceId ||
-      !selected?.channelId ||
-      !["qr-code", "connecting"].includes(selected.state)
-    )
-      return;
+    if (!workspaceId || !selected?.channelId || loading) return;
     let stopped = false;
+    let pending = false;
     const timer = window.setInterval(() => {
+      if (pending) return;
+      pending = true;
       void refreshLiveChannel({ workspaceId, channelId: selected.channelId! })
         .then((next) => {
           if (stopped) return;
           applyChannel(next);
           if (next.state === "open") {
             setQr(null);
-            onToast(t("v2.whatsapp.connectedToast"));
+            if (selected.state !== "open")
+              onToast(t("v2.whatsapp.connectedToast"));
           }
         })
-        .catch(() => undefined);
+        .catch(() => {
+          if (stopped) return;
+          applyChannel({ ...selected, state: "unknown" });
+        })
+        .finally(() => {
+          pending = false;
+        });
     }, 3000);
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [
-    applyChannel,
-    onToast,
-    selected?.channelId,
-    selected?.state,
-    t,
-    workspaceId,
-  ]);
+  }, [applyChannel, loading, onToast, selected, t, workspaceId]);
 
   const runChannelAction = async (
     name: string,
@@ -183,6 +199,12 @@ export function SettingsWhatsAppPage({
         }
       />
       {error && <SettingsError message={error} onRetry={() => void load()} />}
+      {statusUnavailable && !error && (
+        <SettingsError
+          message={t("v2.whatsapp.errors.load")}
+          onRetry={() => void load()}
+        />
+      )}
       {!workspaceId ? (
         <SettingsWorkspaceRequired />
       ) : loading ? (

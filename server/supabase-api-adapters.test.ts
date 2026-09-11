@@ -1460,7 +1460,67 @@ describe("Supabase API adapters", () => {
     });
   });
 
-  it("repairs an existing channel webhook during setup, connect and refresh", async () => {
+  it("refreshes a disconnected channel from the provider even when webhook setup is unavailable", async () => {
+    const client = new FakeClient({
+      channel_connections: [
+        {
+          id: "channel-existing",
+          workspace_id: workspaceId,
+          provider: "whatsmiau",
+          provider_instance_name: "mend-existing",
+          status: "open",
+        },
+        {
+          id: "channel-other",
+          workspace_id: otherWorkspaceId,
+          provider: "whatsmiau",
+          provider_instance_name: "mend-other",
+          status: "open",
+        },
+      ],
+    });
+    const configureWebhook = vi.fn(async () => {
+      throw new Error("webhook setup unavailable");
+    });
+    const getConnectionState = vi.fn(async () => ({ state: "closed" }));
+    const dependencies = adapters(client, {
+      ...fakeProvider(),
+      configureWebhook,
+      getConnectionState,
+    });
+    vi.stubEnv("WHATSMIAU_WEBHOOK_SECRET", "test-secret");
+    vi.stubEnv(
+      "WHATSMIAU_WEBHOOK_URL",
+      "https://hooks.example.test/mend/webhooks/whatsmiau",
+    );
+    const context = { userId, workspaceId, role: "agent" as const };
+
+    await expect(
+      dependencies.channels.refresh(context, "channel-existing"),
+    ).resolves.toMatchObject({
+      id: "channel-existing",
+      workspaceId,
+      status: "closed",
+    });
+    expect(getConnectionState).toHaveBeenCalledExactlyOnceWith("mend-existing");
+    expect(configureWebhook).not.toHaveBeenCalled();
+    expect(client.rows.get("channel_connections")?.[0].status).toBe("closed");
+
+    await expect(
+      dependencies.channels.refresh(context, "channel-other"),
+    ).resolves.toBeNull();
+    expect(getConnectionState).toHaveBeenCalledTimes(1);
+    expect(client.rows.get("channel_connections")?.[1].status).toBe("open");
+    for (const call of client.calls) {
+      expect(call.filters).toContainEqual({
+        kind: "eq",
+        column: "workspace_id",
+        value: workspaceId,
+      });
+    }
+  });
+
+  it("repairs an existing channel webhook during setup and connect without rewriting it during refresh", async () => {
     const client = new FakeClient({
       channel_connections: [
         {
@@ -1501,7 +1561,7 @@ describe("Supabase API adapters", () => {
       await dependencies.channels.connect(context, "channel-existing");
       await dependencies.channels.refresh(context, "channel-existing");
 
-      expect(configureWebhook).toHaveBeenCalledTimes(3);
+      expect(configureWebhook).toHaveBeenCalledTimes(2);
       expect(configureWebhook).toHaveBeenCalledWith({
         instanceName: "mend-existing",
         url: "https://hooks.example.test/mend/webhooks/whatsmiau",
