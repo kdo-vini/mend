@@ -127,4 +127,67 @@ describe("WhatsApp connection status", () => {
       state: "unknown",
     });
   });
+
+  async function generateQr() {
+    const button = [...container.querySelectorAll("button")].find((item) =>
+      item.textContent?.includes("Generate QR"),
+    );
+    expect(button).toBeDefined();
+    await act(async () => button!.click());
+  }
+
+  it("renders the QR data URI returned by the API without corrupting it", async () => {
+    vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
+      ...connected,
+      state: "closed",
+    });
+    const data = "data:image/png;base64,iVBORw0KGgo=";
+    vi.mocked(settingsApi.getLiveChannelQr).mockResolvedValue({ data });
+    await render();
+    await generateQr();
+    expect(container.querySelector(".qr-image")?.getAttribute("src")).toBe(
+      data,
+    );
+  });
+
+  it("renews the QR while pairing and stops requesting it after connection", async () => {
+    vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
+      ...connected,
+      state: "closed",
+    });
+    vi.mocked(settingsApi.getLiveChannelQr)
+      .mockResolvedValueOnce({ data: "data:image/png;base64,first" })
+      .mockResolvedValue({ data: "data:image/png;base64,renewed" });
+    await render();
+    await generateQr();
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(settingsApi.getLiveChannelQr).toHaveBeenCalledTimes(2);
+    expect(container.querySelector(".qr-image")?.getAttribute("src")).toBe(
+      "data:image/png;base64,renewed",
+    );
+    vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue(connected);
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+    expect(container.querySelector(".qr-image")).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(settingsApi.getLiveChannelQr).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes a stale QR after a renewal failure and retries automatically", async () => {
+    vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
+      ...connected,
+      state: "closed",
+    });
+    vi.mocked(settingsApi.getLiveChannelQr)
+      .mockResolvedValueOnce({ data: "data:image/png;base64,first" })
+      .mockRejectedValueOnce(new Error("QR unavailable"))
+      .mockResolvedValue({ data: "data:image/png;base64,recovered" });
+    await render();
+    await generateQr();
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(container.querySelector(".qr-image")).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(container.querySelector(".qr-image")?.getAttribute("src")).toBe(
+      "data:image/png;base64,recovered",
+    );
+  });
 });
