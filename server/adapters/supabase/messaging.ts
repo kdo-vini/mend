@@ -328,7 +328,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
     let request = this.client
       .from("conversations")
       .select(
-        "*, contact:contacts(id, phone_number, display_name), channel:channel_connections(*), ai_state:conversation_ai_state(*)",
+        "*, contact:contacts!conversations_contact_workspace_fkey(id, phone_number, display_name), channel:channel_connections!conversations_channel_workspace_fkey(*), ai_state:conversation_ai_state!conversation_ai_state_conversation_workspace_fkey(*)",
       )
       .eq("workspace_id", context.workspaceId);
     if (query.status) request = request.eq("status", query.status);
@@ -348,7 +348,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
     const result = await this.client
       .from("conversations")
       .select(
-        "*, contact:contacts(id, phone_number, display_name), channel:channel_connections(*), ai_state:conversation_ai_state(*)",
+        "*, contact:contacts!conversations_contact_workspace_fkey(id, phone_number, display_name), channel:channel_connections!conversations_channel_workspace_fkey(*), ai_state:conversation_ai_state!conversation_ai_state_conversation_workspace_fkey(*)",
       )
       .eq("id", conversationId)
       .eq("workspace_id", context.workspaceId)

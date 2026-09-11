@@ -31,6 +31,7 @@ class FakeQuery implements PromiseLike<Result> {
     "select";
   private payload: unknown;
   private singleResult = false;
+  private selectedColumns = "*";
   private limitValue?: number;
   private orderColumn?: string;
   private ascending = true;
@@ -40,7 +41,8 @@ class FakeQuery implements PromiseLike<Result> {
     private readonly table: string,
   ) {}
 
-  select(_columns = "*") {
+  select(columns = "*") {
+    this.selectedColumns = columns;
     return this;
   }
   eq(column: string, value: unknown) {
@@ -136,6 +138,7 @@ class FakeQuery implements PromiseLike<Result> {
     this.client.calls.push({
       table: this.table,
       operation: this.operation,
+      columns: this.selectedColumns,
       filters: [...this.filters],
     });
     const rows = this.client.rows.get(this.table) ?? [];
@@ -184,6 +187,7 @@ class FakeClient {
   readonly calls: Array<{
     table: string;
     operation: string;
+    columns: string;
     filters: Array<{ kind: string; column?: string; value?: unknown }>;
   }> = [];
   readonly rpcCalls: Array<{ name: string; args: Row }> = [];
@@ -1296,6 +1300,24 @@ describe("Supabase API adapters", () => {
           p_action: "snooze",
         }),
       }),
+    );
+  });
+
+  it("qualifies conversation embeds that have more than one foreign key", async () => {
+    const client = new FakeClient({ conversations: [] });
+    const dependencies = adapters(client);
+
+    await dependencies.conversations.list(
+      { userId, workspaceId, role: "agent" },
+      { limit: 20 },
+    );
+
+    expect(
+      client.calls.find(
+        (call) => call.table === "conversations" && call.operation === "select",
+      )?.columns,
+    ).toBe(
+      "*, contact:contacts!conversations_contact_workspace_fkey(id, phone_number, display_name), channel:channel_connections!conversations_channel_workspace_fkey(*), ai_state:conversation_ai_state!conversation_ai_state_conversation_workspace_fkey(*)",
     );
   });
 
