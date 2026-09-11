@@ -196,7 +196,7 @@ describe("support AI providers", () => {
           name: "Zelo",
           description: "Customer data",
           serverUrl: "https://mcp.example.com",
-          authMode: "none",
+          authMode: "oauth",
           status: "connected",
           tools: [
             {
@@ -212,14 +212,21 @@ describe("support AI providers", () => {
           lastTestedAt: null,
           createdAt: "",
           updatedAt: "",
-          headers: {},
+          headers: {
+            Authorization: "Bearer oauth-access-token",
+            "x-workspace-id": "workspace-1",
+          },
         },
       ],
     });
     expect(result.mcpEvidence).toBe(true);
     expect(result.body).toContain("Zelo PDV");
     expect(calls[0]?.tools).toEqual([
-      expect.objectContaining({ allowed_tools: ["buscar_cliente"] }),
+      expect.objectContaining({
+        allowed_tools: ["buscar_cliente"],
+        authorization: "oauth-access-token",
+        headers: { "x-workspace-id": "workspace-1" },
+      }),
     ]);
   });
 });

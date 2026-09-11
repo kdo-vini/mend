@@ -242,14 +242,17 @@ export class OpenAiSupportProvider implements SupportAiProvider {
       );
       const authorization =
         connection.headers.Authorization ?? connection.headers.authorization;
+      const headers = Object.fromEntries(
+        Object.entries(connection.headers).filter(
+          ([name]) => name.toLowerCase() !== "authorization",
+        ),
+      );
       return {
         type: "mcp",
         server_label: `mcp_${connection.id}`,
         server_description: connection.description || connection.name,
         server_url: connection.serverUrl,
-        ...(Object.keys(connection.headers).length
-          ? { headers: connection.headers }
-          : {}),
+        ...(Object.keys(headers).length ? { headers } : {}),
         ...(authorization
           ? { authorization: authorization.replace(/^Bearer\s+/i, "") }
           : {}),
