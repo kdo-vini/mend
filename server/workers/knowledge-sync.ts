@@ -179,30 +179,33 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
         index,
         index + KNOWLEDGE_ARTICLE_WRITE_BATCH_SIZE,
       );
-      const articleResult = await this.client
-        .from("knowledge_articles")
-        .upsert(
-          batch.map((document) => ({
-            workspace_id: payload.workspaceId,
-            title: document.title,
-            category: "Repository",
-            body: document.body,
-            status: "published",
-            source_id: payload.sourceId,
-            source_path: document.relativePath,
-            source_revision: payload.requestedSha,
-            managed_by_sync: true,
-            trust_level: "deterministic",
-            audience: "customer",
-            source_metadata_json: {
-              contentHash: document.contentHash,
-              bytes: document.body.length,
-            },
-            updated_at: new Date().toISOString(),
-          })) as never,
-          { onConflict: "source_id,source_path,source_revision" },
-        )
-        .select("id,source_path");
+      const articleResult = await retryTransientDatabaseWrite(
+        async () =>
+          await this.client
+            .from("knowledge_articles")
+            .upsert(
+              batch.map((document) => ({
+                workspace_id: payload.workspaceId,
+                title: document.title,
+                category: "Repository",
+                body: document.body,
+                status: "published",
+                source_id: payload.sourceId,
+                source_path: document.relativePath,
+                source_revision: payload.requestedSha,
+                managed_by_sync: true,
+                trust_level: "deterministic",
+                audience: "customer",
+                source_metadata_json: {
+                  contentHash: document.contentHash,
+                  bytes: document.body.length,
+                },
+                updated_at: new Date().toISOString(),
+              })) as never,
+              { onConflict: "source_id,source_path,source_revision" },
+            )
+            .select("id,source_path"),
+      );
       const articleRows = rows(
         checked("knowledge_articles.write_managed", articleResult),
       );
@@ -215,11 +218,14 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
       const articleIds = [...articleIdByPath.values()];
       checked(
         "knowledge_chunks.replace.delete",
-        await this.client
-          .from("knowledge_chunks")
-          .delete()
-          .eq("workspace_id", payload.workspaceId)
-          .in("article_id", articleIds),
+        await retryTransientDatabaseWrite(
+          async () =>
+            await this.client
+              .from("knowledge_chunks")
+              .delete()
+              .eq("workspace_id", payload.workspaceId)
+              .in("article_id", articleIds),
+        ),
       );
       await insertKnowledgeChunkRows(
         this.client,
