@@ -21,9 +21,11 @@ import {
   startLiveAgentRun,
   updateLiveRepository,
   updateLiveAgentRun,
+  hydrateMessageMediaUrls,
   saveLiveAgentRoutingPolicy,
   type LiveStageRoutingPolicy,
 } from "./live-actions";
+import type { MendSupabaseClient } from "../lib/supabase";
 
 describe("live Agent run actions", () => {
   it("links a continuation to its parent run and research artifact", async () => {
@@ -78,6 +80,33 @@ describe("live Agent run actions", () => {
       { method: "POST", body: JSON.stringify({}) },
       "workspace-1",
     );
+  });
+});
+
+describe("live message media hydration", () => {
+  it("reuses a signed media URL across realtime snapshots", async () => {
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://media.test/audio.ogg?token=stable" },
+    });
+    const client = {
+      storage: { from: vi.fn(() => ({ createSignedUrl })) },
+    } as unknown as MendSupabaseClient;
+    const record = {
+      id: "message-1",
+      media_storage_path: "workspace-1/message-1/audio.ogg",
+      media_remote_url: null,
+    } as never;
+
+    const first = await hydrateMessageMediaUrls(client, [record]);
+    const second = await hydrateMessageMediaUrls(client, [record]);
+
+    expect(first[0]?.media_remote_url).toBe(
+      "https://media.test/audio.ogg?token=stable",
+    );
+    expect(second[0]?.media_remote_url).toBe(
+      "https://media.test/audio.ogg?token=stable",
+    );
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
   });
 });
 

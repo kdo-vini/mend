@@ -47,19 +47,81 @@ type KnowledgeRow = Tables["knowledge_articles"]["Row"];
 type AiDraftRow = Tables["ai_drafts"]["Row"];
 type AiDraftKnowledgeRow = Tables["ai_draft_knowledge"]["Row"];
 
-async function hydrateMessageMediaUrls(
+const SIGNED_MEDIA_URL_TTL_MS = 15 * 60 * 1000;
+const SIGNED_MEDIA_URL_RENEWAL_WINDOW_MS = 60 * 1000;
+
+type SignedMediaUrlCacheEntry = {
+  url: string;
+  expiresAt: number;
+};
+
+const signedMediaUrlCaches = new WeakMap<
+  object,
+  Map<string, SignedMediaUrlCacheEntry>
+>();
+const signedMediaUrlInFlight = new WeakMap<
+  object,
+  Map<string, Promise<string | null>>
+>();
+
+export async function hydrateMessageMediaUrls(
   client: MendSupabaseClient,
   records: Message[],
 ): Promise<Message[]> {
+  const clientKey = client as object;
+  const cache =
+    signedMediaUrlCaches.get(clientKey) ??
+    new Map<string, SignedMediaUrlCacheEntry>();
+  const inFlight =
+    signedMediaUrlInFlight.get(clientKey) ??
+    new Map<string, Promise<string | null>>();
+  signedMediaUrlCaches.set(clientKey, cache);
+  signedMediaUrlInFlight.set(clientKey, inFlight);
+
   return Promise.all(
     records.map(async (record) => {
       if (!record.media_storage_path) return record;
-      const signed = await client.storage
-        .from("private-media")
-        .createSignedUrl(record.media_storage_path, 900);
-      return signed.data?.signedUrl
-        ? { ...record, media_remote_url: signed.data.signedUrl }
-        : record;
+      const mediaPath = record.media_storage_path;
+
+      const now = Date.now();
+      const cached = cache.get(mediaPath);
+      if (
+        cached &&
+        cached.expiresAt - now > SIGNED_MEDIA_URL_RENEWAL_WINDOW_MS
+      ) {
+        return { ...record, media_remote_url: cached.url };
+      }
+
+      if (!cached && record.media_remote_url) {
+        cache.set(mediaPath, {
+          url: record.media_remote_url,
+          expiresAt: now + SIGNED_MEDIA_URL_TTL_MS,
+        });
+        return record;
+      }
+
+      const existingRequest = inFlight.get(mediaPath);
+      const request =
+        existingRequest ??
+        client.storage
+          .from("private-media")
+          .createSignedUrl(mediaPath, 900)
+          .then((signed) => signed.data?.signedUrl ?? null);
+      if (!existingRequest) {
+        inFlight.set(mediaPath, request);
+        void request.then(
+          () => inFlight.delete(mediaPath),
+          () => inFlight.delete(mediaPath),
+        );
+      }
+
+      const signedUrl = await request;
+      if (!signedUrl) return record;
+      cache.set(mediaPath, {
+        url: signedUrl,
+        expiresAt: Date.now() + SIGNED_MEDIA_URL_TTL_MS,
+      });
+      return { ...record, media_remote_url: signedUrl };
     }),
   );
 }
