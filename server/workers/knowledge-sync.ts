@@ -1,5 +1,5 @@
 import type { AnySupabaseClient } from "../adapters/supabase/types.js";
-import { checked, row, rows, str } from "../adapters/supabase-mappers.js";
+import { checked, row, str } from "../adapters/supabase-mappers.js";
 import type { AgentCredentialPort } from "../contracts/api-ports.js";
 import type { GitHubControlPlane } from "../github-control-plane.js";
 import type { KnowledgeMetricWriter } from "../knowledge-evals.js";
@@ -27,7 +27,10 @@ export async function insertKnowledgeChunkRows(
       await client
         .from("knowledge_chunks")
         .insert(
-          values.slice(index, index + KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE) as never,
+          values.slice(
+            index,
+            index + KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE,
+          ) as never,
         ),
     );
   }
@@ -197,16 +200,13 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
         .eq("workspace_id", payload.workspaceId)
         .eq("id", payload.sourceId),
     );
-    const chunks = rows(
-      checked(
-        "knowledge_chunks.count",
-        await this.client
-          .from("knowledge_chunks")
-          .select("id")
-          .eq("workspace_id", payload.workspaceId)
-          .eq("article_version", payload.requestedSha),
-      ),
-    );
+    const chunkCountResult = await this.client
+      .from("knowledge_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", payload.workspaceId)
+      .eq("article_version", payload.requestedSha);
+    checked("knowledge_chunks.count", chunkCountResult);
+    const chunksWritten = chunkCountResult.count ?? 0;
     checked(
       "knowledge_sync_runs.complete",
       await this.client
@@ -216,8 +216,8 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
           files_scanned: result.filesScanned,
           files_indexed: result.documents.length,
           files_skipped: result.filesSkipped,
-          chunks_written: chunks.length,
-          embedding_input_count: chunks.length,
+          chunks_written: chunksWritten,
+          embedding_input_count: chunksWritten,
           finished_at: now,
         })
         .eq("workspace_id", payload.workspaceId)
