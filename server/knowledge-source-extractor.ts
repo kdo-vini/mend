@@ -27,16 +27,26 @@ export interface RepositoryExtractionOptions {
 
 export const DEFAULT_KNOWLEDGE_INCLUDE_PATTERNS = [
   "README.md",
+  "package.json",
   "docs/**/*.md",
   "docs/**/*.mdx",
   "openapi*.json",
+  "openapi*.yaml",
+  "openapi*.yml",
   "src/**/*.ts",
   "src/**/*.tsx",
   "src/**/*.js",
   "src/**/*.jsx",
+  "src/**/*.svelte",
   "src/**/*.json",
   "server/**/*.ts",
-  "supabase/migrations/**/*.sql",
+  "app/**/*.ts",
+  "app/**/*.tsx",
+  "app/**/*.svelte",
+  "packages/**/*.ts",
+  "packages/**/*.tsx",
+  "admin-dashboard/src/**/*.ts",
+  "admin-dashboard/src/**/*.svelte",
 ] as const;
 
 export const DEFAULT_KNOWLEDGE_EXCLUDE_PATTERNS = [
@@ -68,6 +78,7 @@ const allowedExtensions = new Set([
   ".tsx",
   ".js",
   ".jsx",
+  ".svelte",
   ".sql",
 ]);
 

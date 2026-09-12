@@ -67,4 +67,21 @@ describe("repository knowledge extraction", () => {
     expect(result.documents).toEqual([]);
     expect(result.filesSkipped).toBe(1);
   });
+
+  it("indexes Svelte product screens selected by a repository source", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "mend-knowledge-svelte-"));
+    await mkdir(path.join(root, "src", "routes"), { recursive: true });
+    await writeFile(
+      path.join(root, "src", "routes", "+page.svelte"),
+      "<h1>Caixa</h1>\n<p>Registre uma venda e escolha a forma de pagamento.</p>",
+    );
+
+    const result = await extractRepositoryKnowledge(root, {
+      includePatterns: ["src/**/*.svelte"],
+    });
+
+    expect(result.documents.map((item) => item.relativePath)).toEqual([
+      "src/routes/+page.svelte",
+    ]);
+  });
 });
