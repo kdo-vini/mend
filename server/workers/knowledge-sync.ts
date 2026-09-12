@@ -2,6 +2,7 @@ import type { AnySupabaseClient } from "../adapters/supabase/types.js";
 import { checked, row, rows, str } from "../adapters/supabase-mappers.js";
 import type { AgentCredentialPort } from "../contracts/api-ports.js";
 import type { GitHubControlPlane } from "../github-control-plane.js";
+import type { KnowledgeMetricWriter } from "../knowledge-evals.js";
 import {
   KnowledgeSourceIndexer,
   type KnowledgeSourceIndexStore,
@@ -25,20 +26,18 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
     const source = row(checked("knowledge_sources.begin_sync", result));
     checked(
       "knowledge_sync_runs.begin",
-      await this.client
-        .from("knowledge_sync_runs")
-        .upsert(
-          {
-            workspace_id: payload.workspaceId,
-            source_id: payload.sourceId,
-            requested_sha: payload.requestedSha,
-            status: "running",
-            started_at: new Date().toISOString(),
-            finished_at: null,
-            error_code: null,
-          },
-          { onConflict: "source_id,requested_sha" },
-        ),
+      await this.client.from("knowledge_sync_runs").upsert(
+        {
+          workspace_id: payload.workspaceId,
+          source_id: payload.sourceId,
+          requested_sha: payload.requestedSha,
+          status: "running",
+          started_at: new Date().toISOString(),
+          finished_at: null,
+          error_code: null,
+        },
+        { onConflict: "source_id,requested_sha" },
+      ),
     );
     checked(
       "knowledge_sources.running",
@@ -130,20 +129,18 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
     if (document.chunks.length)
       checked(
         "knowledge_chunks.replace.insert",
-        await this.client
-          .from("knowledge_chunks")
-          .insert(
-            document.chunks.map((chunk) => ({
-              workspace_id: payload.workspaceId,
-              article_id: articleId,
-              article_version: payload.requestedSha,
-              chunk_index: chunk.index,
-              heading: chunk.heading,
-              content: chunk.content,
-              content_hash: chunk.contentHash,
-              ...(chunk.embedding ? { embedding: [...chunk.embedding] } : {}),
-            })),
-          ),
+        await this.client.from("knowledge_chunks").insert(
+          document.chunks.map((chunk) => ({
+            workspace_id: payload.workspaceId,
+            article_id: articleId,
+            article_version: payload.requestedSha,
+            chunk_index: chunk.index,
+            heading: chunk.heading,
+            content: chunk.content,
+            content_hash: chunk.contentHash,
+            ...(chunk.embedding ? { embedding: [...chunk.embedding] } : {}),
+          })),
+        ),
       );
   }
 
@@ -240,6 +237,7 @@ export class SupabaseKnowledgeSyncProcessor {
     private readonly client: AnySupabaseClient,
     private readonly github: GitHubControlPlane,
     private readonly credentials: AgentCredentialPort,
+    private readonly metrics?: KnowledgeMetricWriter,
   ) {}
 
   async process(payload: KnowledgeRepositorySyncJobPayload): Promise<void> {
@@ -256,6 +254,7 @@ export class SupabaseKnowledgeSyncProcessor {
       this.github,
       new SupabaseKnowledgeSourceIndexStore(this.client),
       new OpenAiKnowledgeEmbeddings(credential.apiKey, model),
+      this.metrics,
     ).process(payload);
   }
 }

@@ -10,6 +10,40 @@ export interface ImpactPeriod {
   to: string;
 }
 
+export function computeKnowledgeMetricSummary(
+  facts: readonly WorkflowFactValue[],
+) {
+  const count = (type: string) =>
+    facts.filter(
+      (fact) => fact.factType === type && fact.valueBoolean !== false,
+    ).length;
+  const completedSyncs = facts.filter(
+    (fact) => fact.factType === "knowledge_sync_completed",
+  );
+  return {
+    syncs: {
+      started: count("knowledge_sync_started"),
+      completed: completedSyncs.length,
+      failed: count("knowledge_sync_failed"),
+      chunksWritten: completedSyncs.reduce(
+        (sum, fact) => sum + (fact.valueNumeric ?? 0),
+        0,
+      ),
+    },
+    retrieval: {
+      sufficient: count("knowledge_retrieval_sufficient"),
+      insufficient: count("knowledge_retrieval_insufficient"),
+      staleBlocked: count("knowledge_retrieval_stale_blocked"),
+      ambiguous: count("knowledge_product_ambiguous"),
+    },
+    deepResearch: {
+      started: count("knowledge_deep_research_started"),
+      completed: count("knowledge_deep_research_completed"),
+    },
+    rejectedReplies: count("knowledge_customer_reply_rejected"),
+  };
+}
+
 function rate(numerator: number, denominator: number) {
   return {
     numerator,

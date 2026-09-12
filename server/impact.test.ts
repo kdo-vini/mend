@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeImpactSummary, runnerIsReady } from "./impact.js";
+import {
+  computeImpactSummary,
+  computeKnowledgeMetricSummary,
+  runnerIsReady,
+} from "./impact.js";
 
 describe("Impact metrics", () => {
   it("reports exact numerators, denominators, sample and period", () => {
@@ -60,5 +64,26 @@ describe("Impact metrics", () => {
         new Date("2026-08-12T12:01:00.000Z"),
       ),
     ).toBe(true);
+  });
+
+  it("summarizes repository sync cost and retrieval outcomes", () => {
+    const fact = (factType: string, valueNumeric: number | null = null) => ({
+      workflowId: "one",
+      factType,
+      valueBoolean: valueNumeric === null ? true : null,
+      valueNumeric,
+    });
+    expect(
+      computeKnowledgeMetricSummary([
+        fact("knowledge_sync_started"),
+        fact("knowledge_sync_completed", 24),
+        fact("knowledge_retrieval_sufficient", 3),
+        fact("knowledge_retrieval_insufficient", 0),
+        fact("knowledge_product_ambiguous"),
+      ]),
+    ).toMatchObject({
+      syncs: { started: 1, completed: 1, failed: 0, chunksWritten: 24 },
+      retrieval: { sufficient: 1, insufficient: 1, ambiguous: 1 },
+    });
   });
 });

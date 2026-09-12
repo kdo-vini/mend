@@ -11,13 +11,23 @@ import type {
   LiveWorkerKnowledge,
   LiveWorkerSupabaseClient,
 } from "../live-worker.js";
+import type { KnowledgeMetricWriter } from "../knowledge-evals.js";
 export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
   constructor(
     private readonly client: LiveWorkerSupabaseClient,
     private readonly maxArticles = 20,
     private readonly maxTotalCharacters = 50_000,
     private readonly agentCredentials?: AgentCredentialPort,
+    private readonly metrics?: KnowledgeMetricWriter,
   ) {}
+
+  private async metric(input: Parameters<KnowledgeMetricWriter["record"]>[0]) {
+    try {
+      await this.metrics?.record(input);
+    } catch {
+      // Telemetry must never prevent support processing.
+    }
+  }
 
   async resolveProducts(
     workspaceId: string,
@@ -107,6 +117,13 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
         ambiguous: false,
       };
     }
+    await this.metric({
+      workspaceId,
+      workflowId: conversationId,
+      factType: "knowledge_product_ambiguous",
+      idempotencyKey: `knowledge-product:${messageId}:ambiguous`,
+      metadata: { messageId, candidateProductIds: explicit.productIds },
+    });
     return explicit;
   }
 
@@ -114,7 +131,9 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
     workspaceId: string,
     query?: string,
     productIds: readonly string[] = [],
+    metricContext?: { conversationId: string; messageId: string },
   ): Promise<readonly LiveWorkerKnowledgeArticle[]> {
+    const startedAt = Date.now();
     if (query?.trim()) {
       let queryEmbedding: readonly number[] | undefined;
       if (this.agentCredentials) {
@@ -152,38 +171,64 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
       });
       if (result.error)
         throw new Error(`supabase:knowledge_chunks:${result.error.message}`);
-      return (result.data ?? []).map((value) => {
-        const chunk = value as Record<string, unknown>;
-        const title = String(chunk.article_title ?? "Published knowledge");
-        const heading = String(chunk.heading ?? "");
-        return {
-          id: String(chunk.article_id),
-          title,
-          category: heading || "Support",
-          body: String(chunk.content ?? ""),
-          retrievalScore: Number(chunk.hybrid_score ?? 0),
-          citation: `${title}${heading ? ` — ${heading}` : ""}`,
-          evidenceKey: `kb:${String(chunk.chunk_id)}`,
-          chunkId: String(chunk.chunk_id),
-          articleVersion: String(chunk.article_version),
-          productIds: Array.isArray(chunk.product_ids)
-            ? chunk.product_ids.map(String)
-            : [],
-          sourceRevision: chunk.source_revision
-            ? String(chunk.source_revision)
-            : undefined,
-          sourcePath: chunk.source_path ? String(chunk.source_path) : undefined,
-          sourceKind:
-            chunk.source_kind === "repository" ? "repository" : "manual",
-          trustLevel:
-            chunk.trust_level === "deterministic"
-              ? "deterministic"
-              : chunk.trust_level === "generated"
-                ? "generated"
-                : "reviewed",
-          audience: chunk.audience === "internal" ? "internal" : "customer",
-        };
-      });
+      const articles: LiveWorkerKnowledgeArticle[] = (result.data ?? []).map(
+        (value) => {
+          const chunk = value as Record<string, unknown>;
+          const title = String(chunk.article_title ?? "Published knowledge");
+          const heading = String(chunk.heading ?? "");
+          return {
+            id: String(chunk.article_id),
+            title,
+            category: heading || "Support",
+            body: String(chunk.content ?? ""),
+            retrievalScore: Number(chunk.hybrid_score ?? 0),
+            citation: `${title}${heading ? ` — ${heading}` : ""}`,
+            evidenceKey: `kb:${String(chunk.chunk_id)}`,
+            chunkId: String(chunk.chunk_id),
+            articleVersion: String(chunk.article_version),
+            productIds: Array.isArray(chunk.product_ids)
+              ? chunk.product_ids.map(String)
+              : [],
+            sourceRevision: chunk.source_revision
+              ? String(chunk.source_revision)
+              : undefined,
+            sourcePath: chunk.source_path
+              ? String(chunk.source_path)
+              : undefined,
+            sourceKind:
+              chunk.source_kind === "repository" ? "repository" : "manual",
+            trustLevel:
+              chunk.trust_level === "deterministic"
+                ? "deterministic"
+                : chunk.trust_level === "generated"
+                  ? "generated"
+                  : "reviewed",
+            audience: chunk.audience === "internal" ? "internal" : "customer",
+          };
+        },
+      );
+      if (metricContext)
+        await this.metric({
+          workspaceId,
+          workflowId: metricContext.conversationId,
+          factType: articles.length
+            ? "knowledge_retrieval_sufficient"
+            : "knowledge_retrieval_insufficient",
+          idempotencyKey: `knowledge-retrieval:${metricContext.messageId}`,
+          valueNumeric: articles.length,
+          metadata: {
+            messageId: metricContext.messageId,
+            productIds: [...productIds],
+            evidenceCount: articles.length,
+            topScore: Math.max(
+              0,
+              ...articles.map((article) => article.retrievalScore ?? 0),
+            ),
+            activeRevisionMatch: true,
+            elapsedMs: Date.now() - startedAt,
+          },
+        });
+      return articles;
     }
     const result = await this.client
       .from("knowledge_articles")

@@ -16,6 +16,7 @@ import {
   type InboxMessageRecord,
 } from "./inbox-service.js";
 import { type JobRecord, type JobStore } from "./jobs.js";
+import { SupabaseKnowledgeMetricWriter } from "./knowledge-evals.js";
 import {
   MEDIA_PROCESS_JOB_TYPE,
   SupabaseMediaPipeline,
@@ -199,6 +200,7 @@ export interface LiveWorkerKnowledge {
     workspaceId: string,
     query?: string,
     productIds?: readonly string[],
+    metricContext?: { conversationId: string; messageId: string },
   ): Promise<readonly LiveWorkerKnowledgeArticle[]>;
 }
 
@@ -637,6 +639,10 @@ export class LiveWorker {
             payload.binding.workspaceId,
             messageText(payload.message),
             productResolution?.productIds,
+            {
+              conversationId: payload.persisted.conversationId,
+              messageId: payload.persisted.id,
+            },
           )
         : [];
     } catch (error) {
@@ -759,6 +765,7 @@ export function createSupabaseLiveWorker(
       20,
       50_000,
       options.agentCredentials,
+      new SupabaseKnowledgeMetricWriter(options.client as never),
     );
   const automation = new SupabaseLiveWorkerAutomation(
     options.client,

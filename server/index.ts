@@ -46,6 +46,7 @@ import { runnerIsReady } from "./impact.js";
 import { createGitHubControlPlaneFromEnv } from "./github-control-plane.js";
 import { SupabaseKnowledgeSyncProcessor } from "./workers/knowledge-sync.js";
 import { createGitHubKnowledgeWebhook } from "./github-knowledge-webhook.js";
+import { SupabaseKnowledgeMetricWriter } from "./knowledge-evals.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -738,6 +739,7 @@ if (workerSupabase && processRole === "runner") {
             workerSupabase,
             knowledgeGitHub,
             agentCredentials,
+            new SupabaseKnowledgeMetricWriter(workerSupabase as never),
           ),
         }
       : {}),

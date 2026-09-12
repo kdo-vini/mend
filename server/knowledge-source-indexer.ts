@@ -11,6 +11,7 @@ import {
   type RepositoryExtractionResult,
 } from "./knowledge-source-extractor.js";
 import type { KnowledgeRepositorySyncJobPayload } from "./knowledge-sync.js";
+import type { KnowledgeMetricWriter } from "./knowledge-evals.js";
 
 export interface RepositoryArchivePort {
   checkoutRepositoryArchive(
@@ -64,9 +65,18 @@ export class KnowledgeSourceIndexer {
     private readonly embeddings?: KnowledgeEmbeddingPort & {
       embedMany?(values: readonly string[]): Promise<readonly number[][]>;
     },
+    private readonly metrics?: KnowledgeMetricWriter,
   ) {}
 
   async process(payload: KnowledgeRepositorySyncJobPayload): Promise<void> {
+    const startedAt = Date.now();
+    await this.metrics?.record({
+      workspaceId: payload.workspaceId,
+      workflowId: payload.sourceId,
+      factType: "knowledge_sync_started",
+      idempotencyKey: `knowledge-sync:${payload.sourceId}:${payload.requestedSha}:started`,
+      metadata: { sourceId: payload.sourceId, revision: payload.requestedSha },
+    });
     const configuration = await this.store.begin(payload);
     const directory = await mkdtemp(
       path.join(tmpdir(), "mend-knowledge-sync-"),
@@ -85,6 +95,7 @@ export class KnowledgeSourceIndexer {
         includePatterns: configuration.includePatterns,
         excludePatterns: configuration.excludePatterns,
       });
+      let chunksWritten = 0;
       for (const document of extracted.documents) {
         const chunks = chunkPublishedArticle({
           id: `${payload.sourceId}:${document.relativePath}`,
@@ -113,10 +124,41 @@ export class KnowledgeSourceIndexer {
             ...(vectors[index] ? { embedding: vectors[index] } : {}),
           })),
         });
+        chunksWritten += chunks.length;
       }
       await this.store.complete(payload, extracted);
+      await this.metrics?.record({
+        workspaceId: payload.workspaceId,
+        workflowId: payload.sourceId,
+        factType: "knowledge_sync_completed",
+        idempotencyKey: `knowledge-sync:${payload.sourceId}:${payload.requestedSha}:completed`,
+        valueNumeric: chunksWritten,
+        metadata: {
+          sourceId: payload.sourceId,
+          revision: payload.requestedSha,
+          filesScanned: extracted.filesScanned,
+          filesIndexed: extracted.documents.length,
+          filesSkipped: extracted.filesSkipped,
+          chunksWritten,
+          embeddingInputCount: this.embeddings ? chunksWritten : 0,
+          elapsedMs: Date.now() - startedAt,
+        },
+      });
     } catch (error) {
-      await this.store.fail(payload, safeIndexErrorCode(error));
+      const errorCode = safeIndexErrorCode(error);
+      await this.store.fail(payload, errorCode);
+      await this.metrics?.record({
+        workspaceId: payload.workspaceId,
+        workflowId: payload.sourceId,
+        factType: "knowledge_sync_failed",
+        idempotencyKey: `knowledge-sync:${payload.sourceId}:${payload.requestedSha}:failed`,
+        metadata: {
+          sourceId: payload.sourceId,
+          revision: payload.requestedSha,
+          errorCode,
+          elapsedMs: Date.now() - startedAt,
+        },
+      });
       throw error;
     } finally {
       await rm(directory, { recursive: true, force: true });

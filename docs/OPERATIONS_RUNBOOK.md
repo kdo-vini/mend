@@ -59,6 +59,10 @@ Set these server-side values in the deployment secret manager:
 
 Configure the Whatsmiau webhook to the public `/webhooks/whatsmiau` endpoint and verify the authorization header with a signed test event before connecting a customer number.
 
+Repository-backed support knowledge uses the separate signed GitHub endpoint,
+exact-commit activation and release gates documented in
+[`engineering/multirepo-knowledge-operations.md`](engineering/multirepo-knowledge-operations.md).
+
 ## First live workspace setup
 
 1. Start the API with `WHATSMIAU_API_KEY` available only to the server. For local loopback testing, `MEND_DEV_MODE=1` allows the Vite app to call the safe connection summaries without an admin token; this is rejected when `NODE_ENV=production`.
@@ -96,6 +100,7 @@ Use Supabase's managed backups/PITR for the database and verify one restore dril
 - [ ] Migration applied to the target project and advisors clean.
 - [ ] Whatsmiau webhook signature, idempotency and retry/dead-letter behavior verified.
 - [ ] OpenAI draft/triage tested with fixture conversations and unsafe-content block tested.
+- [ ] Knowledge sources match deployed SHAs and the latest grounded-answer evaluation passes every release threshold.
 - [ ] No live auto-send enabled until human review and rollback are proven.
 - [ ] Agent runner tested with a disposable GitHub checkout; push/merge/deploy remain approval-gated.
 - [ ] E2E, accessibility keyboard pass, observability alerts and backup restore drill complete.
