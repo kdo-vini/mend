@@ -47,6 +47,9 @@ type KnowledgeRow = Tables["knowledge_articles"]["Row"];
 type AiDraftRow = Tables["ai_drafts"]["Row"];
 type AiDraftKnowledgeRow = Tables["ai_draft_knowledge"]["Row"];
 
+const REPOSITORY_ARTICLE_SUMMARY_COLUMNS =
+  "id, workspace_id, title, category, status, created_by_user_id, created_at, updated_at, managed_by_sync, trust_level, audience, source_id, source_metadata_json, source_path, source_revision";
+
 const SIGNED_MEDIA_URL_TTL_MS = 15 * 60 * 1000;
 const SIGNED_MEDIA_URL_RENEWAL_WINDOW_MS = 60 * 1000;
 
@@ -189,6 +192,37 @@ function mapLatestAiDrafts(
   return latestByConversation;
 }
 
+async function loadWorkspaceKnowledge(
+  db: MendSupabaseClient,
+  workspaceId: string,
+): Promise<KnowledgeRow[]> {
+  const [manualArticles, repositoryArticles] = await Promise.all([
+    unwrap(
+      db
+        .from("knowledge_articles")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("managed_by_sync", false)
+        .order("updated_at", { ascending: false }),
+    ),
+    unwrap(
+      db
+        .from("knowledge_articles")
+        .select(REPOSITORY_ARTICLE_SUMMARY_COLUMNS)
+        .eq("workspace_id", workspaceId)
+        .eq("managed_by_sync", true)
+        .order("updated_at", { ascending: false }),
+    ),
+  ]);
+  return [
+    ...manualArticles,
+    ...repositoryArticles.map((article) => ({
+      ...article,
+      body: article.source_path || article.title,
+    })),
+  ].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+}
+
 const dbPriority = (value: Priority) =>
   ({
     Urgent: "urgent",
@@ -322,13 +356,7 @@ export async function loadLiveWorkspace(
         .eq("workspace_id", workspace.id)
         .order("created_at", { ascending: true }),
     ),
-    unwrap(
-      db
-        .from("knowledge_articles")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .order("updated_at", { ascending: false }),
-    ),
+    loadWorkspaceKnowledge(db, workspace.id),
     unwrap(
       db
         .from("conversation_ai_state")

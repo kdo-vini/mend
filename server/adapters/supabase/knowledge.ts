@@ -20,6 +20,9 @@ import {
   type Row,
 } from "../supabase-mappers.js";
 
+const REPOSITORY_ARTICLE_SUMMARY_COLUMNS =
+  "id, workspace_id, title, category, status, created_by_user_id, created_at, updated_at, managed_by_sync, trust_level, audience, source_id, source_path, source_revision";
+
 export class SupabaseKnowledgeAdapter implements KnowledgePort {
   constructor(
     private readonly client: SupabaseClient,
@@ -136,18 +139,51 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
 
   async list(context: KnowledgeRequestContext, query: KnowledgeListQuery) {
     const value = query as unknown as Row;
-    let request = this.client
+    let manualRequest = this.client
       .from("knowledge_articles")
       .select("*")
-      .eq("workspace_id", context.workspaceId);
-    if (value.status) request = request.eq("status", value.status);
-    if (value.category) request = request.eq("category", value.category);
-    if (value.search) request = request.ilike("title", `%${value.search}%`);
-    if (value.cursor) request = request.gt("id", value.cursor);
-    const result = await request
-      .order("updated_at", { ascending: false })
-      .limit(Number(value.limit ?? 100));
-    const articleRows = rows(checked("knowledge_articles.list", result));
+      .eq("workspace_id", context.workspaceId)
+      .eq("managed_by_sync", false);
+    let repositoryRequest = this.client
+      .from("knowledge_articles")
+      .select(REPOSITORY_ARTICLE_SUMMARY_COLUMNS)
+      .eq("workspace_id", context.workspaceId)
+      .eq("managed_by_sync", true);
+    if (value.status) {
+      manualRequest = manualRequest.eq("status", value.status);
+      repositoryRequest = repositoryRequest.eq("status", value.status);
+    }
+    if (value.category) {
+      manualRequest = manualRequest.eq("category", value.category);
+      repositoryRequest = repositoryRequest.eq("category", value.category);
+    }
+    if (value.search) {
+      manualRequest = manualRequest.ilike("title", `%${value.search}%`);
+      repositoryRequest = repositoryRequest.ilike("title", `%${value.search}%`);
+    }
+    if (value.cursor) {
+      manualRequest = manualRequest.gt("id", value.cursor);
+      repositoryRequest = repositoryRequest.gt("id", value.cursor);
+    }
+    const limit = Number(value.limit ?? 100);
+    const [manualResult, repositoryResult] = await Promise.all([
+      manualRequest.order("updated_at", { ascending: false }).limit(limit),
+      repositoryRequest.order("updated_at", { ascending: false }).limit(limit),
+    ]);
+    const manualRows = rows(
+      checked("knowledge_articles.manual_list", manualResult),
+    );
+    const repositoryRows: Row[] = rows(
+      checked("knowledge_articles.repository_list", repositoryResult),
+    ).map((item) => ({
+      ...item,
+      body: str(item.source_path, str(item.title)),
+    }));
+    const articleRows = [...manualRows, ...repositoryRows]
+      .sort((left, right) =>
+        str(right.updated_at).localeCompare(str(left.updated_at)),
+      )
+      .slice(0, limit);
     const mappings = await this.productIdsByArticle(
       context.workspaceId,
       articleRows.map((item) => str(item.id)),

@@ -1331,6 +1331,7 @@ describe("Supabase API adapters", () => {
           category: "Support",
           body: "Use the runbook.",
           status: "published",
+          managed_by_sync: false,
         },
         {
           id: "article-2",
@@ -1339,6 +1340,7 @@ describe("Supabase API adapters", () => {
           category: "Support",
           body: "Not ready.",
           status: "draft",
+          managed_by_sync: false,
         },
         {
           id: "article-3",
@@ -1347,6 +1349,7 @@ describe("Supabase API adapters", () => {
           category: "Support",
           body: "Other tenant.",
           status: "published",
+          managed_by_sync: false,
         },
       ],
     });
@@ -1363,6 +1366,65 @@ describe("Supabase API adapters", () => {
         title: "Published",
       }),
     ]);
+  });
+
+  it("keeps synchronized repository bodies out of knowledge list responses", async () => {
+    const client = new FakeClient({
+      knowledge_articles: [
+        {
+          id: "manual-article",
+          workspace_id: workspaceId,
+          title: "Manual runbook",
+          category: "Support",
+          body: "Customer-facing instructions.",
+          status: "published",
+          managed_by_sync: false,
+          updated_at: "2026-09-12T11:00:00.000Z",
+        },
+        {
+          id: "repository-article",
+          workspace_id: workspaceId,
+          title: "Checkout source",
+          category: "Repository",
+          body: "A very large source file that must not cross the API boundary.",
+          status: "published",
+          managed_by_sync: true,
+          source_path: "src/checkout.ts",
+          updated_at: "2026-09-12T12:00:00.000Z",
+        },
+      ],
+    });
+
+    const result = await adapters(client).knowledge.list(
+      { userId, workspaceId, role: "agent" },
+      { limit: 20 },
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: "repository-article",
+        body: "src/checkout.ts",
+        managedBySync: true,
+      }),
+      expect.objectContaining({
+        id: "manual-article",
+        body: "Customer-facing instructions.",
+        managedBySync: false,
+      }),
+    ]);
+    const articleQueries = client.calls.filter(
+      (call) =>
+        call.table === "knowledge_articles" && call.operation === "select",
+    );
+    expect(articleQueries).toHaveLength(2);
+    expect(articleQueries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ columns: "*" }),
+        expect.objectContaining({
+          columns: expect.not.stringContaining("body"),
+        }),
+      ]),
+    );
   });
 
   it("does not send a localhost webhook URL to Whatsmiau during local setup", async () => {
