@@ -11,6 +11,28 @@ import {
 import { OpenAiKnowledgeEmbeddings } from "../knowledge-retrieval.js";
 import type { KnowledgeRepositorySyncJobPayload } from "../knowledge-sync.js";
 
+const KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE = 25;
+
+export async function insertKnowledgeChunkRows(
+  client: AnySupabaseClient,
+  values: readonly Record<string, unknown>[],
+): Promise<void> {
+  for (
+    let index = 0;
+    index < values.length;
+    index += KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE
+  ) {
+    checked(
+      "knowledge_chunks.replace.insert",
+      await client
+        .from("knowledge_chunks")
+        .insert(
+          values.slice(index, index + KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE) as never,
+        ),
+    );
+  }
+}
+
 class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
   constructor(private readonly client: AnySupabaseClient) {}
 
@@ -127,20 +149,18 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
         .eq("article_id", articleId),
     );
     if (document.chunks.length)
-      checked(
-        "knowledge_chunks.replace.insert",
-        await this.client.from("knowledge_chunks").insert(
-          document.chunks.map((chunk) => ({
-            workspace_id: payload.workspaceId,
-            article_id: articleId,
-            article_version: payload.requestedSha,
-            chunk_index: chunk.index,
-            heading: chunk.heading,
-            content: chunk.content,
-            content_hash: chunk.contentHash,
-            ...(chunk.embedding ? { embedding: [...chunk.embedding] } : {}),
-          })),
-        ),
+      await insertKnowledgeChunkRows(
+        this.client,
+        document.chunks.map((chunk) => ({
+          workspace_id: payload.workspaceId,
+          article_id: articleId,
+          article_version: payload.requestedSha,
+          chunk_index: chunk.index,
+          heading: chunk.heading,
+          content: chunk.content,
+          content_hash: chunk.contentHash,
+          ...(chunk.embedding ? { embedding: [...chunk.embedding] } : {}),
+        })),
       );
   }
 

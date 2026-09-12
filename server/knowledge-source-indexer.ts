@@ -58,6 +58,24 @@ export interface KnowledgeSourceIndexStore {
   ): Promise<void>;
 }
 
+const EMBEDDING_BATCH_SIZE = 64;
+
+async function embedInBatches(
+  embeddings: KnowledgeEmbeddingPort & {
+    embedMany?(values: readonly string[]): Promise<readonly number[][]>;
+  },
+  values: readonly string[],
+): Promise<readonly (readonly number[])[]> {
+  if (!embeddings.embedMany)
+    return Promise.all(values.map((value) => embeddings.embed(value)));
+  const vectors: (readonly number[])[] = [];
+  for (let index = 0; index < values.length; index += EMBEDDING_BATCH_SIZE) {
+    const batch = values.slice(index, index + EMBEDDING_BATCH_SIZE);
+    vectors.push(...(await embeddings.embedMany(batch)));
+  }
+  return vectors;
+}
+
 export class KnowledgeSourceIndexer {
   constructor(
     private readonly github: RepositoryArchivePort,
@@ -95,37 +113,64 @@ export class KnowledgeSourceIndexer {
         includePatterns: configuration.includePatterns,
         excludePatterns: configuration.excludePatterns,
       });
-      let chunksWritten = 0;
-      for (const document of extracted.documents) {
-        const chunks = chunkPublishedArticle({
+      const prepared = extracted.documents.map((document) => ({
+        document,
+        chunks: chunkPublishedArticle({
           id: `${payload.sourceId}:${document.relativePath}`,
           workspaceId: payload.workspaceId,
           title: document.title,
           status: "published",
           body: document.body,
           updatedAt: payload.requestedSha,
-        });
+        }),
+      }));
+      let chunksWritten = 0;
+      let pending: typeof prepared = [];
+      let pendingChunkCount = 0;
+      const flush = async () => {
+        if (!pending.length) return;
+        const chunks = pending.flatMap((item) => item.chunks);
         const vectors = this.embeddings
-          ? this.embeddings.embedMany
-            ? await this.embeddings.embedMany(
-                chunks.map((chunk) => chunk.content),
-              )
-            : await Promise.all(
-                chunks.map((chunk) => this.embeddings!.embed(chunk.content)),
-              )
+          ? await embedInBatches(
+              this.embeddings,
+              chunks.map((chunk) => chunk.content),
+            )
           : [];
-        await this.store.writeDocument(payload, {
-          ...document,
-          chunks: chunks.map((chunk, index) => ({
-            index: chunk.index,
-            heading: chunk.heading,
-            content: chunk.content,
-            contentHash: chunk.contentHash,
-            ...(vectors[index] ? { embedding: vectors[index] } : {}),
-          })),
-        });
-        chunksWritten += chunks.length;
+        let offset = 0;
+        for (const item of pending) {
+          const documentVectors = vectors.slice(
+            offset,
+            offset + item.chunks.length,
+          );
+          await this.store.writeDocument(payload, {
+            ...item.document,
+            chunks: item.chunks.map((chunk, index) => ({
+              index: chunk.index,
+              heading: chunk.heading,
+              content: chunk.content,
+              contentHash: chunk.contentHash,
+              ...(documentVectors[index]
+                ? { embedding: documentVectors[index] }
+                : {}),
+            })),
+          });
+          offset += item.chunks.length;
+          chunksWritten += item.chunks.length;
+        }
+        pending = [];
+        pendingChunkCount = 0;
+      };
+      for (const item of prepared) {
+        if (
+          pending.length &&
+          pendingChunkCount + item.chunks.length > EMBEDDING_BATCH_SIZE
+        )
+          await flush();
+        pending.push(item);
+        pendingChunkCount += item.chunks.length;
+        if (pendingChunkCount >= EMBEDDING_BATCH_SIZE) await flush();
       }
+      await flush();
       await this.store.complete(payload, extracted);
       await this.metrics?.record({
         workspaceId: payload.workspaceId,

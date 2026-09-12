@@ -62,6 +62,41 @@ describe("knowledge source indexer", () => {
     expect(store.fail).not.toHaveBeenCalled();
   });
 
+  it("batches embeddings across repository documents", async () => {
+    const store: KnowledgeSourceIndexStore = {
+      begin: vi.fn(async () => ({
+        includePatterns: ["docs/**/*.md"],
+        excludePatterns: [],
+      })),
+      writeDocument: vi.fn(async () => undefined),
+      complete: vi.fn(async () => undefined),
+      fail: vi.fn(async () => undefined),
+    };
+    const github = {
+      checkoutRepositoryArchive: vi.fn(
+        async (_repository, _ref: string, destination: string) => {
+          await mkdir(path.join(destination, "docs"), { recursive: true });
+          await writeFile(path.join(destination, "docs", "one.md"), "One");
+          await writeFile(path.join(destination, "docs", "two.md"), "Two");
+        },
+      ),
+    };
+    const embeddings = {
+      embed: vi.fn(async () => [1]),
+      embedMany: vi.fn(async (values: readonly string[]) =>
+        values.map(() => [1]),
+      ),
+    };
+
+    await new KnowledgeSourceIndexer(github, store, embeddings).process(
+      payload,
+    );
+
+    expect(embeddings.embedMany).toHaveBeenCalledTimes(1);
+    expect(embeddings.embedMany).toHaveBeenCalledWith(["One", "Two"]);
+    expect(store.writeDocument).toHaveBeenCalledTimes(2);
+  });
+
   it("records a stable failure and never completes a partial revision", async () => {
     const store: KnowledgeSourceIndexStore = {
       begin: async () => ({ includePatterns: [], excludePatterns: [] }),
