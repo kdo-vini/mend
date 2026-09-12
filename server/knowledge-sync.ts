@@ -1,7 +1,7 @@
 import { z } from "zod";
+import { KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE } from "./workers/live-worker-shared.js";
 
-export const KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE =
-  "mend.knowledge.repository_sync";
+export { KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE };
 
 export const knowledgeRepositorySyncJobPayloadSchema = z
   .object({

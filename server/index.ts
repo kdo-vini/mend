@@ -43,6 +43,8 @@ import {
   type AgentRunRequestedJobPayload,
 } from "./agent-runtime.js";
 import { runnerIsReady } from "./impact.js";
+import { createGitHubControlPlaneFromEnv } from "./github-control-plane.js";
+import { SupabaseKnowledgeSyncProcessor } from "./workers/knowledge-sync.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -624,6 +626,7 @@ if (existsSync(frontendIndex)) {
 let liveWorker: LiveWorker | undefined;
 if (workerSupabase && processRole === "runner") {
   const agentCredentials = new SupabaseAgentCredentialAdapter(workerSupabase);
+  const knowledgeGitHub = createGitHubControlPlaneFromEnv();
   liveWorker = createSupabaseLiveWorker({
     client: workerSupabase,
     jobStore: messageJobs,
@@ -709,6 +712,15 @@ if (workerSupabase && processRole === "runner") {
       }
     },
     agentCredentials,
+    ...(knowledgeGitHub
+      ? {
+          knowledgeSync: new SupabaseKnowledgeSyncProcessor(
+            workerSupabase,
+            knowledgeGitHub,
+            agentCredentials,
+          ),
+        }
+      : {}),
     pollIntervalMs: Number(process.env.MEND_WORKER_POLL_MS ?? 1_000),
     onUnmappedMessage: (input) =>
       logger.warn(

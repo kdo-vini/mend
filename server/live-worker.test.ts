@@ -377,6 +377,36 @@ describe("live Whatsmiau worker", () => {
     ]);
   });
 
+  it("dispatches exact-SHA knowledge sync jobs through the existing queue", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const process = vi.fn(async () => undefined);
+    const payload = {
+      stage: "knowledge_repository_sync" as const,
+      workspaceId: "10000000-0000-4000-8000-000000000001",
+      sourceId: "10000000-0000-4000-8000-000000000002",
+      repositoryId: "10000000-0000-4000-8000-000000000003",
+      owner: "techne",
+      repo: "zelo",
+      installationId: 1,
+      requestedSha: "a".repeat(40),
+      deliveryId: "delivery",
+    };
+    await (store as unknown as InMemoryJobStore<typeof payload>).enqueue({
+      workspaceId: payload.workspaceId,
+      type: "mend.knowledge.repository_sync",
+      payload,
+    });
+    const worker = new LiveWorker({
+      jobStore: store,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      knowledgeSync: { process },
+    });
+
+    expect(await worker.poll()).toBe(true);
+    expect(process).toHaveBeenCalledWith(payload);
+  });
+
   it("persists duplicate deliveries once and does not retrigger triage/knowledge", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const inbox = new FakeInbox();

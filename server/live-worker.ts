@@ -31,6 +31,10 @@ import { type TriageResult } from "./triage.js";
 import { type WhatsAppProvider } from "./whatsapp-service.js";
 import { type NormalizedWhatsmiauMessage } from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
+import {
+  knowledgeRepositorySyncJobPayloadSchema,
+  type KnowledgeRepositorySyncJobPayload,
+} from "./knowledge-sync.js";
 import { SupabaseLiveWorkerAutomation } from "./workers/automation.js";
 import { SupabaseLiveWorkerChannelResolver } from "./workers/channel-resolver.js";
 import { SupabaseCodexStarter } from "./workers/codex-starter.js";
@@ -38,6 +42,7 @@ import { SupabaseLiveWorkerKnowledge } from "./workers/knowledge.js";
 import {
   cleanInstanceName,
   CODING_RUN_CONTINUATION_JOB_TYPE,
+  KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE,
   delay,
   PROCESS_INBOUND_MESSAGE_JOB_TYPE,
   safeOperationalError,
@@ -124,7 +129,8 @@ export type LiveWorkerJobPayload =
   | SendAiReplyJobPayload
   | CodingRunContinuationJobPayload
   | AgentRunRequestedJobPayload
-  | MediaProcessJobPayload;
+  | MediaProcessJobPayload
+  | KnowledgeRepositorySyncJobPayload;
 
 export interface UncheckedSupabaseQuery
   extends PromiseLike<{
@@ -252,6 +258,9 @@ export interface LiveWorkerOptions {
   jobStore: JobStore<WhatsmiauMessageJobPayload>;
   mediaPipeline?: SupabaseMediaPipeline;
   agentRunRunner?: (payload: AgentRunRequestedJobPayload) => Promise<void>;
+  knowledgeSync?: {
+    process(payload: KnowledgeRepositorySyncJobPayload): Promise<void>;
+  };
   knowledge?: LiveWorkerKnowledge;
   onDraftReady?: (draft: LiveWorkerDraft) => Promise<void> | void;
   onIssueReady?: (issue: LiveWorkerIssue) => Promise<void> | void;
@@ -482,6 +491,17 @@ export class LiveWorker {
       await this.options.mediaPipeline.processAsset(payload);
       return;
     }
+    if (job.type === KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE) {
+      if (!this.options.knowledgeSync)
+        throw new Error("knowledge_sync_runner_not_configured");
+      const parsed = knowledgeRepositorySyncJobPayloadSchema.safeParse(
+        job.payload,
+      );
+      if (!parsed.success)
+        throw new Error("invalid_knowledge_repository_sync_job");
+      await this.options.knowledgeSync.process(parsed.data);
+      return;
+    }
     throw new Error(`unsupported_job_type:${job.type}`);
   }
 
@@ -681,6 +701,7 @@ export interface CreateSupabaseLiveWorkerOptions {
   onUnmappedMessage?: LiveWorkerOptions["onUnmappedMessage"];
   codexStarter?: LiveWorkerCodexStarter;
   agentRunRunner?: LiveWorkerOptions["agentRunRunner"];
+  knowledgeSync?: LiveWorkerOptions["knowledgeSync"];
   agentCredentials?: AgentCredentialPort;
   pollIntervalMs?: number;
   inboundDebounceMs?: number;
@@ -745,6 +766,7 @@ export function createSupabaseLiveWorker(
     ...(options.agentRunRunner
       ? { agentRunRunner: options.agentRunRunner }
       : {}),
+    ...(options.knowledgeSync ? { knowledgeSync: options.knowledgeSync } : {}),
     ...(options.pollIntervalMs !== undefined
       ? { pollIntervalMs: options.pollIntervalMs }
       : {}),
@@ -764,6 +786,7 @@ export {
 export { SupabaseLiveWorkerKnowledge } from "./workers/knowledge.js";
 export {
   CODING_RUN_CONTINUATION_JOB_TYPE,
+  KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE,
   PROCESS_INBOUND_MESSAGE_JOB_TYPE,
   SEND_AI_REPLY_JOB_TYPE,
   WHATSAPP_INGEST_JOB_TYPE,
