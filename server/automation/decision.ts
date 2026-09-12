@@ -22,6 +22,10 @@ export interface LiveWorkerKnowledgeArticle {
   sourceRevision?: string;
   sourcePath?: string;
   sourceKind?: "manual" | "repository";
+  chunkId?: string;
+  articleVersion?: string;
+  trustLevel?: "reviewed" | "deterministic" | "generated";
+  audience?: "customer" | "internal";
 }
 
 export interface ConversationReplyMessage {
@@ -57,7 +61,7 @@ export function safeKnowledgeContext(
   return articles
     .map(
       (article) =>
-        `[published article: ${article.title} | ${article.category}]\n${article.body}`,
+        `[evidence ${article.evidenceKey ?? `kb:${article.id}`} | ${article.title} | ${article.category}]\n${article.body}`,
     )
     .join("\n\n")
     .slice(0, 50_000);

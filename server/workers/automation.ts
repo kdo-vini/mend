@@ -63,6 +63,12 @@ import { SupabaseMcpConnectionAdapter } from "../adapters/supabase/mcp.js";
 import { triageConversation, type TriageResult } from "../triage.js";
 import { WhatsAppService, type WhatsAppProvider } from "../whatsapp-service.js";
 import { normalizePhoneNumber } from "../whatsmiau.js";
+import {
+  boundedEvidenceBundle,
+  validateGroundedSupportReply,
+  type GroundedSupportReply,
+  type SupportKnowledgeEvidence,
+} from "../support-evidence.js";
 import type { WhatsmiauMessageJobPayload } from "../worker.js";
 import {
   CODING_RUN_CONTINUATION_JOB_TYPE,
@@ -1373,33 +1379,80 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       conversationReplyInput(history, input.persisted.id),
     ].join("\n");
     const provider = await this.providerFor(input.binding.workspaceId);
-    const contextResult =
-      mcpConnections.length && provider.draftReplyWithContext
-        ? await provider.draftReplyWithContext({
+    const evidence = knowledge.map(
+      (article): SupportKnowledgeEvidence => ({
+        evidenceKey: article.evidenceKey ?? `kb:${article.id}`,
+        articleId: article.id,
+        ...(article.chunkId ? { chunkId: article.chunkId } : {}),
+        ...(article.articleVersion
+          ? { articleVersion: article.articleVersion }
+          : {}),
+        productIds: article.productIds ?? [],
+        sourceKind: article.sourceKind ?? "manual",
+        ...(article.sourceRevision
+          ? { sourceRevision: article.sourceRevision }
+          : {}),
+        ...(article.sourcePath ? { sourcePath: article.sourcePath } : {}),
+        title: article.title,
+        heading: article.category,
+        content: article.body,
+        trustLevel: article.trustLevel ?? "reviewed",
+        audience: article.audience ?? "customer",
+        score: article.retrievalScore ?? 0.2,
+      }),
+    );
+    const resolution = input.productResolution ?? {
+      productIds: [],
+      confidence: 1,
+      source: "shared" as const,
+      ambiguous: false,
+    };
+    const evidenceBundle = boundedEvidenceBundle(resolution, evidence);
+    const contextResult = provider.draftReplyWithContext
+      ? await provider.draftReplyWithContext({
+          conversation,
+          knowledgeContext: safeKnowledgeContext(knowledge),
+          language: normalizeLocale(workspaceRow.default_language),
+          mcpConnections,
+          evidenceKeys: evidenceBundle.citations,
+          onMcpApproval: (approval) =>
+            this.approveMcpWrite(input, mode, mcpConnections, approval),
+        })
+      : {
+          body: await provider.draftReply(
             conversation,
-            knowledgeContext: safeKnowledgeContext(knowledge),
-            language: normalizeLocale(workspaceRow.default_language),
-            mcpConnections,
-            onMcpApproval: (approval) =>
-              this.approveMcpWrite(input, mode, mcpConnections, approval),
-          })
-        : {
-            body: await provider.draftReply(
-              conversation,
-              safeKnowledgeContext(knowledge),
-              normalizeLocale(workspaceRow.default_language),
-            ),
-            mcpEvidence: false,
-            mcpCalls: [],
-          };
+            safeKnowledgeContext(knowledge),
+            normalizeLocale(workspaceRow.default_language),
+          ),
+          mcpEvidence: false,
+          mcpCalls: [],
+          usedCitationKeys: evidenceBundle.citations,
+          confidence: triage.confidence,
+          customerSafe: true,
+          needsClarification: false,
+        };
     const body = boundedText(contextResult.body, 12_000);
     if (!body) return undefined;
+    const grounded: GroundedSupportReply = {
+      body,
+      usedCitationKeys: contextResult.usedCitationKeys ?? [],
+      confidence: contextResult.confidence ?? triage.confidence,
+      customerSafe: contextResult.customerSafe ?? true,
+      needsClarification: contextResult.needsClarification ?? false,
+      ...(contextResult.clarificationQuestion
+        ? { clarificationQuestion: contextResult.clarificationQuestion }
+        : {}),
+    };
+    const validation = validateGroundedSupportReply(grounded, evidenceBundle);
+    if (!validation.valid)
+      throw new Error(`support_reply_not_grounded:${validation.reason}`);
     return {
       conversationId: input.persisted.conversationId,
       messageId: input.persisted.id,
       idempotencyKey: input.idempotencyKey,
       body,
       knowledgeArticleIds: knowledge.map((article) => article.id),
+      usedCitationKeys: grounded.usedCitationKeys,
       triage,
       mcpEvidence: contextResult.mcpEvidence,
       mcpCalls: contextResult.mcpCalls,
@@ -1758,7 +1811,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     }
     if (!draftId) throw new Error("supabase:ai_drafts:missing_id");
 
+    const used = new Set(draft.usedCitationKeys ?? []);
     for (const [rank, article] of knowledge.entries()) {
+      const evidenceKey = article.evidenceKey ?? `kb:${article.id}`;
+      if (used.size && !used.has(evidenceKey)) continue;
       const reference = await client
         .from("ai_draft_knowledge")
         .insert({
@@ -1775,6 +1831,31 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         throw new Error(
           `supabase:ai_draft_knowledge:${reference.error.message}`,
         );
+      }
+      if (article.chunkId) {
+        const evidence = await client.from("ai_draft_evidence").insert({
+          workspace_id: input.binding.workspaceId,
+          draft_id: draftId,
+          evidence_key: evidenceKey,
+          source_kind: article.sourceKind ?? "manual",
+          knowledge_article_id: article.id,
+          knowledge_chunk_id: article.chunkId,
+          product_id:
+            article.productIds?.length === 1 ? article.productIds[0] : null,
+          article_version: article.articleVersion ?? null,
+          source_revision: article.sourceRevision ?? null,
+          source_path: article.sourcePath ?? null,
+          retrieval_score: article.retrievalScore ?? null,
+          evidence_json: {
+            title: article.title,
+            heading: article.category,
+            content: article.body.slice(0, 8_000),
+          },
+        });
+        if (evidence.error && !/duplicate|unique/i.test(evidence.error.message))
+          throw new Error(
+            `supabase:ai_draft_evidence:${evidence.error.message}`,
+          );
       }
     }
   }

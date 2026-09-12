@@ -218,6 +218,7 @@ export interface LiveWorkerDraft {
   idempotencyKey: string;
   body: string;
   knowledgeArticleIds: readonly string[];
+  usedCitationKeys?: readonly string[];
   triage: TriageResult;
   mcpEvidence?: boolean;
   mcpCalls?: SupportAiDraftResult["mcpCalls"];

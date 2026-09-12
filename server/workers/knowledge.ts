@@ -164,6 +164,8 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
           retrievalScore: Number(chunk.hybrid_score ?? 0),
           citation: `${title}${heading ? ` — ${heading}` : ""}`,
           evidenceKey: `kb:${String(chunk.chunk_id)}`,
+          chunkId: String(chunk.chunk_id),
+          articleVersion: String(chunk.article_version),
           productIds: Array.isArray(chunk.product_ids)
             ? chunk.product_ids.map(String)
             : [],
@@ -173,6 +175,13 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
           sourcePath: chunk.source_path ? String(chunk.source_path) : undefined,
           sourceKind:
             chunk.source_kind === "repository" ? "repository" : "manual",
+          trustLevel:
+            chunk.trust_level === "deterministic"
+              ? "deterministic"
+              : chunk.trust_level === "generated"
+                ? "generated"
+                : "reviewed",
+          audience: chunk.audience === "internal" ? "internal" : "customer",
         };
       });
     }

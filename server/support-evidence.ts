@@ -48,6 +48,8 @@ export function validateGroundedSupportReply(
   bundle: SupportEvidenceBundle,
 ): { valid: boolean; reason?: string } {
   const allowed = new Set(bundle.evidence.map((item) => item.evidenceKey));
+  if (!reply.customerSafe)
+    return { valid: false, reason: "provider_marked_unsafe" };
   if (bundle.resolution.ambiguous && !reply.needsClarification)
     return { valid: false, reason: "product_ambiguous" };
   if (reply.usedCitationKeys.some((key) => !allowed.has(key)))

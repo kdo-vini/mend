@@ -9,6 +9,39 @@ import {
 } from "./providers.js";
 
 describe("support AI providers", () => {
+  it("returns cited customer-safe structured replies when evidence keys are supplied", async () => {
+    const client: OpenAiResponsesClient = {
+      responses: {
+        async create() {
+          return {
+            output_text: JSON.stringify({
+              body: "Abra o caixa em Operações.",
+              usedCitationKeys: ["kb:chunk-1"],
+              confidence: 0.92,
+              customerSafe: true,
+              needsClarification: false,
+            }),
+          };
+        },
+      },
+    };
+    await expect(
+      new OpenAiSupportProvider(client, {
+        model: "test-model",
+      }).draftReplyWithContext({
+        conversation: "Como abro o caixa?",
+        knowledgeContext: "[evidence kb:chunk-1] Abra em Operações.",
+        evidenceKeys: ["kb:chunk-1"],
+        language: "pt-BR",
+        mcpConnections: [],
+      }),
+    ).resolves.toMatchObject({
+      body: "Abra o caixa em Operações.",
+      usedCitationKeys: ["kb:chunk-1"],
+      customerSafe: true,
+    });
+  });
+
   it("uses the OpenAI responses contract for drafts and triage", async () => {
     const calls: string[] = [];
     const client: OpenAiResponsesClient = {
