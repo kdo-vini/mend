@@ -55,17 +55,31 @@ export function chunkPublishedArticle(
   );
   let heading = article.title.trim();
   const sections: Array<{ heading: string; content: string }> = [];
+  let pending: { heading: string; content: string } | undefined;
+  const flush = () => {
+    if (pending) sections.push(pending);
+    pending = undefined;
+  };
   for (const block of article.body.split(/\n\s*\n/g)) {
     const normalized = block.trim();
     if (!normalized) continue;
     const markdownHeading = /^#{1,6}\s+(.+)$/.exec(normalized);
     if (markdownHeading?.[1]) {
+      flush();
       heading = markdownHeading[1].trim();
       continue;
     }
-    for (const content of splitBounded(normalized, maximum))
-      sections.push({ heading, content });
+    for (const content of splitBounded(normalized, maximum)) {
+      const combined = pending ? `${pending.content}\n\n${content}` : content;
+      if (pending?.heading === heading && combined.length <= maximum)
+        pending.content = combined;
+      else {
+        flush();
+        pending = { heading, content };
+      }
+    }
   }
+  flush();
   return sections.map((section, index) => ({
     articleId: article.id,
     workspaceId: article.workspaceId,

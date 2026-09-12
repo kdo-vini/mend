@@ -43,6 +43,27 @@ describe("tenant-scoped hybrid knowledge retrieval", () => {
     ).toEqual([]);
   });
 
+  it("coalesces small adjacent blocks under the same heading", () => {
+    const chunks = chunkPublishedArticle({
+      id: "article-1",
+      workspaceId: "workspace-1",
+      title: "Cash register",
+      status: "published",
+      body: "# Opening\n\nChoose Cash.\n\nConfirm the opening balance.\n\n# Closing\n\nChoose Close cash register.",
+      updatedAt: "2026-09-12T00:00:00.000Z",
+    });
+
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toMatchObject({
+      heading: "Opening",
+      content: "Choose Cash.\n\nConfirm the opening balance.",
+    });
+    expect(chunks[1]).toMatchObject({
+      heading: "Closing",
+      content: "Choose Close cash register.",
+    });
+  });
+
   it("passes the tenant filter and returns cited hybrid results", async () => {
     const search: KnowledgeSearchPort = {
       query: async (input) => {
