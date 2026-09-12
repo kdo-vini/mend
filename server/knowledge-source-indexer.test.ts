@@ -146,6 +146,70 @@ describe("knowledge source indexer", () => {
     );
   });
 
+  it("embeds each new content hash once, including duplicates in later batches", async () => {
+    const store: KnowledgeSourceIndexStore = {
+      begin: vi.fn(async () => ({
+        includePatterns: ["docs/**/*.md"],
+        excludePatterns: [],
+      })),
+      findReusableEmbeddings: vi.fn(async () => new Map()),
+      writeDocuments: vi.fn(async () => undefined),
+      complete: vi.fn(async () => undefined),
+      fail: vi.fn(async () => undefined),
+    };
+    const github = {
+      checkoutRepositoryArchive: vi.fn(
+        async (_repository, _ref: string, destination: string) => {
+          await mkdir(path.join(destination, "docs"), { recursive: true });
+          await Promise.all(
+            Array.from({ length: 258 }, (_, index) =>
+              writeFile(
+                path.join(
+                  destination,
+                  "docs",
+                  `${String(index).padStart(3, "0")}.md`,
+                ),
+                index === 257 ? "Repeated" : `Document ${index}`,
+              ),
+            ),
+          );
+          await writeFile(path.join(destination, "docs", "000.md"), "Repeated");
+        },
+      ),
+    };
+    let activeCalls = 0;
+    let maximumConcurrency = 0;
+    const embeddedInputs: string[] = [];
+    const embeddings = {
+      embed: vi.fn(async () => [1]),
+      embedMany: vi.fn(async (values: readonly string[]) => {
+        activeCalls += 1;
+        maximumConcurrency = Math.max(maximumConcurrency, activeCalls);
+        embeddedInputs.push(...values);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        activeCalls -= 1;
+        return values.map((value) => [value.length]);
+      }),
+    };
+
+    await new KnowledgeSourceIndexer(github, store, embeddings).process(
+      payload,
+    );
+
+    expect(maximumConcurrency).toBeGreaterThan(1);
+    expect(embeddedInputs.filter((value) => value === "Repeated")).toHaveLength(
+      1,
+    );
+    expect(store.complete).toHaveBeenCalledWith(
+      payload,
+      expect.objectContaining({
+        chunksWritten: 258,
+        chunksReused: 1,
+        embeddingInputCount: 257,
+      }),
+    );
+  });
+
   it("records a stable failure and never completes a partial revision", async () => {
     const store: KnowledgeSourceIndexStore = {
       begin: async () => ({ includePatterns: [], excludePatterns: [] }),

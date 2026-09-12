@@ -70,6 +70,7 @@ export interface KnowledgeSourceIndexStore {
 
 const EMBEDDING_BATCH_SIZE = 64;
 const EMBEDDING_CONCURRENCY = 4;
+const EMBEDDING_FLUSH_SIZE = EMBEDDING_BATCH_SIZE * EMBEDDING_CONCURRENCY;
 
 async function embedInBatches(
   embeddings: KnowledgeEmbeddingPort & {
@@ -147,7 +148,7 @@ export class KnowledgeSourceIndexer {
           updatedAt: payload.requestedSha,
         }),
       }));
-      const reusableEmbeddings =
+      const reusableEmbeddings = new Map(
         this.embeddings && this.store.findReusableEmbeddings
           ? await this.store.findReusableEmbeddings(payload, [
               ...new Set(
@@ -156,18 +157,24 @@ export class KnowledgeSourceIndexer {
                 ),
               ),
             ])
-          : new Map<string, readonly number[]>();
+          : [],
+      );
       let chunksWritten = 0;
       let chunksReused = 0;
       let embeddingInputCount = 0;
+      const embeddedHashesThisSync = new Set<string>();
+      const emittedGeneratedHashes = new Set<string>();
       let pending: typeof prepared = [];
       let pendingChunkCount = 0;
       const flush = async () => {
         if (!pending.length) return;
         const chunks = pending.flatMap((item) => item.chunks);
-        const missing = chunks.filter(
-          (chunk) => !reusableEmbeddings.has(chunk.contentHash),
+        const missingByHash = new Map(
+          chunks
+            .filter((chunk) => !reusableEmbeddings.has(chunk.contentHash))
+            .map((chunk) => [chunk.contentHash, chunk] as const),
         );
+        const missing = [...missingByHash.values()];
         const generatedVectors = this.embeddings
           ? await embedInBatches(
               this.embeddings,
@@ -181,9 +188,20 @@ export class KnowledgeSourceIndexer {
             generatedVectors[index] ?? [],
           ]),
         );
+        for (const [hash, vector] of generatedByHash)
+          if (vector.length) {
+            reusableEmbeddings.set(hash, vector);
+            embeddedHashesThisSync.add(hash);
+          }
         const vectors = chunks.map((chunk) => {
           const reusable = reusableEmbeddings.get(chunk.contentHash);
-          if (reusable) chunksReused += 1;
+          if (reusable) {
+            if (!embeddedHashesThisSync.has(chunk.contentHash))
+              chunksReused += 1;
+            else if (emittedGeneratedHashes.has(chunk.contentHash))
+              chunksReused += 1;
+            else emittedGeneratedHashes.add(chunk.contentHash);
+          }
           return reusable ?? generatedByHash.get(chunk.contentHash) ?? [];
         });
         let offset = 0;
@@ -215,12 +233,12 @@ export class KnowledgeSourceIndexer {
       for (const item of prepared) {
         if (
           pending.length &&
-          pendingChunkCount + item.chunks.length > EMBEDDING_BATCH_SIZE
+          pendingChunkCount + item.chunks.length > EMBEDDING_FLUSH_SIZE
         )
           await flush();
         pending.push(item);
         pendingChunkCount += item.chunks.length;
-        if (pendingChunkCount >= EMBEDDING_BATCH_SIZE) await flush();
+        if (pendingChunkCount >= EMBEDDING_FLUSH_SIZE) await flush();
       }
       await flush();
       await this.store.complete(payload, {
