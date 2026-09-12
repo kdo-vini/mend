@@ -56,18 +56,27 @@
     "connect": "Connect source",
     "empty": "No code sources connected",
     "emptyDescription": "Connect product repositories to follow released changes.",
-    "observed": "Observed",
-    "indexed": "Indexed",
+    "observed": "On GitHub",
+    "indexed": "In AI knowledge",
     "active": "In production",
     "sync": "Refresh",
+    "checkUpdates": "Check for updates",
+    "syncing": "Updating…",
     "activate": "Use this version",
     "activateTitle": "Use knowledge from this version?",
     "activateDescription": "Version {{sha}} of {{repository}} will represent the behavior available to customers.",
     "error": "The last refresh failed: {{code}}",
     "freshness": {
       "empty": "Waiting for version",
-      "stale": "Review needed",
+      "stale": "Update available",
       "current": "Current"
+    },
+    "status": {
+      "current": "AI knowledge matches the version in production.",
+      "syncing": "Checking for changes and updating AI knowledge. You can leave this page.",
+      "empty": "Run the first update to make this product available to AI.",
+      "changesDetected": "New code is waiting for a knowledge update.",
+      "awaitingProduction": "Knowledge is updated, but this version is not in production yet."
     }
   },
   "editor": {
@@ -100,7 +109,10 @@
     "deleted": "Article deleted",
     "productCreated": "Product created",
     "sourceConnected": "Repository connected to knowledge",
-    "syncQueued": "Refresh started",
+    "syncQueued": "Update started. You can leave this page.",
+    "syncCurrent": "Knowledge already matches the latest version.",
+    "syncCompleted": "Knowledge updated successfully.",
+    "syncFailed": "The update failed. Try again.",
     "revisionActivated": "Active version updated"
   }
 }

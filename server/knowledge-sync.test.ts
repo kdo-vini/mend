@@ -27,7 +27,7 @@ describe("knowledge source state", () => {
     ).toThrow();
   });
 
-  it("is current only after the active revision is indexed and ready", () => {
+  it("derives freshness from observed, indexed, and production revisions", () => {
     const source = {
       id: "s",
       workspaceId: "w",
@@ -39,6 +39,10 @@ describe("knowledge source state", () => {
       activeSha: "a",
     };
     expect(sourceFreshness(source)).toBe("current");
+    expect(sourceFreshness({ ...source, syncState: "running" })).toBe(
+      "current",
+    );
+    expect(sourceFreshness({ ...source, observedSha: "b" })).toBe("stale");
     expect(sourceFreshness({ ...source, activeSha: "b" })).toBe("stale");
     expect(sourceFreshness({ ...source, activeSha: undefined })).toBe("empty");
   });

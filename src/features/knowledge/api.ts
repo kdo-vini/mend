@@ -83,18 +83,25 @@ export async function loadKnowledgeConfiguration(workspaceId: string): Promise<{
       {},
       workspaceId,
     ),
-    apiRequest<{ data: KnowledgeSourceSummary[] }>(
-      "/api/knowledge/sources",
-      {},
-      workspaceId,
-    ),
+    loadKnowledgeSources(workspaceId),
     listLiveRepositories(workspaceId),
   ]);
   return {
     products: products.data ?? [],
-    sources: sources.data ?? [],
+    sources,
     repositories,
   };
+}
+
+export async function loadKnowledgeSources(
+  workspaceId: string,
+): Promise<KnowledgeSourceSummary[]> {
+  const response = await apiRequest<{ data: KnowledgeSourceSummary[] }>(
+    "/api/knowledge/sources",
+    {},
+    workspaceId,
+  );
+  return response.data ?? [];
 }
 
 export async function saveKnowledgeProduct(

@@ -37,7 +37,8 @@ export function sourceFreshness(
   source: KnowledgeSource,
 ): "empty" | "stale" | "current" {
   if (!source.indexedSha || !source.activeSha) return "empty";
-  return source.indexedSha === source.activeSha && source.syncState === "ready"
+  return source.indexedSha === source.activeSha &&
+    (!source.observedSha || source.observedSha === source.indexedSha)
     ? "current"
     : "stale";
 }

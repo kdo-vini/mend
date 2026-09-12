@@ -1,4 +1,10 @@
-import { CheckCircle2, GitBranch, RefreshCw, ShieldAlert } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  GitBranch,
+  LoaderCircle,
+  RefreshCw,
+} from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { LiveRepository } from "../api";
@@ -101,9 +107,21 @@ export function KnowledgeSourcesPanel({
         {sources.length ? (
           sources.map((source) => {
             const current = source.freshness === "current";
+            const syncing =
+              source.syncState === "running" || source.syncState === "queued";
+            const statusDescription = syncing
+              ? "sources.status.syncing"
+              : source.freshness === "empty"
+                ? "sources.status.empty"
+                : source.observedSha && source.observedSha !== source.indexedSha
+                  ? "sources.status.changesDetected"
+                  : source.indexedSha !== source.activeSha
+                    ? "sources.status.awaitingProduction"
+                    : "sources.status.current";
             return (
               <article className="knowledge-source-card" key={source.id}>
                 <header>
+                  <strong>{source.repositoryName}</strong>
                   <span
                     className={
                       current
@@ -114,27 +132,35 @@ export function KnowledgeSourcesPanel({
                     {current ? (
                       <CheckCircle2 size={14} />
                     ) : (
-                      <ShieldAlert size={14} />
+                      <CircleAlert size={14} />
                     )}
                     {t(`sources.freshness.${source.freshness}`)}
                   </span>
-                  <strong>{source.repositoryName}</strong>
                 </header>
+                <p className="knowledge-source-description" aria-live="polite">
+                  {t(statusDescription)}
+                </p>
                 <div className="knowledge-source-meta">
                   <span>
                     <GitBranch size={13} /> {source.refName}
                   </span>
                   <span>
                     {t("sources.observed")}:{" "}
-                    <code>{shortSha(source.observedSha)}</code>
+                    <code title={source.observedSha}>
+                      {shortSha(source.observedSha)}
+                    </code>
                   </span>
                   <span>
                     {t("sources.indexed")}:{" "}
-                    <code>{shortSha(source.indexedSha)}</code>
+                    <code title={source.indexedSha}>
+                      {shortSha(source.indexedSha)}
+                    </code>
                   </span>
                   <span>
                     {t("sources.active")}:{" "}
-                    <code>{shortSha(source.activeSha)}</code>
+                    <code title={source.activeSha}>
+                      {shortSha(source.activeSha)}
+                    </code>
                   </span>
                 </div>
                 <p>
@@ -155,14 +181,15 @@ export function KnowledgeSourcesPanel({
                   <button
                     className="button button-ghost button-small"
                     type="button"
-                    disabled={
-                      busy ||
-                      source.syncState === "running" ||
-                      source.syncState === "queued"
-                    }
+                    disabled={busy || syncing}
                     onClick={() => void onSync(source.id)}
                   >
-                    <RefreshCw size={13} /> {t("sources.sync")}
+                    {syncing ? (
+                      <LoaderCircle className="spin" size={13} />
+                    ) : (
+                      <RefreshCw size={13} />
+                    )}{" "}
+                    {syncing ? t("sources.syncing") : t("sources.checkUpdates")}
                   </button>
                   {source.indexedSha &&
                   source.indexedSha !== source.activeSha ? (

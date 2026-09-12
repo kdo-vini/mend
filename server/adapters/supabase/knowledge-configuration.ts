@@ -272,11 +272,13 @@ export class SupabaseKnowledgeConfigurationAdapter
     )
       throw new Error("github_repository_not_connected");
     let requestedSha = str(source.observed_sha || source.active_sha);
-    if (!requestedSha && this.github) {
+    if (this.github) {
       requestedSha = await this.github.getBranchSha(
         { owner, repo, installationId },
         str(source.ref_name),
       );
+    }
+    if (requestedSha && requestedSha !== str(source.observed_sha)) {
       checked(
         "knowledge_sources.observe",
         await this.client
@@ -291,6 +293,21 @@ export class SupabaseKnowledgeConfigurationAdapter
     }
     if (!/^[a-f0-9]{40,64}$/.test(requestedSha))
       throw new Error("knowledge_source_revision_required");
+    if (requestedSha === str(source.indexed_sha)) {
+      checked(
+        "knowledge_sources.already_current",
+        await this.client
+          .from("knowledge_sources")
+          .update({
+            sync_state: "ready",
+            last_error_code: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("workspace_id", workspaceId)
+          .eq("id", sourceId),
+      );
+      return { queued: false, requestedSha };
+    }
     const payload: KnowledgeRepositorySyncJobPayload = {
       stage: "knowledge_repository_sync",
       workspaceId,

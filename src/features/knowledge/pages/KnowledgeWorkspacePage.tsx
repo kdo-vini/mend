@@ -20,6 +20,7 @@ import {
   createKnowledgeSource,
   loadKnowledgeArticles,
   loadKnowledgeConfiguration,
+  loadKnowledgeSources,
   removeKnowledgeArticle,
   requestKnowledgeSync,
   saveKnowledgeArticle,
@@ -82,6 +83,7 @@ export function KnowledgeWorkspacePage({
   const [view, setView] = useState<"content" | "sources">("content");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [configurationBusy, setConfigurationBusy] = useState(false);
+  const [pendingSyncIds, setPendingSyncIds] = useState<string[]>([]);
   const { confirm, confirmationDialog } = useConfirmation();
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(
     null,
@@ -115,6 +117,14 @@ export function KnowledgeWorkspacePage({
       setProducts(configuration.products);
       setSources(configuration.sources);
       setRepositories(configuration.repositories);
+      setPendingSyncIds(
+        configuration.sources
+          .filter(
+            (source) =>
+              source.syncState === "queued" || source.syncState === "running",
+          )
+          .map((source) => source.id),
+      );
     } catch (error) {
       onToast(localizedError(error, t("errors.load", { ns: "knowledge" })));
     } finally {
@@ -125,6 +135,51 @@ export function KnowledgeWorkspacePage({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!workspaceId || !pendingSyncIds.length) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const poll = async () => {
+      try {
+        const nextSources = await loadKnowledgeSources(workspaceId);
+        if (cancelled) return;
+        setSources(nextSources);
+
+        const pending = new Set(pendingSyncIds);
+        const tracked = nextSources.filter((source) => pending.has(source.id));
+        const stillRunning = tracked
+          .filter(
+            (source) =>
+              source.syncState === "queued" || source.syncState === "running",
+          )
+          .map((source) => source.id);
+        const completed = tracked.filter(
+          (source) =>
+            source.syncState !== "queued" && source.syncState !== "running",
+        );
+        if (completed.some((source) => source.syncState === "failed"))
+          onToast(t("toasts.syncFailed"));
+        else if (completed.length) onToast(t("toasts.syncCompleted"));
+        setPendingSyncIds((current) =>
+          current.length === stillRunning.length &&
+          current.every((id, index) => id === stillRunning[index])
+            ? current
+            : stillRunning,
+        );
+        if (stillRunning.length) timer = setTimeout(() => void poll(), 2_500);
+      } catch {
+        if (!cancelled) timer = setTimeout(() => void poll(), 5_000);
+      }
+    };
+
+    timer = setTimeout(() => void poll(), 1_000);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [onToast, pendingSyncIds, t, workspaceId]);
 
   const scopedArticles = articles.filter((article) =>
     selectedProductId === "all"
@@ -290,11 +345,41 @@ export function KnowledgeWorkspacePage({
               }}
               onSync={async (sourceId) => {
                 setConfigurationBusy(true);
+                setSources((current) =>
+                  current.map((source) =>
+                    source.id === sourceId
+                      ? { ...source, syncState: "queued" }
+                      : source,
+                  ),
+                );
+                setPendingSyncIds((current) => [
+                  ...new Set([...current, sourceId]),
+                ]);
                 try {
-                  await requestKnowledgeSync(workspaceId, sourceId);
-                  await refresh();
-                  onToast(t("toasts.syncQueued"));
+                  const result = await requestKnowledgeSync(
+                    workspaceId,
+                    sourceId,
+                  );
+                  if (result.queued) {
+                    onToast(t("toasts.syncQueued"));
+                  } else {
+                    const configuration =
+                      await loadKnowledgeConfiguration(workspaceId);
+                    setProducts(configuration.products);
+                    setSources(configuration.sources);
+                    setRepositories(configuration.repositories);
+                    setPendingSyncIds((current) =>
+                      current.filter((id) => id !== sourceId),
+                    );
+                    onToast(t("toasts.syncCurrent"));
+                  }
                 } catch (error) {
+                  setPendingSyncIds((current) =>
+                    current.filter((id) => id !== sourceId),
+                  );
+                  void loadKnowledgeSources(workspaceId)
+                    .then(setSources)
+                    .catch(() => undefined);
                   onToast(localizedError(error, t("errors.sync")));
                 } finally {
                   setConfigurationBusy(false);

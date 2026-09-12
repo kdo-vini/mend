@@ -44,7 +44,7 @@ class Query implements PromiseLike<{ data: unknown; error: null }> {
 }
 
 describe("SupabaseKnowledgeConfigurationAdapter", () => {
-  it("resolves and persists the branch SHA before the first manual sync", async () => {
+  it("checks and persists the branch SHA before every manual sync", async () => {
     const workspaceId = "10000000-0000-4000-8000-000000000001";
     const sourceId = "10000000-0000-4000-8000-000000000002";
     const sha = "a".repeat(40);
@@ -94,5 +94,48 @@ describe("SupabaseKnowledgeConfigurationAdapter", () => {
       type: "mend.knowledge.repository_sync",
       payload: expect.objectContaining({ requestedSha: sha }),
     });
+  });
+
+  it("does not enqueue a duplicate refresh when the branch is already indexed", async () => {
+    const workspaceId = "10000000-0000-4000-8000-000000000001";
+    const sourceId = "10000000-0000-4000-8000-000000000002";
+    const sha = "a".repeat(40);
+    const updates: Array<Record<string, unknown>> = [];
+    const source = {
+      id: sourceId,
+      workspace_id: workspaceId,
+      repository_id: "10000000-0000-4000-8000-000000000003",
+      ref_name: "main",
+      sync_mode: "event",
+      observed_sha: sha,
+      indexed_sha: sha,
+      active_sha: sha,
+      sync_state: "running",
+      repositories: {
+        github_owner: "techne",
+        github_repo: "zelopdv",
+        github_installation_id: 42,
+      },
+    };
+    const client = {
+      from: vi.fn(() => new Query(source, updates)),
+    };
+    const jobs = new InMemoryJobStore<Record<string, unknown>>();
+    const github = { getBranchSha: vi.fn(async () => sha) };
+    const adapter = new SupabaseKnowledgeConfigurationAdapter(
+      client as never,
+      jobs,
+      github,
+    );
+
+    await expect(adapter.requestSync(workspaceId, sourceId)).resolves.toEqual({
+      queued: false,
+      requestedSha: sha,
+    });
+    expect(github.getBranchSha).toHaveBeenCalledOnce();
+    expect(await jobs.list()).toHaveLength(0);
+    expect(updates).toContainEqual(
+      expect.objectContaining({ sync_state: "ready", last_error_code: null }),
+    );
   });
 });
