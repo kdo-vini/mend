@@ -122,7 +122,7 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
             },
             updated_at: new Date().toISOString(),
           })) as never,
-          { onConflict: "source_id,source_path" },
+          { onConflict: "source_id,source_path,source_revision" },
         )
         .select("id,source_path");
       const articleRows = rows(
