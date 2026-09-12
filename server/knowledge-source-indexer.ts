@@ -68,6 +68,7 @@ export interface KnowledgeSourceIndexStore {
 }
 
 const EMBEDDING_BATCH_SIZE = 64;
+const EMBEDDING_CONCURRENCY = 4;
 
 async function embedInBatches(
   embeddings: KnowledgeEmbeddingPort & {
@@ -77,12 +78,24 @@ async function embedInBatches(
 ): Promise<readonly (readonly number[])[]> {
   if (!embeddings.embedMany)
     return Promise.all(values.map((value) => embeddings.embed(value)));
-  const vectors: (readonly number[])[] = [];
-  for (let index = 0; index < values.length; index += EMBEDDING_BATCH_SIZE) {
-    const batch = values.slice(index, index + EMBEDDING_BATCH_SIZE);
-    vectors.push(...(await embeddings.embedMany(batch)));
-  }
-  return vectors;
+  const batches: string[][] = [];
+  for (let index = 0; index < values.length; index += EMBEDDING_BATCH_SIZE)
+    batches.push(values.slice(index, index + EMBEDDING_BATCH_SIZE));
+  const results: Array<readonly number[][]> = new Array(batches.length);
+  let nextBatch = 0;
+  await Promise.all(
+    Array.from(
+      { length: Math.min(EMBEDDING_CONCURRENCY, batches.length) },
+      async () => {
+        while (nextBatch < batches.length) {
+          const index = nextBatch;
+          nextBatch += 1;
+          results[index] = await embeddings.embedMany!(batches[index]!);
+        }
+      },
+    ),
+  );
+  return results.flat();
 }
 
 export class KnowledgeSourceIndexer {
