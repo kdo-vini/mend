@@ -1,5 +1,8 @@
 import "dotenv/config";
+import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
+
+/* global console */
 
 const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

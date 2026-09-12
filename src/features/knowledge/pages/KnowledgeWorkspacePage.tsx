@@ -15,7 +15,6 @@ import type {
   KnowledgeProduct,
   KnowledgeSourceSummary,
 } from "../../../types";
-import type { LiveRepository } from "../../../api/live-actions";
 import {
   activateKnowledgeRevision,
   createKnowledgeSource,
@@ -25,6 +24,7 @@ import {
   requestKnowledgeSync,
   saveKnowledgeArticle,
   saveKnowledgeProduct,
+  type LiveRepository,
 } from "../api";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { EmptyState, Skeleton } from "../../../shared/ui/ResourceState";

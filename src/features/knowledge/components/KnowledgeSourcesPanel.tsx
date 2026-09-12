@@ -1,7 +1,7 @@
 import { CheckCircle2, GitBranch, RefreshCw, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { LiveRepository } from "../../../api/live-actions";
+import type { LiveRepository } from "../api";
 import type { KnowledgeProduct, KnowledgeSourceSummary } from "../../../types";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
 import { Select } from "../../../shared/ui/Select";

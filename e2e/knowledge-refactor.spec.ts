@@ -110,7 +110,10 @@ async function installLiveKnowledgeHarness(
     const id = url.pathname.split("/").at(-1);
     let response: unknown;
 
-    if (url.pathname.endsWith("/products") || url.pathname.endsWith("/sources")) {
+    if (
+      url.pathname.endsWith("/products") ||
+      url.pathname.endsWith("/sources")
+    ) {
       response = { data: [] };
     } else if (method === "GET") {
       response = { data: articles };

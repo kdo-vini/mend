@@ -13,6 +13,8 @@ import {
   type LiveRepository,
 } from "../../api/live-actions";
 
+export type { LiveRepository };
+
 function requireClient() {
   if (!supabase) throw new Error("Live workspace is not configured.");
   return supabase;
@@ -26,7 +28,9 @@ export async function loadKnowledgeArticles(
     {},
     workspaceId,
   );
-  return (response.data ?? []).map((article) => toUiKnowledge(article as never));
+  return (response.data ?? []).map((article) =>
+    toUiKnowledge(article as never),
+  );
 }
 
 export async function saveKnowledgeArticle(input: {

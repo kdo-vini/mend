@@ -184,10 +184,7 @@ export class WhatsAppService {
     const destination = outboundDestination(conversation);
     if (this.provider.sendPresence)
       await this.provider
-        .sendPresence(
-          conversation.providerInstanceName,
-          destination,
-        )
+        .sendPresence(conversation.providerInstanceName, destination)
         .catch(() => undefined);
     const response = await this.provider.sendText({
       instanceName: conversation.providerInstanceName,

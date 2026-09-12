@@ -1530,7 +1530,8 @@ export async function updateLiveKnowledge(
       { method: "PATCH", body: JSON.stringify(input.patch) },
       input.workspaceId,
     ).then((result) => ("article" in result ? result.article : result));
-  const { productIds: _productIds, ...databasePatch } = input.patch;
+  const databasePatch = { ...input.patch };
+  delete databasePatch.productIds;
   return unwrap(
     requireClient(client)
       .from("knowledge_articles")
