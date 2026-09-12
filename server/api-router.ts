@@ -24,6 +24,7 @@ import { registerCodingRunRoutes } from "./routes/coding-run-routes.js";
 import { registerConversationRoutes } from "./routes/conversation-routes.js";
 import { registerIssueRoutes } from "./routes/issue-routes.js";
 import { registerKnowledgeRoutes } from "./routes/knowledge-routes.js";
+import { registerKnowledgeSourceRoutes } from "./routes/knowledge-source-routes.js";
 import { registerRepositoryRoutes } from "./routes/repository-routes.js";
 import { registerWorkspaceRoutes } from "./routes/workspace-routes.js";
 import { registerMediaRoutes } from "./routes/media-routes.js";
@@ -676,6 +677,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerIssueRoutes(routeContext);
   registerKanbanRoutes(routeContext);
   registerKnowledgeRoutes(routeContext);
+  registerKnowledgeSourceRoutes(routeContext);
   registerRepositoryRoutes(routeContext);
   registerGitHubConnectionRoutes(routeContext);
   registerCodingRunRoutes(routeContext);

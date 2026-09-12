@@ -19,6 +19,7 @@ import type {
   StageRoutingPolicy,
   StageRoutingPolicyOverride,
 } from "../coding-control-plane.js";
+import type { KnowledgeConfigurationPort } from "../knowledge-sync.js";
 
 export type WorkspaceRole = "owner" | "admin" | "agent" | "viewer";
 export type WorkspaceInvitationRole = Exclude<WorkspaceRole, "owner">;
@@ -594,6 +595,7 @@ export interface ApiRouterDependencies {
   conversations: ConversationPort;
   issues: IssuePort;
   knowledge: KnowledgePort;
+  knowledgeConfiguration?: KnowledgeConfigurationPort;
   repositories: RepositoryPort;
   agentCredentials: AgentCredentialPort;
   codingControlPlane?: CodingControlPlanePort;

@@ -47,3 +47,49 @@ export function knowledgeSyncDedupeKey(
 ): string {
   return `mend:knowledge-sync:${payload.workspaceId}:${payload.sourceId}:${payload.requestedSha}`;
 }
+
+export interface KnowledgeProductInput {
+  key: string;
+  name: string;
+  description: string;
+  aliases: readonly string[];
+  status?: "active" | "archived";
+}
+
+export interface KnowledgeSourceInput {
+  repositoryId: string;
+  productIds: readonly string[];
+  refName: string;
+  syncMode: "event" | "manual" | "paused";
+  includePatterns?: readonly string[];
+  excludePatterns?: readonly string[];
+}
+
+export interface KnowledgeConfigurationPort {
+  listProducts(workspaceId: string): Promise<unknown>;
+  createProduct(
+    workspaceId: string,
+    input: KnowledgeProductInput,
+  ): Promise<unknown>;
+  updateProduct(
+    workspaceId: string,
+    productId: string,
+    input: Partial<KnowledgeProductInput>,
+  ): Promise<unknown | null>;
+  listSources(workspaceId: string): Promise<unknown>;
+  createSource(
+    workspaceId: string,
+    input: KnowledgeSourceInput,
+  ): Promise<unknown>;
+  updateSource(
+    workspaceId: string,
+    sourceId: string,
+    input: Partial<KnowledgeSourceInput>,
+  ): Promise<unknown | null>;
+  requestSync(workspaceId: string, sourceId: string): Promise<unknown | null>;
+  activateRevision(
+    workspaceId: string,
+    sourceId: string,
+    sha: string,
+  ): Promise<unknown | null>;
+}

@@ -27,6 +27,58 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
     private readonly agentCredentials?: AgentCredentialPort,
   ) {}
 
+  private async productIdsByArticle(
+    workspaceId: string,
+    articleIds: readonly string[],
+  ) {
+    const output = new Map<string, string[]>();
+    if (!articleIds.length) return output;
+    const mappings = rows(
+      checked(
+        "knowledge_article_products.list",
+        await this.client
+          .from("knowledge_article_products")
+          .select("article_id, product_id")
+          .eq("workspace_id", workspaceId)
+          .in("article_id", [...articleIds]),
+      ),
+    );
+    for (const mapping of mappings) {
+      const articleId = str(mapping.article_id);
+      output.set(articleId, [
+        ...(output.get(articleId) ?? []),
+        str(mapping.product_id),
+      ]);
+    }
+    return output;
+  }
+
+  private async replaceProductMappings(
+    workspaceId: string,
+    articleId: string,
+    productIds: readonly string[],
+  ): Promise<void> {
+    checked(
+      "knowledge_article_products.delete",
+      await this.indexingClient
+        .from("knowledge_article_products")
+        .delete()
+        .eq("workspace_id", workspaceId)
+        .eq("article_id", articleId),
+    );
+    if (!productIds.length) return;
+    checked(
+      "knowledge_article_products.insert",
+      await this.indexingClient.from("knowledge_article_products").insert(
+        [...new Set(productIds)].map((productId) => ({
+          workspace_id: workspaceId,
+          article_id: articleId,
+          product_id: productId,
+        })),
+      ),
+    );
+  }
+
   private async syncChunks(value: Row): Promise<void> {
     const articleId = str(value.id);
     const workspaceId = str(value.workspace_id);
@@ -95,7 +147,28 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
     const result = await request
       .order("updated_at", { ascending: false })
       .limit(Number(value.limit ?? 100));
-    return rows(checked("knowledge_articles.list", result)).map(article);
+    const articleRows = rows(checked("knowledge_articles.list", result));
+    const mappings = await this.productIdsByArticle(
+      context.workspaceId,
+      articleRows.map((item) => str(item.id)),
+    );
+    return articleRows
+      .map((item) => ({
+        ...article(item),
+        productIds: mappings.get(str(item.id)) ?? [],
+        managedBySync: Boolean(item.managed_by_sync),
+        trustLevel: str(item.trust_level, "reviewed"),
+        audience: str(item.audience, "customer"),
+        sourcePath: item.source_path ? str(item.source_path) : null,
+        sourceRevision: item.source_revision ? str(item.source_revision) : null,
+      }))
+      .filter((item) =>
+        value.productId
+          ? (item.productIds as string[]).includes(str(value.productId))
+          : value.shared
+            ? (item.productIds as string[]).length === 0
+            : true,
+      );
   }
 
   async create(context: KnowledgeRequestContext, input: KnowledgeCreateInput) {
@@ -112,8 +185,13 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
       .select("*")
       .single();
     const created = row(checked("knowledge_articles.create", result));
+    await this.replaceProductMappings(
+      context.workspaceId,
+      str(created.id),
+      input.productIds,
+    );
     await this.syncChunks(created);
-    return article(created);
+    return { ...article(created), productIds: [...new Set(input.productIds)] };
   }
 
   async update(
@@ -133,13 +211,21 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
       })
       .eq("id", id)
       .eq("workspace_id", context.workspaceId)
+      .eq("managed_by_sync", false)
       .select("*")
       .maybeSingle();
     const data = checked("knowledge_articles.update", result);
     if (!data) return null;
     const updated = row(data);
+    if (input.productIds !== undefined)
+      await this.replaceProductMappings(
+        context.workspaceId,
+        id,
+        input.productIds,
+      );
     await this.syncChunks(updated);
-    return article(updated);
+    const mappings = await this.productIdsByArticle(context.workspaceId, [id]);
+    return { ...article(updated), productIds: mappings.get(id) ?? [] };
   }
 
   async remove(context: KnowledgeRequestContext, id: string) {
@@ -148,6 +234,7 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
       .delete()
       .eq("id", id)
       .eq("workspace_id", context.workspaceId)
+      .eq("managed_by_sync", false)
       .select("id");
     return rows(checked("knowledge_articles.delete", result)).length > 0;
   }

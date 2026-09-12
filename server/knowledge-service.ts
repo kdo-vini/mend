@@ -8,6 +8,7 @@ export const knowledgeCreateSchema = z
     category: z.string().trim().min(1).max(120).default("Support"),
     body: z.string().trim().min(1).max(100_000),
     status: knowledgeStatusSchema.default("draft"),
+    productIds: z.array(z.string().uuid()).max(20).default([]),
   })
   .strict();
 
@@ -20,6 +21,8 @@ export const knowledgeListQuerySchema = z
     status: knowledgeStatusSchema.optional(),
     limit: z.coerce.number().int().min(1).max(200).default(100),
     cursor: z.string().trim().max(200).optional(),
+    productId: z.string().uuid().optional(),
+    shared: z.coerce.boolean().optional(),
   })
   .strict();
 

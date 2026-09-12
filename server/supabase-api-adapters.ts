@@ -12,6 +12,7 @@ import { SupabaseGoogleConnectionAdapter } from "./adapters/supabase/google.js";
 import { SupabaseImpactAdapter } from "./adapters/supabase/impact.js";
 import { SupabaseIssueAdapter } from "./adapters/supabase/issues.js";
 import { SupabaseKnowledgeAdapter } from "./adapters/supabase/knowledge.js";
+import { SupabaseKnowledgeConfigurationAdapter } from "./adapters/supabase/knowledge-configuration.js";
 import { SupabaseMcpConnectionAdapter } from "./adapters/supabase/mcp.js";
 import {
   SupabaseChannelAdapter,
@@ -102,6 +103,7 @@ export type SupabaseApiPortDependencies = {
   conversations: ConversationPort;
   issues: IssuePort;
   knowledge: KnowledgePort;
+  knowledgeConfiguration: import("./knowledge-sync.js").KnowledgeConfigurationPort;
   repositories: RepositoryPort;
   agentCredentials: AgentCredentialPort;
   codingControlPlane: CodingControlPlanePort;
@@ -175,6 +177,10 @@ export function createSupabaseApiAdapters(
     privilegedClient,
     agentCredentials,
   );
+  const knowledgeConfiguration = new SupabaseKnowledgeConfigurationAdapter(
+    privilegedClient,
+    options.jobStore as unknown as JobStore<Record<string, unknown>>,
+  );
   const impact = new SupabaseImpactAdapter(client);
   const repositories = new SupabaseRepositoryAdapter(client);
   const githubConnections = new SupabaseGitHubConnectionAdapter(
@@ -206,6 +212,7 @@ export function createSupabaseApiAdapters(
     conversations,
     issues,
     knowledge,
+    knowledgeConfiguration,
     impact,
     repositories,
     agentCredentials,
