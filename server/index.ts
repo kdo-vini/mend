@@ -45,9 +45,15 @@ import {
 import { runnerIsReady } from "./impact.js";
 import { createGitHubControlPlaneFromEnv } from "./github-control-plane.js";
 import { SupabaseKnowledgeSyncProcessor } from "./workers/knowledge-sync.js";
+import { createGitHubKnowledgeWebhook } from "./github-knowledge-webhook.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
+
+app.use(
+  "/webhooks/github/knowledge",
+  express.raw({ type: "application/json", limit: "1mb" }),
+);
 
 const supabaseOrigin = (() => {
   try {
@@ -138,6 +144,20 @@ const processRole = process.env.MEND_PROCESS_ROLE?.trim() || "control";
 const messageJobs = workerSupabase
   ? new SupabaseJobStore<WhatsmiauMessageJobPayload>(workerSupabase)
   : new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+
+if (workerSupabase && process.env.MEND_GITHUB_WEBHOOK_SECRET) {
+  app.post(
+    "/webhooks/github/knowledge",
+    createGitHubKnowledgeWebhook({
+      client: workerSupabase,
+      jobs: messageJobs as unknown as import("./jobs.js").JobStore<
+        Record<string, unknown>
+      >,
+      secret: process.env.MEND_GITHUB_WEBHOOK_SECRET,
+      logger,
+    }),
+  );
+}
 
 function secretMatches(
   value: string | undefined,
