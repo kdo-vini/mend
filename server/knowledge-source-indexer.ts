@@ -44,9 +44,9 @@ export interface KnowledgeSourceIndexStore {
   begin(
     payload: KnowledgeRepositorySyncJobPayload,
   ): Promise<KnowledgeSourceIndexConfiguration>;
-  writeDocument(
+  writeDocuments(
     payload: KnowledgeRepositorySyncJobPayload,
-    document: RepositoryKnowledgeDocumentWrite,
+    documents: readonly RepositoryKnowledgeDocumentWrite[],
   ): Promise<void>;
   complete(
     payload: KnowledgeRepositorySyncJobPayload,
@@ -137,12 +137,13 @@ export class KnowledgeSourceIndexer {
             )
           : [];
         let offset = 0;
+        const writes: RepositoryKnowledgeDocumentWrite[] = [];
         for (const item of pending) {
           const documentVectors = vectors.slice(
             offset,
             offset + item.chunks.length,
           );
-          await this.store.writeDocument(payload, {
+          writes.push({
             ...item.document,
             chunks: item.chunks.map((chunk, index) => ({
               index: chunk.index,
@@ -157,6 +158,7 @@ export class KnowledgeSourceIndexer {
           offset += item.chunks.length;
           chunksWritten += item.chunks.length;
         }
+        await this.store.writeDocuments(payload, writes);
         pending = [];
         pendingChunkCount = 0;
       };

@@ -1,5 +1,5 @@
 import type { AnySupabaseClient } from "../adapters/supabase/types.js";
-import { checked, row, str } from "../adapters/supabase-mappers.js";
+import { checked, row, rows, str } from "../adapters/supabase-mappers.js";
 import type { AgentCredentialPort } from "../contracts/api-ports.js";
 import type { GitHubControlPlane } from "../github-control-plane.js";
 import type { KnowledgeMetricWriter } from "../knowledge-evals.js";
@@ -12,6 +12,7 @@ import { OpenAiKnowledgeEmbeddings } from "../knowledge-retrieval.js";
 import type { KnowledgeRepositorySyncJobPayload } from "../knowledge-sync.js";
 
 const KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE = 25;
+const KNOWLEDGE_ARTICLE_WRITE_BATCH_SIZE = 10;
 
 export async function insertKnowledgeChunkRows(
   client: AnySupabaseClient,
@@ -87,41 +88,23 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
     };
   }
 
-  async writeDocument(
+  async writeDocuments(
     payload: KnowledgeRepositorySyncJobPayload,
-    document: RepositoryKnowledgeDocumentWrite,
+    documents: readonly RepositoryKnowledgeDocumentWrite[],
   ) {
-    const existing = checked(
-      "knowledge_articles.find_managed",
-      await this.client
+    for (
+      let index = 0;
+      index < documents.length;
+      index += KNOWLEDGE_ARTICLE_WRITE_BATCH_SIZE
+    ) {
+      const batch = documents.slice(
+        index,
+        index + KNOWLEDGE_ARTICLE_WRITE_BATCH_SIZE,
+      );
+      const articleResult = await this.client
         .from("knowledge_articles")
-        .select("id")
-        .eq("workspace_id", payload.workspaceId)
-        .eq("source_id", payload.sourceId)
-        .eq("source_path", document.relativePath)
-        .eq("source_revision", payload.requestedSha)
-        .maybeSingle(),
-    );
-    const articleResult = existing
-      ? await this.client
-          .from("knowledge_articles")
-          .update({
-            title: document.title,
-            body: document.body,
-            status: "published",
-            source_metadata_json: {
-              contentHash: document.contentHash,
-              bytes: document.body.length,
-            },
-            updated_at: new Date().toISOString(),
-          })
-          .eq("workspace_id", payload.workspaceId)
-          .eq("id", str(row(existing).id))
-          .select("id")
-          .single()
-      : await this.client
-          .from("knowledge_articles")
-          .insert({
+        .upsert(
+          batch.map((document) => ({
             workspace_id: payload.workspaceId,
             title: document.title,
             category: "Repository",
@@ -137,34 +120,47 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
               contentHash: document.contentHash,
               bytes: document.body.length,
             },
-          })
-          .select("id")
-          .single();
-    const articleId = str(
-      row(checked("knowledge_articles.write_managed", articleResult)).id,
-    );
-    checked(
-      "knowledge_chunks.replace.delete",
-      await this.client
-        .from("knowledge_chunks")
-        .delete()
-        .eq("workspace_id", payload.workspaceId)
-        .eq("article_id", articleId),
-    );
-    if (document.chunks.length)
+            updated_at: new Date().toISOString(),
+          })) as never,
+          { onConflict: "source_id,source_path" },
+        )
+        .select("id,source_path");
+      const articleRows = rows(
+        checked("knowledge_articles.write_managed", articleResult),
+      );
+      const articleIdByPath = new Map(
+        articleRows.map((article) => [
+          str(article.source_path),
+          str(article.id),
+        ]),
+      );
+      const articleIds = [...articleIdByPath.values()];
+      checked(
+        "knowledge_chunks.replace.delete",
+        await this.client
+          .from("knowledge_chunks")
+          .delete()
+          .eq("workspace_id", payload.workspaceId)
+          .in("article_id", articleIds),
+      );
       await insertKnowledgeChunkRows(
         this.client,
-        document.chunks.map((chunk) => ({
-          workspace_id: payload.workspaceId,
-          article_id: articleId,
-          article_version: payload.requestedSha,
-          chunk_index: chunk.index,
-          heading: chunk.heading,
-          content: chunk.content,
-          content_hash: chunk.contentHash,
-          ...(chunk.embedding ? { embedding: [...chunk.embedding] } : {}),
-        })),
+        batch.flatMap((document) => {
+          const articleId = articleIdByPath.get(document.relativePath);
+          if (!articleId) throw new Error("knowledge_article_write_missing_id");
+          return document.chunks.map((chunk) => ({
+            workspace_id: payload.workspaceId,
+            article_id: articleId,
+            article_version: payload.requestedSha,
+            chunk_index: chunk.index,
+            heading: chunk.heading,
+            content: chunk.content,
+            content_hash: chunk.contentHash,
+            ...(chunk.embedding ? { embedding: [...chunk.embedding] } : {}),
+          }));
+        }),
       );
+    }
   }
 
   async complete(

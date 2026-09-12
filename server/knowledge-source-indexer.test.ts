@@ -26,7 +26,7 @@ describe("knowledge source indexer", () => {
         includePatterns: ["docs/**/*.md"],
         excludePatterns: [],
       })),
-      writeDocument: vi.fn(async () => undefined),
+      writeDocuments: vi.fn(async () => undefined),
       complete: vi.fn(async () => undefined),
       fail: vi.fn(async () => undefined),
     };
@@ -51,13 +51,12 @@ describe("knowledge source indexer", () => {
     await new KnowledgeSourceIndexer(github, store, embeddings).process(
       payload,
     );
-    expect(store.writeDocument).toHaveBeenCalledWith(
-      payload,
+    expect(store.writeDocuments).toHaveBeenCalledWith(payload, [
       expect.objectContaining({
         relativePath: "docs/guide.md",
         chunks: expect.any(Array),
       }),
-    );
+    ]);
     expect(store.complete).toHaveBeenCalledOnce();
     expect(store.fail).not.toHaveBeenCalled();
   });
@@ -68,7 +67,7 @@ describe("knowledge source indexer", () => {
         includePatterns: ["docs/**/*.md"],
         excludePatterns: [],
       })),
-      writeDocument: vi.fn(async () => undefined),
+      writeDocuments: vi.fn(async () => undefined),
       complete: vi.fn(async () => undefined),
       fail: vi.fn(async () => undefined),
     };
@@ -94,13 +93,20 @@ describe("knowledge source indexer", () => {
 
     expect(embeddings.embedMany).toHaveBeenCalledTimes(1);
     expect(embeddings.embedMany).toHaveBeenCalledWith(["One", "Two"]);
-    expect(store.writeDocument).toHaveBeenCalledTimes(2);
+    expect(store.writeDocuments).toHaveBeenCalledTimes(1);
+    expect(store.writeDocuments).toHaveBeenCalledWith(
+      payload,
+      expect.arrayContaining([
+        expect.objectContaining({ relativePath: "docs/one.md" }),
+        expect.objectContaining({ relativePath: "docs/two.md" }),
+      ]),
+    );
   });
 
   it("records a stable failure and never completes a partial revision", async () => {
     const store: KnowledgeSourceIndexStore = {
       begin: async () => ({ includePatterns: [], excludePatterns: [] }),
-      writeDocument: async () => undefined,
+      writeDocuments: async () => undefined,
       complete: vi.fn(async () => undefined),
       fail: vi.fn(async () => undefined),
     };
