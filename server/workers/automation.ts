@@ -252,6 +252,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       !mcpConnections.length
         ? modePolicy.policy.fallbackRoute
         : configuredRoute;
+    if (input.productResolution?.ambiguous && route !== "bug_triage")
+      route = "human_escalation";
     if (mcpFailureRequiresReview && route !== "bug_triage")
       route = "human_escalation";
     if (route === "human_escalation" || route === "bug_triage")

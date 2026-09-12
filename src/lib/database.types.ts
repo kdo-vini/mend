@@ -4607,6 +4607,35 @@ export type Database = {
           semantic_score: number
         }[]
       }
+      match_product_knowledge_chunks: {
+        Args: {
+          p_limit?: number
+          p_min_score?: number
+          p_product_ids: string[]
+          p_query: string
+          p_query_embedding?: string
+          p_workspace_id: string
+        }
+        Returns: {
+          article_id: string
+          article_title: string
+          article_version: string
+          audience: string
+          chunk_id: string
+          content: string
+          heading: string
+          hybrid_score: number
+          lexical_score: number
+          product_ids: string[]
+          repository_id: string
+          semantic_score: number
+          source_id: string
+          source_kind: string
+          source_path: string
+          source_revision: string
+          trust_level: string
+        }[]
+      }
       pause_conversation_ai: {
         Args: {
           p_conversation_id: string

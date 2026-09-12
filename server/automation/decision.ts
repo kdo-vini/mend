@@ -17,6 +17,11 @@ export interface LiveWorkerKnowledgeArticle {
   body: string;
   retrievalScore?: number;
   citation?: string;
+  evidenceKey?: string;
+  productIds?: readonly string[];
+  sourceRevision?: string;
+  sourcePath?: string;
+  sourceKind?: "manual" | "repository";
 }
 
 export interface ConversationReplyMessage {

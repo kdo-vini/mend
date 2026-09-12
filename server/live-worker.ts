@@ -35,6 +35,7 @@ import {
   knowledgeRepositorySyncJobPayloadSchema,
   type KnowledgeRepositorySyncJobPayload,
 } from "./knowledge-sync.js";
+import type { ProductResolution } from "./knowledge-products.js";
 import { SupabaseLiveWorkerAutomation } from "./workers/automation.js";
 import { SupabaseLiveWorkerChannelResolver } from "./workers/channel-resolver.js";
 import { SupabaseCodexStarter } from "./workers/codex-starter.js";
@@ -188,9 +189,16 @@ export interface LiveWorkerGroupDirectory {
 }
 
 export interface LiveWorkerKnowledge {
+  resolveProducts?(
+    workspaceId: string,
+    conversationId: string,
+    messageId: string,
+    text: string,
+  ): Promise<ProductResolution>;
   listPublished(
     workspaceId: string,
     query?: string,
+    productIds?: readonly string[],
   ): Promise<readonly LiveWorkerKnowledgeArticle[]>;
 }
 
@@ -201,6 +209,7 @@ export interface LiveWorkerAutomationInput {
   knowledge: readonly LiveWorkerKnowledgeArticle[];
   message: NormalizedWhatsmiauMessage;
   persisted: InboxMessageRecord;
+  productResolution?: ProductResolution;
 }
 
 export interface LiveWorkerDraft {
@@ -613,11 +622,20 @@ export class LiveWorker {
       return;
 
     let knowledge: readonly LiveWorkerKnowledgeArticle[] = [];
+    const productResolution = this.options.knowledge?.resolveProducts
+      ? await this.options.knowledge.resolveProducts(
+          payload.binding.workspaceId,
+          payload.persisted.conversationId,
+          payload.persisted.id,
+          messageText(payload.message),
+        )
+      : undefined;
     try {
       knowledge = this.options.knowledge
         ? await this.options.knowledge.listPublished(
             payload.binding.workspaceId,
             messageText(payload.message),
+            productResolution?.productIds,
           )
         : [];
     } catch (error) {
@@ -638,7 +656,11 @@ export class LiveWorker {
       }
       throw error;
     }
-    const result = await automation.process({ ...automationBase, knowledge });
+    const result = await automation.process({
+      ...automationBase,
+      knowledge,
+      ...(productResolution ? { productResolution } : {}),
+    });
     if (result?.send) {
       await this.stageJobStore.enqueue({
         workspaceId: payload.binding.workspaceId,

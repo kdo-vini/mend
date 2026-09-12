@@ -87,6 +87,14 @@ export interface KnowledgeSearchResult {
   semanticScore: number;
   hybridScore: number;
   articleVersion: string;
+  productIds?: readonly string[];
+  sourceId?: string;
+  sourcePath?: string;
+  sourceRevision?: string;
+  sourceKind?: "manual" | "repository";
+  trustLevel?: "reviewed" | "deterministic" | "generated";
+  audience?: "customer" | "internal";
+  repositoryId?: string;
 }
 
 export interface KnowledgeSearchPort {
@@ -96,6 +104,7 @@ export interface KnowledgeSearchPort {
     limit: number;
     minimumScore: number;
     queryEmbedding?: readonly number[];
+    productIds?: readonly string[];
   }): Promise<readonly KnowledgeSearchResult[]>;
 }
 
@@ -169,6 +178,7 @@ export class KnowledgeRetriever {
     workspaceId: string;
     query: string;
     limit?: number;
+    productIds?: readonly string[];
   }) {
     const query = input.query.trim();
     if (!query)
@@ -184,6 +194,7 @@ export class KnowledgeRetriever {
       limit: Math.max(1, Math.min(input.limit ?? 8, 20)),
       minimumScore: this.minimumScore,
       ...(queryEmbedding ? { queryEmbedding } : {}),
+      ...(input.productIds ? { productIds: input.productIds } : {}),
     });
     const chunks = rows.map((row) => ({
       ...row,
