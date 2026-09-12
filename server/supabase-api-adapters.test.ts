@@ -1427,6 +1427,41 @@ describe("Supabase API adapters", () => {
     );
   });
 
+  it("can list only customer-facing manual knowledge articles", async () => {
+    const client = new FakeClient({
+      knowledge_articles: [
+        {
+          id: "manual-article",
+          workspace_id: workspaceId,
+          title: "Manual runbook",
+          body: "Instructions.",
+          managed_by_sync: false,
+          updated_at: "2026-09-12T11:00:00.000Z",
+        },
+        {
+          id: "repository-article",
+          workspace_id: workspaceId,
+          title: "Internal source",
+          body: "Source code.",
+          managed_by_sync: true,
+          updated_at: "2026-09-12T12:00:00.000Z",
+        },
+      ],
+    });
+
+    await expect(
+      adapters(client).knowledge.list(
+        { userId, workspaceId, role: "agent" },
+        { limit: 20, managedBySync: false },
+      ),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: "manual-article",
+        managedBySync: false,
+      }),
+    ]);
+  });
+
   it("does not send a localhost webhook URL to Whatsmiau during local setup", async () => {
     const client = new FakeClient({ channel_connections: [] });
     const provider = fakeProvider();

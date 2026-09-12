@@ -111,7 +111,7 @@ export function KnowledgeWorkspacePage({
         loadKnowledgeArticles(workspaceId),
         loadKnowledgeConfiguration(workspaceId),
       ]);
-      setArticles(nextArticles);
+      setArticles(nextArticles.filter((article) => !article.managedBySync));
       setProducts(configuration.products);
       setSources(configuration.sources);
       setRepositories(configuration.repositories);

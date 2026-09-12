@@ -345,6 +345,19 @@ const scoped = (agent = false) => ({
 });
 
 describe("Mend API router", () => {
+  it("parses false knowledge query flags as false", async () => {
+    const dependencies = createFakeDependencies();
+    const response = await request(makeApp(dependencies))
+      .get("/api/knowledge?managedBySync=false&shared=false")
+      .set(scoped());
+
+    expect(response.status).toBe(200);
+    expect(dependencies.knowledge.list).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId }),
+      expect.objectContaining({ managedBySync: false, shared: false }),
+    );
+  });
+
   it("returns a controlled workspace configuration outcome when support BYOK is missing", async () => {
     const dependencies = createFakeDependencies();
     dependencies.conversations.aiDraft = vi.fn(async () => {

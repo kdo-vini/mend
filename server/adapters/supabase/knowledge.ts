@@ -165,6 +165,16 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
       manualRequest = manualRequest.gt("id", value.cursor);
       repositoryRequest = repositoryRequest.gt("id", value.cursor);
     }
+    if (value.managedBySync !== undefined) {
+      manualRequest = manualRequest.eq(
+        "managed_by_sync",
+        Boolean(value.managedBySync),
+      );
+      repositoryRequest = repositoryRequest.eq(
+        "managed_by_sync",
+        Boolean(value.managedBySync),
+      );
+    }
     const limit = Number(value.limit ?? 100);
     const [manualResult, repositoryResult] = await Promise.all([
       manualRequest.order("updated_at", { ascending: false }).limit(limit),

@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 export const knowledgeStatusSchema = z.enum(["draft", "published"]);
+const queryBooleanSchema = z.union([
+  z.boolean(),
+  z.enum(["true", "false"]).transform((value) => value === "true"),
+]);
 
 export const knowledgeCreateSchema = z
   .object({
@@ -22,7 +26,8 @@ export const knowledgeListQuerySchema = z
     limit: z.coerce.number().int().min(1).max(200).default(100),
     cursor: z.string().trim().max(200).optional(),
     productId: z.string().uuid().optional(),
-    shared: z.coerce.boolean().optional(),
+    shared: queryBooleanSchema.optional(),
+    managedBySync: queryBooleanSchema.optional(),
   })
   .strict();
 

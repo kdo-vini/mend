@@ -24,7 +24,7 @@ export async function loadKnowledgeArticles(
   workspaceId: string,
 ): Promise<KnowledgeArticle[]> {
   const response = await apiRequest<{ data: unknown[] }>(
-    "/api/knowledge?limit=200",
+    "/api/knowledge?limit=200&managedBySync=false",
     {},
     workspaceId,
   );
