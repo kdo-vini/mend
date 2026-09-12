@@ -820,6 +820,37 @@
 }
 
 @media (max-width: 650px) {
+  .app-shell.inbox-app-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+  .main-shell.inbox-main-shell {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .inbox-main-shell .mobile-topbar {
+    flex: 0 0 52px;
+  }
+  .inbox-main-shell .inbox-page {
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .inbox-main-shell .inbox-toolbar {
+    flex: 0 0 auto;
+  }
+  .inbox-app-shell:has(.mobile-detail-open) .mobile-topbar,
+  .inbox-app-shell:has(.mobile-detail-open) .mobile-bottom-nav {
+    display: none;
+  }
+  .main-shell.inbox-main-shell:has(.mobile-detail-open) {
+    padding-bottom: 0;
+  }
   .sidebar {
     display: none;
   }
@@ -991,13 +1022,10 @@
   .security-facts dd {
     text-align: left;
   }
-  /* The 220px covers the topbar, page padding and the Inbox toolbar above the
-     layout. The bottom tab bar was never subtracted, so the rail ran under the
-     nav and pushed the page into a short scroll. The conversation-open state
-     below already accounts for it. */
-  .inbox-layout {
-    height: calc(100dvh - 220px - var(--mobile-bottom-nav-clearance));
-    min-height: 430px;
+  .inbox-main-shell .inbox-layout {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
   }
   .inbox-layout:not(.mobile-conversation-open) .conversation-panel {
     display: none;
@@ -1009,38 +1037,58 @@
     min-height: 0;
     height: 100%;
   }
-  .mobile-detail-open {
+  .app-shell .inbox-page.mobile-detail-open {
     padding: 0;
   }
   .mobile-detail-open .inbox-toolbar {
     display: none;
   }
   .mobile-detail-open .inbox-layout {
-    height: calc(100dvh - 114px);
+    height: auto;
     min-height: 0;
+    flex: 1 1 auto;
     border: 0;
     border-radius: 0;
   }
   .mobile-conversation-back {
-    min-height: 35px;
+    width: var(--mobile-touch-target);
+    min-width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+    min-height: var(--mobile-touch-target);
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 0 12px;
+    justify-content: center;
+    flex: 0 0 var(--mobile-touch-target);
+    padding: 0;
     border: 0;
-    border-bottom: 1px solid var(--line);
-    background: var(--sidebar);
-    color: var(--muted);
-    font-size: 11px;
-    text-align: left;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ink-soft);
   }
-  .conversation-header {
-    min-height: 62px;
-    padding: 10px 12px;
+  .mobile-conversation-back:active,
+  .conversation-header .icon-button:active {
+    transform: scale(0.94);
+  }
+  .app-shell .mobile-detail-open .conversation-header {
+    position: relative;
+    z-index: var(--z-sticky);
+    min-height: calc(58px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) 0
+      max(6px, env(safe-area-inset-left));
     gap: 8px;
+    border-bottom-color: color-mix(in oklch, var(--line) 78%, transparent);
+    background: color-mix(in oklch, var(--sidebar) 92%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    backdrop-filter: blur(18px) saturate(1.15);
   }
   .conversation-identity {
     flex: 1;
+  }
+  .conversation-avatar.large {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 10px;
   }
   .conversation-identity > div:last-child {
     min-width: 0;
@@ -1049,7 +1097,12 @@
     display: none;
   }
   .identity-name h2 {
-    max-width: 145px;
+    max-width: min(38vw, 170px);
+    font-size: 13px;
+    letter-spacing: -0.01em;
+  }
+  .identity-name-edit {
+    display: none;
   }
   .conversation-controls {
     flex: 0 0 auto;

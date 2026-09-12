@@ -1400,18 +1400,12 @@ export function InboxPage({
           </ScrollArea>
         </section>
         <section className="conversation-panel">
-          <button
-            className="mobile-conversation-back"
-            type="button"
-            onClick={() => {
+          <ConversationHeader
+            conversation={selected}
+            onMobileBack={() => {
               setContextOpen(false);
               setMobileConversationOpen(false);
             }}
-          >
-            <ArrowLeft size={15} /> {t("ui.conversations")}
-          </button>
-          <ConversationHeader
-            conversation={selected}
             onOpenLinkedIssue={
               activeIssue ? () => onOpenIssue(activeIssue.id) : undefined
             }
@@ -2027,6 +2021,7 @@ function AiDraftCard({
 
 function ConversationHeader({
   conversation,
+  onMobileBack,
   onOpenLinkedIssue,
   onSetAiMode,
   onSetAiPause,
@@ -2043,6 +2038,7 @@ function ConversationHeader({
   onOpenContext,
 }: {
   conversation: Conversation;
+  onMobileBack: () => void;
   onOpenLinkedIssue?: () => void;
   onSetAiMode: (mode: AiMode) => void;
   onSetAiPause: (paused: boolean) => void;
@@ -2068,6 +2064,14 @@ function ConversationHeader({
   }, [conversation.id, conversation.name]);
   return (
     <header className="conversation-header">
+      <button
+        className="mobile-conversation-back"
+        type="button"
+        onClick={onMobileBack}
+        aria-label={t("ui.conversations")}
+      >
+        <ArrowLeft size={20} />
+      </button>
       <div className="conversation-identity">
         <div
           className="conversation-avatar large"
@@ -2209,6 +2213,18 @@ function ConversationHeader({
           </button>
           {menuOpen && (
             <div className="context-menu" role="menu">
+              <button
+                className="mobile-menu-control"
+                type="button"
+                role="menuitem"
+                disabled={!conversation.contactId}
+                onClick={() => {
+                  setEditingName(true);
+                  setMenuOpen(false);
+                }}
+              >
+                <PenLine size={14} /> {t("ui.editContactName")}
+              </button>
               <button
                 type="button"
                 role="menuitem"

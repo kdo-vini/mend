@@ -176,3 +176,66 @@ test("mobile Inbox conversation list uses the rail height and clears the bottom 
   }));
   expect(pageScroll.scrollHeight).toBeLessThanOrEqual(pageScroll.innerHeight);
 });
+
+test("compact iPhone Inbox does not scroll behind the bottom navigation", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/inbox?demo=1");
+
+  const rail = page.locator(".conversation-rail");
+  const nav = page.locator(".mobile-bottom-nav");
+  await expect(rail).toBeVisible();
+  await expect(nav).toBeVisible();
+
+  const listGeometry = await page.evaluate(() => {
+    const rail = document.querySelector(".conversation-rail");
+    const nav = document.querySelector(".mobile-bottom-nav");
+    if (!rail || !nav) return null;
+    return {
+      pageHeight: document.scrollingElement?.scrollHeight ?? 0,
+      viewportHeight: window.innerHeight,
+      railBottom: rail.getBoundingClientRect().bottom,
+      navTop: nav.getBoundingClientRect().top,
+    };
+  });
+  expect(listGeometry).not.toBeNull();
+  expect(listGeometry!.pageHeight).toBeLessThanOrEqual(
+    listGeometry!.viewportHeight,
+  );
+  expect(listGeometry!.railBottom).toBeLessThanOrEqual(listGeometry!.navTop);
+
+  await page
+    .getByRole("button", { name: /Open conversation with/ })
+    .first()
+    .click();
+  const composer = page.locator(".composer");
+  await expect(composer).toBeVisible();
+  await expect(nav).toBeHidden();
+  await expect(page.locator(".mobile-topbar")).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Conversations" }),
+  ).toBeVisible();
+
+  const detailGeometry = await page.evaluate(() => {
+    const composer = document.querySelector(".composer");
+    const header = document.querySelector(".conversation-header");
+    if (!composer || !header) return null;
+    return {
+      pageHeight: document.scrollingElement?.scrollHeight ?? 0,
+      viewportHeight: window.innerHeight,
+      composerBottom: composer.getBoundingClientRect().bottom,
+      headerTop: header.getBoundingClientRect().top,
+      headerHeight: header.getBoundingClientRect().height,
+    };
+  });
+  expect(detailGeometry).not.toBeNull();
+  expect(detailGeometry!.pageHeight).toBeLessThanOrEqual(
+    detailGeometry!.viewportHeight,
+  );
+  expect(detailGeometry!.composerBottom).toBeLessThanOrEqual(
+    detailGeometry!.viewportHeight,
+  );
+  expect(detailGeometry!.headerTop).toBe(0);
+  expect(detailGeometry!.headerHeight).toBeLessThanOrEqual(60);
+});

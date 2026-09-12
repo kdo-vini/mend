@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorState, LoadingState } from "./shared/ui/ResourceState";
 import { useConfirmation } from "./shared/ui/useConfirmation";
@@ -194,6 +195,8 @@ function mergeConversationSnapshot(
 }
 
 function App() {
+  const location = useLocation();
+  const inboxRoute = location.pathname === "/inbox";
   const { t } = useTranslation(["common", "issues"]);
   const [demoMode] = useState(() => isDemoModeRequested() || !isLiveConfigured);
   const [conversations, setConversations] = useState<Conversation[]>(
@@ -1034,7 +1037,7 @@ function App() {
 
   return (
     <div
-      className={`app-shell ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`}
+      className={`app-shell ${sidebarCollapsed ? "sidebar-is-collapsed" : ""} ${inboxRoute ? "inbox-app-shell" : ""}`}
     >
       <ShellSidebar
         collapsed={sidebarCollapsed}
@@ -1060,7 +1063,7 @@ function App() {
         onDismissNotification={(id) => void dismissNotification(id)}
         onDismissAllNotifications={() => void dismissAllNotifications()}
       />
-      <main className="main-shell">
+      <main className={`main-shell ${inboxRoute ? "inbox-main-shell" : ""}`}>
         <ShellMobileTopbar
           onOpenCommand={() => setCommandOpen(true)}
           notifications={notifications}
