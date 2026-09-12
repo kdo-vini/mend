@@ -13,6 +13,7 @@ import type { KnowledgeRepositorySyncJobPayload } from "../knowledge-sync.js";
 
 const KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE = 8;
 const KNOWLEDGE_ARTICLE_WRITE_BATCH_SIZE = 10;
+const KNOWLEDGE_REUSE_READ_BATCH_SIZE = 100;
 
 function parseVector(value: unknown): number[] {
   const values = Array.isArray(value)
@@ -60,13 +61,20 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
     contentHashes: readonly string[],
   ) {
     const reusable = new Map<string, readonly number[]>();
-    for (let index = 0; index < contentHashes.length; index += 25) {
+    for (
+      let index = 0;
+      index < contentHashes.length;
+      index += KNOWLEDGE_REUSE_READ_BATCH_SIZE
+    ) {
       const result = await this.client
         .from("knowledge_chunks")
         .select("content_hash,embedding")
         .eq("workspace_id", payload.workspaceId)
         .eq("embedding_model", this.embeddingModel)
-        .in("content_hash", contentHashes.slice(index, index + 25))
+        .in(
+          "content_hash",
+          contentHashes.slice(index, index + KNOWLEDGE_REUSE_READ_BATCH_SIZE),
+        )
         .not("embedding", "is", null);
       for (const item of rows(checked("knowledge_chunks.reuse", result))) {
         const hash = str(item.content_hash);
@@ -214,49 +222,20 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
       embeddingInputCount?: number;
     },
   ) {
-    const now = new Date().toISOString();
-    const sourceResult = await this.client
-      .from("knowledge_sources")
-      .select("active_sha")
-      .eq("workspace_id", payload.workspaceId)
-      .eq("id", payload.sourceId)
-      .single();
-    const source = row(
-      checked("knowledge_sources.complete.read", sourceResult),
-    );
-    const activeSha = source.active_sha;
     checked(
-      "knowledge_sources.complete",
-      await this.client
-        .from("knowledge_sources")
-        .update({
-          indexed_sha: payload.requestedSha,
-          sync_state: activeSha === payload.requestedSha ? "ready" : "stale",
-          last_sync_at: now,
-          last_error_code: null,
-          updated_at: now,
-        })
-        .eq("workspace_id", payload.workspaceId)
-        .eq("id", payload.sourceId),
-    );
-    checked(
-      "knowledge_sync_runs.complete",
-      await this.client
-        .from("knowledge_sync_runs")
-        .update({
-          status: "completed",
-          files_scanned: result.filesScanned,
-          files_indexed: result.documents.length,
-          files_skipped: result.filesSkipped,
-          chunks_written: result.chunksWritten,
-          chunks_reused: result.chunksReused ?? 0,
-          embedding_input_count:
-            result.embeddingInputCount ?? result.chunksWritten,
-          finished_at: now,
-        })
-        .eq("workspace_id", payload.workspaceId)
-        .eq("source_id", payload.sourceId)
-        .eq("requested_sha", payload.requestedSha),
+      "knowledge_sync.complete",
+      await this.client.rpc("complete_knowledge_source_sync", {
+        p_workspace_id: payload.workspaceId,
+        p_source_id: payload.sourceId,
+        p_requested_sha: payload.requestedSha,
+        p_files_scanned: result.filesScanned,
+        p_files_indexed: result.documents.length,
+        p_files_skipped: result.filesSkipped,
+        p_chunks_written: result.chunksWritten,
+        p_chunks_reused: result.chunksReused ?? 0,
+        p_embedding_input_count:
+          result.embeddingInputCount ?? result.chunksWritten,
+      }),
     );
   }
 

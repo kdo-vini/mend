@@ -1,5 +1,5 @@
 begin;
-select plan(10);
+select plan(14);
 
 set local request.jwt.claims = '{"role":"service_role"}';
 
@@ -95,6 +95,49 @@ select ok(
 select ok(
   has_table_privilege('authenticated', 'public.knowledge_sync_runs', 'insert') = false,
   'authenticated users cannot write sync runs'
+);
+
+insert into public.knowledge_sync_runs (
+  workspace_id, source_id, requested_sha, status
+) values (
+  '31000000-0000-4000-8000-000000000001',
+  '31300000-0000-4000-8000-000000000001',
+  repeat('a', 40),
+  'running'
+);
+
+select is(
+  public.complete_knowledge_source_sync(
+    '31000000-0000-4000-8000-000000000001',
+    '31300000-0000-4000-8000-000000000001',
+    repeat('a', 40),
+    20, 8, 12, 30, 24, 6
+  ),
+  'stale',
+  'sync completion atomically returns the resulting source state'
+);
+
+select is(
+  (select indexed_sha from public.knowledge_sources
+    where id = '31300000-0000-4000-8000-000000000001'),
+  repeat('a', 40),
+  'sync completion promotes the indexed revision'
+);
+
+select is(
+  (select status from public.knowledge_sync_runs
+    where source_id = '31300000-0000-4000-8000-000000000001'
+      and requested_sha = repeat('a', 40)),
+  'completed',
+  'sync completion marks the matching run completed'
+);
+
+select is(
+  (select embedding_input_count from public.knowledge_sync_runs
+    where source_id = '31300000-0000-4000-8000-000000000001'
+      and requested_sha = repeat('a', 40)),
+  6,
+  'sync completion persists cost counters in the same transaction'
 );
 
 select * from finish();

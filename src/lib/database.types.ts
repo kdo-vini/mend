@@ -4416,6 +4416,20 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      complete_knowledge_source_sync: {
+        Args: {
+          p_chunks_reused: number
+          p_chunks_written: number
+          p_embedding_input_count: number
+          p_files_indexed: number
+          p_files_scanned: number
+          p_files_skipped: number
+          p_requested_sha: string
+          p_source_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       create_workspace: {
         Args: {
           p_default_language?: string
