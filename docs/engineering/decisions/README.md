@@ -15,6 +15,7 @@ consistentes entre backend, frontend, banco, workers e operação.
 | [ADR-008](ADR-008-auth-rate-limits.md)             | Rate limits em camadas para autenticação               | accepted |
 
 | [ADR-009](ADR-009-architecture-hardening.md) | Tenant-safe automation and recoverable effects | accepted |
+| [ADR-010](ADR-010-multirepo-live-knowledge.md) | Product-scoped live knowledge from multiple repositories | accepted |
 
 Novas decisões devem copiar o [template de ADR](../templates/ADR.md), receber o
 próximo número e ser adicionadas a esta tabela.
