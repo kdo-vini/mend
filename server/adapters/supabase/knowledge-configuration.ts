@@ -2,6 +2,10 @@ import type { AnySupabaseClient } from "./types.js";
 import { checked, row, rows, str, type Row } from "../supabase-mappers.js";
 import type { JobStore } from "../../jobs.js";
 import {
+  createGitHubControlPlaneFromEnv,
+  type GitHubControlPlane,
+} from "../../github-control-plane.js";
+import {
   KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE,
   knowledgeSyncDedupeKey,
   sourceFreshness,
@@ -64,6 +68,10 @@ export class SupabaseKnowledgeConfigurationAdapter
   constructor(
     private readonly client: AnySupabaseClient,
     private readonly jobStore?: JobStore<Record<string, unknown>>,
+    private readonly github: Pick<
+      GitHubControlPlane,
+      "getBranchSha"
+    > | null = createGitHubControlPlaneFromEnv(),
   ) {}
 
   async listProducts(workspaceId: string) {
@@ -166,16 +174,14 @@ export class SupabaseKnowledgeConfigurationAdapter
     if (productIds.length)
       checked(
         "support_product_repositories.insert",
-        await this.client
-          .from("support_product_repositories")
-          .insert(
-            [...new Set(productIds)].map((productId) => ({
-              workspace_id: workspaceId,
-              repository_id: repositoryId,
-              product_id: productId,
-              knowledge_enabled: true,
-            })),
-          ),
+        await this.client.from("support_product_repositories").insert(
+          [...new Set(productIds)].map((productId) => ({
+            workspace_id: workspaceId,
+            repository_id: repositoryId,
+            product_id: productId,
+            knowledge_enabled: true,
+          })),
+        ),
       );
   }
 
@@ -265,7 +271,24 @@ export class SupabaseKnowledgeConfigurationAdapter
       installationId < 1
     )
       throw new Error("github_repository_not_connected");
-    const requestedSha = str(source.observed_sha || source.active_sha);
+    let requestedSha = str(source.observed_sha || source.active_sha);
+    if (!requestedSha && this.github) {
+      requestedSha = await this.github.getBranchSha(
+        { owner, repo, installationId },
+        str(source.ref_name),
+      );
+      checked(
+        "knowledge_sources.observe",
+        await this.client
+          .from("knowledge_sources")
+          .update({
+            observed_sha: requestedSha,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("workspace_id", workspaceId)
+          .eq("id", sourceId),
+      );
+    }
     if (!/^[a-f0-9]{40,64}$/.test(requestedSha))
       throw new Error("knowledge_source_revision_required");
     const payload: KnowledgeRepositorySyncJobPayload = {
