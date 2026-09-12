@@ -98,13 +98,15 @@
       "stale": "Atualização disponível",
       "current": "Atualizado",
       "syncing": "Carregando conhecimento",
-      "failed": "Falha na atualização"
+      "failed": "Falha na atualização",
+      "readyToActivate": "Pronto para ativar"
     },
     "status": {
       "current": "O conhecimento da IA corresponde à versão em produção.",
       "queued": "A primeira carga está na fila. Você pode sair desta página; o Mend continuará em segundo plano.",
       "running": "Lendo e indexando o repositório. Você pode sair desta página; o Mend continuará em segundo plano.",
       "failed": "A última atualização falhou. Tente novamente ou revise a configuração da fonte.",
+      "readyToActivate": "A primeira carga terminou. Ative esta versão para disponibilizar o conhecimento à IA.",
       "empty": "A fonte está conectada, mas a primeira carga ainda não começou.",
       "changesDetected": "Há código novo aguardando atualização do conhecimento.",
       "awaitingProduction": "O conhecimento foi atualizado, mas essa versão ainda não está em produção."

@@ -137,6 +137,22 @@ describe("KnowledgeSourcesPanel", () => {
     ).toContain("Iniciar primeira carga");
   });
 
+  it("distinguishes an indexed revision that is waiting for activation", async () => {
+    await render({
+      ...currentSource,
+      activeSha: undefined,
+      freshness: "empty",
+      syncState: "ready",
+    });
+
+    expect(container.textContent).toContain("Pronto para ativar");
+    expect(container.textContent).toContain(
+      "A primeira carga terminou. Ative esta versão",
+    );
+    expect(container.textContent).toContain("Usar esta versão");
+    expect(container.textContent).not.toContain("Iniciar primeira carga");
+  });
+
   it("suggests the product repository before exposing unrelated repositories", async () => {
     const onCreate = vi.fn(async () => true);
     await act(async () => {

@@ -98,13 +98,15 @@
       "stale": "Update available",
       "current": "Current",
       "syncing": "Loading knowledge",
-      "failed": "Update failed"
+      "failed": "Update failed",
+      "readyToActivate": "Ready to activate"
     },
     "status": {
       "current": "AI knowledge matches the version in production.",
       "queued": "The first load is queued. You can leave this page; Mend will continue in the background.",
       "running": "Reading and indexing the repository. You can leave this page; Mend will continue in the background.",
       "failed": "The last update failed. Try again or review the source configuration.",
+      "readyToActivate": "The first load is complete. Activate this version to make its knowledge available to AI.",
       "empty": "The source is connected, but the first load has not started yet.",
       "changesDetected": "New code is waiting for a knowledge update.",
       "awaitingProduction": "Knowledge is updated, but this version is not in production yet."

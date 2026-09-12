@@ -307,14 +307,16 @@ export function KnowledgeSourcesPanel({
                   ? "sources.status.running"
                   : failed
                     ? "sources.status.failed"
-                    : source.freshness === "empty"
-                      ? "sources.status.empty"
-                      : source.observedSha &&
-                          source.observedSha !== source.indexedSha
-                        ? "sources.status.changesDetected"
-                        : source.indexedSha !== source.activeSha
-                          ? "sources.status.awaitingProduction"
-                          : "sources.status.current";
+                    : source.indexedSha && !source.activeSha
+                      ? "sources.status.readyToActivate"
+                      : source.freshness === "empty"
+                        ? "sources.status.empty"
+                        : source.observedSha &&
+                            source.observedSha !== source.indexedSha
+                          ? "sources.status.changesDetected"
+                          : source.indexedSha !== source.activeSha
+                            ? "sources.status.awaitingProduction"
+                            : "sources.status.current";
             return (
               <article className="knowledge-source-card" key={source.id}>
                 <header>
@@ -338,7 +340,9 @@ export function KnowledgeSourcesPanel({
                         ? "sources.freshness.syncing"
                         : failed
                           ? "sources.freshness.failed"
-                          : `sources.freshness.${source.freshness}`,
+                          : source.indexedSha && !source.activeSha
+                            ? "sources.freshness.readyToActivate"
+                            : `sources.freshness.${source.freshness}`,
                     )}
                   </span>
                 </header>
@@ -413,7 +417,7 @@ export function KnowledgeSourcesPanel({
                     )}{" "}
                     {syncing
                       ? t("sources.syncing")
-                      : source.freshness === "empty"
+                      : source.freshness === "empty" && !source.indexedSha
                         ? t("sources.startFirstSync")
                         : t("sources.checkUpdates")}
                   </button>
