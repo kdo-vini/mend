@@ -531,7 +531,7 @@ export class SupabaseInboxPort implements InboxPort {
     const [contact, channel] = await Promise.all([
       this.client
         .from("contacts")
-        .select("id, phone_number, display_name")
+        .select("id, phone_number, display_name, provider_contact_id")
         .eq("id", conversation.data.contact_id)
         .eq("workspace_id", workspaceId)
         .maybeSingle(),
@@ -547,13 +547,17 @@ export class SupabaseInboxPort implements InboxPort {
     if (channel.error)
       throw new Error(`supabase:channel_connections:${channel.error.message}`);
     if (!contact.data || !channel.data) return null;
+    const phoneNumber = String(contact.data.phone_number);
+    const providerContactId = contact.data.provider_contact_id
+      ? String(contact.data.provider_contact_id)
+      : null;
     return {
       id: String(conversation.data.id),
       workspaceId: String(conversation.data.workspace_id),
       channelConnectionId: String(conversation.data.channel_connection_id),
       providerInstanceName: String(channel.data.provider_instance_name),
-      remoteJid: `${String(contact.data.phone_number)}@s.whatsapp.net`,
-      phoneNumber: String(contact.data.phone_number),
+      remoteJid: providerContactId ?? `${phoneNumber}@s.whatsapp.net`,
+      phoneNumber,
       contactId: String(contact.data.id),
       contactName: String(contact.data.display_name),
       status: String(conversation.data.status),

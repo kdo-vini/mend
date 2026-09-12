@@ -93,7 +93,8 @@ class FakeInboxPort implements InboxPort {
         workspaceId: input.workspaceId,
         channelConnectionId: input.channelConnectionId,
         providerInstanceName: "mend-demo",
-        remoteJid: `${input.phoneNumber}@s.whatsapp.net`,
+        remoteJid:
+          input.providerContactId ?? `${input.phoneNumber}@s.whatsapp.net`,
         phoneNumber: input.phoneNumber,
         contactId: contact.id,
         contactName: contact.displayName,
@@ -720,5 +721,44 @@ describe("InboxService and WhatsAppService", () => {
         )
       ).startsWith("memory://signed/"),
     ).toBe(true);
+  });
+
+  it("sends group messages with the full group JID instead of a phone number", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, {
+      instanceName: "mend-demo",
+      providerMessageId: "group-in-1",
+      remoteJid: "120363426966918405@g.us",
+      phoneNumber: "120363426966918405",
+      direction: "inbound",
+      messageType: "text",
+      text: "Mensagem do grupo",
+      chatType: "group",
+      raw: {},
+    });
+    const provider: WhatsAppProvider = {
+      sendText: vi.fn(async () => ({ key: { id: "wamid-out-group" } })),
+      markAsRead: vi.fn(async () => undefined),
+    };
+    const whatsapp = new WhatsAppService(inbox, provider);
+    await whatsapp.sendText(
+      { workspaceId, actorUserId: "user-1", actorType: "user" },
+      conversationId,
+      { text: "Resposta no grupo" },
+    );
+    expect(provider.sendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instanceName: "mend-demo",
+        number: "120363426966918405@g.us",
+        text: "Resposta no grupo",
+      }),
+    );
+    await whatsapp.markRead({ workspaceId }, conversationId);
+    expect(provider.markAsRead).toHaveBeenCalledWith(
+      "mend-demo",
+      "120363426966918405@g.us",
+      "group-in-1",
+    );
   });
 });

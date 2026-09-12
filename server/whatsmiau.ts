@@ -193,6 +193,18 @@ export function normalizePhoneNumber(value: string): string {
     .replace(/\D/g, "");
 }
 
+/** Provider send target: digits for DMs, full `{id}@g.us` JID for group chats. */
+export function resolveWhatsAppSendDestination(input: {
+  phoneNumber: string;
+  remoteJid?: string;
+}): string {
+  const remoteJid = input.remoteJid?.trim() ?? "";
+  if (remoteJid.endsWith("@g.us")) return remoteJid;
+  const number = input.phoneNumber.trim();
+  if (number.endsWith("@g.us")) return number;
+  return normalizePhoneNumber(number || remoteJid);
+}
+
 function messageType(message: Record<string, unknown>): NormalizedMessageType {
   if (message.imageMessage) return "image";
   if (message.videoMessage) return "video";
@@ -511,7 +523,10 @@ export class WhatsmiauMessagingProvider {
           ? { headers: { "idempotency-key": input.idempotencyKey } }
           : {}),
         body: JSON.stringify({
-          number: normalizePhoneNumber(input.number),
+          number: resolveWhatsAppSendDestination({
+            phoneNumber: input.number,
+            remoteJid: input.number,
+          }),
           text: input.text,
           delay: input.delay,
         }),
@@ -524,7 +539,10 @@ export class WhatsmiauMessagingProvider {
       {
         method: "POST",
         body: JSON.stringify({
-          number: normalizePhoneNumber(input.number),
+          number: resolveWhatsAppSendDestination({
+            phoneNumber: input.number,
+            remoteJid: input.number,
+          }),
           mediatype: input.mediatype,
           media: input.media,
           caption: input.caption,
@@ -539,7 +557,10 @@ export class WhatsmiauMessagingProvider {
       {
         method: "POST",
         body: JSON.stringify({
-          number: normalizePhoneNumber(input.number),
+          number: resolveWhatsAppSendDestination({
+            phoneNumber: input.number,
+            remoteJid: input.number,
+          }),
           audio: input.audio,
         }),
       },
@@ -556,7 +577,10 @@ export class WhatsmiauMessagingProvider {
       {
         method: "POST",
         body: JSON.stringify({
-          number: normalizePhoneNumber(number),
+          number: resolveWhatsAppSendDestination({
+            phoneNumber: number,
+            remoteJid: number,
+          }),
           presence,
           type: "text",
           delay,
@@ -609,7 +633,10 @@ export class WhatsmiauMessagingProvider {
       {
         method: "POST",
         body: JSON.stringify({
-          number: normalizePhoneNumber(input.number),
+          number: resolveWhatsAppSendDestination({
+            phoneNumber: input.number,
+            remoteJid: input.number,
+          }),
           title: input.title,
           description: input.description,
           buttonText: input.buttonText,
@@ -625,7 +652,10 @@ export class WhatsmiauMessagingProvider {
       {
         method: "POST",
         body: JSON.stringify({
-          number: normalizePhoneNumber(input.number),
+          number: resolveWhatsAppSendDestination({
+            phoneNumber: input.number,
+            remoteJid: input.number,
+          }),
           title: input.title,
           description: input.description,
           footer: input.footer,

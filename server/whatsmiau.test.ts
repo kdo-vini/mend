@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizePhoneNumber,
   normalizeWhatsmiauEvent,
+  resolveWhatsAppSendDestination,
   WhatsmiauMessagingProvider,
 } from "./whatsmiau.js";
 
@@ -218,6 +219,47 @@ describe("Whatsmiau normalization", () => {
     expect(normalizePhoneNumber("+55 (11) 99999-9999@s.whatsapp.net")).toBe(
       "5511999999999",
     );
+    expect(
+      resolveWhatsAppSendDestination({
+        phoneNumber: "120363426966918405",
+        remoteJid: "120363426966918405@g.us",
+      }),
+    ).toBe("120363426966918405@g.us");
+    expect(
+      resolveWhatsAppSendDestination({
+        phoneNumber: "5511999999999",
+        remoteJid: "5511999999999@s.whatsapp.net",
+      }),
+    ).toBe("5511999999999");
+  });
+
+  it("preserves the group JID when sending text through the provider", async () => {
+    const originalFetch = globalThis.fetch;
+    let body: Record<string, unknown> | undefined;
+    globalThis.fetch = async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({ key: { id: "wamid-out" } }), {
+        status: 200,
+      });
+    };
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await provider.sendText({
+        instanceName: "mend-test",
+        number: "120363426966918405@g.us",
+        text: "Olá, grupo!",
+      });
+      expect(body).toEqual({
+        number: "120363426966918405@g.us",
+        text: "Olá, grupo!",
+        delay: undefined,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("cleans up a provider instance when webhook setup fails", async () => {

@@ -9,11 +9,13 @@ import {
   InboxService,
   normalizeOutboundMedia,
   type InboxContext,
+  type InboxConversationContext,
   type InboxMediaInput,
   type InboxMessageRecord,
 } from "./inbox-service.js";
 import {
   normalizePhoneNumber,
+  resolveWhatsAppSendDestination,
   type ProviderMessage,
   type SendButtonsInput,
   type SendListInput,
@@ -143,6 +145,13 @@ function mediaTypeFor(input: {
   return "document";
 }
 
+function outboundDestination(conversation: InboxConversationContext): string {
+  return resolveWhatsAppSendDestination({
+    phoneNumber: conversation.phoneNumber,
+    remoteJid: conversation.remoteJid,
+  });
+}
+
 function providerMediaValue(
   media: ValidatedMedia | RemoteMediaReference,
   signedUrl?: string,
@@ -172,16 +181,17 @@ export class WhatsAppService {
       conversationId,
     );
     if (!conversation) throw new Error("conversation_not_found");
+    const destination = outboundDestination(conversation);
     if (this.provider.sendPresence)
       await this.provider
         .sendPresence(
           conversation.providerInstanceName,
-          conversation.phoneNumber,
+          destination,
         )
         .catch(() => undefined);
     const response = await this.provider.sendText({
       instanceName: conversation.providerInstanceName,
-      number: conversation.phoneNumber,
+      number: destination,
       text,
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     });
@@ -251,6 +261,7 @@ export class WhatsAppService {
       conversationId,
     );
     if (!conversation) throw new Error("conversation_not_found");
+    const destination = outboundDestination(conversation);
     const media = normalizeOutboundMedia(
       input.media,
       input.mimeType,
@@ -277,13 +288,13 @@ export class WhatsAppService {
     if (type === "audio") {
       response = await this.provider.sendAudio({
         instanceName: conversation.providerInstanceName,
-        number: conversation.phoneNumber,
+        number: destination,
         audio: value,
       });
     } else {
       response = await this.provider.sendMedia({
         instanceName: conversation.providerInstanceName,
-        number: conversation.phoneNumber,
+        number: destination,
         mediatype: type,
         media: value,
         caption: input.caption,
@@ -376,7 +387,7 @@ export class WhatsAppService {
       throw new Error("whatsmiau_presence_not_supported");
     await this.provider.sendPresence(
       conversation.providerInstanceName,
-      conversation.phoneNumber,
+      outboundDestination(conversation),
       presence,
       3_000,
     );
@@ -392,6 +403,7 @@ export class WhatsAppService {
       conversationId,
     );
     if (!conversation) throw new Error("conversation_not_found");
+    const destination = outboundDestination(conversation);
     const visibleText =
       node.type === "menu"
         ? `${node.message}\n\n${node.options
@@ -406,7 +418,7 @@ export class WhatsAppService {
     ) {
       response = await this.provider.sendButtons({
         instanceName: conversation.providerInstanceName,
-        number: conversation.phoneNumber,
+        number: destination,
         title: node.title,
         description: node.message,
         buttons: node.options.map((option) => ({
@@ -418,7 +430,7 @@ export class WhatsAppService {
     } else if (node.type === "menu" && this.provider.sendList) {
       response = await this.provider.sendList({
         instanceName: conversation.providerInstanceName,
-        number: conversation.phoneNumber,
+        number: destination,
         title: node.title,
         description: node.message,
         buttonText: "Ver opções",
@@ -435,7 +447,7 @@ export class WhatsAppService {
     } else {
       response = await this.provider.sendText({
         instanceName: conversation.providerInstanceName,
-        number: conversation.phoneNumber,
+        number: destination,
         text: visibleText,
       });
     }
