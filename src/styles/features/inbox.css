@@ -1352,6 +1352,11 @@
   .inbox-page .inbox-layout {
     grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
   }
+  /* iOS and mobile Chrome zoom focused form controls below 16px. */
+  .inbox-page .composer textarea {
+    font-size: 16px;
+    line-height: 1.4;
+  }
   .inbox-context-trigger,
   .inbox-context-close {
     display: inline-grid;

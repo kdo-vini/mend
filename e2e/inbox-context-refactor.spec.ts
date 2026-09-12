@@ -239,3 +239,19 @@ test("compact iPhone Inbox does not scroll behind the bottom navigation", async 
   expect(detailGeometry!.headerTop).toBe(0);
   expect(detailGeometry!.headerHeight).toBeLessThanOrEqual(60);
 });
+
+test("mobile reply composer uses a non-zooming text size", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/inbox?demo=1");
+  await page
+    .getByRole("button", { name: /Open conversation with/ })
+    .first()
+    .click();
+
+  const composer = page.getByPlaceholder("Write a reply…");
+  await expect(composer).toBeVisible();
+  const fontSize = await composer.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).fontSize),
+  );
+  expect(fontSize).toBeGreaterThanOrEqual(16);
+});
