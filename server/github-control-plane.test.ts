@@ -77,6 +77,40 @@ describe("GitHub App control plane", () => {
     ).toBe(false);
   });
 
+  it("preserves each repository default branch from the installation catalog", async () => {
+    const github = new GitHubControlPlane(
+      {
+        async getToken() {
+          return {
+            token: "ghs_catalog",
+            expiresAt: "2099-01-01T00:00:00Z",
+          };
+        },
+      },
+      vi.fn(async () =>
+        jsonResponse({
+          repositories: [
+            {
+              name: "zelomenu",
+              owner: { login: "kdo-vini" },
+              default_branch: "master",
+            },
+          ],
+        }),
+      ) as GitHubFetch,
+      "https://api.github.test",
+    );
+
+    await expect(github.listInstallationRepositories(42)).resolves.toEqual([
+      {
+        owner: "kdo-vini",
+        repo: "zelomenu",
+        installationId: 42,
+        defaultBranch: "master",
+      },
+    ]);
+  });
+
   it("mints a repository- and permission-scoped installation token", async () => {
     const { privateKey } = crypto.generateKeyPairSync("rsa", {
       modulusLength: 2048,

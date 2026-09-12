@@ -21,6 +21,7 @@ export interface GitHubRepositoryRef {
   owner: string;
   repo: string;
   installationId: number;
+  defaultBranch?: string;
 }
 
 export type GitHubPermissionLevel = "read" | "write";
@@ -644,7 +645,11 @@ export class GitHubControlPlane {
       installationId: id,
       permissions: { metadata: "read" },
     });
-    const repositories: Array<{ name: string; owner: { login: string } }> = [];
+    const repositories: Array<{
+      name: string;
+      owner: { login: string };
+      default_branch: string;
+    }> = [];
     for (let page = 1; page <= 100; page += 1) {
       const response = await this.fetcher(
         `${this.apiUrl}/installation/repositories?per_page=100&page=${page}`,
@@ -657,18 +662,23 @@ export class GitHubControlPlane {
         },
       );
       const value = await githubResponse<{
-        repositories: Array<{ name: string; owner: { login: string } }>;
+        repositories: Array<{
+          name: string;
+          owner: { login: string };
+          default_branch: string;
+        }>;
       }>(response, [access.token]);
       repositories.push(...value.repositories);
       if (value.repositories.length < 100) break;
     }
-    return repositories.map((repository) =>
-      validateRepository({
+    return repositories.map((repository) => ({
+      ...validateRepository({
         owner: repository.owner.login,
         repo: repository.name,
         installationId: id,
       }),
-    );
+      defaultBranch: validateRef(repository.default_branch),
+    }));
   }
 
   async dispatchWorkflow(

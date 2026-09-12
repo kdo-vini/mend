@@ -376,9 +376,38 @@ export function KnowledgeWorkspacePage({
                       ? current.map((item) =>
                           item.id === source.id ? source : item,
                         )
-                      : [...current, source],
+                      : [...current, { ...source, syncState: "queued" }],
                   );
-                  onToast(t("toasts.sourceConnected"));
+                  if (!existing) {
+                    try {
+                      const result = await requestKnowledgeSync(
+                        workspaceId,
+                        source.id,
+                      );
+                      if (result.queued) {
+                        setPendingSyncIds((current) => [
+                          ...new Set([...current, source.id]),
+                        ]);
+                        onToast(t("toasts.sourceConnectedSyncing"));
+                      } else {
+                        setSources((current) =>
+                          current.map((item) =>
+                            item.id === source.id ? source : item,
+                          ),
+                        );
+                        onToast(t("toasts.sourceConnected"));
+                      }
+                    } catch {
+                      setSources((current) =>
+                        current.map((item) =>
+                          item.id === source.id ? source : item,
+                        ),
+                      );
+                      onToast(t("toasts.sourceConnectedSyncFailed"));
+                    }
+                  } else {
+                    onToast(t("toasts.sourceConnected"));
+                  }
                   return true;
                 } catch (error) {
                   onToast(localizedError(error, t("errors.source")));

@@ -84,7 +84,11 @@
     "active": "Em produção",
     "sync": "Atualizar",
     "checkUpdates": "Buscar atualizações",
+    "startFirstSync": "Iniciar primeira carga",
     "syncing": "Atualizando…",
+    "progressLabel": "Progresso da atualização de {{repository}}",
+    "progressQueued": "Atualização aguardando na fila",
+    "progressRunning": "Lendo e indexando o repositório",
     "activate": "Usar esta versão",
     "activateTitle": "Usar conhecimento desta versão?",
     "activateDescription": "A versão {{sha}} de {{repository}} passará a representar o comportamento disponível aos clientes.",
@@ -92,12 +96,16 @@
     "freshness": {
       "empty": "Aguardando versão",
       "stale": "Atualização disponível",
-      "current": "Atualizado"
+      "current": "Atualizado",
+      "syncing": "Carregando conhecimento",
+      "failed": "Falha na atualização"
     },
     "status": {
       "current": "O conhecimento da IA corresponde à versão em produção.",
-      "syncing": "Buscando mudanças e atualizando o conhecimento da IA. Você pode sair desta página.",
-      "empty": "Faça a primeira atualização para disponibilizar este produto à IA.",
+      "queued": "A primeira carga está na fila. Você pode sair desta página; o Mend continuará em segundo plano.",
+      "running": "Lendo e indexando o repositório. Você pode sair desta página; o Mend continuará em segundo plano.",
+      "failed": "A última atualização falhou. Tente novamente ou revise a configuração da fonte.",
+      "empty": "A fonte está conectada, mas a primeira carga ainda não começou.",
       "changesDetected": "Há código novo aguardando atualização do conhecimento.",
       "awaitingProduction": "O conhecimento foi atualizado, mas essa versão ainda não está em produção."
     }
@@ -133,6 +141,8 @@
     "deleted": "Artigo excluído",
     "productCreated": "Produto criado",
     "sourceConnected": "Repositório conectado à base",
+    "sourceConnectedSyncing": "Fonte conectada. A primeira carga começou e continuará em segundo plano.",
+    "sourceConnectedSyncFailed": "Fonte conectada, mas a primeira carga não pôde ser iniciada. Use “Iniciar primeira carga” para tentar novamente.",
     "syncQueued": "Atualização iniciada. Você pode sair desta página.",
     "syncCurrent": "O conhecimento já corresponde à versão mais recente.",
     "syncCompleted": "Conhecimento atualizado com sucesso.",

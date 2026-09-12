@@ -87,6 +87,40 @@
   margin-top: var(--space-2);
 }
 
+.knowledge-source-progress {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  margin-top: var(--space-3);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.knowledge-source-progress span {
+  position: absolute;
+  inset-block: 0;
+  width: 38%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: knowledge-source-loading 1.4s ease-in-out infinite;
+}
+
+@keyframes knowledge-source-loading {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knowledge-source-progress span {
+    width: 100%;
+    animation: none;
+  }
+}
+
 .knowledge-source-form {
   display: grid;
   gap: var(--space-3);

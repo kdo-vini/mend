@@ -299,15 +299,22 @@ export function KnowledgeSourcesPanel({
             const current = source.freshness === "current";
             const syncing =
               source.syncState === "running" || source.syncState === "queued";
-            const statusDescription = syncing
-              ? "sources.status.syncing"
-              : source.freshness === "empty"
-                ? "sources.status.empty"
-                : source.observedSha && source.observedSha !== source.indexedSha
-                  ? "sources.status.changesDetected"
-                  : source.indexedSha !== source.activeSha
-                    ? "sources.status.awaitingProduction"
-                    : "sources.status.current";
+            const failed = source.syncState === "failed";
+            const statusDescription =
+              source.syncState === "queued"
+                ? "sources.status.queued"
+                : source.syncState === "running"
+                  ? "sources.status.running"
+                  : failed
+                    ? "sources.status.failed"
+                    : source.freshness === "empty"
+                      ? "sources.status.empty"
+                      : source.observedSha &&
+                          source.observedSha !== source.indexedSha
+                        ? "sources.status.changesDetected"
+                        : source.indexedSha !== source.activeSha
+                          ? "sources.status.awaitingProduction"
+                          : "sources.status.current";
             return (
               <article className="knowledge-source-card" key={source.id}>
                 <header>
@@ -319,17 +326,41 @@ export function KnowledgeSourcesPanel({
                         : "knowledge-source-state stale"
                     }
                   >
-                    {current ? (
+                    {syncing ? (
+                      <LoaderCircle className="spin" size={14} />
+                    ) : current ? (
                       <CheckCircle2 size={14} />
                     ) : (
                       <CircleAlert size={14} />
                     )}
-                    {t(`sources.freshness.${source.freshness}`)}
+                    {t(
+                      syncing
+                        ? "sources.freshness.syncing"
+                        : failed
+                          ? "sources.freshness.failed"
+                          : `sources.freshness.${source.freshness}`,
+                    )}
                   </span>
                 </header>
                 <p className="knowledge-source-description" aria-live="polite">
                   {t(statusDescription)}
                 </p>
+                {syncing ? (
+                  <div
+                    className="knowledge-source-progress"
+                    role="progressbar"
+                    aria-label={t("sources.progressLabel", {
+                      repository: source.repositoryName,
+                    })}
+                    aria-valuetext={t(
+                      source.syncState === "queued"
+                        ? "sources.progressQueued"
+                        : "sources.progressRunning",
+                    )}
+                  >
+                    <span />
+                  </div>
+                ) : null}
                 <div className="knowledge-source-meta">
                   <span>
                     <GitBranch size={13} /> {source.refName}
@@ -380,7 +411,11 @@ export function KnowledgeSourcesPanel({
                     ) : (
                       <RefreshCw size={13} />
                     )}{" "}
-                    {syncing ? t("sources.syncing") : t("sources.checkUpdates")}
+                    {syncing
+                      ? t("sources.syncing")
+                      : source.freshness === "empty"
+                        ? t("sources.startFirstSync")
+                        : t("sources.checkUpdates")}
                   </button>
                   {source.indexedSha &&
                   source.indexedSha !== source.activeSha ? (

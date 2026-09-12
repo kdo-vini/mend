@@ -93,8 +93,16 @@ describe("KnowledgeSourcesPanel", () => {
   it("keeps equal revisions current while a background refresh is running", async () => {
     await render({ ...currentSource, syncState: "running" });
 
-    expect(container.textContent).toContain("zelopdvAtualizado");
+    expect(container.textContent).toContain("zelopdvCarregando conhecimento");
+    expect(container.textContent).toContain(
+      "Você pode sair desta página; o Mend continuará em segundo plano.",
+    );
     expect(container.textContent).not.toContain("Atualização disponível");
+    expect(
+      container
+        .querySelector('[role="progressbar"]')
+        ?.getAttribute("aria-valuetext"),
+    ).toBe("Lendo e indexando o repositório");
     const button = container.querySelector<HTMLButtonElement>("article button");
     expect(button?.textContent).toContain("Atualizando");
     expect(button?.disabled).toBe(true);
@@ -109,6 +117,24 @@ describe("KnowledgeSourcesPanel", () => {
     expect(container.textContent).toContain(
       "O conhecimento da IA corresponde à versão em produção.",
     );
+  });
+
+  it("explains when a connected source has not started its first load", async () => {
+    await render({
+      ...currentSource,
+      observedSha: undefined,
+      indexedSha: undefined,
+      activeSha: undefined,
+      freshness: "empty",
+      syncState: "idle",
+    });
+
+    expect(container.textContent).toContain(
+      "A fonte está conectada, mas a primeira carga ainda não começou.",
+    );
+    expect(
+      container.querySelector<HTMLButtonElement>("article button")?.textContent,
+    ).toContain("Iniciar primeira carga");
   });
 
   it("suggests the product repository before exposing unrelated repositories", async () => {

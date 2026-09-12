@@ -84,7 +84,11 @@
     "active": "In production",
     "sync": "Refresh",
     "checkUpdates": "Check for updates",
+    "startFirstSync": "Start first load",
     "syncing": "Updating…",
+    "progressLabel": "Update progress for {{repository}}",
+    "progressQueued": "Update waiting in the queue",
+    "progressRunning": "Reading and indexing the repository",
     "activate": "Use this version",
     "activateTitle": "Use knowledge from this version?",
     "activateDescription": "Version {{sha}} of {{repository}} will represent the behavior available to customers.",
@@ -92,12 +96,16 @@
     "freshness": {
       "empty": "Waiting for version",
       "stale": "Update available",
-      "current": "Current"
+      "current": "Current",
+      "syncing": "Loading knowledge",
+      "failed": "Update failed"
     },
     "status": {
       "current": "AI knowledge matches the version in production.",
-      "syncing": "Checking for changes and updating AI knowledge. You can leave this page.",
-      "empty": "Run the first update to make this product available to AI.",
+      "queued": "The first load is queued. You can leave this page; Mend will continue in the background.",
+      "running": "Reading and indexing the repository. You can leave this page; Mend will continue in the background.",
+      "failed": "The last update failed. Try again or review the source configuration.",
+      "empty": "The source is connected, but the first load has not started yet.",
       "changesDetected": "New code is waiting for a knowledge update.",
       "awaitingProduction": "Knowledge is updated, but this version is not in production yet."
     }
@@ -133,6 +141,8 @@
     "deleted": "Article deleted",
     "productCreated": "Product created",
     "sourceConnected": "Repository connected to knowledge",
+    "sourceConnectedSyncing": "Source connected. The first load started and will continue in the background.",
+    "sourceConnectedSyncFailed": "Source connected, but the first load could not start. Use “Start first load” to try again.",
     "syncQueued": "Update started. You can leave this page.",
     "syncCurrent": "Knowledge already matches the latest version.",
     "syncCompleted": "Knowledge updated successfully.",

@@ -247,7 +247,7 @@ export class SupabaseGitHubConnectionAdapter implements GitHubConnectionPort {
     return repositories.map((repository) => ({
       owner: repository.owner,
       repo: repository.repo,
-      defaultBranch: "main",
+      defaultBranch: repository.defaultBranch ?? "main",
     }));
   }
 
