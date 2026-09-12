@@ -14,6 +14,32 @@ import type { KnowledgeRepositorySyncJobPayload } from "../knowledge-sync.js";
 const KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE = 8;
 const KNOWLEDGE_ARTICLE_WRITE_BATCH_SIZE = 10;
 const KNOWLEDGE_REUSE_READ_BATCH_SIZE = 100;
+const KNOWLEDGE_WRITE_RETRY_DELAYS_MS = [200, 600] as const;
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+function transientDatabaseError(message: string): boolean {
+  return /gateway timeout|statement timeout|timed out|connection reset|fetch failed/i.test(
+    message,
+  );
+}
+
+async function retryTransientDatabaseWrite(
+  operation: () => Promise<{
+    data: unknown;
+    error: { message?: string } | null;
+  }>,
+) {
+  for (let attempt = 0; ; attempt += 1) {
+    const result = await operation();
+    const message = result.error?.message ?? "";
+    if (!result.error || !transientDatabaseError(message)) return result;
+    const delay = KNOWLEDGE_WRITE_RETRY_DELAYS_MS[attempt];
+    if (delay === undefined) return result;
+    await wait(delay);
+  }
+}
 
 function parseVector(value: unknown): number[] {
   const values = Array.isArray(value)
@@ -38,14 +64,21 @@ export async function insertKnowledgeChunkRows(
   ) {
     checked(
       "knowledge_chunks.replace.insert",
-      await client
-        .from("knowledge_chunks")
-        .insert(
-          values.slice(
-            index,
-            index + KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE,
-          ) as never,
-        ),
+      await retryTransientDatabaseWrite(
+        async () =>
+          await client
+            .from("knowledge_chunks")
+            .upsert(
+              values.slice(
+                index,
+                index + KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE,
+              ) as never,
+              {
+                onConflict: "article_id,article_version,chunk_index",
+                ignoreDuplicates: true,
+              },
+            ),
+      ),
     );
   }
 }
