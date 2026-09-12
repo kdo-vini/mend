@@ -37,6 +37,10 @@ import {
   type KnowledgeRepositorySyncJobPayload,
 } from "./knowledge-sync.js";
 import type { ProductResolution } from "./knowledge-products.js";
+import {
+  supportRepositoryResearchJobPayloadSchema,
+  type SupportRepositoryResearchJobPayload,
+} from "./support-repository-research.js";
 import { SupabaseLiveWorkerAutomation } from "./workers/automation.js";
 import { SupabaseLiveWorkerChannelResolver } from "./workers/channel-resolver.js";
 import { SupabaseCodexStarter } from "./workers/codex-starter.js";
@@ -49,6 +53,7 @@ import {
   PROCESS_INBOUND_MESSAGE_JOB_TYPE,
   safeOperationalError,
   SEND_AI_REPLY_JOB_TYPE,
+  SUPPORT_REPOSITORY_RESEARCH_JOB_TYPE,
   WHATSAPP_INGEST_JOB_TYPE,
 } from "./workers/live-worker-shared.js";
 import { SupabaseRunnerHeartbeat } from "./workers/runner-heartbeat.js";
@@ -132,7 +137,8 @@ export type LiveWorkerJobPayload =
   | CodingRunContinuationJobPayload
   | AgentRunRequestedJobPayload
   | MediaProcessJobPayload
-  | KnowledgeRepositorySyncJobPayload;
+  | KnowledgeRepositorySyncJobPayload
+  | SupportRepositoryResearchJobPayload;
 
 export interface UncheckedSupabaseQuery
   extends PromiseLike<{
@@ -272,6 +278,9 @@ export interface LiveWorkerOptions {
   agentRunRunner?: (payload: AgentRunRequestedJobPayload) => Promise<void>;
   knowledgeSync?: {
     process(payload: KnowledgeRepositorySyncJobPayload): Promise<void>;
+  };
+  supportResearch?: {
+    process(payload: SupportRepositoryResearchJobPayload): Promise<void>;
   };
   knowledge?: LiveWorkerKnowledge;
   onDraftReady?: (draft: LiveWorkerDraft) => Promise<void> | void;
@@ -514,6 +523,17 @@ export class LiveWorker {
       await this.options.knowledgeSync.process(parsed.data);
       return;
     }
+    if (job.type === SUPPORT_REPOSITORY_RESEARCH_JOB_TYPE) {
+      if (!this.options.supportResearch)
+        throw new Error("support_repository_research_not_configured");
+      const parsed = supportRepositoryResearchJobPayloadSchema.safeParse(
+        job.payload,
+      );
+      if (!parsed.success)
+        throw new Error("invalid_support_repository_research_job");
+      await this.options.supportResearch.process(parsed.data);
+      return;
+    }
     throw new Error(`unsupported_job_type:${job.type}`);
   }
 
@@ -731,6 +751,7 @@ export interface CreateSupabaseLiveWorkerOptions {
   codexStarter?: LiveWorkerCodexStarter;
   agentRunRunner?: LiveWorkerOptions["agentRunRunner"];
   knowledgeSync?: LiveWorkerOptions["knowledgeSync"];
+  supportResearch?: LiveWorkerOptions["supportResearch"];
   agentCredentials?: AgentCredentialPort;
   pollIntervalMs?: number;
   inboundDebounceMs?: number;
@@ -797,6 +818,9 @@ export function createSupabaseLiveWorker(
       ? { agentRunRunner: options.agentRunRunner }
       : {}),
     ...(options.knowledgeSync ? { knowledgeSync: options.knowledgeSync } : {}),
+    ...(options.supportResearch
+      ? { supportResearch: options.supportResearch }
+      : {}),
     ...(options.pollIntervalMs !== undefined
       ? { pollIntervalMs: options.pollIntervalMs }
       : {}),
@@ -819,5 +843,6 @@ export {
   KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE,
   PROCESS_INBOUND_MESSAGE_JOB_TYPE,
   SEND_AI_REPLY_JOB_TYPE,
+  SUPPORT_REPOSITORY_RESEARCH_JOB_TYPE,
   WHATSAPP_INGEST_JOB_TYPE,
 } from "./workers/live-worker-shared.js";

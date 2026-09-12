@@ -5,6 +5,8 @@ export const SEND_AI_REPLY_JOB_TYPE = "mend.send_ai_reply";
 export const CODING_RUN_CONTINUATION_JOB_TYPE = "mend.agent_run_continuation";
 export const KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE =
   "mend.knowledge.repository_sync";
+export const SUPPORT_REPOSITORY_RESEARCH_JOB_TYPE =
+  "mend.support.repository_research";
 export function safeOperationalError(error: unknown): string {
   return redactJobError(error);
 }
