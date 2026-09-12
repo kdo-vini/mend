@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -7,6 +7,11 @@
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -144,8 +149,8 @@ export type Database = {
           provider: string
           purpose: string
           quota_json: Json
-          support_config_json: Json
           status: string
+          support_config_json: Json
           updated_at: string
           workspace_id: string
         }
@@ -166,8 +171,8 @@ export type Database = {
           provider: string
           purpose?: string
           quota_json?: Json
-          support_config_json?: Json
           status?: string
+          support_config_json?: Json
           updated_at?: string
           workspace_id: string
         }
@@ -188,8 +193,8 @@ export type Database = {
           provider?: string
           purpose?: string
           quota_json?: Json
-          support_config_json?: Json
           status?: string
+          support_config_json?: Json
           updated_at?: string
           workspace_id?: string
         }
@@ -686,6 +691,90 @@ export type Database = {
           },
           {
             foreignKeyName: "coding_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_draft_evidence: {
+        Row: {
+          article_version: string | null
+          created_at: string
+          draft_id: string
+          evidence_json: Json
+          evidence_key: string
+          knowledge_article_id: string | null
+          knowledge_chunk_id: string | null
+          product_id: string | null
+          retrieval_score: number | null
+          source_kind: string
+          source_path: string | null
+          source_revision: string | null
+          workspace_id: string
+        }
+        Insert: {
+          article_version?: string | null
+          created_at?: string
+          draft_id: string
+          evidence_json: Json
+          evidence_key: string
+          knowledge_article_id?: string | null
+          knowledge_chunk_id?: string | null
+          product_id?: string | null
+          retrieval_score?: number | null
+          source_kind: string
+          source_path?: string | null
+          source_revision?: string | null
+          workspace_id: string
+        }
+        Update: {
+          article_version?: string | null
+          created_at?: string
+          draft_id?: string
+          evidence_json?: Json
+          evidence_key?: string
+          knowledge_article_id?: string | null
+          knowledge_chunk_id?: string | null
+          product_id?: string | null
+          retrieval_score?: number | null
+          source_kind?: string
+          source_path?: string | null
+          source_revision?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_draft_evidence_draft_id_workspace_id_fkey"
+            columns: ["draft_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "ai_drafts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "ai_draft_evidence_knowledge_article_id_workspace_id_fkey"
+            columns: ["knowledge_article_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_articles"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "ai_draft_evidence_knowledge_chunk_id_workspace_id_fkey"
+            columns: ["knowledge_chunk_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_chunks"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "ai_draft_evidence_product_id_workspace_id_fkey"
+            columns: ["product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "support_products"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "ai_draft_evidence_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1418,6 +1507,71 @@ export type Database = {
           },
           {
             foreignKeyName: "conversation_ai_state_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_product_context: {
+        Row: {
+          confidence: number
+          conversation_id: string
+          created_at: string
+          is_primary: boolean
+          last_message_id: string | null
+          product_id: string
+          resolution_source: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          confidence: number
+          conversation_id: string
+          created_at?: string
+          is_primary?: boolean
+          last_message_id?: string | null
+          product_id: string
+          resolution_source: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          confidence?: number
+          conversation_id?: string
+          created_at?: string
+          is_primary?: boolean
+          last_message_id?: string | null
+          product_id?: string
+          resolution_source?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_product_context_conversation_id_workspace_id_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "conversation_product_context_last_message_id_workspace_id_fkey"
+            columns: ["last_message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "conversation_product_context_product_id_workspace_id_fkey"
+            columns: ["product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "support_products"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "conversation_product_context_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2231,41 +2385,112 @@ export type Database = {
           },
         ]
       }
+      knowledge_article_products: {
+        Row: {
+          article_id: string
+          created_at: string
+          product_id: string
+          workspace_id: string
+        }
+        Insert: {
+          article_id: string
+          created_at?: string
+          product_id: string
+          workspace_id: string
+        }
+        Update: {
+          article_id?: string
+          created_at?: string
+          product_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_article_products_article_id_workspace_id_fkey"
+            columns: ["article_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_articles"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "knowledge_article_products_product_id_workspace_id_fkey"
+            columns: ["product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "support_products"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "knowledge_article_products_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_articles: {
         Row: {
+          audience: string
           body: string
           category: string
           created_at: string
           created_by_user_id: string | null
           id: string
+          managed_by_sync: boolean
+          source_id: string | null
+          source_metadata_json: Json
+          source_path: string | null
+          source_revision: string | null
           status: string
           title: string
+          trust_level: string
           updated_at: string
           workspace_id: string
         }
         Insert: {
+          audience?: string
           body: string
           category?: string
           created_at?: string
           created_by_user_id?: string | null
           id?: string
+          managed_by_sync?: boolean
+          source_id?: string | null
+          source_metadata_json?: Json
+          source_path?: string | null
+          source_revision?: string | null
           status?: string
           title: string
+          trust_level?: string
           updated_at?: string
           workspace_id: string
         }
         Update: {
+          audience?: string
           body?: string
           category?: string
           created_at?: string
           created_by_user_id?: string | null
           id?: string
+          managed_by_sync?: boolean
+          source_id?: string | null
+          source_metadata_json?: Json
+          source_path?: string | null
+          source_revision?: string | null
           status?: string
           title?: string
+          trust_level?: string
           updated_at?: string
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "knowledge_articles_source_workspace_fkey"
+            columns: ["source_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "knowledge_articles_workspace_id_fkey"
             columns: ["workspace_id"]
@@ -2328,6 +2553,150 @@ export type Database = {
           },
           {
             foreignKeyName: "knowledge_chunks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_sources: {
+        Row: {
+          active_sha: string | null
+          active_sha_source: string | null
+          created_at: string
+          exclude_patterns: Json
+          id: string
+          include_patterns: Json
+          indexed_sha: string | null
+          last_error_code: string | null
+          last_sync_at: string | null
+          observed_sha: string | null
+          ref_name: string
+          repository_id: string
+          source_type: string
+          sync_mode: string
+          sync_state: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active_sha?: string | null
+          active_sha_source?: string | null
+          created_at?: string
+          exclude_patterns?: Json
+          id?: string
+          include_patterns?: Json
+          indexed_sha?: string | null
+          last_error_code?: string | null
+          last_sync_at?: string | null
+          observed_sha?: string | null
+          ref_name: string
+          repository_id: string
+          source_type?: string
+          sync_mode?: string
+          sync_state?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          active_sha?: string | null
+          active_sha_source?: string | null
+          created_at?: string
+          exclude_patterns?: Json
+          id?: string
+          include_patterns?: Json
+          indexed_sha?: string | null
+          last_error_code?: string | null
+          last_sync_at?: string | null
+          observed_sha?: string | null
+          ref_name?: string
+          repository_id?: string
+          source_type?: string
+          sync_mode?: string
+          sync_state?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_sources_repository_id_workspace_id_fkey"
+            columns: ["repository_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "repositories"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "knowledge_sources_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_sync_runs: {
+        Row: {
+          chunks_reused: number
+          chunks_written: number
+          created_at: string
+          embedding_input_count: number
+          error_code: string | null
+          files_indexed: number
+          files_scanned: number
+          files_skipped: number
+          finished_at: string | null
+          id: string
+          requested_sha: string
+          source_id: string
+          started_at: string | null
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          chunks_reused?: number
+          chunks_written?: number
+          created_at?: string
+          embedding_input_count?: number
+          error_code?: string | null
+          files_indexed?: number
+          files_scanned?: number
+          files_skipped?: number
+          finished_at?: string | null
+          id?: string
+          requested_sha: string
+          source_id: string
+          started_at?: string | null
+          status?: string
+          workspace_id: string
+        }
+        Update: {
+          chunks_reused?: number
+          chunks_written?: number
+          created_at?: string
+          embedding_input_count?: number
+          error_code?: string | null
+          files_indexed?: number
+          files_scanned?: number
+          files_skipped?: number
+          finished_at?: string | null
+          id?: string
+          requested_sha?: string
+          source_id?: string
+          started_at?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_sync_runs_source_id_workspace_id_fkey"
+            columns: ["source_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "knowledge_sync_runs_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3391,6 +3760,102 @@ export type Database = {
         }
         Relationships: []
       }
+      support_product_repositories: {
+        Row: {
+          created_at: string
+          knowledge_enabled: boolean
+          product_id: string
+          repository_id: string
+          repository_role: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          knowledge_enabled?: boolean
+          product_id: string
+          repository_id: string
+          repository_role?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          knowledge_enabled?: boolean
+          product_id?: string
+          repository_id?: string
+          repository_role?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_product_repositories_product_id_workspace_id_fkey"
+            columns: ["product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "support_products"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "support_product_repositories_repository_id_workspace_id_fkey"
+            columns: ["repository_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "repositories"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "support_product_repositories_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_products: {
+        Row: {
+          aliases: string[]
+          created_at: string
+          description: string
+          id: string
+          name: string
+          product_key: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          aliases?: string[]
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          product_key: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          aliases?: string[]
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          product_key?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_products_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       timeline_events: {
         Row: {
           actor_type: string
@@ -4322,12 +4787,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4351,11 +4816,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4376,11 +4841,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4401,11 +4866,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4418,11 +4883,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
