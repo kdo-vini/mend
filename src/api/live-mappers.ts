@@ -911,6 +911,10 @@ export function toUiKnowledge(
 ): KnowledgeArticle {
   const apiRecord = record as KnowledgeArticleRecord & {
     updatedAt?: string | null;
+    productIds?: string[];
+    managedBySync?: boolean;
+    sourcePath?: string | null;
+    sourceRevision?: string | null;
   };
   return {
     id: record.id,
@@ -919,6 +923,10 @@ export function toUiKnowledge(
     updatedAt: displayTime(record.updated_at ?? apiRecord.updatedAt ?? null),
     excerpt: record.body,
     status: record.status === "published" ? "Published" : "Draft",
+    productIds: apiRecord.productIds ?? [],
+    managedBySync: apiRecord.managedBySync ?? false,
+    sourcePath: apiRecord.sourcePath ?? null,
+    sourceRevision: apiRecord.sourceRevision ?? null,
   };
 }
 

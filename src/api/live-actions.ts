@@ -1476,6 +1476,7 @@ export async function createLiveKnowledge(
     category: string;
     body: string;
     status?: "draft" | "published";
+    productIds?: string[];
   },
   client: MendSupabaseClient | null = supabase,
 ) {
@@ -1489,6 +1490,7 @@ export async function createLiveKnowledge(
           category: input.category.trim() || "Support",
           body: input.body.trim(),
           status: input.status ?? "draft",
+          productIds: input.productIds ?? [],
         }),
       },
       input.workspaceId,
@@ -1517,6 +1519,7 @@ export async function updateLiveKnowledge(
       category?: string;
       body?: string;
       status?: "draft" | "published";
+      productIds?: string[];
     };
   },
   client: MendSupabaseClient | null = supabase,
@@ -1527,10 +1530,11 @@ export async function updateLiveKnowledge(
       { method: "PATCH", body: JSON.stringify(input.patch) },
       input.workspaceId,
     ).then((result) => ("article" in result ? result.article : result));
+  const { productIds: _productIds, ...databasePatch } = input.patch;
   return unwrap(
     requireClient(client)
       .from("knowledge_articles")
-      .update(input.patch)
+      .update(databasePatch)
       .eq("workspace_id", input.workspaceId)
       .eq("id", input.articleId)
       .select("*")

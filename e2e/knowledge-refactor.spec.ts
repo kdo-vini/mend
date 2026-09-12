@@ -110,7 +110,11 @@ async function installLiveKnowledgeHarness(
     const id = url.pathname.split("/").at(-1);
     let response: unknown;
 
-    if (method === "POST") {
+    if (url.pathname.endsWith("/products") || url.pathname.endsWith("/sources")) {
+      response = { data: [] };
+    } else if (method === "GET") {
+      response = { data: articles };
+    } else if (method === "POST") {
       const payload = request.postDataJSON() as Partial<LiveKnowledgeRow>;
       const created = {
         ...liveArticle("live-created", payload.title ?? "Untitled", "draft"),
@@ -140,6 +144,13 @@ async function installLiveKnowledgeHarness(
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(response),
+    });
+  });
+  await page.route("**/api/repositories", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: [] }),
     });
   });
 

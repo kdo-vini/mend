@@ -30,6 +30,46 @@
     "workspaceKnowledge": "Workspace knowledge",
     "closeEditor": "Close article editor"
   },
+  "products": {
+    "viewLabel": "Knowledge view",
+    "content": "Content",
+    "sources": "Sources",
+    "filterLabel": "Filter by product",
+    "all": "All",
+    "shared": "Shared",
+    "create": "New product",
+    "catalog": "Product catalog",
+    "close": "Close product form",
+    "name": "Name",
+    "key": "Identifier",
+    "description": "Description",
+    "aliases": "Terms customers use",
+    "aliasesPlaceholder": "pos, register, point of sale",
+    "save": "Save product"
+  },
+  "sources": {
+    "connectTitle": "Connect a repository",
+    "connectDescription": "Choose which products this repository helps Mend support.",
+    "repository": "Repository",
+    "selectRepository": "Select a repository",
+    "products": "Supported products",
+    "connect": "Connect source",
+    "empty": "No code sources connected",
+    "emptyDescription": "Connect product repositories to follow released changes.",
+    "observed": "Observed",
+    "indexed": "Indexed",
+    "active": "In production",
+    "sync": "Refresh",
+    "activate": "Use this version",
+    "activateTitle": "Use knowledge from this version?",
+    "activateDescription": "Version {{sha}} of {{repository}} will represent the behavior available to customers.",
+    "error": "The last refresh failed: {{code}}",
+    "freshness": {
+      "empty": "Waiting for version",
+      "stale": "Review needed",
+      "current": "Current"
+    }
+  },
   "editor": {
     "title": "Title",
     "titlePlaceholder": "How our checkout works",
@@ -40,17 +80,27 @@
     "status": "Status",
     "draft": "Draft",
     "published": "Published for AI",
-    "save": "Save article"
+    "save": "Save article",
+    "products": "Products",
+    "productsDescription": "With no selection, the article is shared across every product."
   },
   "errors": {
     "load": "Knowledge could not be loaded.",
     "save": "Article could not be saved.",
-    "delete": "Article could not be deleted."
+    "delete": "Article could not be deleted.",
+    "product": "Product could not be saved.",
+    "source": "Repository could not be connected.",
+    "sync": "Refresh could not be started.",
+    "activate": "This version could not be activated."
   },
   "toasts": {
     "updated": "Article updated",
     "published": "Article published for AI",
     "savedDraft": "Article saved as draft",
-    "deleted": "Article deleted"
+    "deleted": "Article deleted",
+    "productCreated": "Product created",
+    "sourceConnected": "Repository connected to knowledge",
+    "syncQueued": "Refresh started",
+    "revisionActivated": "Active version updated"
   }
 }

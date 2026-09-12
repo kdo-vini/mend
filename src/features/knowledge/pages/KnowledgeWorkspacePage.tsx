@@ -10,17 +10,31 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { KnowledgeArticle } from "../../../types";
+import type {
+  KnowledgeArticle,
+  KnowledgeProduct,
+  KnowledgeSourceSummary,
+} from "../../../types";
+import type { LiveRepository } from "../../../api/live-actions";
 import {
+  activateKnowledgeRevision,
+  createKnowledgeSource,
   loadKnowledgeArticles,
+  loadKnowledgeConfiguration,
   removeKnowledgeArticle,
+  requestKnowledgeSync,
   saveKnowledgeArticle,
+  saveKnowledgeProduct,
 } from "../api";
 import { PageHeader } from "../../../shared/ui/PageHeader";
 import { EmptyState, Skeleton } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
 import { localizedError } from "../../../shared/ui/localizedError";
 import { KnowledgeCollection } from "../components/KnowledgeCollection";
+import { KnowledgeProductBar } from "../components/KnowledgeProductBar";
+import { KnowledgeProductDialog } from "../components/KnowledgeProductDialog";
+import { KnowledgeSourcesPanel } from "../components/KnowledgeSourcesPanel";
+import { useConfirmation } from "../../../shared/ui/useConfirmation";
 import {
   filterKnowledgeArticles,
   reconcileKnowledgeSelection,
@@ -49,6 +63,7 @@ type KnowledgeDraft = {
   category: string;
   body: string;
   status: "draft" | "published";
+  productIds: string[];
 };
 
 export function KnowledgeWorkspacePage({
@@ -60,6 +75,14 @@ export function KnowledgeWorkspacePage({
 }) {
   const { t } = useTranslation("knowledge");
   const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
+  const [products, setProducts] = useState<KnowledgeProduct[]>([]);
+  const [sources, setSources] = useState<KnowledgeSourceSummary[]>([]);
+  const [repositories, setRepositories] = useState<LiveRepository[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState("all");
+  const [view, setView] = useState<"content" | "sources">("content");
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [configurationBusy, setConfigurationBusy] = useState(false);
+  const { confirm, confirmationDialog } = useConfirmation();
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(
     null,
   );
@@ -69,6 +92,7 @@ export function KnowledgeWorkspacePage({
     category: "Suporte",
     body: "",
     status: "draft",
+    productIds: [],
   });
   const [editorOpen, setEditorOpen] = useState(false);
   const [loading, setLoading] = useState(Boolean(workspaceId));
@@ -83,7 +107,14 @@ export function KnowledgeWorkspacePage({
     }
     setLoading(true);
     try {
-      setArticles(await loadKnowledgeArticles(workspaceId));
+      const [nextArticles, configuration] = await Promise.all([
+        loadKnowledgeArticles(workspaceId),
+        loadKnowledgeConfiguration(workspaceId),
+      ]);
+      setArticles(nextArticles);
+      setProducts(configuration.products);
+      setSources(configuration.sources);
+      setRepositories(configuration.repositories);
     } catch (error) {
       onToast(localizedError(error, t("errors.load", { ns: "knowledge" })));
     } finally {
@@ -95,7 +126,14 @@ export function KnowledgeWorkspacePage({
     void refresh();
   }, [refresh]);
 
-  const filtered = filterKnowledgeArticles(articles, search);
+  const scopedArticles = articles.filter((article) =>
+    selectedProductId === "all"
+      ? true
+      : selectedProductId === "shared"
+        ? !article.productIds?.length
+        : article.productIds?.includes(selectedProductId),
+  );
+  const filtered = filterKnowledgeArticles(scopedArticles, search);
 
   useEffect(() => {
     const destination = pendingDeleteFocusRef.current;
@@ -118,7 +156,16 @@ export function KnowledgeWorkspacePage({
   };
 
   const openNewArticle = () => {
-    setEditing({ title: "", category: "Suporte", body: "", status: "draft" });
+    setEditing({
+      title: "",
+      category: "Suporte",
+      body: "",
+      status: "draft",
+      productIds:
+        selectedProductId !== "all" && selectedProductId !== "shared"
+          ? [selectedProductId]
+          : [],
+    });
     setEditorOpen(true);
   };
 
@@ -132,6 +179,7 @@ export function KnowledgeWorkspacePage({
         category: editing.category.trim() || "Suporte",
         body: editing.body.trim(),
         status: editing.status,
+        productIds: editing.productIds,
       });
       setArticles((current) =>
         editing.id
@@ -141,7 +189,13 @@ export function KnowledgeWorkspacePage({
       setSearch("");
       setSelectedArticleId(article.id);
       setEditorOpen(false);
-      setEditing({ title: "", category: "Suporte", body: "", status: "draft" });
+      setEditing({
+        title: "",
+        category: "Suporte",
+        body: "",
+        status: "draft",
+        productIds: [],
+      });
       onToast(
         editing.id
           ? t("toasts.updated", { ns: "knowledge" })
@@ -204,112 +258,199 @@ export function KnowledgeWorkspacePage({
       )}
       {workspaceId && (
         <>
-          <div className="knowledge-toolbar">
-            <label className="search-field">
-              <Search size={15} />
-              <input
-                data-global-search
-                value={search}
-                onChange={(event) => updateSearch(event.target.value)}
-                placeholder={t("ui.search")}
-                aria-label={t("ui.search")}
-              />
-            </label>
-            <button
-              className="button button-ghost"
-              type="button"
-              onClick={() => void refresh()}
-              disabled={loading}
-            >
-              <RefreshCw size={14} />{" "}
-              {loading ? t("ui.loading") : t("ui.refresh")}
-            </button>
-          </div>
-          {loading ? (
-            <div className="knowledge-collection">
-              <KnowledgeSkeletonPreview label={t("ui.loading")} />
-            </div>
-          ) : filtered.length ? (
-            <KnowledgeCollection
-              articles={filtered}
-              selectedId={selectedArticleId}
-              onSelect={setSelectedArticleId}
-              actionsFor={(article) => (
-                <>
-                  <button
-                    className="button button-ghost"
-                    type="button"
-                    onClick={() => {
-                      setEditing({
-                        id: article.id,
-                        title: article.title,
-                        category: article.category,
-                        body: article.excerpt,
-                        status:
-                          article.status === "Published"
-                            ? "published"
-                            : "draft",
-                      });
-                      setEditorOpen(true);
-                    }}
-                  >
-                    <PenLine size={14} /> {t("ui.edit")}
-                  </button>
-                  <button
-                    className="button button-danger"
-                    type="button"
-                    onClick={() => void remove(article.id)}
-                  >
-                    <Trash2 size={14} /> {t("ui.delete")}
-                  </button>
-                </>
-              )}
+          <KnowledgeProductBar
+            products={products}
+            selectedProductId={selectedProductId}
+            view={view}
+            onProductChange={setSelectedProductId}
+            onViewChange={setView}
+            onCreateProduct={() => setProductDialogOpen(true)}
+          />
+          {view === "sources" ? (
+            <KnowledgeSourcesPanel
+              products={products}
+              repositories={repositories}
+              sources={sources}
+              busy={configurationBusy}
+              confirm={confirm}
+              onCreate={async (input) => {
+                setConfigurationBusy(true);
+                try {
+                  const source = await createKnowledgeSource(
+                    workspaceId,
+                    input,
+                  );
+                  setSources((current) => [...current, source]);
+                  onToast(t("toasts.sourceConnected"));
+                } catch (error) {
+                  onToast(localizedError(error, t("errors.source")));
+                } finally {
+                  setConfigurationBusy(false);
+                }
+              }}
+              onSync={async (sourceId) => {
+                setConfigurationBusy(true);
+                try {
+                  await requestKnowledgeSync(workspaceId, sourceId);
+                  await refresh();
+                  onToast(t("toasts.syncQueued"));
+                } catch (error) {
+                  onToast(localizedError(error, t("errors.sync")));
+                } finally {
+                  setConfigurationBusy(false);
+                }
+              }}
+              onActivate={async (sourceId, sha) => {
+                setConfigurationBusy(true);
+                try {
+                  const source = await activateKnowledgeRevision(
+                    workspaceId,
+                    sourceId,
+                    sha,
+                  );
+                  setSources((current) =>
+                    current.map((item) =>
+                      item.id === source.id ? source : item,
+                    ),
+                  );
+                  onToast(t("toasts.revisionActivated"));
+                } catch (error) {
+                  onToast(localizedError(error, t("errors.activate")));
+                } finally {
+                  setConfigurationBusy(false);
+                }
+              }}
             />
           ) : (
-            <div className="knowledge-collection knowledge-collection-empty">
-              <EmptyState
-                title={
-                  articles.length ? t("ui.noMatching") : t("ui.noArticles")
-                }
-                description={
-                  articles.length
-                    ? t("ui.tryDifferent")
-                    : t("ui.createReviewedAnswer")
-                }
-                action={
-                  articles.length ? (
-                    <button
-                      ref={clearSearchRef}
-                      className="text-button"
-                      type="button"
-                      onClick={() => {
-                        updateSearch("");
-                        setSelectedArticleId(null);
-                      }}
-                    >
-                      {t("ui.clearFilters")}
-                    </button>
-                  ) : (
-                    <button
-                      className="button button-ghost button-small"
-                      type="button"
-                      disabled={!workspaceId}
-                      onClick={openNewArticle}
-                    >
-                      <Plus size={13} /> {t("create")}
-                    </button>
-                  )
-                }
-                search={Boolean(search)}
-              />
-            </div>
+            <>
+              <div className="knowledge-toolbar">
+                <label className="search-field">
+                  <Search size={15} />
+                  <input
+                    data-global-search
+                    value={search}
+                    onChange={(event) => updateSearch(event.target.value)}
+                    placeholder={t("ui.search")}
+                    aria-label={t("ui.search")}
+                  />
+                </label>
+                <button
+                  className="button button-ghost"
+                  type="button"
+                  onClick={() => void refresh()}
+                  disabled={loading}
+                >
+                  <RefreshCw size={14} />{" "}
+                  {loading ? t("ui.loading") : t("ui.refresh")}
+                </button>
+              </div>
+              {loading ? (
+                <div className="knowledge-collection">
+                  <KnowledgeSkeletonPreview label={t("ui.loading")} />
+                </div>
+              ) : filtered.length ? (
+                <KnowledgeCollection
+                  articles={filtered}
+                  selectedId={selectedArticleId}
+                  onSelect={setSelectedArticleId}
+                  actionsFor={(article) =>
+                    article.managedBySync ? null : (
+                      <>
+                        <button
+                          className="button button-ghost"
+                          type="button"
+                          onClick={() => {
+                            setEditing({
+                              id: article.id,
+                              title: article.title,
+                              category: article.category,
+                              body: article.excerpt,
+                              status:
+                                article.status === "Published"
+                                  ? "published"
+                                  : "draft",
+                              productIds: article.productIds ?? [],
+                            });
+                            setEditorOpen(true);
+                          }}
+                        >
+                          <PenLine size={14} /> {t("ui.edit")}
+                        </button>
+                        <button
+                          className="button button-danger"
+                          type="button"
+                          onClick={() => void remove(article.id)}
+                        >
+                          <Trash2 size={14} /> {t("ui.delete")}
+                        </button>
+                      </>
+                    )
+                  }
+                />
+              ) : (
+                <div className="knowledge-collection knowledge-collection-empty">
+                  <EmptyState
+                    title={
+                      articles.length ? t("ui.noMatching") : t("ui.noArticles")
+                    }
+                    description={
+                      articles.length
+                        ? t("ui.tryDifferent")
+                        : t("ui.createReviewedAnswer")
+                    }
+                    action={
+                      articles.length ? (
+                        <button
+                          ref={clearSearchRef}
+                          className="text-button"
+                          type="button"
+                          onClick={() => {
+                            updateSearch("");
+                            setSelectedArticleId(null);
+                          }}
+                        >
+                          {t("ui.clearFilters")}
+                        </button>
+                      ) : (
+                        <button
+                          className="button button-ghost button-small"
+                          type="button"
+                          disabled={!workspaceId}
+                          onClick={openNewArticle}
+                        >
+                          <Plus size={13} /> {t("create")}
+                        </button>
+                      )
+                    }
+                    search={Boolean(search)}
+                  />
+                </div>
+              )}
+              <div className="knowledge-note">
+                <ShieldCheck size={15} />
+                <span>{t("ui.publishedOnly")}</span>
+              </div>
+            </>
           )}
-          <div className="knowledge-note">
-            <ShieldCheck size={15} />
-            <span>{t("ui.publishedOnly")}</span>
-          </div>
         </>
       )}
+      {productDialogOpen && workspaceId ? (
+        <KnowledgeProductDialog
+          onClose={() => setProductDialogOpen(false)}
+          onSave={async (input) => {
+            try {
+              const product = await saveKnowledgeProduct(workspaceId, input);
+              setProducts((current) => [...current, product]);
+              setSelectedProductId(product.id);
+              setProductDialogOpen(false);
+              onToast(t("toasts.productCreated"));
+            } catch (error) {
+              onToast(localizedError(error, t("errors.product")));
+            }
+          }}
+        />
+      ) : null}
+      {confirmationDialog}
       {editorOpen && (
         <div
           className="modal-backdrop"
@@ -399,6 +540,35 @@ export function KnowledgeWorkspacePage({
                   }
                 />
               </label>
+              <fieldset className="knowledge-editor-products">
+                <legend>{t("editor.products")}</legend>
+                <p>{t("editor.productsDescription")}</p>
+                <div className="knowledge-product-checks">
+                  {products
+                    .filter((product) => product.status === "active")
+                    .map((product) => (
+                      <label key={product.id}>
+                        <input
+                          type="checkbox"
+                          checked={editing.productIds.includes(product.id)}
+                          onChange={() =>
+                            setEditing((current) => ({
+                              ...current,
+                              productIds: current.productIds.includes(
+                                product.id,
+                              )
+                                ? current.productIds.filter(
+                                    (id) => id !== product.id,
+                                  )
+                                : [...current.productIds, product.id],
+                            }))
+                          }
+                        />
+                        {product.name}
+                      </label>
+                    ))}
+                </div>
+              </fieldset>
             </div>
             <div className="modal-footer">
               <button

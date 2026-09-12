@@ -292,4 +292,32 @@ export interface KnowledgeArticle {
   updatedAt: string;
   excerpt: string;
   status: "Published" | "Draft";
+  productIds?: string[];
+  managedBySync?: boolean;
+  sourcePath?: string | null;
+  sourceRevision?: string | null;
+}
+
+export interface KnowledgeProduct {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  aliases: string[];
+  status: "active" | "archived";
+}
+
+export interface KnowledgeSourceSummary {
+  id: string;
+  repositoryId: string;
+  repositoryName: string;
+  productIds: string[];
+  refName: string;
+  observedSha?: string;
+  indexedSha?: string;
+  activeSha?: string;
+  freshness: "empty" | "stale" | "current";
+  syncState: "idle" | "queued" | "running" | "ready" | "stale" | "failed";
+  lastSyncAt?: string;
+  errorCode?: string;
 }
