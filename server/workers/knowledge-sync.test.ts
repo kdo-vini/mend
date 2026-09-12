@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { insertKnowledgeChunkRows } from "./knowledge-sync.js";
+import {
+  deleteKnowledgeChunksForArticles,
+  insertKnowledgeChunkRows,
+} from "./knowledge-sync.js";
 
 describe("knowledge sync chunk writes", () => {
   it("keeps vector inserts below the database timeout batch size", async () => {
@@ -32,5 +35,24 @@ describe("knowledge sync chunk writes", () => {
     await insertKnowledgeChunkRows(client as never, [{ index: 0 }]);
 
     expect(upsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("deletes old chunks one article at a time", async () => {
+    const articleIds: string[] = [];
+    const eq = vi.fn((column: string, value: string) => {
+      if (column === "article_id") articleIds.push(value);
+      return { data: null, error: null, eq };
+    });
+    const client = {
+      from: vi.fn(() => ({ delete: vi.fn(() => ({ eq })) })),
+    };
+
+    await deleteKnowledgeChunksForArticles(client as never, "workspace-1", [
+      "article-1",
+      "article-2",
+      "article-3",
+    ]);
+
+    expect(articleIds).toEqual(["article-1", "article-2", "article-3"]);
   });
 });

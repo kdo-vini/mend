@@ -83,6 +83,25 @@ export async function insertKnowledgeChunkRows(
   }
 }
 
+export async function deleteKnowledgeChunksForArticles(
+  client: AnySupabaseClient,
+  workspaceId: string,
+  articleIds: readonly string[],
+): Promise<void> {
+  for (const articleId of articleIds)
+    checked(
+      "knowledge_chunks.replace.delete",
+      await retryTransientDatabaseWrite(
+        async () =>
+          await client
+            .from("knowledge_chunks")
+            .delete()
+            .eq("workspace_id", workspaceId)
+            .eq("article_id", articleId),
+      ),
+    );
+}
+
 class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
   constructor(
     private readonly client: AnySupabaseClient,
@@ -216,16 +235,10 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
         ]),
       );
       const articleIds = [...articleIdByPath.values()];
-      checked(
-        "knowledge_chunks.replace.delete",
-        await retryTransientDatabaseWrite(
-          async () =>
-            await this.client
-              .from("knowledge_chunks")
-              .delete()
-              .eq("workspace_id", payload.workspaceId)
-              .in("article_id", articleIds),
-        ),
+      await deleteKnowledgeChunksForArticles(
+        this.client,
+        payload.workspaceId,
+        articleIds,
       );
       await insertKnowledgeChunkRows(
         this.client,
