@@ -79,6 +79,17 @@ export function registerKnowledgeSourceRoutes(context: ApiRouteModuleContext) {
       );
     }),
   );
+  router.delete(
+    "/api/knowledge/sources/:id",
+    asyncRoute(async (request, response) => {
+      const access = await scoped(request, response, "admin");
+      requireFound(
+        await port.removeSource(access.workspaceId, pathId(request)),
+        "knowledge_source",
+      );
+      response.status(204).end();
+    }),
+  );
   router.get(
     "/api/knowledge/sources",
     asyncRoute(async (request, response) => {

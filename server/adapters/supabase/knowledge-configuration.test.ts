@@ -6,7 +6,7 @@ class Query implements PromiseLike<{ data: unknown; error: null }> {
   private operation: "select" | "update" = "select";
 
   constructor(
-    private readonly source: Record<string, unknown>,
+    private readonly source: unknown,
     private readonly updates: Array<Record<string, unknown>>,
   ) {}
 
@@ -137,5 +137,21 @@ describe("SupabaseKnowledgeConfigurationAdapter", () => {
     expect(updates).toContainEqual(
       expect.objectContaining({ sync_state: "ready", last_error_code: null }),
     );
+  });
+
+  it("rejects a knowledge source without a workspace GitHub repository", async () => {
+    const client = {
+      from: vi.fn(() => new Query(null, [])),
+    };
+    const adapter = new SupabaseKnowledgeConfigurationAdapter(client as never);
+
+    await expect(
+      adapter.createSource("10000000-0000-4000-8000-000000000001", {
+        repositoryId: "10000000-0000-4000-8000-000000000002",
+        productIds: ["10000000-0000-4000-8000-000000000003"],
+        refName: "main",
+        syncMode: "event",
+      }),
+    ).rejects.toThrow("github_repository_not_connected");
   });
 });

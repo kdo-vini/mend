@@ -87,6 +87,7 @@ export interface KnowledgeConfigurationPort {
     sourceId: string,
     input: Partial<KnowledgeSourceInput>,
   ): Promise<unknown | null>;
+  removeSource(workspaceId: string, sourceId: string): Promise<boolean>;
   requestSync(workspaceId: string, sourceId: string): Promise<unknown | null>;
   activateRevision(
     workspaceId: string,

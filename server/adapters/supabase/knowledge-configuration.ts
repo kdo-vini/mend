@@ -49,7 +49,10 @@ const sourceDto = (value: Row, productIds: string[] = []) => {
   return {
     id: source.id,
     repositoryId: source.repositoryId,
-    repositoryName: str(repository.name || value.repository_name),
+    repositoryName:
+      repository.github_owner && repository.github_repo
+        ? `${str(repository.github_owner)}/${str(repository.github_repo)}`
+        : str(repository.name || value.repository_name),
     productIds,
     refName: source.refName,
     observedSha: source.observedSha,
@@ -148,7 +151,7 @@ export class SupabaseKnowledgeConfigurationAdapter
     const [result, products] = await Promise.all([
       this.client
         .from("knowledge_sources")
-        .select("*, repositories(name)")
+        .select("*, repositories(name, github_owner, github_repo)")
         .eq("workspace_id", workspaceId)
         .order("created_at"),
       this.productIdsByRepository(workspaceId),
@@ -186,6 +189,22 @@ export class SupabaseKnowledgeConfigurationAdapter
   }
 
   async createSource(workspaceId: string, input: KnowledgeSourceInput) {
+    const repositoryResult = await this.client
+      .from("repositories")
+      .select("id, github_owner, github_repo, github_installation_id")
+      .eq("workspace_id", workspaceId)
+      .eq("id", input.repositoryId)
+      .maybeSingle();
+    const repository = row(
+      checked("knowledge_sources.repository", repositoryResult),
+    );
+    if (
+      !repository.id ||
+      !repository.github_owner ||
+      !repository.github_repo ||
+      !repository.github_installation_id
+    )
+      throw new Error("github_repository_not_connected");
     const result = await this.client
       .from("knowledge_sources")
       .insert({
@@ -200,7 +219,7 @@ export class SupabaseKnowledgeConfigurationAdapter
           ? { exclude_patterns: [...input.excludePatterns] }
           : {}),
       })
-      .select("*, repositories(name)")
+      .select("*, repositories(name, github_owner, github_repo)")
       .single();
     const created = row(checked("knowledge_sources.create", result));
     await this.replaceMappings(
@@ -231,7 +250,7 @@ export class SupabaseKnowledgeConfigurationAdapter
       })
       .eq("workspace_id", workspaceId)
       .eq("id", sourceId)
-      .select("*, repositories(name)")
+      .select("*, repositories(name, github_owner, github_repo)")
       .maybeSingle();
     const value = checked("knowledge_sources.update", result);
     if (!value) return null;
@@ -244,6 +263,27 @@ export class SupabaseKnowledgeConfigurationAdapter
       );
     const mappings = await this.productIdsByRepository(workspaceId);
     return sourceDto(updated, mappings.get(str(updated.repository_id)) ?? []);
+  }
+
+  async removeSource(workspaceId: string, sourceId: string) {
+    const result = await this.client
+      .from("knowledge_sources")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("id", sourceId)
+      .select("repository_id")
+      .maybeSingle();
+    const value = checked("knowledge_sources.delete", result);
+    if (!value) return false;
+    checked(
+      "support_product_repositories.delete_orphaned",
+      await this.client
+        .from("support_product_repositories")
+        .delete()
+        .eq("workspace_id", workspaceId)
+        .eq("repository_id", str(row(value).repository_id)),
+    );
+    return true;
   }
 
   async requestSync(workspaceId: string, sourceId: string) {
@@ -362,7 +402,7 @@ export class SupabaseKnowledgeConfigurationAdapter
       .eq("workspace_id", workspaceId)
       .eq("id", sourceId)
       .eq("indexed_sha", sha)
-      .select("*, repositories(name)")
+      .select("*, repositories(name, github_owner, github_repo)")
       .maybeSingle();
     const value = checked("knowledge_sources.activate", result);
     return value ? sourceDto(row(value)) : null;

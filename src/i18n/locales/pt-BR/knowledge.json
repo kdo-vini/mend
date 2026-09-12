@@ -48,14 +48,37 @@
     "save": "Salvar produto"
   },
   "sources": {
-    "connectTitle": "Conectar um repositório",
-    "connectDescription": "Escolha quais produtos este repositório ajuda o Mend a orientar.",
+    "connectTitle": "Adicionar fonte de código",
+    "connectDescription": "Escolha primeiro o produto e depois o repositório que realmente implementa esse produto.",
+    "product": "Produto atendido",
+    "selectProduct": "Selecione um produto",
+    "githubRepository": "Repositório do produto no GitHub",
+    "selectProductFirst": "Selecione o produto primeiro",
+    "selectGithubRepository": "Selecione um repositório",
+    "suggestedAlreadyConnected": "As fontes sugeridas já estão conectadas",
+    "noSuggestedRepository": "Não encontramos uma correspondência clara pelo nome ou pelos aliases do produto. Verifique o repositório antes de mostrar todas as opções.",
+    "noGithubRepositories": "Nenhum repositório está disponível pelo GitHub App deste workspace.",
+    "manageGithub": "Gerenciar acesso ao GitHub",
+    "mappingSummary": "O Mend usará {{repository}} para responder clientes sobre {{product}}.",
+    "mappingSummaryExisting": "{{repository}} já é uma fonte. {{product}} também passará a usar esse conhecimento.",
+    "showAllRepositories": "Não é esse? Mostrar todos os repositórios",
+    "showSuggestedRepositories": "Voltar às sugestões para este produto",
+    "confirmDifferentRepositoryTitle": "Usar outro repositório?",
+    "confirmDifferentRepositoryDescription": "Você está associando {{repository}} a {{product}}. Confirme somente se esse repositório realmente implementa o produto ou contém código compartilhado por ele.",
+    "confirmDifferentRepository": "Confirmar associação",
     "repository": "Repositório",
     "selectRepository": "Selecione um repositório",
     "products": "Produtos atendidos",
-    "connect": "Conectar fonte",
+    "connect": "Conectar ao produto",
+    "connecting": "Conectando…",
     "empty": "Nenhuma fonte de código conectada",
     "emptyDescription": "Conecte os repositórios dos produtos para acompanhar mudanças publicadas.",
+    "emptyForProduct": "Nenhuma fonte conectada a este produto",
+    "emptyForProductDescription": "Escolha acima o repositório que implementa este produto.",
+    "usedBy": "Usado para",
+    "remove": "Desconectar",
+    "removeTitle": "Desconectar esta fonte?",
+    "removeDescription": "O Mend deixará de usar o conhecimento de {{repository}}. Os artigos manuais não serão afetados.",
     "observed": "No GitHub",
     "indexed": "Na IA",
     "active": "Em produção",
@@ -100,7 +123,8 @@
     "product": "Não foi possível salvar o produto.",
     "source": "Não foi possível conectar o repositório.",
     "sync": "Não foi possível iniciar a atualização.",
-    "activate": "Não foi possível ativar esta versão."
+    "activate": "Não foi possível ativar esta versão.",
+    "removeSource": "Não foi possível desconectar esta fonte."
   },
   "toasts": {
     "updated": "Artigo atualizado",
@@ -113,6 +137,7 @@
     "syncCurrent": "O conhecimento já corresponde à versão mais recente.",
     "syncCompleted": "Conhecimento atualizado com sucesso.",
     "syncFailed": "A atualização falhou. Tente novamente.",
-    "revisionActivated": "Versão ativa atualizada"
+    "revisionActivated": "Versão ativa atualizada",
+    "sourceRemoved": "Fonte desconectada."
   }
 }

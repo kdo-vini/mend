@@ -3,6 +3,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { MemoryRouter } from "react-router-dom";
 import {
   afterEach,
   beforeAll,
@@ -38,6 +39,15 @@ const currentSource: KnowledgeSourceSummary = {
   syncState: "ready",
 };
 
+const menuProduct: KnowledgeProduct = {
+  id: "product-zelo-menu",
+  key: "zelomenu",
+  name: "ZeloMenu",
+  description: "Cardápio",
+  aliases: ["cardápio digital"],
+  status: "active",
+};
+
 describe("KnowledgeSourcesPanel", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -61,16 +71,21 @@ describe("KnowledgeSourcesPanel", () => {
   async function render(source: KnowledgeSourceSummary) {
     await act(async () => {
       root.render(
-        <KnowledgeSourcesPanel
-          products={[product]}
-          repositories={[]}
-          sources={[source]}
-          busy={false}
-          confirm={vi.fn(async () => true)}
-          onCreate={vi.fn()}
-          onSync={vi.fn()}
-          onActivate={vi.fn()}
-        />,
+        <MemoryRouter>
+          <KnowledgeSourcesPanel
+            products={[product]}
+            repositories={[]}
+            githubRepositories={[]}
+            sources={[source]}
+            selectedProductId="all"
+            busy={false}
+            confirm={vi.fn(async () => true)}
+            onCreate={vi.fn(async () => true)}
+            onSync={vi.fn()}
+            onActivate={vi.fn()}
+            onRemove={vi.fn()}
+          />
+        </MemoryRouter>,
       );
     });
   }
@@ -94,5 +109,57 @@ describe("KnowledgeSourcesPanel", () => {
     expect(container.textContent).toContain(
       "O conhecimento da IA corresponde à versão em produção.",
     );
+  });
+
+  it("suggests the product repository before exposing unrelated repositories", async () => {
+    const onCreate = vi.fn(async () => true);
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <KnowledgeSourcesPanel
+            products={[product, menuProduct]}
+            repositories={[]}
+            githubRepositories={[
+              { owner: "kdo-vini", repo: "mend", defaultBranch: "main" },
+              { owner: "kdo-vini", repo: "zelomenu", defaultBranch: "main" },
+            ]}
+            sources={[currentSource]}
+            selectedProductId={menuProduct.id}
+            busy={false}
+            confirm={vi.fn(async () => true)}
+            onCreate={onCreate}
+            onSync={vi.fn()}
+            onActivate={vi.fn()}
+            onRemove={vi.fn()}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    const repositorySelect = container.querySelectorAll("[role=combobox]")[1];
+    await act(async () => (repositorySelect as HTMLButtonElement).click());
+    expect(container.textContent).toContain("kdo-vini/zelomenu");
+    expect(
+      container.querySelector('[role="option"]')?.parentElement?.textContent,
+    ).not.toContain("kdo-vini/mend");
+
+    const menuOption = [...container.querySelectorAll('[role="option"]')].find(
+      (option) => option.textContent?.includes("kdo-vini/zelomenu"),
+    );
+    await act(async () => (menuOption as HTMLButtonElement).click());
+    expect(container.textContent).toContain(
+      "O Mend usará kdo-vini/zelomenu para responder clientes sobre ZeloMenu.",
+    );
+
+    const connect = [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Conectar ao produto"),
+    );
+    await act(async () => (connect as HTMLButtonElement).click());
+    expect(onCreate).toHaveBeenCalledWith({
+      githubOwner: "kdo-vini",
+      githubRepo: "zelomenu",
+      productId: menuProduct.id,
+      refName: "main",
+    });
   });
 });

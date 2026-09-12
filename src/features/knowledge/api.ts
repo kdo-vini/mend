@@ -9,11 +9,14 @@ import type { KnowledgeProduct, KnowledgeSourceSummary } from "../../types";
 import { supabase } from "../../lib/supabase";
 import { apiRequest } from "../../api/transport";
 import {
+  createLiveRepository,
   listLiveRepositories,
+  listLiveGitHubRepositories,
+  type LiveGitHubRepository,
   type LiveRepository,
 } from "../../api/live-actions";
 
-export type { LiveRepository };
+export type { LiveGitHubRepository, LiveRepository };
 
 function requireClient() {
   if (!supabase) throw new Error("Live workspace is not configured.");
@@ -76,20 +79,24 @@ export async function loadKnowledgeConfiguration(workspaceId: string): Promise<{
   products: KnowledgeProduct[];
   sources: KnowledgeSourceSummary[];
   repositories: LiveRepository[];
+  githubRepositories: LiveGitHubRepository[];
 }> {
-  const [products, sources, repositories] = await Promise.all([
-    apiRequest<{ data: KnowledgeProduct[] }>(
-      "/api/knowledge/products",
-      {},
-      workspaceId,
-    ),
-    loadKnowledgeSources(workspaceId),
-    listLiveRepositories(workspaceId),
-  ]);
+  const [products, sources, repositories, githubRepositories] =
+    await Promise.all([
+      apiRequest<{ data: KnowledgeProduct[] }>(
+        "/api/knowledge/products",
+        {},
+        workspaceId,
+      ),
+      loadKnowledgeSources(workspaceId),
+      listLiveRepositories(workspaceId),
+      listLiveGitHubRepositories(workspaceId).catch(() => []),
+    ]);
   return {
     products: products.data ?? [],
     sources,
     repositories,
+    githubRepositories,
   };
 }
 
@@ -140,6 +147,40 @@ export async function createKnowledgeSource(
   );
 }
 
+export async function configureKnowledgeRepository(
+  workspaceId: string,
+  repository: LiveGitHubRepository,
+): Promise<LiveRepository> {
+  return createLiveRepository({
+    workspaceId,
+    name: repository.repo,
+    defaultBranch: repository.defaultBranch,
+    githubOwner: repository.owner,
+    githubRepo: repository.repo,
+    agentProvider: "openai",
+    executionPlane: "dokploy",
+  });
+}
+
+export async function updateKnowledgeSourceProducts(
+  workspaceId: string,
+  source: KnowledgeSourceSummary,
+  productIds: string[],
+) {
+  return apiRequest<KnowledgeSourceSummary>(
+    `/api/knowledge/sources/${encodeURIComponent(source.id)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        productIds,
+        refName: source.refName,
+        syncMode: "event",
+      }),
+    },
+    workspaceId,
+  );
+}
+
 export async function requestKnowledgeSync(
   workspaceId: string,
   sourceId: string,
@@ -147,6 +188,17 @@ export async function requestKnowledgeSync(
   return apiRequest<{ queued: boolean; requestedSha: string }>(
     `/api/knowledge/sources/${encodeURIComponent(sourceId)}/sync`,
     { method: "POST", body: "{}" },
+    workspaceId,
+  );
+}
+
+export async function removeKnowledgeSource(
+  workspaceId: string,
+  sourceId: string,
+) {
+  await apiRequest<void>(
+    `/api/knowledge/sources/${encodeURIComponent(sourceId)}`,
+    { method: "DELETE" },
     workspaceId,
   );
 }

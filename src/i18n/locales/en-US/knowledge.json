@@ -48,14 +48,37 @@
     "save": "Save product"
   },
   "sources": {
-    "connectTitle": "Connect a repository",
-    "connectDescription": "Choose which products this repository helps Mend support.",
+    "connectTitle": "Add a code source",
+    "connectDescription": "Choose the product first, then the repository that actually implements it.",
+    "product": "Supported product",
+    "selectProduct": "Select a product",
+    "githubRepository": "Product repository on GitHub",
+    "selectProductFirst": "Select the product first",
+    "selectGithubRepository": "Select a repository",
+    "suggestedAlreadyConnected": "Suggested sources are already connected",
+    "noSuggestedRepository": "No clear match was found from the product name or aliases. Verify the repository before showing every option.",
+    "noGithubRepositories": "No repositories are available through this workspace's GitHub App.",
+    "manageGithub": "Manage GitHub access",
+    "mappingSummary": "Mend will use {{repository}} to answer customers about {{product}}.",
+    "mappingSummaryExisting": "{{repository}} is already a source. {{product}} will also use this knowledge.",
+    "showAllRepositories": "Not this one? Show all repositories",
+    "showSuggestedRepositories": "Back to suggestions for this product",
+    "confirmDifferentRepositoryTitle": "Use another repository?",
+    "confirmDifferentRepositoryDescription": "You are linking {{repository}} to {{product}}. Confirm only if this repository implements the product or contains code shared by it.",
+    "confirmDifferentRepository": "Confirm link",
     "repository": "Repository",
     "selectRepository": "Select a repository",
     "products": "Supported products",
-    "connect": "Connect source",
+    "connect": "Connect to product",
+    "connecting": "Connecting…",
     "empty": "No code sources connected",
     "emptyDescription": "Connect product repositories to follow released changes.",
+    "emptyForProduct": "No source connected to this product",
+    "emptyForProductDescription": "Choose the repository that implements this product above.",
+    "usedBy": "Used for",
+    "remove": "Disconnect",
+    "removeTitle": "Disconnect this source?",
+    "removeDescription": "Mend will stop using knowledge from {{repository}}. Manual articles will not be affected.",
     "observed": "On GitHub",
     "indexed": "In AI knowledge",
     "active": "In production",
@@ -100,7 +123,8 @@
     "product": "Product could not be saved.",
     "source": "Repository could not be connected.",
     "sync": "Refresh could not be started.",
-    "activate": "This version could not be activated."
+    "activate": "This version could not be activated.",
+    "removeSource": "This source could not be disconnected."
   },
   "toasts": {
     "updated": "Article updated",
@@ -113,6 +137,7 @@
     "syncCurrent": "Knowledge already matches the latest version.",
     "syncCompleted": "Knowledge updated successfully.",
     "syncFailed": "The update failed. Try again.",
-    "revisionActivated": "Active version updated"
+    "revisionActivated": "Active version updated",
+    "sourceRemoved": "Source disconnected."
   }
 }

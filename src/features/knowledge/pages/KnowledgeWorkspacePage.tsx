@@ -17,14 +17,17 @@ import type {
 } from "../../../types";
 import {
   activateKnowledgeRevision,
+  configureKnowledgeRepository,
   createKnowledgeSource,
   loadKnowledgeArticles,
   loadKnowledgeConfiguration,
   loadKnowledgeSources,
   removeKnowledgeArticle,
+  removeKnowledgeSource,
   requestKnowledgeSync,
   saveKnowledgeArticle,
   saveKnowledgeProduct,
+  updateKnowledgeSourceProducts,
   type LiveRepository,
 } from "../api";
 import { PageHeader } from "../../../shared/ui/PageHeader";
@@ -79,6 +82,9 @@ export function KnowledgeWorkspacePage({
   const [products, setProducts] = useState<KnowledgeProduct[]>([]);
   const [sources, setSources] = useState<KnowledgeSourceSummary[]>([]);
   const [repositories, setRepositories] = useState<LiveRepository[]>([]);
+  const [githubRepositories, setGithubRepositories] = useState<
+    Array<{ owner: string; repo: string; defaultBranch: string }>
+  >([]);
   const [selectedProductId, setSelectedProductId] = useState("all");
   const [view, setView] = useState<"content" | "sources">("content");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
@@ -117,6 +123,7 @@ export function KnowledgeWorkspacePage({
       setProducts(configuration.products);
       setSources(configuration.sources);
       setRepositories(configuration.repositories);
+      setGithubRepositories(configuration.githubRepositories);
       setPendingSyncIds(
         configuration.sources
           .filter(
@@ -318,27 +325,64 @@ export function KnowledgeWorkspacePage({
             selectedProductId={selectedProductId}
             view={view}
             onProductChange={setSelectedProductId}
-            onViewChange={setView}
+            onViewChange={(nextView) => {
+              setView(nextView);
+              if (nextView === "sources" && selectedProductId === "shared")
+                setSelectedProductId("all");
+            }}
             onCreateProduct={() => setProductDialogOpen(true)}
           />
           {view === "sources" ? (
             <KnowledgeSourcesPanel
               products={products}
               repositories={repositories}
+              githubRepositories={githubRepositories}
               sources={sources}
+              selectedProductId={selectedProductId}
               busy={configurationBusy}
               confirm={confirm}
               onCreate={async (input) => {
                 setConfigurationBusy(true);
                 try {
-                  const source = await createKnowledgeSource(
-                    workspaceId,
-                    input,
+                  let repositoryId = input.repositoryId;
+                  if (!repositoryId) {
+                    const repository = await configureKnowledgeRepository(
+                      workspaceId,
+                      {
+                        owner: input.githubOwner,
+                        repo: input.githubRepo,
+                        defaultBranch: input.refName,
+                      },
+                    );
+                    repositoryId = repository.id;
+                    setRepositories((current) => [repository, ...current]);
+                  }
+                  const existing = sources.find(
+                    (source) => source.repositoryId === repositoryId,
                   );
-                  setSources((current) => [...current, source]);
+                  const source = existing
+                    ? await updateKnowledgeSourceProducts(
+                        workspaceId,
+                        existing,
+                        [...new Set([...existing.productIds, input.productId])],
+                      )
+                    : await createKnowledgeSource(workspaceId, {
+                        repositoryId,
+                        productIds: [input.productId],
+                        refName: input.refName,
+                      });
+                  setSources((current) =>
+                    existing
+                      ? current.map((item) =>
+                          item.id === source.id ? source : item,
+                        )
+                      : [...current, source],
+                  );
                   onToast(t("toasts.sourceConnected"));
+                  return true;
                 } catch (error) {
                   onToast(localizedError(error, t("errors.source")));
+                  return false;
                 } finally {
                   setConfigurationBusy(false);
                 }
@@ -368,6 +412,7 @@ export function KnowledgeWorkspacePage({
                     setProducts(configuration.products);
                     setSources(configuration.sources);
                     setRepositories(configuration.repositories);
+                    setGithubRepositories(configuration.githubRepositories);
                     setPendingSyncIds((current) =>
                       current.filter((id) => id !== sourceId),
                     );
@@ -401,6 +446,23 @@ export function KnowledgeWorkspacePage({
                   onToast(t("toasts.revisionActivated"));
                 } catch (error) {
                   onToast(localizedError(error, t("errors.activate")));
+                } finally {
+                  setConfigurationBusy(false);
+                }
+              }}
+              onRemove={async (sourceId) => {
+                setConfigurationBusy(true);
+                try {
+                  await removeKnowledgeSource(workspaceId, sourceId);
+                  setSources((current) =>
+                    current.filter((source) => source.id !== sourceId),
+                  );
+                  setPendingSyncIds((current) =>
+                    current.filter((id) => id !== sourceId),
+                  );
+                  onToast(t("toasts.sourceRemoved"));
+                } catch (error) {
+                  onToast(localizedError(error, t("errors.removeSource")));
                 } finally {
                   setConfigurationBusy(false);
                 }

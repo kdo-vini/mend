@@ -50,13 +50,15 @@ export function KnowledgeProductBar({
         >
           {t("products.all")}
         </button>
-        <button
-          type="button"
-          className={selectedProductId === "shared" ? "selected" : ""}
-          onClick={() => onProductChange("shared")}
-        >
-          {t("products.shared")}
-        </button>
+        {view === "content" ? (
+          <button
+            type="button"
+            className={selectedProductId === "shared" ? "selected" : ""}
+            onClick={() => onProductChange("shared")}
+          >
+            {t("products.shared")}
+          </button>
+        ) : null}
         {products
           .filter((product) => product.status === "active")
           .map((product) => (
