@@ -14,6 +14,18 @@ import type { KnowledgeRepositorySyncJobPayload } from "../knowledge-sync.js";
 const KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE = 25;
 const KNOWLEDGE_ARTICLE_WRITE_BATCH_SIZE = 10;
 
+function parseVector(value: unknown): number[] {
+  const values = Array.isArray(value)
+    ? value.map(Number)
+    : typeof value === "string"
+      ? value
+          .replace(/^\[|\]$/g, "")
+          .split(",")
+          .map(Number)
+      : [];
+  return values.length === 1_536 && values.every(Number.isFinite) ? values : [];
+}
+
 export async function insertKnowledgeChunkRows(
   client: AnySupabaseClient,
   values: readonly Record<string, unknown>[],
@@ -38,7 +50,32 @@ export async function insertKnowledgeChunkRows(
 }
 
 class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
-  constructor(private readonly client: AnySupabaseClient) {}
+  constructor(
+    private readonly client: AnySupabaseClient,
+    private readonly embeddingModel: string,
+  ) {}
+
+  async findReusableEmbeddings(
+    payload: KnowledgeRepositorySyncJobPayload,
+    contentHashes: readonly string[],
+  ) {
+    const reusable = new Map<string, readonly number[]>();
+    for (let index = 0; index < contentHashes.length; index += 25) {
+      const result = await this.client
+        .from("knowledge_chunks")
+        .select("content_hash,embedding")
+        .eq("workspace_id", payload.workspaceId)
+        .eq("embedding_model", this.embeddingModel)
+        .in("content_hash", contentHashes.slice(index, index + 25))
+        .not("embedding", "is", null);
+      for (const item of rows(checked("knowledge_chunks.reuse", result))) {
+        const hash = str(item.content_hash);
+        const value = parseVector(item.embedding);
+        if (hash && value.length) reusable.set(hash, value);
+      }
+    }
+    return reusable;
+  }
 
   async begin(payload: KnowledgeRepositorySyncJobPayload) {
     const result = await this.client
@@ -157,6 +194,9 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
             content: chunk.content,
             content_hash: chunk.contentHash,
             ...(chunk.embedding ? { embedding: [...chunk.embedding] } : {}),
+            ...(chunk.embedding
+              ? { embedding_model: this.embeddingModel }
+              : {}),
           }));
         }),
       );
@@ -169,6 +209,8 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
       filesScanned: number;
       filesSkipped: number;
       documents: readonly unknown[];
+      chunksReused?: number;
+      embeddingInputCount?: number;
     },
   ) {
     const now = new Date().toISOString();
@@ -213,7 +255,8 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
           files_indexed: result.documents.length,
           files_skipped: result.filesSkipped,
           chunks_written: chunksWritten,
-          embedding_input_count: chunksWritten,
+          chunks_reused: result.chunksReused ?? 0,
+          embedding_input_count: result.embeddingInputCount ?? chunksWritten,
           finished_at: now,
         })
         .eq("workspace_id", payload.workspaceId)
@@ -268,7 +311,7 @@ export class SupabaseKnowledgeSyncProcessor {
       throw new Error("support_ai_model_missing");
     await new KnowledgeSourceIndexer(
       this.github,
-      new SupabaseKnowledgeSourceIndexStore(this.client),
+      new SupabaseKnowledgeSourceIndexStore(this.client, model),
       new OpenAiKnowledgeEmbeddings(credential.apiKey, model),
       this.metrics,
     ).process(payload);

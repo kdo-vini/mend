@@ -40,6 +40,11 @@ export interface RepositoryKnowledgeDocumentWrite {
   }[];
 }
 
+export interface KnowledgeSourceIndexResult extends RepositoryExtractionResult {
+  chunksReused: number;
+  embeddingInputCount: number;
+}
+
 export interface KnowledgeSourceIndexStore {
   begin(
     payload: KnowledgeRepositorySyncJobPayload,
@@ -48,9 +53,13 @@ export interface KnowledgeSourceIndexStore {
     payload: KnowledgeRepositorySyncJobPayload,
     documents: readonly RepositoryKnowledgeDocumentWrite[],
   ): Promise<void>;
+  findReusableEmbeddings?(
+    payload: KnowledgeRepositorySyncJobPayload,
+    contentHashes: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly number[]>>;
   complete(
     payload: KnowledgeRepositorySyncJobPayload,
-    result: RepositoryExtractionResult,
+    result: KnowledgeSourceIndexResult,
   ): Promise<void>;
   fail(
     payload: KnowledgeRepositorySyncJobPayload,
@@ -124,18 +133,45 @@ export class KnowledgeSourceIndexer {
           updatedAt: payload.requestedSha,
         }),
       }));
+      const reusableEmbeddings =
+        this.embeddings && this.store.findReusableEmbeddings
+          ? await this.store.findReusableEmbeddings(payload, [
+              ...new Set(
+                prepared.flatMap((item) =>
+                  item.chunks.map((chunk) => chunk.contentHash),
+                ),
+              ),
+            ])
+          : new Map<string, readonly number[]>();
       let chunksWritten = 0;
+      let chunksReused = 0;
+      let embeddingInputCount = 0;
       let pending: typeof prepared = [];
       let pendingChunkCount = 0;
       const flush = async () => {
         if (!pending.length) return;
         const chunks = pending.flatMap((item) => item.chunks);
-        const vectors = this.embeddings
+        const missing = chunks.filter(
+          (chunk) => !reusableEmbeddings.has(chunk.contentHash),
+        );
+        const generatedVectors = this.embeddings
           ? await embedInBatches(
               this.embeddings,
-              chunks.map((chunk) => chunk.content),
+              missing.map((chunk) => chunk.content),
             )
           : [];
+        embeddingInputCount += missing.length;
+        const generatedByHash = new Map(
+          missing.map((chunk, index) => [
+            chunk.contentHash,
+            generatedVectors[index] ?? [],
+          ]),
+        );
+        const vectors = chunks.map((chunk) => {
+          const reusable = reusableEmbeddings.get(chunk.contentHash);
+          if (reusable) chunksReused += 1;
+          return reusable ?? generatedByHash.get(chunk.contentHash) ?? [];
+        });
         let offset = 0;
         const writes: RepositoryKnowledgeDocumentWrite[] = [];
         for (const item of pending) {
@@ -173,7 +209,11 @@ export class KnowledgeSourceIndexer {
         if (pendingChunkCount >= EMBEDDING_BATCH_SIZE) await flush();
       }
       await flush();
-      await this.store.complete(payload, extracted);
+      await this.store.complete(payload, {
+        ...extracted,
+        chunksReused,
+        embeddingInputCount,
+      });
       await this.metrics?.record({
         workspaceId: payload.workspaceId,
         workflowId: payload.sourceId,
@@ -187,7 +227,8 @@ export class KnowledgeSourceIndexer {
           filesIndexed: extracted.documents.length,
           filesSkipped: extracted.filesSkipped,
           chunksWritten,
-          embeddingInputCount: this.embeddings ? chunksWritten : 0,
+          chunksReused,
+          embeddingInputCount,
           elapsedMs: Date.now() - startedAt,
         },
       });

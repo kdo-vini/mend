@@ -2509,6 +2509,7 @@ export type Database = {
           content_hash: string
           created_at: string
           embedding: string | null
+          embedding_model: string | null
           heading: string
           id: string
           search_document: unknown
@@ -2523,6 +2524,7 @@ export type Database = {
           content_hash: string
           created_at?: string
           embedding?: string | null
+          embedding_model?: string | null
           heading?: string
           id?: string
           search_document?: unknown
@@ -2537,6 +2539,7 @@ export type Database = {
           content_hash?: string
           created_at?: string
           embedding?: string | null
+          embedding_model?: string | null
           heading?: string
           id?: string
           search_document?: unknown

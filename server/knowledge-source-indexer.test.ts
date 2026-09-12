@@ -103,6 +103,49 @@ describe("knowledge source indexer", () => {
     );
   });
 
+  it("reuses unchanged chunk embeddings without another provider call", async () => {
+    const reused = [0.5];
+    const store: KnowledgeSourceIndexStore = {
+      begin: vi.fn(async () => ({
+        includePatterns: ["docs/**/*.md"],
+        excludePatterns: [],
+      })),
+      findReusableEmbeddings: vi.fn(
+        async (_payload, hashes) => new Map([[hashes[0]!, reused]]),
+      ),
+      writeDocuments: vi.fn(async () => undefined),
+      complete: vi.fn(async () => undefined),
+      fail: vi.fn(async () => undefined),
+    };
+    const github = {
+      checkoutRepositoryArchive: vi.fn(
+        async (_repository, _ref: string, destination: string) => {
+          await mkdir(path.join(destination, "docs"), { recursive: true });
+          await writeFile(path.join(destination, "docs", "same.md"), "Same");
+        },
+      ),
+    };
+    const embeddings = {
+      embed: vi.fn(async () => [1]),
+      embedMany: vi.fn(async () => [[1]]),
+    };
+
+    await new KnowledgeSourceIndexer(github, store, embeddings).process(
+      payload,
+    );
+
+    expect(embeddings.embedMany).not.toHaveBeenCalled();
+    expect(store.writeDocuments).toHaveBeenCalledWith(payload, [
+      expect.objectContaining({
+        chunks: [expect.objectContaining({ embedding: reused })],
+      }),
+    ]);
+    expect(store.complete).toHaveBeenCalledWith(
+      payload,
+      expect.objectContaining({ chunksReused: 1, embeddingInputCount: 0 }),
+    );
+  });
+
   it("records a stable failure and never completes a partial revision", async () => {
     const store: KnowledgeSourceIndexStore = {
       begin: async () => ({ includePatterns: [], excludePatterns: [] }),
