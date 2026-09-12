@@ -41,6 +41,7 @@ export interface RepositoryKnowledgeDocumentWrite {
 }
 
 export interface KnowledgeSourceIndexResult extends RepositoryExtractionResult {
+  chunksWritten: number;
   chunksReused: number;
   embeddingInputCount: number;
 }
@@ -224,6 +225,7 @@ export class KnowledgeSourceIndexer {
       await flush();
       await this.store.complete(payload, {
         ...extracted,
+        chunksWritten,
         chunksReused,
         embeddingInputCount,
       });

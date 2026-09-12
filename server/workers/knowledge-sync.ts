@@ -11,7 +11,7 @@ import {
 import { OpenAiKnowledgeEmbeddings } from "../knowledge-retrieval.js";
 import type { KnowledgeRepositorySyncJobPayload } from "../knowledge-sync.js";
 
-const KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE = 25;
+const KNOWLEDGE_CHUNK_WRITE_BATCH_SIZE = 8;
 const KNOWLEDGE_ARTICLE_WRITE_BATCH_SIZE = 10;
 
 function parseVector(value: unknown): number[] {
@@ -209,6 +209,7 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
       filesScanned: number;
       filesSkipped: number;
       documents: readonly unknown[];
+      chunksWritten: number;
       chunksReused?: number;
       embeddingInputCount?: number;
     },
@@ -238,13 +239,6 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
         .eq("workspace_id", payload.workspaceId)
         .eq("id", payload.sourceId),
     );
-    const chunkCountResult = await this.client
-      .from("knowledge_chunks")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", payload.workspaceId)
-      .eq("article_version", payload.requestedSha);
-    checked("knowledge_chunks.count", chunkCountResult);
-    const chunksWritten = chunkCountResult.count ?? 0;
     checked(
       "knowledge_sync_runs.complete",
       await this.client
@@ -254,9 +248,10 @@ class SupabaseKnowledgeSourceIndexStore implements KnowledgeSourceIndexStore {
           files_scanned: result.filesScanned,
           files_indexed: result.documents.length,
           files_skipped: result.filesSkipped,
-          chunks_written: chunksWritten,
+          chunks_written: result.chunksWritten,
           chunks_reused: result.chunksReused ?? 0,
-          embedding_input_count: result.embeddingInputCount ?? chunksWritten,
+          embedding_input_count:
+            result.embeddingInputCount ?? result.chunksWritten,
           finished_at: now,
         })
         .eq("workspace_id", payload.workspaceId)

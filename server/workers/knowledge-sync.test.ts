@@ -9,9 +9,9 @@ describe("knowledge sync chunk writes", () => {
 
     await insertKnowledgeChunkRows(client as never, rows);
 
-    expect(insert).toHaveBeenCalledTimes(3);
+    expect(insert).toHaveBeenCalledTimes(7);
     expect(insert.mock.calls.map(([batch]) => batch.length)).toEqual([
-      25, 25, 5,
+      8, 8, 8, 8, 8, 8, 7,
     ]);
   });
 });
