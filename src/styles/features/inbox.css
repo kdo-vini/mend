@@ -87,45 +87,91 @@
   border-color: transparent;
   color: var(--muted-2);
 }
-.filter-strip {
+.inbox-filter-trigger {
+  gap: var(--space-2);
+}
+.inbox-filter-trigger.is-active {
+  border-color: color-mix(in oklch, var(--accent) 48%, var(--line));
+  color: var(--accent-soft);
+}
+.inbox-filter-trigger b,
+.inbox-filter-menu b {
+  min-width: 16px;
+  margin-left: auto;
+  color: var(--muted);
+  font:
+    10px "JetBrains Mono",
+    "DM Mono",
+    monospace;
+  text-align: right;
+}
+.inbox-filter-menu {
+  min-width: 210px;
+}
+.inbox-filter-menu [role="menuitemradio"] {
+  gap: var(--space-3);
+}
+.inbox-select-trigger {
+  min-height: 28px;
+  padding-inline: var(--space-2);
+  color: var(--accent-soft);
+  font-size: 11px;
+}
+.inbox-bulk-bar {
+  min-height: 42px;
   display: flex;
-  gap: 4px;
-  padding: 0 11px 11px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 11px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
 }
-.filter-strip::-webkit-scrollbar {
-  display: none;
+.inbox-select-all,
+.conversation-select {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
 }
-.filter-strip button {
-  min-height: 25px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--muted-2);
+.inbox-select-all {
+  min-width: 0;
+  gap: var(--space-2);
+  color: var(--ink-soft);
   font-size: 10px;
   white-space: nowrap;
 }
-.filter-strip button:hover {
-  color: var(--ink-soft);
-  background: var(--surface);
-}
-.filter-strip button.selected {
-  border-color: var(--line);
-  background: var(--surface-2);
-  color: var(--ink-soft);
-}
-.filter-strip button span {
-  display: inline-grid;
-  min-width: 15px;
-  height: 15px;
-  margin-left: 5px;
-  place-items: center;
+.inbox-select-all input,
+.conversation-select input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
-  background: var(--accent-wash);
-  color: var(--accent-soft);
-  font-size: 9px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.inbox-select-all input:focus-visible,
+.conversation-select input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+.inbox-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.inbox-bulk-mode {
+  min-height: 28px;
+  padding-inline: var(--space-2);
+  gap: var(--space-1);
+  font-size: 10px;
+}
+.inbox-bulk-delete {
+  color: var(--danger);
+}
+.inbox-bulk-delete:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--danger) 10%, transparent);
+  color: var(--danger);
 }
 .conversation-list {
   flex: 1;
@@ -152,6 +198,17 @@
 }
 .conversation-row.selected {
   background: var(--surface-2);
+}
+.conversation-row.bulk-selected {
+  background: color-mix(in oklch, var(--surface-2) 82%, var(--accent-wash));
+}
+.conversation-select {
+  min-width: 38px;
+  justify-content: center;
+  padding-left: 8px;
+}
+.conversation-select + .conversation-row-hit {
+  padding-left: 0;
 }
 .conversation-row-hit {
   display: flex;
@@ -1422,8 +1479,24 @@
     min-height: var(--mobile-touch-target);
   }
   .inbox-new-chat,
+  .inbox-filter-trigger,
   .new-chat-dialog .modal-footer .button {
     min-height: var(--mobile-touch-target);
+  }
+  .inbox-select-trigger {
+    min-width: var(--mobile-touch-target);
+    min-height: var(--mobile-touch-target);
+  }
+  .inbox-bulk-bar {
+    min-height: var(--mobile-touch-target);
+  }
+  .conversation-select {
+    min-width: var(--mobile-touch-target);
+  }
+  .conversation-select input,
+  .inbox-select-all input {
+    width: 18px;
+    height: 18px;
   }
   .new-chat-dialog .modal-header .icon-button {
     min-width: var(--mobile-touch-target);

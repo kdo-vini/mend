@@ -16,6 +16,7 @@ import {
 import i18n from "../../../i18n";
 import { seedConversations } from "../../../data";
 import type { Conversation } from "../../../types";
+import { conversationMatchesInboxFilter } from "../inbox-filters";
 import { InboxPage } from "./InboxPage";
 
 const startedConversation: Conversation = {
@@ -51,6 +52,8 @@ const startConversation = vi.fn(async (_input: unknown) => ({
 const loadLiveConversationSnapshot = vi.fn(
   async (_workspaceId: string, _conversationId: string) => startedConversation,
 );
+const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
+const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);
 
 vi.mock("../api", () => ({
   LiveActionError: class LiveActionError extends Error {},
@@ -58,7 +61,7 @@ vi.mock("../api", () => ({
   startConversation: (input: unknown) => startConversation(input),
   loadLiveConversationSnapshot: (workspaceId: string, conversationId: string) =>
     loadLiveConversationSnapshot(workspaceId, conversationId),
-  deleteLiveConversation: vi.fn(),
+  deleteLiveConversation: (input: unknown) => deleteLiveConversation(input),
   deleteLiveMessage: vi.fn(),
   markLiveConversationRead: vi.fn(),
   reactToLiveMessage: vi.fn(),
@@ -72,7 +75,7 @@ vi.mock("../api", () => ({
   sendLivePresence: vi.fn(),
   snoozeLiveConversation: vi.fn(),
   updateLiveContact: vi.fn(),
-  updateLiveConversation: vi.fn(),
+  updateLiveConversation: (input: unknown) => updateLiveConversation(input),
   uploadLiveMediaAsset: vi.fn(),
 }));
 
@@ -159,6 +162,8 @@ describe("InboxPage new chat", () => {
     root = createRoot(container);
     startConversation.mockClear();
     loadLiveConversationSnapshot.mockClear();
+    deleteLiveConversation.mockClear();
+    updateLiveConversation.mockClear();
   });
 
   afterEach(async () => {
@@ -197,5 +202,100 @@ describe("InboxPage new chat", () => {
       "workspace-1",
       startedConversation.id,
     );
+  });
+
+  it("reveals checkboxes on demand and supports Ctrl+A", async () => {
+    await act(async () => root.render(<InboxHarness />));
+
+    const select = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Select",
+    );
+    await act(async () => select?.click());
+
+    expect(
+      document.body.querySelectorAll(".conversation-select input"),
+    ).toHaveLength(2);
+    await act(async () =>
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "a",
+          ctrlKey: true,
+          bubbles: true,
+        }),
+      ),
+    );
+
+    expect(document.body.textContent).toContain("2 selected");
+    expect(
+      [
+        ...document.body.querySelectorAll<HTMLInputElement>(
+          ".conversation-select input",
+        ),
+      ].every((checkbox) => checkbox.checked),
+    ).toBe(true);
+  });
+
+  it("selects a contiguous range with Shift+click", async () => {
+    await act(async () => root.render(<InboxHarness />));
+    const select = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Select",
+    );
+    await act(async () => select?.click());
+    const checkboxes = [
+      ...document.body.querySelectorAll<HTMLInputElement>(
+        ".conversation-select input",
+      ),
+    ];
+
+    await act(async () => checkboxes[0]?.click());
+    const rowButtons = [
+      ...document.body.querySelectorAll<HTMLButtonElement>(
+        "button[aria-label^='Toggle selection']",
+      ),
+    ];
+    await act(async () =>
+      rowButtons[1]?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, shiftKey: true }),
+      ),
+    );
+
+    expect(checkboxes.every((checkbox) => checkbox.checked)).toBe(true);
+    expect(document.body.textContent).toContain("2 selected");
+  });
+
+  it("offers an unread filter backed by unread counts", async () => {
+    await act(async () => root.render(<InboxHarness />));
+    expect(document.body.querySelector(".inbox-filter-trigger")).toBeTruthy();
+    expect(conversationMatchesInboxFilter(seedConversations[0], "unread")).toBe(
+      true,
+    );
+    expect(conversationMatchesInboxFilter(seedConversations[1], "unread")).toBe(
+      false,
+    );
+  });
+
+  it("deletes every selected conversation after one confirmation", async () => {
+    await act(async () => root.render(<InboxHarness />));
+    const select = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Select",
+    );
+    await act(async () => select?.click());
+    await act(async () =>
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "a",
+          ctrlKey: true,
+          bubbles: true,
+        }),
+      ),
+    );
+    await act(async () =>
+      document.body
+        .querySelector<HTMLButtonElement>(".inbox-bulk-delete")
+        ?.click(),
+    );
+
+    expect(deleteLiveConversation).toHaveBeenCalledTimes(2);
+    expect(document.body.textContent).toContain("No conversations yet");
   });
 });

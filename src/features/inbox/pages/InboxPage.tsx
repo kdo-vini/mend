@@ -1,5 +1,7 @@
 import {
   Fragment,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
   type WheelEvent,
   useEffect,
   useMemo,
@@ -14,12 +16,12 @@ import {
   CircleDot,
   Copy,
   ChevronLeft,
+  ChevronDown as ChevronDownIcon,
   Ellipsis,
   FileText,
   Filter,
   LoaderCircle,
   Mic,
-  ListFilter,
   LockKeyhole,
   Paperclip,
   PanelRight,
@@ -86,6 +88,15 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog";
 import { Button } from "../../../components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu";
 import { PriorityDot, StatusPill } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
@@ -109,6 +120,11 @@ import {
   type NewChatChannel,
   type NewChatInput,
 } from "../components/NewChatDialog";
+import {
+  conversationMatchesInboxFilter,
+  inboxFilterValues,
+  type InboxFilter,
+} from "../inbox-filters";
 
 interface AssigneeOption {
   value: string;
@@ -257,7 +273,12 @@ export function InboxPage({
   const messageDayNow = new Date();
   const location = useLocation();
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("All conversations");
+  const [filter, setFilter] = useState<InboxFilter>("all");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedConversationIds, setSelectedConversationIds] = useState<
+    Set<string>
+  >(new Set());
+  const [bulkPending, setBulkPending] = useState(false);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [draftInsertRequest, setDraftInsertRequest] = useState<{
@@ -294,6 +315,8 @@ export function InboxPage({
     undefined,
   );
   const searchRef = useRef<HTMLInputElement>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const lastSelectionIndexRef = useRef<number | null>(null);
 
   const openNewChat = () => {
     setNewChatOpen(true);
@@ -338,7 +361,7 @@ export function InboxPage({
       // search can exclude — a new one lands at attention_state 'none' — so the
       // rail is cleared before the thread is shown.
       setSearch("");
-      setFilter("All conversations");
+      setFilter("all");
       if (result.created) {
         onToast(t("toasts.chatStarted"));
         return;
@@ -413,17 +436,9 @@ export function InboxPage({
         const queryMatch = normalizeSearch(
           `${conversation.name} ${conversation.company} ${conversation.phone} ${conversation.lastMessage}`,
         ).includes(normalizeSearch(search));
-        const filterMatch =
-          filter === "All conversations" ||
-          (filter === "Needs attention" &&
-            conversation.attention === "needs_attention") ||
-          (filter === "AI handling" &&
-            conversation.attention === "ai_handling") ||
-          (filter === "Waiting customer" &&
-            conversation.attention === "waiting_customer") ||
-          (filter === "Unassigned" && conversation.assignee === "Unassigned") ||
-          (filter === "Resolved" && conversation.status === "resolved");
-        return queryMatch && filterMatch;
+        return (
+          queryMatch && conversationMatchesInboxFilter(conversation, filter)
+        );
       }),
     [conversations, filter, search],
   );
@@ -499,6 +514,52 @@ export function InboxPage({
     );
   }, [aiCardStorageKey, dismissedAiCardsByScope]);
 
+  const selectionVisibleIds = filtered.map((conversation) => conversation.id);
+  const selectionVisibleCount = selectionVisibleIds.filter((id) =>
+    selectedConversationIds.has(id),
+  ).length;
+  const selectionCoversAllVisible =
+    selectionVisibleIds.length > 0 &&
+    selectionVisibleCount === selectionVisibleIds.length;
+
+  useEffect(() => {
+    if (selectAllRef.current)
+      selectAllRef.current.indeterminate =
+        selectionVisibleCount > 0 && !selectionCoversAllVisible;
+  }, [selectionCoversAllVisible, selectionVisibleCount]);
+
+  useEffect(() => {
+    setSelectedConversationIds(new Set());
+    lastSelectionIndexRef.current = null;
+  }, [filter, search]);
+
+  useEffect(() => {
+    if (!selectionMode) return;
+    const handleSelectionShortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.matches("input, textarea, select, [contenteditable='true']")
+      )
+        return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        setSelectedConversationIds(
+          new Set(filtered.map((conversation) => conversation.id)),
+        );
+        lastSelectionIndexRef.current = null;
+      }
+      if (event.key === "Escape") {
+        setSelectionMode(false);
+        setSelectedConversationIds(new Set());
+        lastSelectionIndexRef.current = null;
+      }
+    };
+    document.addEventListener("keydown", handleSelectionShortcut);
+    return () =>
+      document.removeEventListener("keydown", handleSelectionShortcut);
+  }, [filtered, selectionMode]);
+
   if (!selected) {
     return (
       <div className="inbox-page">
@@ -572,44 +633,77 @@ export function InboxPage({
     const index = lightboxMedia.findIndex((media) => media.id === messageId);
     if (index >= 0) setMediaViewerIndex(index);
   };
-  const filterItems = [
-    "All conversations",
-    "Needs attention",
-    "AI handling",
-    "Waiting customer",
-    "Unassigned",
-    "Resolved",
-  ];
-  const filterLabel = (item: string) => {
+  const filterLabel = (item: InboxFilter) => {
     switch (item) {
-      case "All conversations":
+      case "all":
         return t("filters.all");
-      case "Needs attention":
+      case "unread":
+        return t("filters.unread");
+      case "needs_attention":
         return t("filters.needsAttention");
-      case "AI handling":
-        return t("filters.aiHandling");
-      case "Waiting customer":
+      case "waiting_customer":
         return t("filters.waitingCustomer");
-      case "Unassigned":
+      case "unassigned":
         return t("filters.unassigned");
       default:
         return t("filters.resolved");
     }
   };
-  const countForFilter = (item: string) =>
-    item === "All conversations"
+  const countForFilter = (item: InboxFilter) =>
+    item === "all"
       ? conversations.length
-      : conversations.filter(
-          (conversation) =>
-            (item === "Needs attention" &&
-              conversation.attention === "needs_attention") ||
-            (item === "AI handling" &&
-              conversation.attention === "ai_handling") ||
-            (item === "Waiting customer" &&
-              conversation.attention === "waiting_customer") ||
-            (item === "Unassigned" && conversation.assignee === "Unassigned") ||
-            (item === "Resolved" && conversation.status === "resolved"),
+      : conversations.filter((conversation) =>
+          conversationMatchesInboxFilter(conversation, item),
         ).length;
+
+  const visibleConversationIds = selectionVisibleIds;
+  const visibleSelectedCount = selectionVisibleCount;
+  const allVisibleSelected = selectionCoversAllVisible;
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedConversationIds(new Set());
+    lastSelectionIndexRef.current = null;
+  };
+
+  const toggleAllVisible = () => {
+    setSelectedConversationIds((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) {
+        visibleConversationIds.forEach((id) => next.delete(id));
+      } else {
+        visibleConversationIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+    lastSelectionIndexRef.current = null;
+  };
+
+  const toggleConversationSelection = (
+    conversationId: string,
+    shiftKey: boolean,
+  ) => {
+    const index = visibleConversationIds.indexOf(conversationId);
+    if (index < 0) return;
+    setSelectedConversationIds((current) => {
+      const next = new Set(current);
+      const shouldSelect = !next.has(conversationId);
+      if (shiftKey && lastSelectionIndexRef.current !== null) {
+        const start = Math.min(lastSelectionIndexRef.current, index);
+        const end = Math.max(lastSelectionIndexRef.current, index);
+        visibleConversationIds.slice(start, end + 1).forEach((id) => {
+          if (shouldSelect) next.add(id);
+          else next.delete(id);
+        });
+      } else if (shouldSelect) {
+        next.add(conversationId);
+      } else {
+        next.delete(conversationId);
+      }
+      return next;
+    });
+    lastSelectionIndexRef.current = index;
+  };
 
   const selectConversation = (conversation: Conversation) => {
     setSelectedConversationId(conversation.id);
@@ -997,6 +1091,118 @@ export function InboxPage({
     }
   };
 
+  const applyBulkAiMode = async (mode: AiMode) => {
+    const ids = selectionVisibleIds.filter((id) =>
+      selectedConversationIds.has(id),
+    );
+    if (!ids.length || bulkPending) return;
+    if (
+      mode === "safe_auto" &&
+      !(await onConfirm({
+        title: t("bulk.confirmAutoTitle", { count: ids.length }),
+        description: t("bulk.confirmAutoDescription"),
+        confirmLabel: t("bulk.confirmAutoAction"),
+      }))
+    )
+      return;
+    setBulkPending(true);
+    const results = liveMode
+      ? await Promise.allSettled(
+          ids.map((conversationId) => {
+            if (!workspaceId)
+              return Promise.reject(new Error("workspace_missing"));
+            return updateLiveConversation({
+              workspaceId,
+              conversationId,
+              updates: { ai_mode: mode },
+            });
+          }),
+        )
+      : ids.map(() => ({ status: "fulfilled" as const, value: undefined }));
+    const succeeded = new Set(
+      ids.filter((_, index) => results[index]?.status === "fulfilled"),
+    );
+    setConversations((current) =>
+      current.map((conversation) =>
+        succeeded.has(conversation.id)
+          ? {
+              ...conversation,
+              aiMode: mode,
+              attention:
+                mode === "safe_auto"
+                  ? "ai_handling"
+                  : conversation.attention === "ai_handling"
+                    ? "none"
+                    : conversation.attention,
+            }
+          : conversation,
+      ),
+    );
+    setBulkPending(false);
+    if (succeeded.size === ids.length) {
+      onToast(t("bulk.aiModeUpdated", { count: succeeded.size }));
+      exitSelectionMode();
+      return;
+    }
+    setSelectedConversationIds(new Set(ids.filter((id) => !succeeded.has(id))));
+    onToast(
+      t("bulk.partialFailure", {
+        success: succeeded.size,
+        failed: ids.length - succeeded.size,
+      }),
+    );
+  };
+
+  const deleteSelectedConversations = async () => {
+    const ids = selectionVisibleIds.filter((id) =>
+      selectedConversationIds.has(id),
+    );
+    if (!ids.length || bulkPending) return;
+    if (
+      !(await onConfirm({
+        title: t("bulk.deleteTitle", { count: ids.length }),
+        description: t("bulk.deleteDescription"),
+        confirmLabel: t("bulk.deleteAction", { count: ids.length }),
+        destructive: true,
+      }))
+    )
+      return;
+    setBulkPending(true);
+    const results = liveMode
+      ? await Promise.allSettled(
+          ids.map((conversationId) => {
+            if (!workspaceId)
+              return Promise.reject(new Error("workspace_missing"));
+            return deleteLiveConversation({ workspaceId, conversationId });
+          }),
+        )
+      : ids.map(() => ({ status: "fulfilled" as const, value: undefined }));
+    const deleted = new Set(
+      ids.filter((_, index) => results[index]?.status === "fulfilled"),
+    );
+    const remaining = conversations.filter(
+      (conversation) => !deleted.has(conversation.id),
+    );
+    setConversations(remaining);
+    if (deleted.has(selected.id)) {
+      setSelectedConversationId(remaining[0]?.id ?? "");
+      setMobileConversationOpen(false);
+    }
+    setBulkPending(false);
+    if (deleted.size === ids.length) {
+      onToast(t("bulk.deleted", { count: deleted.size }));
+      exitSelectionMode();
+      return;
+    }
+    setSelectedConversationIds(new Set(ids.filter((id) => !deleted.has(id))));
+    onToast(
+      t("bulk.partialFailure", {
+        success: deleted.size,
+        failed: ids.length - deleted.size,
+      }),
+    );
+  };
+
   const deleteMessage = async (message: Message) => {
     if (
       !(await onConfirm({
@@ -1295,13 +1501,40 @@ export function InboxPage({
           </h1>
         </div>
         <div className="toolbar-actions">
-          <button
-            className="button button-ghost"
-            type="button"
-            onClick={() => setFilter("All conversations")}
-          >
-            <Filter size={15} /> {t("filters.all")}
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={`button button-ghost inbox-filter-trigger ${filter !== "all" ? "is-active" : ""}`}
+                type="button"
+                aria-label={t("filters.triggerLabel", {
+                  filter: filterLabel(filter),
+                })}
+              >
+                <Filter size={15} />
+                <span>{filterLabel(filter)}</span>
+                {filter !== "all" && <b>{countForFilter(filter)}</b>}
+                <ChevronDownIcon size={13} aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="inbox-filter-menu">
+              <DropdownMenuLabel>{t("filters.menuLabel")}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={filter}
+                onValueChange={(value) => setFilter(value as InboxFilter)}
+              >
+                {inboxFilterValues.map((item) => (
+                  <DropdownMenuRadioItem
+                    key={item}
+                    value={item}
+                    onSelect={() => setFilter(item)}
+                  >
+                    <span>{filterLabel(item)}</span>
+                    <b>{countForFilter(item)}</b>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             className="button button-primary inbox-new-chat"
             type="button"
@@ -1323,12 +1556,14 @@ export function InboxPage({
               <span className="count-muted">{filtered.length}</span>
             </span>
             <button
-              className="icon-button subtle"
+              className="text-button inbox-select-trigger"
               type="button"
-              aria-label={t("ui.focusSearch")}
-              onClick={() => searchRef.current?.focus()}
+              aria-pressed={selectionMode}
+              onClick={() =>
+                selectionMode ? exitSelectionMode() : setSelectionMode(true)
+              }
             >
-              <ListFilter size={16} />
+              {selectionMode ? t("bulk.cancel") : t("bulk.select")}
             </button>
           </div>
           <label className="search-field">
@@ -1343,25 +1578,70 @@ export function InboxPage({
             />
             <kbd>/</kbd>
           </label>
-          <div
-            className="filter-strip"
-            role="tablist"
-            aria-label={t("ui.filters")}
-          >
-            {filterItems.map((item) => (
-              <button
-                key={item}
-                type="button"
-                role="tab"
-                aria-selected={filter === item}
-                className={filter === item ? "selected" : ""}
-                onClick={() => setFilter(item)}
-              >
-                {filterLabel(item)}
-                <span>{countForFilter(item)}</span>
-              </button>
-            ))}
-          </div>
+          {selectionMode && (
+            <div className="inbox-bulk-bar" aria-label={t("bulk.actions")}>
+              <label className="inbox-select-all">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleAllVisible}
+                  disabled={!filtered.length || bulkPending}
+                />
+                <span aria-live="polite">
+                  {t("bulk.selected", { count: visibleSelectedCount })}
+                </span>
+              </label>
+              <div className="inbox-bulk-actions">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="button button-ghost inbox-bulk-mode"
+                      type="button"
+                      disabled={!visibleSelectedCount || bulkPending}
+                    >
+                      <Sparkles size={14} />
+                      <span>{t("bulk.aiMode")}</span>
+                      <ChevronDownIcon size={12} aria-hidden="true" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>
+                      {t("bulk.aiModeLabel")}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onSelect={() => void applyBulkAiMode("safe_auto")}
+                    >
+                      <Zap size={14} /> {t("ui.autoReply")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => void applyBulkAiMode("draft")}
+                    >
+                      <Sparkles size={14} /> {t("ui.copilot")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => void applyBulkAiMode("off")}
+                    >
+                      <UserRound size={14} /> {t("ui.manual")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <button
+                  className="icon-button subtle inbox-bulk-delete"
+                  type="button"
+                  aria-label={t("bulk.deleteSelected")}
+                  disabled={!visibleSelectedCount || bulkPending}
+                  onClick={() => void deleteSelectedConversations()}
+                >
+                  {bulkPending ? (
+                    <LoaderCircle className="spin" size={15} />
+                  ) : (
+                    <Trash2 size={15} />
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
           <ScrollArea
             className="conversation-list"
             viewportClassName="conversation-list-viewport"
@@ -1372,7 +1652,23 @@ export function InboxPage({
                 key={conversation.id}
                 conversation={conversation}
                 selected={conversation.id === selected.id}
-                onClick={() => selectConversation(conversation)}
+                selectionMode={selectionMode}
+                checked={selectedConversationIds.has(conversation.id)}
+                selectionDisabled={bulkPending}
+                onSelectionChange={(event) =>
+                  toggleConversationSelection(
+                    conversation.id,
+                    (event.nativeEvent as MouseEvent).shiftKey,
+                  )
+                }
+                onClick={(event) =>
+                  selectionMode
+                    ? toggleConversationSelection(
+                        conversation.id,
+                        event.shiftKey,
+                      )
+                    : selectConversation(conversation)
+                }
                 onDelete={() => void deleteConversation(conversation.id)}
               />
             ))}
@@ -1382,13 +1678,13 @@ export function InboxPage({
                 description={t("ui.tryDifferent")}
                 search={Boolean(search)}
                 action={
-                  search || filter !== "All conversations" ? (
+                  search || filter !== "all" ? (
                     <button
                       className="text-button"
                       type="button"
                       onClick={() => {
                         setSearch("");
-                        setFilter("All conversations");
+                        setFilter("all");
                       }}
                     >
                       {t("ui.clearFilters")}
@@ -1818,22 +2114,52 @@ function MediaLightbox({
 function ConversationRow({
   conversation,
   selected,
+  selectionMode,
+  checked,
+  selectionDisabled,
+  onSelectionChange,
   onClick,
   onDelete,
 }: {
   conversation: Conversation;
   selected: boolean;
-  onClick: () => void;
+  selectionMode: boolean;
+  checked: boolean;
+  selectionDisabled: boolean;
+  onSelectionChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation("inbox");
   return (
-    <div className={`conversation-row ${selected ? "selected" : ""}`}>
+    <div
+      className={`conversation-row ${selected ? "selected" : ""} ${checked ? "bulk-selected" : ""}`}
+    >
+      {selectionMode && (
+        <label
+          className="conversation-select"
+          aria-label={t("bulk.selectConversation", {
+            name: conversation.name,
+          })}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={selectionDisabled}
+            onChange={onSelectionChange}
+          />
+        </label>
+      )}
       <button
         className="conversation-row-hit"
         type="button"
-        aria-current={selected ? "true" : undefined}
-        aria-label={t("ui.openConversation", { name: conversation.name })}
+        aria-current={!selectionMode && selected ? "true" : undefined}
+        aria-label={
+          selectionMode
+            ? t("bulk.toggleConversation", { name: conversation.name })
+            : t("ui.openConversation", { name: conversation.name })
+        }
         onClick={onClick}
       >
         <div
@@ -1875,18 +2201,20 @@ function ConversationRow({
           </div>
         </div>
       </button>
-      <div className="conversation-row-actions">
-        <ActionMenu label={conversation.name}>
-          <button
-            className="danger"
-            type="button"
-            role="menuitem"
-            onClick={onDelete}
-          >
-            <Trash2 size={14} /> {t("ui.deleteConversation")}
-          </button>
-        </ActionMenu>
-      </div>
+      {!selectionMode && (
+        <div className="conversation-row-actions">
+          <ActionMenu label={conversation.name}>
+            <button
+              className="danger"
+              type="button"
+              role="menuitem"
+              onClick={onDelete}
+            >
+              <Trash2 size={14} /> {t("ui.deleteConversation")}
+            </button>
+          </ActionMenu>
+        </div>
+      )}
       <div className={`attention-marker ${conversation.attention}`} />
     </div>
   );
