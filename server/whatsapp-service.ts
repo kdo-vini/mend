@@ -28,6 +28,8 @@ import {
 import type { SupportFlowNode } from "../src/shared/support-flow.js";
 
 export interface WhatsAppProvider {
+  /** Live session state, read back to explain why a send was refused. */
+  getConnectionState?(instanceName: string): Promise<{ state?: string }>;
   getGroupInfo?(input: {
     instanceName: string;
     remoteJid: string;
@@ -91,6 +93,41 @@ export interface OutboundResult {
   message: InboxMessageRecord;
   providerMessageId: string;
   mediaStoragePath?: string;
+}
+
+export type OutboundSendReason =
+  | "channel_disconnected"
+  | "provider_rejected"
+  | "provider_unavailable"
+  | "provider_timeout";
+
+/**
+ * A delivery failure the operator can act on. Every provider fault used to
+ * reach the API as an unclassified error and surface as a generic internal
+ * error, which told the operator nothing: a dropped WhatsApp session and a
+ * message the provider refused need opposite responses. This carries the
+ * distinction to the route layer.
+ */
+export class OutboundSendError extends Error {
+  constructor(
+    readonly reason: OutboundSendReason,
+    readonly providerError?: unknown,
+  ) {
+    super(`outbound_send_${reason}`);
+    this.name = "OutboundSendError";
+  }
+}
+
+/** Provider faults worth another attempt: timeouts, throttling and outages. */
+function retryableProviderFailure(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (typeof status !== "number") return false;
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function connectedState(state: string | undefined): boolean {
+  const value = (state ?? "").toLowerCase();
+  return value === "open" || value === "connected";
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -169,6 +206,47 @@ export class WhatsAppService {
     private readonly mediaStorage?: MediaStorage,
   ) {}
 
+  /**
+   * Turns a provider send fault into a reason the operator can act on. The
+   * provider answers 4xx both for a message it refused and for an instance
+   * whose WhatsApp session has dropped, and the stored channel status is only
+   * refreshed on demand, so the live session state is read back before the
+   * message gets the blame.
+   */
+  private async sendFailure(
+    instanceName: string,
+    error: unknown,
+  ): Promise<OutboundSendError> {
+    if (error instanceof OutboundSendError) return error;
+    if (error instanceof Error && error.name === "AbortError")
+      return new OutboundSendError("provider_timeout", error);
+    const state = this.provider.getConnectionState
+      ? await this.provider
+          .getConnectionState(instanceName)
+          .catch(() => undefined)
+      : undefined;
+    if (state && !connectedState(state.state))
+      return new OutboundSendError("channel_disconnected", error);
+    return new OutboundSendError(
+      retryableProviderFailure(error)
+        ? "provider_unavailable"
+        : "provider_rejected",
+      error,
+    );
+  }
+
+  /** Runs one provider send, classifying any fault before it leaves this port. */
+  private async delivering<T>(
+    instanceName: string,
+    send: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await send();
+    } catch (error) {
+      throw await this.sendFailure(instanceName, error);
+    }
+  }
+
   async sendText(
     context: InboxContext,
     conversationId: string,
@@ -186,12 +264,18 @@ export class WhatsAppService {
       await this.provider
         .sendPresence(conversation.providerInstanceName, destination)
         .catch(() => undefined);
-    const response = await this.provider.sendText({
-      instanceName: conversation.providerInstanceName,
-      number: destination,
-      text,
-      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
-    });
+    const response = await this.delivering(
+      conversation.providerInstanceName,
+      () =>
+        this.provider.sendText({
+          instanceName: conversation.providerInstanceName,
+          number: destination,
+          text,
+          ...(input.idempotencyKey
+            ? { idempotencyKey: input.idempotencyKey }
+            : {}),
+        }),
+    );
     const id = providerMessageId(response);
     await input.onProviderMessageId?.(id);
     const message = await this.inbox.recordOutbound(context, conversationId, {
@@ -219,11 +303,13 @@ export class WhatsAppService {
   ): Promise<InboxMessageRecord> {
     const text = input.text.trim();
     if (!text || text.length > 20_000) throw new Error("message_text_invalid");
-    const response = await this.provider.sendText({
-      instanceName: input.instanceName,
-      number: input.phoneNumber,
-      text,
-    });
+    const response = await this.delivering(input.instanceName, () =>
+      this.provider.sendText({
+        instanceName: input.instanceName,
+        number: input.phoneNumber,
+        text,
+      }),
+    );
     // Record the number WhatsApp resolved, not the digits that were typed: a
     // Brazilian mobile answers on both the 8- and 9-digit forms, and the
     // customer's reply arrives at the webhook under the resolved JID. Recording
@@ -283,21 +369,26 @@ export class WhatsAppService {
     const value = providerMediaValue(media, signedUrl);
     let response: ProviderMessage | Record<string, unknown>;
     if (type === "audio") {
-      response = await this.provider.sendAudio({
-        instanceName: conversation.providerInstanceName,
-        number: destination,
-        audio: value,
-      });
+      response = await this.delivering(conversation.providerInstanceName, () =>
+        this.provider.sendAudio({
+          instanceName: conversation.providerInstanceName,
+          number: destination,
+          audio: value,
+        }),
+      );
     } else {
-      response = await this.provider.sendMedia({
-        instanceName: conversation.providerInstanceName,
-        number: destination,
-        mediatype: type,
-        media: value,
-        caption: input.caption,
-        fileName:
-          input.fileName ?? ("fileName" in media ? media.fileName : undefined),
-      });
+      response = await this.delivering(conversation.providerInstanceName, () =>
+        this.provider.sendMedia({
+          instanceName: conversation.providerInstanceName,
+          number: destination,
+          mediatype: type,
+          media: value,
+          caption: input.caption,
+          fileName:
+            input.fileName ??
+            ("fileName" in media ? media.fileName : undefined),
+        }),
+      );
     }
     const id = providerMessageId(response);
     const message = await this.inbox.recordOutbound(context, conversationId, {

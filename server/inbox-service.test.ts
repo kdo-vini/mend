@@ -10,7 +10,11 @@ import {
   type InboxIngestPortResult,
   type InboxPort,
 } from "./inbox-service.js";
-import { WhatsAppService, type WhatsAppProvider } from "./whatsapp-service.js";
+import {
+  OutboundSendError,
+  WhatsAppService,
+  type WhatsAppProvider,
+} from "./whatsapp-service.js";
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const otherWorkspaceId = "22222222-2222-4222-8222-222222222222";
@@ -721,6 +725,103 @@ describe("InboxService and WhatsAppService", () => {
         )
       ).startsWith("memory://signed/"),
     ).toBe(true);
+  });
+
+  it("names a dropped WhatsApp session as the reason a send failed", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, inbound());
+    const refused = Object.assign(new Error("Whatsmiau request failed: 400"), {
+      status: 400,
+    });
+    const provider: WhatsAppProvider = {
+      getConnectionState: vi.fn(async () => ({ state: "close" })),
+      sendText: vi.fn(async () => {
+        throw refused;
+      }),
+      markAsRead: vi.fn(async () => undefined),
+    };
+    const whatsapp = new WhatsAppService(inbox, provider);
+
+    await expect(
+      whatsapp.sendText(
+        { workspaceId, actorUserId: "user-1", actorType: "user" },
+        conversationId,
+        { text: "Boa noite!" },
+      ),
+    ).rejects.toMatchObject({
+      name: "OutboundSendError",
+      reason: "channel_disconnected",
+    });
+    expect(provider.getConnectionState).toHaveBeenCalledWith("mend-demo");
+    // A refusal never reaches the thread as a delivered message.
+    expect(
+      [...port.messages.values()].some(
+        (message) => message.direction === "outbound",
+      ),
+    ).toBe(false);
+  });
+
+  it("separates a refused message, a provider outage and a timeout", async () => {
+    const scenarios: Array<{ failure: unknown; reason: string }> = [
+      {
+        failure: Object.assign(new Error("bad request"), { status: 400 }),
+        reason: "provider_rejected",
+      },
+      {
+        failure: Object.assign(new Error("bad gateway"), { status: 502 }),
+        reason: "provider_unavailable",
+      },
+      {
+        failure: Object.assign(new Error("aborted"), { name: "AbortError" }),
+        reason: "provider_timeout",
+      },
+    ];
+    for (const scenario of scenarios) {
+      const port = new FakeInboxPort();
+      const inbox = new InboxService(port);
+      await inbox.persistNormalizedMessage(
+        { workspaceId },
+        channelId,
+        inbound(),
+      );
+      const provider: WhatsAppProvider = {
+        getConnectionState: vi.fn(async () => ({ state: "open" })),
+        sendText: vi.fn(async () => {
+          throw scenario.failure;
+        }),
+        markAsRead: vi.fn(async () => undefined),
+      };
+      const whatsapp = new WhatsAppService(inbox, provider);
+      const error = await whatsapp
+        .sendText(
+          { workspaceId, actorUserId: "user-1", actorType: "user" },
+          conversationId,
+          { text: "Boa noite!" },
+        )
+        .catch((value: unknown) => value);
+      expect(error).toBeInstanceOf(OutboundSendError);
+      expect((error as OutboundSendError).reason).toBe(scenario.reason);
+    }
+  });
+
+  it("forwards the composer idempotency key so a retry is not a second message", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, inbound());
+    const provider: WhatsAppProvider = {
+      sendText: vi.fn(async () => ({ key: { id: "wamid-out-retry" } })),
+      markAsRead: vi.fn(async () => undefined),
+    };
+    const whatsapp = new WhatsAppService(inbox, provider);
+    await whatsapp.sendText(
+      { workspaceId, actorUserId: "user-1", actorType: "user" },
+      conversationId,
+      { text: "Boa noite!", idempotencyKey: "client-abcdefgh" },
+    );
+    expect(provider.sendText).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: "client-abcdefgh" }),
+    );
   });
 
   it("sends group messages with the full group JID instead of a phone number", async () => {

@@ -35,6 +35,10 @@ import { registerGitHubConnectionRoutes } from "./routes/github-connection-route
 import { registerCodingControlPlaneRoutes } from "./routes/coding-control-plane-routes.js";
 import { registerImpactRoutes } from "./routes/impact-routes.js";
 import { SupportAiConfigurationError } from "./providers.js";
+import {
+  OutboundSendError,
+  type OutboundSendReason,
+} from "./whatsapp-service.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -521,6 +525,56 @@ function mediaApiError(error: unknown): ApiHttpError | null {
   return null;
 }
 
+/**
+ * Outbound delivery faults, answered with the reason instead of a generic
+ * internal error. The inbox turns each code into an instruction: reconnect the
+ * channel, fix the message, or try again.
+ */
+const outboundSendErrors: Record<
+  OutboundSendReason,
+  { status: number; message: string }
+> = {
+  channel_disconnected: {
+    status: 409,
+    message:
+      "The WhatsApp channel is not connected. Reconnect it in Settings before sending.",
+  },
+  provider_rejected: {
+    status: 502,
+    message: "WhatsApp refused this message. Check the number and the content.",
+  },
+  provider_unavailable: {
+    status: 503,
+    message: "WhatsApp is temporarily unavailable. Try sending again.",
+  },
+  provider_timeout: {
+    status: 504,
+    message:
+      "WhatsApp did not answer in time. The message may not have been delivered.",
+  },
+};
+
+function messagingApiError(error: unknown): ApiHttpError | null {
+  if (error instanceof OutboundSendError) {
+    const mapped = outboundSendErrors[error.reason];
+    return new ApiHttpError(mapped.status, error.reason, mapped.message);
+  }
+  if (!(error instanceof Error)) return null;
+  if (error.message === "conversation_not_found")
+    return new ApiHttpError(
+      404,
+      "conversation_not_found",
+      "The conversation no longer exists.",
+    );
+  if (error.message === "message_text_invalid")
+    return new ApiHttpError(
+      400,
+      "message_text_invalid",
+      "The message is empty or longer than the allowed limit.",
+    );
+  return null;
+}
+
 function githubApiError(error: unknown): ApiHttpError | null {
   if (!(error instanceof Error)) return null;
   const reason = error.message;
@@ -719,6 +773,11 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
             code: error.code,
             message: "Configure a workspace support AI credential and model.",
           },
+        });
+      const messagingError = messagingApiError(error);
+      if (messagingError)
+        return send(response, messagingError.status, {
+          error: { code: messagingError.code, message: messagingError.message },
         });
       const mediaError = mediaApiError(error);
       if (mediaError)
