@@ -101,6 +101,7 @@ import { PriorityDot, StatusPill } from "../../../shared/ui/DataDisplay";
 import { Select } from "../../../shared/ui/Select";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
 import { localizedError } from "../../../shared/ui/localizedError";
+import type { ToastTone } from "../../../shared/ui/toast";
 import {
   dismissAiCard,
   getAiCardDismissalStorage,
@@ -125,6 +126,16 @@ import {
   inboxFilterValues,
   type InboxFilter,
 } from "../inbox-filters";
+
+/** Server delivery-failure codes, mapped to the inbox message for each. */
+const sendErrorKeys: Record<string, string> = {
+  channel_disconnected: "errors.sendChannelDisconnected",
+  provider_rejected: "errors.sendRejected",
+  provider_unavailable: "errors.sendUnavailable",
+  provider_timeout: "errors.sendTimeout",
+  conversation_not_found: "errors.sendConversationMissing",
+  message_text_invalid: "errors.sendTextInvalid",
+};
 
 interface AssigneeOption {
   value: string;
@@ -261,7 +272,7 @@ export function InboxPage({
   setSelectedConversationId: (id: string) => void;
   issues: Issue[];
   onOpenIssue: (id: string) => void;
-  onToast: (message: string) => void;
+  onToast: (message: string, tone?: ToastTone) => void;
   onConfirm: Confirm;
   liveMode: boolean;
   senderNames: Record<string, string>;
@@ -722,6 +733,24 @@ export function InboxPage({
       }).catch((error) => onToast(localizedError(error, t("errors.markRead"))));
   };
 
+  /**
+   * Delivery failures the server can name. Each maps to the one thing the
+   * operator can do about it, instead of the same "could not send" for a
+   * dropped WhatsApp session, a refused message and a provider outage.
+   */
+  const sendFailureMessage = (error: unknown): string => {
+    const code = error instanceof LiveActionError ? error.code : undefined;
+    const key = code ? sendErrorKeys[code] : undefined;
+    return localizedError(error, t(key ?? "errors.sendMessage"));
+  };
+
+  /**
+   * Queues one outbound message and reports whether the thread took ownership
+   * of it. Delivery is reported on the message itself: a failed send stays in
+   * the thread as a failed bubble with retry, edit and cancel, so the composer
+   * must let go of the text as soon as this resolves true. Returning delivery
+   * success instead would leave the same message in two places at once.
+   */
   const sendMessage = async (
     text: string,
     idempotencyKey?: string,
@@ -799,8 +828,8 @@ export function InboxPage({
               : item,
           ),
         );
-        onToast(localizedError(error, t("errors.sendMessage")));
-        return false;
+        onToast(sendFailureMessage(error), "error");
+        return true;
       }
     }
     setConversations((current) =>
@@ -821,11 +850,16 @@ export function InboxPage({
     return true;
   };
 
+  /**
+   * Queues one attachment batch. Same ownership contract as `sendMessage`: true
+   * means the thread now holds these attachments, whether or not the provider
+   * accepted them, so the composer tray clears instead of duplicating them.
+   */
   const sendMediaBatch = async (
     inputs: ComposerMediaInput[],
   ): Promise<boolean> => {
     if (!liveMode || !workspaceId) {
-      onToast(t("toasts.attachmentsUnavailable"));
+      onToast(t("toasts.attachmentsUnavailable"), "error");
       return false;
     }
     const conversationId = selected.id;
@@ -946,8 +980,8 @@ export function InboxPage({
             : item,
         ),
       );
-      onToast(localizedError(error, t("errors.sendAttachment")));
-      return false;
+      onToast(localizedError(error, t("errors.sendAttachment")), "error");
+      return true;
     }
   };
 
@@ -3146,10 +3180,15 @@ function MediaComposer({
   };
 
   const submitText = async () => {
-    if (!text.trim() || sending) return;
+    const value = text.trim();
+    if (!value || sending) return;
     setSending(true);
     try {
-      if (await onSend(text)) {
+      // The thread owns the message the moment it is accepted, including when
+      // delivery fails: it renders there as a failed bubble with retry, edit
+      // and cancel. Keeping the text here too would show it twice and let a
+      // second press send a duplicate.
+      if (await onSend(value)) {
         setText("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
       }

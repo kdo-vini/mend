@@ -1,11 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorState, LoadingState } from "./shared/ui/ResourceState";
 import { useConfirmation } from "./shared/ui/useConfirmation";
+import type { Toast, ToastTone } from "./shared/ui/toast";
 import { ProfileWorkspacePage } from "./components/ProfileWorkspacePage";
 import { seedConversations, seedIssues, seedKnowledge, seedRuns } from "./data";
 import type {
@@ -237,7 +238,7 @@ function App() {
       : "dark";
   });
   const [commandOpen, setCommandOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const pendingRunIdsRef = useRef(new Set<string>());
   const pendingRunStartIssueIdsRef = useRef(new Set<string>());
   const [pendingRunIds, setPendingRunIds] = useState<ReadonlySet<string>>(
@@ -343,6 +344,12 @@ function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  const notify = useCallback(
+    (message: string, tone: ToastTone = "success") =>
+      setToast({ message, tone }),
+    [],
+  );
 
   useEffect(() => {
     if (!toast) return;
@@ -537,7 +544,7 @@ function App() {
               ? error.message
               : "The live workspace data could not be loaded.";
           setLiveDataError(message);
-          setToast(t("toasts.liveDataUnavailable", { message }));
+          notify(t("toasts.liveDataUnavailable", { message }));
         }
       } finally {
         if (active && showLoading) setWorkspaceLoading(false);
@@ -582,7 +589,7 @@ function App() {
       realtimeFallback.stop();
       if (runStatusTimer) clearInterval(runStatusTimer);
     };
-  }, [demoMode, liveDataRetry, t, workspaceId]);
+  }, [demoMode, liveDataRetry, notify, t, workspaceId]);
 
   useEffect(() => {
     if (demoMode || !mendApiBaseUrl) return;
@@ -611,9 +618,9 @@ function App() {
         await createLiveIssue({ workspaceId, ...input });
         setCreateIssueOpen(false);
         setLiveDataRetry((current) => current + 1);
-        setToast(t("toasts.issueCreatedLive"));
+        notify(t("toasts.issueCreatedLive"));
       } catch (error) {
-        setToast(
+        notify(
           error instanceof Error ? error.message : t("errors.issueCreate"),
         );
       }
@@ -664,7 +671,7 @@ function App() {
     }
     setInspectorIssueId(issue.id);
     setCreateIssueOpen(false);
-    setToast(t("toasts.issueCreated", { identifier: issue.identifier }));
+    notify(t("toasts.issueCreated", { identifier: issue.identifier }));
   };
 
   const dismissNotification = async (notificationId: string) => {
@@ -676,7 +683,7 @@ function App() {
     try {
       await dismissWorkspaceNotification(supabase, workspaceId, notificationId);
     } catch (error) {
-      setToast(
+      notify(
         error instanceof Error
           ? error.message
           : t("errors.notificationDismiss"),
@@ -692,7 +699,7 @@ function App() {
     try {
       await dismissWorkspaceNotifications(supabase, workspaceId);
     } catch (error) {
-      setToast(
+      notify(
         error instanceof Error
           ? error.message
           : t("errors.notificationsDismiss"),
@@ -706,7 +713,7 @@ function App() {
     try {
       const status = await enableNativePush(supabase, workspaceId);
       setPushStatus(status);
-      setToast(
+      notify(
         status === "enabled"
           ? t("toasts.nativeNotificationsEnabled")
           : status === "denied"
@@ -716,7 +723,7 @@ function App() {
               : t("toasts.nativeNotificationsNotConfigured"),
       );
     } catch (error) {
-      setToast(
+      notify(
         error instanceof Error
           ? error.message
           : t("errors.nativeNotificationsEnable"),
@@ -748,7 +755,7 @@ function App() {
             setIssues((current) =>
               current.map((item) => (item.id === issueId ? previous : item)),
             );
-          setToast(
+          notify(
             error instanceof Error ? error.message : t("errors.issueUpdate"),
           );
         });
@@ -804,11 +811,9 @@ function App() {
         window.history.pushState({}, "", "/issues");
         window.dispatchEvent(new PopStateEvent("popstate"));
       }
-      setToast(t("toasts.issueDeleted", { identifier: issue.identifier }));
+      notify(t("toasts.issueDeleted", { identifier: issue.identifier }));
     } catch (error) {
-      setToast(
-        error instanceof Error ? error.message : t("errors.issueDelete"),
-      );
+      notify(error instanceof Error ? error.message : t("errors.issueDelete"));
     }
   };
 
@@ -877,10 +882,10 @@ function App() {
           ),
         );
       }
-      setToast(t("toasts.issueResolved", { identifier: issue.identifier }));
+      notify(t("toasts.issueResolved", { identifier: issue.identifier }));
       return true;
     } catch (error) {
-      setToast(
+      notify(
         error instanceof Error
           ? `Resolution incomplete: ${error.message}`
           : t("errors.issueResolve"),
@@ -904,7 +909,7 @@ function App() {
     const issue = issues.find((item) => item.id === issueId);
     if (!issue) return;
     if (!demoMode && !workspaceId) {
-      setToast(t("errors.agentRunQueue"));
+      notify(t("errors.agentRunQueue"));
       return;
     }
     if (pendingRunStartIssueIdsRef.current.has(issueId)) return;
@@ -925,7 +930,7 @@ function App() {
         });
         setRunDialogIssueId(null);
         setLiveDataRetry((current) => current + 1);
-        setToast(t("toasts.agentRunQueued", { identifier: issue.identifier }));
+        notify(t("toasts.agentRunQueued", { identifier: issue.identifier }));
         return;
       }
       const run: CodingRun = {
@@ -955,9 +960,9 @@ function App() {
         status: issue.status === "Triage" ? "In Progress" : issue.status,
       });
       setRunDialogIssueId(null);
-      setToast(t("toasts.agentRunStarted", { identifier: issue.identifier }));
+      notify(t("toasts.agentRunStarted", { identifier: issue.identifier }));
     } catch (error) {
-      setToast(
+      notify(
         error instanceof Error ? error.message : t("errors.agentRunQueue"),
       );
     } finally {
@@ -1010,7 +1015,7 @@ function App() {
             : run,
         ),
       );
-      setToast(successMessage);
+      notify(successMessage);
     };
     if (!demoMode) {
       if (!workspaceId) return;
@@ -1022,7 +1027,7 @@ function App() {
           setLiveDataRetry((current) => current + 1);
         })
         .catch((error) =>
-          setToast(
+          notify(
             error instanceof Error ? error.message : t("errors.agentRunUpdate"),
           ),
         )
@@ -1050,7 +1055,7 @@ function App() {
         }
         onSignOut={() => {
           if (demoMode) {
-            setToast(t("toasts.demoNoSession"));
+            notify(t("toasts.demoNoSession"));
             return;
           }
           void supabase?.auth.signOut().then(() => window.location.reload());
@@ -1114,7 +1119,7 @@ function App() {
                     setSelectedConversationId={setSelectedConversationId}
                     issues={issues}
                     onOpenIssue={setInspectorIssueId}
-                    onToast={setToast}
+                    onToast={notify}
                     onConfirm={requestConfirmation}
                     liveMode={!demoMode}
                     senderNames={{
@@ -1154,7 +1159,7 @@ function App() {
                     onUpdateIssue={updateIssue}
                     onOpenIssue={setInspectorIssueId}
                     onNewIssue={() => setCreateIssueOpen(true)}
-                    onToast={setToast}
+                    onToast={notify}
                   />
                 </FeatureBoundary>
               }
@@ -1170,7 +1175,7 @@ function App() {
                     onUpdateIssue={updateIssue}
                     onOpenIssue={setInspectorIssueId}
                     onNewIssue={() => setCreateIssueOpen(true)}
-                    onToast={setToast}
+                    onToast={notify}
                   />
                 </FeatureBoundary>
               }
@@ -1183,7 +1188,7 @@ function App() {
                   liveMode={!demoMode}
                   assigneeOptions={assigneeOptions}
                   assigneeLabel={assigneeLabel}
-                  onToast={setToast}
+                  onToast={notify}
                   onOpenConversation={(conversationId) => {
                     setSelectedConversationId(conversationId);
                     window.history.pushState(
@@ -1219,7 +1224,7 @@ function App() {
                   ) : (
                     <FeatureKnowledgeWorkspacePage
                       workspaceId={workspaceId}
-                      onToast={setToast}
+                      onToast={notify}
                     />
                   )}
                 </FeatureBoundary>
@@ -1228,7 +1233,7 @@ function App() {
                 <FeatureBoundary label={t("states.loadingSettings")}>
                   <FeatureSettingsPage
                     workspaceId={workspaceId}
-                    onToast={setToast}
+                    onToast={notify}
                     onChannelChange={setChannel}
                     onConfirm={requestConfirmation}
                   />
@@ -1237,7 +1242,7 @@ function App() {
               profile={
                 <ProfileWorkspacePage
                   workspaceId={workspaceId}
-                  onToast={setToast}
+                  onToast={notify}
                   onWorkspaceUpdated={handleProfileWorkspaceUpdated}
                   onIdentityUpdated={handleProfileIdentityUpdated}
                 />
@@ -1252,7 +1257,7 @@ function App() {
                     setSelectedConversationId={setSelectedConversationId}
                     issues={issues}
                     onOpenIssue={setInspectorIssueId}
-                    onToast={setToast}
+                    onToast={notify}
                     onConfirm={requestConfirmation}
                     liveMode={!demoMode}
                     senderNames={{
@@ -1278,7 +1283,7 @@ function App() {
         }
         onSignOut={() => {
           if (demoMode) {
-            setToast(t("toasts.demoNoSession"));
+            notify(t("toasts.demoNoSession"));
             return;
           }
           void supabase?.auth.signOut().then(() => window.location.reload());
@@ -1332,7 +1337,7 @@ function App() {
             setWorkspaceId(workspace.id);
             setOperationalLanguage(workspace.defaultLanguage ?? "en-US");
             setSelectedConversationId("");
-            setToast(t("toasts.workspaceSwitched", { name: workspace.name }));
+            notify(t("toasts.workspaceSwitched", { name: workspace.name }));
           }}
         />
       )}
@@ -1369,8 +1374,17 @@ function App() {
         />
       )}
       {toast && (
-        <div className="toast" role="status" aria-live="polite">
-          <Check size={15} /> {toast}
+        <div
+          className={`toast toast-${toast.tone}`}
+          role={toast.tone === "error" ? "alert" : "status"}
+          aria-live={toast.tone === "error" ? "assertive" : "polite"}
+        >
+          {toast.tone === "error" ? (
+            <TriangleAlert size={15} />
+          ) : (
+            <Check size={15} />
+          )}{" "}
+          {toast.message}
         </div>
       )}
       {confirmationDialog}

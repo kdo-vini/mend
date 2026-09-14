@@ -54,9 +54,18 @@ const loadLiveConversationSnapshot = vi.fn(
 );
 const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);
+const sendLiveMessage = vi.fn(async (_input: unknown) => undefined);
 
 vi.mock("../api", () => ({
-  LiveActionError: class LiveActionError extends Error {},
+  LiveActionError: class LiveActionError extends Error {
+    constructor(
+      message: string,
+      readonly status?: number,
+      readonly code?: string,
+    ) {
+      super(message);
+    }
+  },
   listConnectedChannels: async () => [{ id: "channel-1", name: "Téchne" }],
   startConversation: (input: unknown) => startConversation(input),
   loadLiveConversationSnapshot: (workspaceId: string, conversationId: string) =>
@@ -71,7 +80,7 @@ vi.mock("../api", () => ({
   resumeLiveConversationAi: vi.fn(),
   sendLiveMedia: vi.fn(),
   sendLiveMediaBatch: vi.fn(),
-  sendLiveMessage: vi.fn(),
+  sendLiveMessage: (input: unknown) => sendLiveMessage(input),
   sendLivePresence: vi.fn(),
   snoozeLiveConversation: vi.fn(),
   updateLiveContact: vi.fn(),
@@ -82,7 +91,11 @@ vi.mock("../api", () => ({
 let container: HTMLDivElement;
 let root: Root;
 
-function InboxHarness() {
+function InboxHarness({
+  onToast = () => undefined,
+}: {
+  onToast?: (message: string, tone?: string) => void;
+}) {
   const [conversations, setConversations] = useState<Conversation[]>([
     seedConversations[0],
     seedConversations[1],
@@ -100,7 +113,7 @@ function InboxHarness() {
         setSelectedConversationId={setSelectedConversationId}
         issues={[]}
         onOpenIssue={() => undefined}
-        onToast={() => undefined}
+        onToast={onToast}
         onConfirm={async () => true}
         liveMode
         senderNames={{}}
@@ -164,6 +177,8 @@ describe("InboxPage new chat", () => {
     loadLiveConversationSnapshot.mockClear();
     deleteLiveConversation.mockClear();
     updateLiveConversation.mockClear();
+    sendLiveMessage.mockReset();
+    sendLiveMessage.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -297,5 +312,52 @@ describe("InboxPage new chat", () => {
 
     expect(deleteLiveConversation).toHaveBeenCalledTimes(2);
     expect(document.body.textContent).toContain("No conversations yet");
+  });
+
+  it("hands a failed send to the thread instead of leaving it in the composer", async () => {
+    const toasts: Array<{ message: string; tone?: string }> = [];
+    const { LiveActionError } = await import("../api");
+    sendLiveMessage.mockRejectedValue(
+      new LiveActionError("channel is down", 409, "channel_disconnected"),
+    );
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          onToast={(message, tone) => toasts.push({ message, tone })}
+        />,
+      ),
+    );
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    await act(async () => type(composer, "Boa noite! É isso mesmo."));
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+
+    expect(sendLiveMessage).toHaveBeenCalledTimes(1);
+    // The thread owns the message: it shows there as failed, with retry, and
+    // the composer is empty so a second press cannot send a duplicate.
+    expect(composer.value).toBe("");
+    expect(document.body.textContent).toContain("Boa noite! É isso mesmo.");
+    expect(document.body.textContent).toContain("Failed");
+    expect(toasts.at(-1)?.tone).toBe("error");
+    // The server named the reason, so the operator is told what to do about it
+    // rather than the same "could not be sent" every failure used to produce.
+    expect(toasts.at(-1)?.message).toBe(
+      "The WhatsApp channel is disconnected. Reconnect it in Settings, then tap Retry.",
+    );
+  });
+
+  it("clears the composer once a message is accepted", async () => {
+    await act(async () => root.render(<InboxHarness />));
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    await act(async () => type(composer, "Tudo certo por aqui."));
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+
+    expect(sendLiveMessage).toHaveBeenCalledTimes(1);
+    expect(composer.value).toBe("");
   });
 });

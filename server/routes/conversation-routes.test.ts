@@ -103,11 +103,23 @@ class FakeSupabase {
   }
 }
 
-function fakeProvider(sendTextResponse?: Row) {
+function fakeProvider(options: {
+  sendTextResponse?: Row;
+  sendTextError?: unknown;
+  connectionState?: string;
+}) {
   return {
-    sendText: vi.fn(
-      async () => sendTextResponse ?? { key: { id: "provider-message-1" } },
-    ),
+    ...(options.connectionState
+      ? {
+          getConnectionState: vi.fn(async () => ({
+            state: options.connectionState as string,
+          })),
+        }
+      : {}),
+    sendText: vi.fn(async () => {
+      if (options.sendTextError) throw options.sendTextError;
+      return options.sendTextResponse ?? { key: { id: "provider-message-1" } };
+    }),
     sendMedia: vi.fn(async () => ({ key: { id: "provider-message-2" } })),
     sendAudio: vi.fn(async () => ({ key: { id: "provider-message-3" } })),
     markAsRead: vi.fn(async () => undefined),
@@ -124,6 +136,8 @@ function createHarness(
     contacts?: (ids: Workspaces) => Row[];
     conversations?: (ids: Workspaces) => Row[];
     sendTextResponse?: Row;
+    sendTextError?: unknown;
+    connectionState?: string;
   } = {},
 ) {
   const workspaceId = randomUUID();
@@ -148,7 +162,15 @@ function createHarness(
     conversations: options.conversations?.(ids) ?? [],
     ai_outbound_messages: [],
   });
-  const provider = fakeProvider(options.sendTextResponse);
+  const provider = fakeProvider({
+    ...(options.sendTextResponse
+      ? { sendTextResponse: options.sendTextResponse }
+      : {}),
+    ...(options.sendTextError ? { sendTextError: options.sendTextError } : {}),
+    ...(options.connectionState
+      ? { connectionState: options.connectionState }
+      : {}),
+  });
   const app = express();
   app.use(express.json());
   // server/index.ts builds the router and its adapters inside a per-request
@@ -478,6 +500,43 @@ describe("POST /api/conversations", () => {
     expect(response.status).toBe(201);
     expect(response.body.conversationId).toBe(createdConversationId);
     expect(provider.sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers a dropped WhatsApp session with the reason instead of an internal error", async () => {
+    const { app, client, workspaceId } = createHarness({
+      sendTextError: Object.assign(new Error("Whatsmiau request failed: 400"), {
+        status: 400,
+      }),
+      connectionState: "close",
+    });
+
+    const response = await startConversation(app, workspaceId, {
+      channelId,
+      phoneNumber: "5511999999999",
+      message: "Hello",
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("channel_disconnected");
+    expect(client.rpcCalls).toEqual([]);
+  });
+
+  it("marks a provider outage as retryable rather than a refused message", async () => {
+    const { app, workspaceId } = createHarness({
+      sendTextError: Object.assign(new Error("Whatsmiau request failed: 503"), {
+        status: 503,
+      }),
+      connectionState: "open",
+    });
+
+    const response = await startConversation(app, workspaceId, {
+      channelId,
+      phoneNumber: "5511999999999",
+      message: "Hello",
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error.code).toBe("provider_unavailable");
   });
 
   it("refuses a workspace the caller does not belong to before reaching the send path", async () => {
