@@ -531,14 +531,13 @@ describe("live Whatsmiau worker", () => {
   it("logs heartbeat write failures without stopping the polling loop", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const logger = { warn: vi.fn() };
-    let beats = 0;
+    const claim = vi.spyOn(store, "claim");
     const worker = new LiveWorker({
       jobStore: store,
       channelResolver: new FakeResolver(binding),
       inbox: new FakeInbox(),
       heartbeat: {
         beat: vi.fn(async () => {
-          beats += 1;
           throw new Error("heartbeat write failed");
         }),
       },
@@ -547,7 +546,7 @@ describe("live Whatsmiau worker", () => {
     });
 
     worker.start();
-    await vi.waitFor(() => expect(beats).toBeGreaterThan(2), {
+    await vi.waitFor(() => expect(claim.mock.calls.length).toBeGreaterThan(2), {
       timeout: 1_000,
     });
     await worker.stop();
@@ -561,6 +560,36 @@ describe("live Whatsmiau worker", () => {
       }),
       "Runner heartbeat write failed",
     );
+  });
+
+  it("backs off empty claims and limits idle heartbeats to once per minute", async () => {
+    vi.useFakeTimers();
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const claim = vi.spyOn(store, "claim");
+    const heartbeat = { beat: vi.fn(async () => undefined) };
+    const worker = new LiveWorker({
+      jobStore: store,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      heartbeat,
+      pollIntervalMs: 2_000,
+      maxIdlePollIntervalMs: 30_000,
+      heartbeatIntervalMs: 60_000,
+      random: () => 0.5,
+    });
+
+    try {
+      worker.start();
+      await vi.advanceTimersByTimeAsync(61_000);
+
+      expect(claim).toHaveBeenCalledTimes(6);
+      expect(heartbeat.beat).toHaveBeenCalledTimes(2);
+    } finally {
+      const stopping = worker.stop();
+      await vi.runAllTimersAsync();
+      await stopping;
+      vi.useRealTimers();
+    }
   });
 
   it("forwards issue and draft handoff results without sending anything", async () => {

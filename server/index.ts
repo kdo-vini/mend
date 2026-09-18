@@ -743,7 +743,11 @@ if (workerSupabase && processRole === "runner") {
           ),
         }
       : {}),
-    pollIntervalMs: Number(process.env.MEND_WORKER_POLL_MS ?? 1_000),
+    pollIntervalMs: Number(process.env.MEND_WORKER_POLL_MS ?? 2_000),
+    maxIdlePollIntervalMs: Number(
+      process.env.MEND_WORKER_MAX_IDLE_POLL_MS ?? 30_000,
+    ),
+    heartbeatIntervalMs: Number(process.env.MEND_RUNNER_HEARTBEAT_MS ?? 60_000),
     onUnmappedMessage: (input) =>
       logger.warn(
         { instanceName: input.instanceName, jobId: input.jobId },

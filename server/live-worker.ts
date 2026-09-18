@@ -287,6 +287,9 @@ export interface LiveWorkerOptions {
   onIssueReady?: (issue: LiveWorkerIssue) => Promise<void> | void;
   onUnmappedMessage?: (input: LiveWorkerUnmappedMessage) => void;
   pollIntervalMs?: number;
+  maxIdlePollIntervalMs?: number;
+  heartbeatIntervalMs?: number;
+  random?: () => number;
   /** Delay inbound automation so consecutive customer messages can be grouped. */
   inboundDebounceMs?: number;
   workerId?: string;
@@ -301,6 +304,8 @@ export interface LiveWorkerOptions {
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
+const DEFAULT_MAX_IDLE_POLL_INTERVAL_MS = 30_000;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 60_000;
 
 /**
  * Consumes the existing WhatsmiauWorker and adds the live application boundary:
@@ -308,12 +313,16 @@ const DEFAULT_POLL_INTERVAL_MS = 1_000;
  */
 export class LiveWorker {
   private readonly pollIntervalMs: number;
+  private readonly maxIdlePollIntervalMs: number;
+  private readonly heartbeatIntervalMs: number;
+  private readonly random: () => number;
   private readonly options: LiveWorkerOptions;
   private readonly workerId: string;
   private readonly inboundDebounceMs: number;
   private readonly stageJobStore: JobStore<LiveWorkerJobPayload>;
   private loopPromise: Promise<void> | null = null;
   private stopRequested = false;
+  private lastHeartbeatAttemptAt: number | null = null;
 
   constructor(options: LiveWorkerOptions) {
     this.options = options;
@@ -321,6 +330,15 @@ export class LiveWorker {
       100,
       options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
     );
+    this.maxIdlePollIntervalMs = Math.max(
+      this.pollIntervalMs,
+      options.maxIdlePollIntervalMs ?? DEFAULT_MAX_IDLE_POLL_INTERVAL_MS,
+    );
+    this.heartbeatIntervalMs = Math.max(
+      1_000,
+      options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS,
+    );
+    this.random = options.random ?? Math.random;
     this.workerId = options.workerId ?? `mend-worker-${process.pid}`;
     this.inboundDebounceMs = Math.max(
       0,
@@ -335,24 +353,19 @@ export class LiveWorker {
 
   /** Poll once. The job store owns claim, retry/backoff and dead-letter behavior. */
   async poll(): Promise<boolean> {
-    await this.options.heartbeat
-      ?.beat({ workerId: this.workerId })
-      .catch((error) => this.reportHeartbeatFailure(error, "before_claim"));
+    await this.writeHeartbeat({ workerId: this.workerId }, "before_claim");
     const job = await this.options.jobStore.claim(this.workerId);
     if (!job) return false;
 
-    await this.options.heartbeat
-      ?.beat({
+    await this.writeHeartbeat(
+      {
         workerId: this.workerId,
         currentJobType: job.type,
         currentJobId: job.id,
-      })
-      .catch((error) =>
-        this.reportHeartbeatFailure(error, "after_claim", {
-          currentJobId: job.id,
-          currentJobType: job.type,
-        }),
-      );
+      },
+      "after_claim",
+      true,
+    );
 
     const typedJob = job as unknown as JobRecord<LiveWorkerJobPayload>;
     try {
@@ -390,10 +403,36 @@ export class LiveWorker {
         // The durable job remains available for its current owner/reclaimer.
       }
     }
-    await this.options.heartbeat
-      ?.beat({ workerId: this.workerId })
-      .catch((error) => this.reportHeartbeatFailure(error, "after_job"));
+    await this.writeHeartbeat({ workerId: this.workerId }, "after_job", true);
     return true;
+  }
+
+  private async writeHeartbeat(
+    input: {
+      workerId: string;
+      currentJobType?: string;
+      currentJobId?: string;
+    },
+    phase: "before_claim" | "after_claim" | "after_job",
+    force = false,
+  ): Promise<void> {
+    if (!this.options.heartbeat) return;
+    const now = Date.now();
+    if (
+      !force &&
+      this.lastHeartbeatAttemptAt !== null &&
+      now - this.lastHeartbeatAttemptAt < this.heartbeatIntervalMs
+    )
+      return;
+    this.lastHeartbeatAttemptAt = now;
+    await this.options.heartbeat.beat(input).catch((error) =>
+      this.reportHeartbeatFailure(error, phase, {
+        ...(input.currentJobId ? { currentJobId: input.currentJobId } : {}),
+        ...(input.currentJobType
+          ? { currentJobType: input.currentJobType }
+          : {}),
+      }),
+    );
   }
 
   private reportHeartbeatFailure(
@@ -427,16 +466,28 @@ export class LiveWorker {
   }
 
   private async runLoop(): Promise<void> {
+    let idleDelayMs = this.pollIntervalMs;
     try {
       while (!this.stopRequested) {
         let worked = false;
+        let claimFailed = false;
         try {
           worked = await this.poll();
         } catch {
+          claimFailed = true;
           // A store outage must not kill the long-lived worker process. The next
           // poll retries the claim and the job store handles per-job retries.
         }
-        if (!worked && !this.stopRequested) await delay(this.pollIntervalMs);
+        if (worked) {
+          idleDelayMs = this.pollIntervalMs;
+          continue;
+        }
+        if (claimFailed) idleDelayMs = this.pollIntervalMs;
+        if (!this.stopRequested) {
+          const jitter = 0.95 + Math.min(1, Math.max(0, this.random())) * 0.1;
+          await delay(Math.round(idleDelayMs * jitter));
+          idleDelayMs = Math.min(idleDelayMs * 2, this.maxIdlePollIntervalMs);
+        }
       }
     } finally {
       this.loopPromise = null;
@@ -754,6 +805,8 @@ export interface CreateSupabaseLiveWorkerOptions {
   supportResearch?: LiveWorkerOptions["supportResearch"];
   agentCredentials?: AgentCredentialPort;
   pollIntervalMs?: number;
+  maxIdlePollIntervalMs?: number;
+  heartbeatIntervalMs?: number;
   inboundDebounceMs?: number;
   workerId?: string;
   logger?: LiveWorkerLogger;
@@ -823,6 +876,12 @@ export function createSupabaseLiveWorker(
       : {}),
     ...(options.pollIntervalMs !== undefined
       ? { pollIntervalMs: options.pollIntervalMs }
+      : {}),
+    ...(options.maxIdlePollIntervalMs !== undefined
+      ? { maxIdlePollIntervalMs: options.maxIdlePollIntervalMs }
+      : {}),
+    ...(options.heartbeatIntervalMs !== undefined
+      ? { heartbeatIntervalMs: options.heartbeatIntervalMs }
       : {}),
     ...(options.inboundDebounceMs !== undefined
       ? { inboundDebounceMs: options.inboundDebounceMs }
