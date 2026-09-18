@@ -288,3 +288,10 @@
 .toast svg {
   color: var(--success);
 }
+.toast-error {
+  border-color: var(--danger);
+  color: var(--ink);
+}
+.toast-error svg {
+  color: var(--danger);
+}
