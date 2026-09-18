@@ -220,6 +220,7 @@
     "copyMessage": "Message could not be copied.",
     "editMessage": "This failed message cannot be edited.",
     "retryMessage": "This failed message cannot be retried.",
+    "loadOlderMessages": "Older messages could not be loaded.",
     "draftUnavailable": "AI draft unavailable."
   },
   "confirmations": {

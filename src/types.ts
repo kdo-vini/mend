@@ -54,6 +54,7 @@ export interface Message {
   transcriptionErrorCode?: string;
   mediaAssetId?: string;
   mediaBatchId?: string;
+  mediaStoragePath?: string;
   attachment?: {
     name: string;
     meta: string;

@@ -55,6 +55,7 @@ import {
   listConnectedChannels,
   LiveActionError,
   loadLiveConversationSnapshot,
+  loadOlderLiveConversationMessages,
   markLiveConversationRead,
   reactToLiveMessage,
   pauseLiveConversationAi,
@@ -75,6 +76,7 @@ import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { useConversationScroll } from "../hooks/useConversationScroll";
+import { MessageMedia } from "../components/MessageMedia";
 import {
   formatMessageTime,
   getMessageDayKey,
@@ -430,6 +432,77 @@ export function InboxPage({
       messageSignature,
       viewKey: mobileConversationOpen ? "open" : "closed",
     });
+  const olderMessagesLoadingRef = useRef(false);
+  const exhaustedConversationIdsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    const canvas = messageCanvasRef.current;
+    const conversationId = selected?.id;
+    const before = selected?.messages.find(
+      (message) => message.createdAt,
+    )?.createdAt;
+    if (!canvas || !liveMode || !workspaceId || !conversationId || !before)
+      return;
+
+    const loadOlder = () => {
+      if (
+        canvas.scrollTop > 24 ||
+        canvas.scrollHeight <= canvas.clientHeight + 24 ||
+        olderMessagesLoadingRef.current ||
+        exhaustedConversationIdsRef.current.has(conversationId)
+      )
+        return;
+      olderMessagesLoadingRef.current = true;
+      const previousHeight = canvas.scrollHeight;
+      void loadOlderLiveConversationMessages(
+        workspaceId,
+        conversationId,
+        before,
+      )
+        .then((older) => {
+          if (!older.length) {
+            exhaustedConversationIdsRef.current.add(conversationId);
+            return;
+          }
+          setConversations((current) =>
+            current.map((conversation) => {
+              if (conversation.id !== conversationId) return conversation;
+              const known = new Set(
+                conversation.messages.map((message) => message.id),
+              );
+              return {
+                ...conversation,
+                messages: [
+                  ...older.filter((message) => !known.has(message.id)),
+                  ...conversation.messages,
+                ],
+              };
+            }),
+          );
+          window.requestAnimationFrame(() => {
+            canvas.scrollTop += canvas.scrollHeight - previousHeight;
+          });
+        })
+        .catch((error) =>
+          onToast(localizedError(error, t("errors.loadOlderMessages"))),
+        )
+        .finally(() => {
+          olderMessagesLoadingRef.current = false;
+        });
+    };
+
+    canvas.addEventListener("scroll", loadOlder, { passive: true });
+    return () => canvas.removeEventListener("scroll", loadOlder);
+  }, [
+    liveMode,
+    messageCanvasRef,
+    onToast,
+    selected?.id,
+    selected?.messages,
+    setConversations,
+    t,
+    workspaceId,
+  ]);
   const filtered = useMemo(
     () =>
       conversations.filter((conversation) => {
@@ -1755,6 +1828,7 @@ export function InboxPage({
                       )}
                       <MessageBubble
                         message={message}
+                        messageWorkspaceId={workspaceId ?? ""}
                         senderName={
                           message.senderUserId
                             ? senderNames[message.senderUserId]
@@ -1767,6 +1841,31 @@ export function InboxPage({
                         onCancelFailed={() => cancelFailedMessage(message)}
                         onRetryFailed={() => void retryFailedMessage(message)}
                         onMediaError={() => refreshFailedMedia(message.id)}
+                        onMediaResolved={(url) =>
+                          setConversations((current) =>
+                            current.map((conversation) =>
+                              conversation.id !== selected.id
+                                ? conversation
+                                : {
+                                    ...conversation,
+                                    messages: conversation.messages.map(
+                                      (candidate) =>
+                                        candidate.id !== message.id
+                                          ? candidate
+                                          : {
+                                              ...candidate,
+                                              attachment: candidate.attachment
+                                                ? {
+                                                    ...candidate.attachment,
+                                                    url,
+                                                  }
+                                                : candidate.attachment,
+                                            },
+                                    ),
+                                  },
+                            ),
+                          )
+                        }
                         onOpenMedia={() => openMediaViewer(message.id)}
                         onCopy={async () => {
                           if (!message.text) return;
@@ -2695,6 +2794,7 @@ function ConversationHeader({
 
 function MessageBubble({
   message,
+  messageWorkspaceId,
   senderName,
   actionPending,
   reactionPending,
@@ -2703,11 +2803,13 @@ function MessageBubble({
   onCancelFailed,
   onRetryFailed,
   onMediaError,
+  onMediaResolved,
   onOpenMedia,
   onCopy,
   onReact,
 }: {
   message: Message;
+  messageWorkspaceId: string;
   senderName?: string;
   actionPending: boolean;
   reactionPending: boolean;
@@ -2716,12 +2818,12 @@ function MessageBubble({
   onCancelFailed: () => void;
   onRetryFailed: () => void;
   onMediaError: () => void;
+  onMediaResolved: (url: string) => void;
   onOpenMedia: () => void;
   onCopy: () => void;
   onReact: (reaction: string) => void;
 }) {
   const { t } = useTranslation("inbox");
-  const attachmentUrl = message.attachment?.url;
   const failedOutbound =
     message.direction === "outbound" && message.status === "failed";
   const pendingOutbound =
@@ -2786,71 +2888,14 @@ function MessageBubble({
             </div>
           ) : message.type === "text" ? (
             <div className="message-bubble">{message.text}</div>
-          ) : message.type === "image" && attachmentUrl ? (
-            <button
-              className="message-bubble media-bubble media-preview-trigger"
-              type="button"
-              aria-label={t("ui.openMediaViewer")}
-              onClick={onOpenMedia}
-            >
-              <img
-                src={attachmentUrl}
-                alt={message.attachment?.name ?? "WhatsApp image"}
-                onError={onMediaError}
-              />
-              {message.text && <span>{message.text}</span>}
-            </button>
-          ) : message.type === "video" && attachmentUrl ? (
-            <button
-              className="message-bubble media-bubble media-preview-trigger"
-              type="button"
-              aria-label={t("ui.openMediaViewer")}
-              onClick={onOpenMedia}
-            >
-              <video
-                preload="metadata"
-                muted
-                playsInline
-                src={attachmentUrl}
-                onError={onMediaError}
-              />
-              {message.text && <span>{message.text}</span>}
-            </button>
-          ) : message.type === "audio" && attachmentUrl ? (
-            <div className="message-bubble media-bubble">
-              <audio
-                controls
-                preload="metadata"
-                src={attachmentUrl}
-                onError={onMediaError}
-              />
-              {message.text && <span>{message.text}</span>}
-              {!message.text &&
-                message.transcriptionStatus === "processing" && (
-                  <span className="media-transcript-status">
-                    {t("ui.transcriptionProcessing")}
-                  </span>
-                )}
-              {!message.text && message.transcriptionStatus === "failed" && (
-                <span className="media-transcript-status failed">
-                  {t("ui.transcriptionUnavailable")}
-                </span>
-              )}
-            </div>
           ) : (
-            <a
-              className="message-bubble attachment-bubble"
-              href={attachmentUrl}
-              target={attachmentUrl ? "_blank" : undefined}
-              rel={attachmentUrl ? "noreferrer" : undefined}
-              aria-disabled={!attachmentUrl}
-            >
-              <FileText size={18} />
-              <span>
-                <strong>{message.attachment?.name ?? "Attachment"}</strong>
-                <small>{message.attachment?.meta ?? "File"}</small>
-              </span>
-            </a>
+            <MessageMedia
+              workspaceId={messageWorkspaceId}
+              message={message}
+              onError={onMediaError}
+              onOpen={onOpenMedia}
+              onResolved={onMediaResolved}
+            />
           )}
         </div>
         {visibleReactions.length > 0 && (

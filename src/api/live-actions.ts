@@ -9,6 +9,7 @@ import type {
   Issue,
   IssueType,
   Priority,
+  Message as UiMessage,
 } from "../types";
 import type { SupportFlow } from "../shared/support-flow";
 import {
@@ -19,6 +20,7 @@ import {
   toUiRun,
   toUiBugCase,
   findBugCaseForRun,
+  toUiMessage,
   type WorkspaceData,
 } from "./live-mappers";
 import {
@@ -203,7 +205,8 @@ async function loadWorkspaceKnowledge(
         .select("*")
         .eq("workspace_id", workspaceId)
         .eq("managed_by_sync", false)
-        .order("updated_at", { ascending: false }),
+        .order("updated_at", { ascending: false })
+        .limit(100),
     ),
     unwrap(
       db
@@ -211,7 +214,8 @@ async function loadWorkspaceKnowledge(
         .select(REPOSITORY_ARTICLE_SUMMARY_COLUMNS)
         .eq("workspace_id", workspaceId)
         .eq("managed_by_sync", true)
-        .order("updated_at", { ascending: false }),
+        .order("updated_at", { ascending: false })
+        .limit(100),
     ),
   ]);
   return [
@@ -303,65 +307,64 @@ export async function loadLiveWorkspace(
     contacts,
     channels,
     conversations,
-    messages,
     issues,
     runs,
-    events,
     knowledge,
     aiStates,
     aiDrafts,
     bugCases,
-    bugCaseEvents,
   ] = await Promise.all([
-    unwrap(db.from("contacts").select("*").eq("workspace_id", workspace.id)),
+    unwrap(
+      db
+        .from("contacts")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .limit(100),
+    ),
     unwrap(
       db
         .from("channel_connections")
         .select("*")
         .eq("workspace_id", workspace.id)
-        .order("name"),
+        .order("name")
+        .limit(20),
     ),
     unwrap(
       db
         .from("conversations")
-        .select("*")
+        .select("*, messages!messages_conversation_id_fkey(*)")
         .eq("workspace_id", workspace.id)
-        .order("last_message_at", { ascending: false, nullsFirst: false }),
-    ),
-    unwrap(
-      db
-        .from("messages")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .order("created_at", { ascending: true }),
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .order("created_at", {
+          referencedTable: "messages",
+          ascending: false,
+        })
+        .limit(1, { referencedTable: "messages" })
+        .limit(100),
     ),
     unwrap(
       db
         .from("issues")
         .select("*")
         .eq("workspace_id", workspace.id)
-        .order("updated_at", { ascending: false }),
+        .order("updated_at", { ascending: false })
+        .limit(100),
     ),
     unwrap(
       db
         .from("agent_runs")
         .select("*")
         .eq("workspace_id", workspace.id)
-        .order("created_at", { ascending: false }),
-    ),
-    unwrap(
-      db
-        .from("agent_run_events")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .order("created_at", { ascending: true }),
+        .order("created_at", { ascending: false })
+        .limit(50),
     ),
     loadWorkspaceKnowledge(db, workspace.id),
     unwrap(
       db
         .from("conversation_ai_state")
         .select("*")
-        .eq("workspace_id", workspace.id),
+        .eq("workspace_id", workspace.id)
+        .limit(100),
     ),
     unwrap(
       db
@@ -369,21 +372,16 @@ export async function loadLiveWorkspace(
         .select("*")
         .eq("workspace_id", workspace.id)
         .in("status", ["pending_review", "auto_eligible"])
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(100),
     ),
     unwrap(
       db
         .from("bug_cases")
         .select("*")
         .eq("workspace_id", workspace.id)
-        .order("updated_at", { ascending: false }),
-    ),
-    unwrap(
-      db
-        .from("bug_case_events")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .order("created_at", { ascending: true }),
+        .order("updated_at", { ascending: false })
+        .limit(50),
     ),
   ]);
   const aiDraftLinks = aiDrafts.length
@@ -411,13 +409,6 @@ export async function loadLiveWorkspace(
       .filter((issue) => issue.conversation_id)
       .map((issue) => [issue.conversation_id!, issue]),
   );
-  const hydratedMessages = await hydrateMessageMediaUrls(db, messages);
-  const messagesByConversation = new Map<string, Message[]>();
-  for (const message of hydratedMessages)
-    messagesByConversation.set(message.conversation_id, [
-      ...(messagesByConversation.get(message.conversation_id) ?? []),
-      message,
-    ]);
   const customerByContact = new Map(
     contacts.map((contact) => [contact.id, contact.display_name]),
   );
@@ -452,7 +443,7 @@ export async function loadLiveWorkspace(
       toUiConversation(
         conversation,
         contactById.get(conversation.contact_id),
-        messagesByConversation.get(conversation.id) ?? [],
+        conversation.messages ?? [],
         issueByConversation.get(conversation.id),
         aiStateByConversation.get(conversation.id),
         aiDraftByConversation.get(conversation.id),
@@ -477,7 +468,7 @@ export async function loadLiveWorkspace(
         .map((bugCase) =>
           toUiBugCase(
             bugCase,
-            bugCaseEvents,
+            [],
             issues.find((issue) => issue.id === bugCase.issue_id)?.identifier,
           ),
         ),
@@ -485,10 +476,10 @@ export async function loadLiveWorkspace(
         const bugCase = findBugCaseForRun(bugCases, run.id);
         return toUiRun(
           run,
-          events,
+          [],
           issues.find((issue) => issue.id === run.issue_id)?.identifier,
           bugCase,
-          bugCaseEvents,
+          [],
         );
       }),
     ],
@@ -515,7 +506,8 @@ export async function loadLiveConversationSnapshot(
       .select("*")
       .eq("workspace_id", workspaceId)
       .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
   if (conversationResult.error)
     throw new LiveActionError(conversationResult.error.message);
@@ -523,10 +515,7 @@ export async function loadLiveConversationSnapshot(
     throw new LiveActionError(messagesResult.error.message);
   if (!conversationResult.data) return null;
 
-  const hydratedMessages = await hydrateMessageMediaUrls(
-    db,
-    messagesResult.data ?? [],
-  );
+  const messages = [...(messagesResult.data ?? [])].reverse();
   const [contactResult, issueResult, aiStateResult, aiDraftResult] =
     await Promise.all([
       db
@@ -591,11 +580,49 @@ export async function loadLiveConversationSnapshot(
   return toUiConversation(
     conversationResult.data,
     contactResult.data ?? undefined,
-    hydratedMessages,
+    messages,
     issueResult.data ?? undefined,
     aiStateResult.data ?? undefined,
     aiDraft,
   );
+}
+
+export async function loadOlderLiveConversationMessages(
+  client: MendSupabaseClient | null,
+  workspaceId: string,
+  conversationId: string,
+  before: string,
+  limit = 50,
+): Promise<UiMessage[]> {
+  const db = requireClient(client);
+  const records = await unwrap(
+    db
+      .from("messages")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("conversation_id", conversationId)
+      .lt("created_at", before)
+      .order("created_at", { ascending: false })
+      .limit(Math.min(50, Math.max(1, limit))),
+  );
+  const ordered = [...records].reverse();
+  const messages = ordered
+    .filter((record) => record.message_type !== "reaction")
+    .map((record) => toUiMessage(record));
+  for (const reaction of ordered.filter(
+    (record) => record.message_type === "reaction",
+  )) {
+    const target = messages.find(
+      (message) => message.id === reaction.quoted_message_id,
+    );
+    const emoji = reaction.text ?? reaction.caption;
+    if (target && emoji)
+      target.reactions = [
+        ...(target.reactions ?? []),
+        { emoji, mine: reaction.direction === "outbound" },
+      ];
+  }
+  return messages;
 }
 
 export interface LiveWorkspaceMember {

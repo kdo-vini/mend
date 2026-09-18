@@ -213,6 +213,7 @@ export function toUiMessage(
     transcriptionErrorCode: record.transcription_error_code ?? undefined,
     mediaAssetId: record.media_asset_id ?? undefined,
     mediaBatchId: record.media_batch_id ?? undefined,
+    mediaStoragePath: record.media_storage_path ?? undefined,
     attachment:
       record.file_name || record.media_remote_url || record.media_storage_path
         ? {

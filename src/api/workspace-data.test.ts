@@ -21,7 +21,7 @@ describe("workspace realtime subscriptions", () => {
     ).toBe(true);
   });
 
-  it("subscribes to every live workspace surface and refetches after reconnect", () => {
+  it("subscribes to every live workspace surface without synthesizing a full refresh", () => {
     const registrations: Array<{
       options: Record<string, unknown>;
       handler: (payload: unknown) => void;
@@ -71,21 +71,20 @@ describe("workspace realtime subscriptions", () => {
     );
 
     statusCallback?.("SUBSCRIBED");
-    expect(changes).toHaveLength(1);
-    expect((changes[0] as { table: string }).table).toBe("*");
+    expect(changes).toHaveLength(0);
     expect(statuses).toEqual(["SUBSCRIBED"]);
     registrations
       .find((item) => item.options.table === "messages")
       ?.handler({ eventType: "INSERT", table: "messages" });
-    expect(changes).toHaveLength(2);
+    expect(changes).toHaveLength(1);
 
     const messagesHandler = registrations.find(
       (item) => item.options.table === "messages",
     )?.handler;
     messagesHandler?.({ new: { workspace_id: "other" }, old: {} });
-    expect(changes).toHaveLength(2);
+    expect(changes).toHaveLength(1);
     messagesHandler?.({ new: { workspace_id: "workspace-1" }, old: {} });
-    expect(changes).toHaveLength(3);
+    expect(changes).toHaveLength(2);
 
     statusCallback?.("CHANNEL_ERROR");
     expect(statuses).toEqual(["SUBSCRIBED", "CHANNEL_ERROR"]);
@@ -148,26 +147,34 @@ describe("workspace realtime subscriptions", () => {
     vi.unstubAllGlobals();
   });
 
-  it("refreshes only while realtime is unhealthy and stops cleanly", () => {
+  it("backs off degraded reconciliation and stops after five minutes", () => {
     vi.useFakeTimers();
     const refresh = vi.fn();
     let healthy = false;
     const fallback = createRealtimeFallback(refresh, () => healthy);
 
     fallback.start();
-    vi.advanceTimersByTime(4_999);
+    vi.advanceTimersByTime(14_999);
     expect(refresh).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(refresh).toHaveBeenCalledTimes(1);
 
-    healthy = true;
-    vi.advanceTimersByTime(5_000);
+    vi.advanceTimersByTime(29_999);
     expect(refresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(60_000);
+    expect(refresh).toHaveBeenCalledTimes(3);
+
+    healthy = true;
+    vi.advanceTimersByTime(60_000);
+    expect(refresh).toHaveBeenCalledTimes(3);
 
     fallback.stop();
     healthy = false;
-    vi.advanceTimersByTime(5_000);
-    expect(refresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(300_000);
+    expect(refresh).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
   });
 });

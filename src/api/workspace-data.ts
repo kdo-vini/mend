@@ -46,19 +46,46 @@ export function hasActiveRuns(runs: readonly { status: string }[]): boolean {
 export function createRealtimeFallback(
   refresh: () => void,
   isHealthy: () => boolean,
-  intervalMs = 5_000,
+  options: {
+    initialDelayMs?: number;
+    maxDelayMs?: number;
+    maxDurationMs?: number;
+    isVisible?: () => boolean;
+  } = {},
 ) {
-  let timer: ReturnType<typeof setInterval> | null = null;
+  const initialDelayMs = options.initialDelayMs ?? 15_000;
+  const maxDelayMs = options.maxDelayMs ?? 60_000;
+  const maxDurationMs = options.maxDurationMs ?? 5 * 60_000;
+  const isVisible =
+    options.isVisible ??
+    (() =>
+      typeof document === "undefined" ||
+      document.visibilityState === "visible");
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let startedAt = 0;
+  let nextDelayMs = initialDelayMs;
+
+  const schedule = () => {
+    if (timer !== null || isHealthy()) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (isHealthy() || Date.now() - startedAt >= maxDurationMs) return;
+      if (isVisible()) refresh();
+      nextDelayMs = Math.min(nextDelayMs * 2, maxDelayMs);
+      schedule();
+    }, nextDelayMs);
+  };
+
   return {
     start() {
       if (timer !== null) return;
-      timer = setInterval(() => {
-        if (!isHealthy()) refresh();
-      }, intervalMs);
+      startedAt = Date.now();
+      nextDelayMs = initialDelayMs;
+      schedule();
     },
     stop() {
       if (timer === null) return;
-      clearInterval(timer);
+      clearTimeout(timer);
       timer = null;
     },
   };
@@ -110,17 +137,6 @@ export function subscribeToWorkspace(
   const isVisible = () =>
     typeof document === "undefined" || document.visibilityState === "visible";
 
-  const refreshPayload = () =>
-    ({
-      eventType: "*",
-      schema: "public",
-      table: "*",
-      commit_timestamp: new Date().toISOString(),
-      new: {},
-      old: {},
-      errors: null,
-    }) as unknown as RealtimePostgresChangesPayload<Record<string, unknown>>;
-
   const scheduleReconnect = () => {
     if (
       stopped ||
@@ -158,9 +174,6 @@ export function subscribeToWorkspace(
       options.onStatus?.(status);
       if (realtimeHealthy) {
         reconnectDelay = 1_000;
-        // A reconnect can happen while the browser was offline. Refetching
-        // here closes the gap between the last event and the current snapshot.
-        onChange(refreshPayload());
       } else if (
         status === "CHANNEL_ERROR" ||
         status === "TIMED_OUT" ||

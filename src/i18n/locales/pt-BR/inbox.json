@@ -220,6 +220,7 @@
     "copyMessage": "Não foi possível copiar a mensagem.",
     "editMessage": "Não foi possível editar esta mensagem com falha.",
     "retryMessage": "Não foi possível tentar esta mensagem novamente.",
+    "loadOlderMessages": "Não foi possível carregar as mensagens anteriores.",
     "draftUnavailable": "O rascunho de IA não está disponível."
   },
   "confirmations": {

@@ -55,6 +55,7 @@ import {
 import { WorkspaceOnboarding as FeatureWorkspaceOnboarding } from "./app/onboarding/WorkspaceOnboarding";
 import { WorkspaceRoutes } from "./app/routes/WorkspaceRoutes";
 import { notificationDestination } from "./app/shell/notification-destination";
+import { workspaceRefreshTarget } from "./app/live-workspace-sync";
 import {
   MobileBottomNav as ShellMobileBottomNav,
   MobileTopbar as ShellMobileTopbar,
@@ -424,6 +425,23 @@ function App() {
     let reconcileQueue = Promise.resolve();
     let realtimeHealthy = false;
     let runStatusTimer: ReturnType<typeof setInterval> | null = null;
+    let workspaceRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleWorkspaceRefresh = () => {
+      if (workspaceRefreshTimer || !active) return;
+      workspaceRefreshTimer = setTimeout(() => {
+        workspaceRefreshTimer = null;
+        reconcileQueue = reconcileQueue
+          .then(() => (active ? hydrate(false) : undefined))
+          .catch((error) => {
+            if (active)
+              setLiveDataError(
+                error instanceof Error
+                  ? error.message
+                  : t("errors.liveReconciliation"),
+              );
+          });
+      }, 250);
+    };
     const hydrate = async (showLoading = true) => {
       try {
         if (showLoading) setWorkspaceLoading(true);
@@ -459,6 +477,13 @@ function App() {
             ),
           ),
         );
+        setSelectedConversationId((current) =>
+          liveData.conversations.some(
+            (conversation) => conversation.id === current,
+          )
+            ? current
+            : (liveData.conversations[0]?.id ?? ""),
+        );
         setIssues(liveData.issues);
         setKnowledgeArticles(liveData.knowledge);
         setRuns(liveData.runs);
@@ -476,40 +501,32 @@ function App() {
               reconcileQueue = reconcileQueue
                 .then(async () => {
                   if (!active) return;
-                  const table = String(payload.table ?? "");
-                  const row = (payload.new ?? payload.old ?? {}) as Record<
-                    string,
-                    unknown
-                  >;
-
-                  if (table === "*") {
-                    await hydrate(false);
+                  const target = workspaceRefreshTarget({
+                    table: String(payload.table ?? ""),
+                    new: payload.new as Record<string, unknown>,
+                    old: payload.old as Record<string, unknown>,
+                  });
+                  if (target.kind === "notifications") {
+                    const nextNotifications = await listWorkspaceNotifications(
+                      client,
+                      workspace.id,
+                    );
+                    if (active) setNotifications(nextNotifications);
                     return;
                   }
-
-                  if (
-                    (table === "messages" || table === "conversations") &&
-                    typeof row.id === "string"
-                  ) {
-                    const conversationId =
-                      table === "messages"
-                        ? String(row.conversation_id ?? "")
-                        : row.id;
-                    if (conversationId) {
-                      const snapshot = await loadLiveConversationSnapshot(
-                        client,
-                        workspace.id,
-                        conversationId,
+                  if (target.kind === "conversation") {
+                    const snapshot = await loadLiveConversationSnapshot(
+                      client,
+                      workspace.id,
+                      target.id,
+                    );
+                    if (snapshot && active)
+                      setConversations((current) =>
+                        mergeConversationSnapshot(current, snapshot),
                       );
-                      if (snapshot && active)
-                        setConversations((current) =>
-                          mergeConversationSnapshot(current, snapshot),
-                        );
-                      return;
-                    }
+                    return;
                   }
-
-                  await hydrate(false);
+                  scheduleWorkspaceRefresh();
                 })
                 .catch((error) => {
                   if (active)
@@ -546,43 +563,57 @@ function App() {
     const realtimeFallback = createRealtimeFallback(
       () => {
         if (realtimeHealthy || !active) return;
-        // ponytail: degraded mode uses the existing full snapshot; add a
-        // cursor-based incremental query if workspace size makes this costly.
-        reconcileQueue = reconcileQueue
-          .then(() => (active ? hydrate(false) : undefined))
-          .catch((error) => {
-            if (active)
-              setLiveDataError(
-                error instanceof Error
-                  ? error.message
-                  : t("errors.liveReconciliation"),
-              );
-          });
+        scheduleWorkspaceRefresh();
       },
       () => realtimeHealthy,
     );
     runStatusTimer = setInterval(() => {
-      if (!active || !realtimeHealthy || !hasActiveRuns(runsRef.current))
+      if (
+        !active ||
+        !realtimeHealthy ||
+        !hasActiveRuns(runsRef.current) ||
+        document.visibilityState !== "visible"
+      )
         return;
-      reconcileQueue = reconcileQueue
-        .then(() => (active ? hydrate(false) : undefined))
-        .catch((error) => {
-          if (active)
-            setLiveDataError(
-              error instanceof Error
-                ? error.message
-                : t("errors.liveReconciliation"),
-            );
-        });
-    }, 5_000);
+      scheduleWorkspaceRefresh();
+    }, 30_000);
     void hydrate();
     return () => {
       active = false;
       unsubscribe();
       realtimeFallback.stop();
       if (runStatusTimer) clearInterval(runStatusTimer);
+      if (workspaceRefreshTimer) clearTimeout(workspaceRefreshTimer);
     };
   }, [demoMode, liveDataRetry, t, workspaceId]);
+
+  useEffect(() => {
+    if (demoMode || !supabase || !workspaceId || !selectedConversationId)
+      return;
+    let active = true;
+    void loadLiveConversationSnapshot(
+      supabase,
+      workspaceId,
+      selectedConversationId,
+    )
+      .then((snapshot) => {
+        if (snapshot && active)
+          setConversations((current) =>
+            mergeConversationSnapshot(current, snapshot),
+          );
+      })
+      .catch((error) => {
+        if (active)
+          setLiveDataError(
+            error instanceof Error
+              ? error.message
+              : t("errors.liveReconciliation"),
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [demoMode, selectedConversationId, t, workspaceId]);
 
   useEffect(() => {
     if (demoMode || !mendApiBaseUrl) return;

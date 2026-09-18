@@ -22,10 +22,69 @@ import {
   updateLiveRepository,
   updateLiveAgentRun,
   hydrateMessageMediaUrls,
+  loadOlderLiveConversationMessages,
+  loadLiveWorkspace,
   saveLiveAgentRoutingPolicy,
   type LiveStageRoutingPolicy,
 } from "./live-actions";
 import type { MendSupabaseClient } from "../lib/supabase";
+
+type RecordedQuery = {
+  table: string;
+  columns?: string;
+  limit?: number;
+  filters?: Record<string, unknown>;
+  descending?: boolean;
+};
+
+function workspaceQueryClient(recorded: RecordedQuery[]): MendSupabaseClient {
+  const rows: Record<string, unknown[]> = {
+    workspaces: [
+      {
+        id: "workspace-1",
+        name: "Mend",
+        default_language: "pt-BR",
+      },
+    ],
+  };
+  return {
+    from(table: string) {
+      const query: RecordedQuery = { table };
+      recorded.push(query);
+      const builder = {
+        select(columns = "*") {
+          query.columns = columns;
+          return builder;
+        },
+        eq(column: string, value: unknown) {
+          query.filters = { ...query.filters, [column]: value };
+          return builder;
+        },
+        lt(column: string, value: unknown) {
+          query.filters = { ...query.filters, [`${column}<`]: value };
+          return builder;
+        },
+        in() {
+          return builder;
+        },
+        order(_column: string, options?: { ascending?: boolean }) {
+          query.descending = options?.ascending === false;
+          return builder;
+        },
+        limit(value: number) {
+          query.limit = value;
+          return builder;
+        },
+        then(resolve: (value: unknown) => unknown) {
+          return Promise.resolve({ data: rows[table] ?? [], error: null }).then(
+            resolve,
+          );
+        },
+      };
+      return builder;
+    },
+  } as unknown as MendSupabaseClient;
+}
 
 describe("live Agent run actions", () => {
   it("links a continuation to its parent run and research artifact", async () => {
@@ -107,6 +166,53 @@ describe("live message media hydration", () => {
       "https://media.test/audio.ogg?token=stable",
     );
     expect(createSignedUrl).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("live workspace bootstrap", () => {
+  it("bounds summary collections and leaves messages and event history on demand", async () => {
+    const recorded: RecordedQuery[] = [];
+
+    await loadLiveWorkspace(workspaceQueryClient(recorded), "workspace-1");
+
+    expect(recorded.some((query) => query.table === "messages")).toBe(false);
+    expect(recorded.some((query) => query.table === "agent_run_events")).toBe(
+      false,
+    );
+    expect(recorded.some((query) => query.table === "bug_case_events")).toBe(
+      false,
+    );
+    expect(
+      recorded.find((query) => query.table === "conversations")?.limit,
+    ).toBe(100);
+    expect(recorded.find((query) => query.table === "issues")?.limit).toBe(100);
+    expect(recorded.find((query) => query.table === "agent_runs")?.limit).toBe(
+      50,
+    );
+  });
+
+  it("loads older messages through a bounded conversation cursor", async () => {
+    const recorded: RecordedQuery[] = [];
+
+    await loadOlderLiveConversationMessages(
+      workspaceQueryClient(recorded),
+      "workspace-1",
+      "conversation-1",
+      "2026-09-18T12:00:00.000Z",
+    );
+
+    expect(recorded).toEqual([
+      expect.objectContaining({
+        table: "messages",
+        limit: 50,
+        descending: true,
+        filters: {
+          workspace_id: "workspace-1",
+          conversation_id: "conversation-1",
+          "created_at<": "2026-09-18T12:00:00.000Z",
+        },
+      }),
+    ]);
   });
 });
 
