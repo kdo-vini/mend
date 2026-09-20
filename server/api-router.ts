@@ -599,6 +599,9 @@ function describeWhatsmiauApiError(error: WhatsmiauApiError): string {
         parsed.error,
         parsed.msg,
         parsed.response,
+        typeof parsed.error === "object" && parsed.error
+          ? (parsed.error as { message?: unknown }).message
+          : undefined,
       ]
         .map((value) =>
           typeof value === "string"

@@ -1498,9 +1498,7 @@ describe("Supabase API adapters", () => {
         name: "Support",
         providerInstanceName: "mend-local",
       });
-      expect(createInput).toEqual([
-        { instanceName: "mend-local", qrcode: true, syncFullHistory: true },
-      ]);
+      expect(createInput).toEqual([{ instanceName: "mend-local" }]);
     } finally {
       if (previousBaseUrl === undefined) delete process.env.APP_BASE_URL;
       else process.env.APP_BASE_URL = previousBaseUrl;
@@ -1739,7 +1737,9 @@ describe("Supabase API adapters", () => {
       ...fakeProvider(),
       createInstance: async () => ({
         instanceName: "mend-new",
-        state: "qr-code",
+        state: "closed",
+      }),
+      connectInstance: async () => ({
         qrcode: "data:image/png;base64,created",
       }),
     });
@@ -1796,8 +1796,6 @@ describe("Supabase API adapters", () => {
     });
     expect(createInstance).toHaveBeenCalledExactlyOnceWith({
       instanceName: "mend-existing",
-      qrcode: true,
-      syncFullHistory: true,
     });
     expect(connectInstance).toHaveBeenCalledTimes(2);
   });

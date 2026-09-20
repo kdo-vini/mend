@@ -345,7 +345,7 @@ describe("Whatsmiau normalization", () => {
       });
       await expect(provider.getQrCode("mend-test")).resolves.toBeNull();
       await expect(
-        provider.createInstance({ instanceName: "mend-created", qrcode: true }),
+        provider.createInstance({ instanceName: "mend-created" }),
       ).resolves.toMatchObject({
         instanceName: "mend-created",
         qrcode: "data:image/png;base64,from-create",
@@ -377,6 +377,33 @@ describe("Whatsmiau normalization", () => {
       await expect(provider.getConnectionState("mend-test")).resolves.toEqual({
         state: "open",
       });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates an instance with only the Whatsmiau Cloud create fields", async () => {
+    const originalFetch = globalThis.fetch;
+    let createBody: Record<string, unknown> | undefined;
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/instance/create")) {
+        createBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({ instanceName: "mend-minimal", state: "closed" }),
+          { status: 200 },
+        );
+      }
+      return new Response(null, { status: 404 });
+    };
+
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await provider.createInstance({ instanceName: " mend-minimal " });
+      expect(createBody).toEqual({ instanceName: "mend-minimal" });
     } finally {
       globalThis.fetch = originalFetch;
     }

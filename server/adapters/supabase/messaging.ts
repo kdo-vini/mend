@@ -166,33 +166,30 @@ export class SupabaseChannelAdapter implements ChannelPort {
     let providerCreated = false;
     try {
       let instance = await this.provider.createInstance({
-        instanceName: input.providerInstanceName,
-        qrcode: true,
-        syncFullHistory: true,
+        instanceName: input.providerInstanceName.trim(),
         ...(webhook
           ? { webhookUrl: webhook.url, webhookSecret: webhook.secret }
           : {}),
       });
       providerCreated = true;
-      let pairingQr = instance.qrcode;
-      if (!pairingQr) {
-        const connected = await this.provider
-          .connectInstance(input.providerInstanceName)
-          .catch(() => null);
-        pairingQr = connected?.qrcode;
-        if (connected?.qrcode || connected?.pairingCode)
-          instance = {
-            ...instance,
-            state: "qr-code",
-            ...(connected?.qrcode ? { qrcode: connected.qrcode } : {}),
-            ...(connected?.pairingCode
-              ? { pairingCode: connected.pairingCode }
-              : {}),
-          };
-      }
+      // Always start pairing after create — Whatsmiau returns the QR from
+      // /instance/connect (base64), not from the create payload.
+      const connected = await this.provider
+        .connectInstance(input.providerInstanceName.trim())
+        .catch(() => null);
+      let pairingQr = connected?.qrcode ?? instance.qrcode;
+      if (connected?.qrcode || connected?.pairingCode)
+        instance = {
+          ...instance,
+          state: "qr-code",
+          ...(connected?.qrcode ? { qrcode: connected.qrcode } : {}),
+          ...(connected?.pairingCode
+            ? { pairingCode: connected.pairingCode }
+            : {}),
+        };
       if (!pairingQr) {
         const image = await this.provider.getQrCode(
-          input.providerInstanceName,
+          input.providerInstanceName.trim(),
           5,
           700,
         );
@@ -205,7 +202,7 @@ export class SupabaseChannelAdapter implements ChannelPort {
           workspace_id: context.workspaceId,
           provider: "whatsmiau",
           name: input.name,
-          provider_instance_name: input.providerInstanceName,
+          provider_instance_name: input.providerInstanceName.trim(),
           phone_number: input.phoneNumber ?? instance.phoneNumber ?? null,
           profile_name: input.profileName ?? null,
           status: providerStatus(
@@ -339,8 +336,6 @@ export class SupabaseChannelAdapter implements ChannelPort {
       const webhook = this.webhookConfiguration();
       await this.provider.createInstance({
         instanceName,
-        qrcode: true,
-        syncFullHistory: true,
         ...(webhook
           ? { webhookUrl: webhook.url, webhookSecret: webhook.secret }
           : {}),

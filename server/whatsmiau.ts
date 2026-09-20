@@ -29,7 +29,16 @@ export interface WhatsmiauGroupInfo {
 }
 export interface CreateInstanceInput {
   instanceName: string;
+  /**
+   * Whatsmiau Cloud create schema does not document a `qrcode` flag. Pairing
+   * happens via `/instance/connect` after create. Kept optional for Evolution
+   * compatibility only when explicitly requested.
+   */
   qrcode?: boolean;
+  /**
+   * Full history sync needs a paid Whatsmiau history slot. Default is off so
+   * create/pair still works on plans without free slots.
+   */
   syncFullHistory?: boolean;
   webhookUrl?: string;
   webhookSecret?: string;
@@ -472,7 +481,15 @@ export class WhatsmiauMessagingProvider {
         );
       }
       if (!body) return undefined as T;
-      return JSON.parse(body) as T;
+      try {
+        return JSON.parse(body) as T;
+      } catch {
+        throw new WhatsmiauApiError(
+          `Whatsmiau request failed: invalid JSON (${response.status})`,
+          response.status,
+          body.slice(0, 300),
+        );
+      }
     } finally {
       clearTimeout(timeout);
     }
@@ -482,20 +499,23 @@ export class WhatsmiauMessagingProvider {
     return this.request<MessagingInstance[]>("/instance/fetchInstances");
   }
   async createInstance(input: CreateInstanceInput) {
+    const instanceName = input.instanceName.trim();
+    const payload: Record<string, unknown> = { instanceName };
+    // Only send optional flags when explicitly requested. Whatsmiau Cloud's
+    // create schema does not list `qrcode`, and `syncFullHistory` needs a paid
+    // history slot — sending them by default caused create to fail with 400.
+    if (input.qrcode === true) payload.qrcode = true;
+    if (input.syncFullHistory === true) payload.syncFullHistory = true;
     const raw = await this.request<unknown>("/instance/create", {
       method: "POST",
-      body: JSON.stringify({
-        instanceName: input.instanceName,
-        qrcode: input.qrcode ?? true,
-        syncFullHistory: input.syncFullHistory ?? true,
-      }),
+      body: JSON.stringify(payload),
     });
     // Webhook setup must not roll back a freshly created instance. Pairing/QR
     // can proceed without inbound events; ensureWebhook repairs the hook later.
     if (input.webhookUrl && input.webhookSecret) {
       try {
         await this.configureWebhook({
-          instanceName: input.instanceName,
+          instanceName,
           url: input.webhookUrl,
           secret: input.webhookSecret,
         });
@@ -503,7 +523,7 @@ export class WhatsmiauMessagingProvider {
         // Best-effort: keep the instance so Settings can still show a QR.
       }
     }
-    return normalizeMessagingInstance(raw, input.instanceName);
+    return normalizeMessagingInstance(raw, instanceName);
   }
   async connectInstance(instanceName: string) {
     const result = await this.request<unknown>(
