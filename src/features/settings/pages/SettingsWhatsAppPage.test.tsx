@@ -214,6 +214,30 @@ describe("WhatsApp connection status", () => {
     );
   });
 
+  it("expands the QR code on click for easier phone scanning", async () => {
+    vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
+      ...connected,
+      state: "closed",
+    });
+    vi.mocked(settingsApi.createLiveChannel).mockResolvedValue({
+      ...connected,
+      state: "qr-code",
+      qr: "data:image/png;base64,created=",
+    });
+    await render();
+
+    const createButton = [...container.querySelectorAll("button")].find(
+      (item) => item.textContent?.includes("Create instance"),
+    );
+    await act(async () => createButton!.click());
+
+    const zoom = container.querySelector(".settings-v2-qr-zoom");
+    expect(zoom).not.toBeNull();
+    expect(zoom?.classList.contains("is-expanded")).toBe(false);
+    await act(async () => (zoom as HTMLButtonElement).click());
+    expect(zoom?.classList.contains("is-expanded")).toBe(true);
+  });
+
   it("shows a remove action for a disconnected channel", async () => {
     vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
       ...connected,

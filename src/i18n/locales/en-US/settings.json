@@ -867,8 +867,10 @@
       "pairDescription": "Generate a fresh QR code and keep this page open while the provider connects.",
       "scanQr": "Scan this QR code",
       "qrReady": "QR code ready when you are",
-      "scanDescription": "Open WhatsApp Business on the phone and scan the code.",
+      "scanDescription": "Open WhatsApp Business on the phone and scan the code. Hover or tap the QR to enlarge it.",
       "generateDescription": "The code expires quickly. Generate a new one when you are ready.",
+      "expandQr": "Enlarge QR code",
+      "expandQrHint": "Hover or tap to enlarge the QR code",
       "generate": "Generate QR",
       "generating": "Generating…",
       "pairNew": "Pair a new number",
@@ -888,7 +890,10 @@
       "errors": {
         "load": "WhatsApp is unavailable.",
         "statusStale": "Live status could not be refreshed for some numbers. You can still create or pair.",
-        "action": "The WhatsApp action failed."
+        "action": "The WhatsApp action failed.",
+        "subscriptionInactive": "The Whatsmiau Cloud subscription for this server is not active. Activate or renew it at https://whatsmiau.dev, confirm WHATSMIAU_API_KEY belongs to that account, then try again.",
+        "instanceSuspended": "This Whatsmiau instance is suspended. Check billing or administrative status at https://whatsmiau.dev, then retry.",
+        "deleteFailed": "Whatsmiau could not delete this instance. Fix the provider error, then try removing again from Mend."
       },
       "connectedToast": "WhatsApp connected"
     },

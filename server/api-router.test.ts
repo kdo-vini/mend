@@ -1263,3 +1263,37 @@ describe("Mend API router", () => {
     expect(response.body.error.code).toBe("kanban_order_conflict");
   });
 });
+
+describe("whatsmiauApiHttpError", () => {
+  it("maps inactive Cloud subscription to a 402 actionable code", async () => {
+    const { whatsmiauApiHttpError } = await import("./api-router.js");
+    const { WhatsmiauApiError } = await import("./whatsmiau.js");
+    const mapped = whatsmiauApiHttpError(
+      new WhatsmiauApiError(
+        "Whatsmiau request failed: 500",
+        500,
+        JSON.stringify({ message: "subscription is not active" }),
+      ),
+    );
+    expect(mapped.status).toBe(402);
+    expect(mapped.code).toBe("whatsapp_subscription_inactive");
+    expect(mapped.message).toMatch(/whatsmiau\.dev/i);
+  });
+
+  it("maps suspended instances to 423", async () => {
+    const { whatsmiauApiHttpError } = await import("./api-router.js");
+    const { WhatsmiauApiError } = await import("./whatsmiau.js");
+    const mapped = whatsmiauApiHttpError(
+      new WhatsmiauApiError(
+        "Whatsmiau request failed: 423",
+        423,
+        JSON.stringify({
+          suspended: true,
+          suspension_reason: "billing_past_due",
+        }),
+      ),
+    );
+    expect(mapped.status).toBe(423);
+    expect(mapped.code).toBe("whatsapp_instance_suspended");
+  });
+});

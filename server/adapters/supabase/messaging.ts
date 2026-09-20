@@ -66,8 +66,37 @@ async function rollbackProviderInstance(
   instanceName: string,
 ) {
   await provider.disconnect(instanceName).catch(() => undefined);
-  if (provider.deleteInstance)
-    await provider.deleteInstance(instanceName).catch(() => undefined);
+  await deleteProviderInstance(provider, instanceName).catch(() => undefined);
+}
+
+/**
+ * Deletes the Whatsmiau instance. Missing instances (404) are treated as
+ * already gone. Other provider faults must surface so Mend does not drop the
+ * local channel while the Cloud instance remains.
+ */
+async function deleteProviderInstance(
+  provider: WhatsmiauProviderPort,
+  instanceName: string,
+) {
+  try {
+    await provider.deleteInstance(instanceName);
+  } catch (error) {
+    if (isMissingProviderInstance(error)) return;
+    if (
+      error instanceof WhatsmiauApiError &&
+      error.status === 409
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      try {
+        await provider.deleteInstance(instanceName);
+        return;
+      } catch (retryError) {
+        if (isMissingProviderInstance(retryError)) return;
+        throw new Error("whatsapp_provider_delete_failed");
+      }
+    }
+    throw new Error("whatsapp_provider_delete_failed");
+  }
 }
 
 export class SupabaseChannelAdapter implements ChannelPort {
@@ -421,16 +450,16 @@ export class SupabaseChannelAdapter implements ChannelPort {
   }
 
   /**
-   * Permanently removes the channel from Mend and best-effort deletes the
-   * Whatsmiau instance so a new name (or the same name) can be paired cleanly.
+   * Permanently removes the channel from Mend only after Whatsmiau confirms
+   * delete (or reports the instance already gone). Local-only deletes left
+   * orphan Cloud instances that blocked recreating the same name.
    */
   async remove(context: RequestContext, channelId: string) {
     const value = await this.getRow(context, channelId);
     if (!value) return false;
     const instanceName = str(value.provider_instance_name);
     await this.provider.disconnect(instanceName).catch(() => undefined);
-    if (this.provider.deleteInstance)
-      await this.provider.deleteInstance(instanceName).catch(() => undefined);
+    await deleteProviderInstance(this.provider, instanceName);
     const result = await this.client
       .from("channel_connections")
       .delete()

@@ -42,6 +42,10 @@ LLM credential in `VITE_*` variables.
 Set these server-side values in the deployment secret manager:
 
 - `WHATSMIAU_API_KEY`, `WHATSMIAU_WEBHOOK_SECRET`, and `WHATSMIAU_BASE_URL`.
+  The API key must belong to a Whatsmiau Cloud account with an **active**
+  subscription. An inactive plan returns provider errors such as
+  `subscription is not active` on `/instance/create` and blocks pairing until
+  the plan is activated or renewed at https://whatsmiau.dev.
 - Do not configure a global support-model key or fallback. Each workspace must
   select its support, transcription, and embedding models and provide its own
   encrypted provider credential in Settings.

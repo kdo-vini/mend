@@ -867,8 +867,10 @@
       "pairDescription": "Gere um QR code novo e mantenha esta p\u00e1gina aberta enquanto o provedor conecta.",
       "scanQr": "Leia este QR code",
       "qrReady": "QR code pronto quando voc\u00ea estiver",
-      "scanDescription": "Abra o WhatsApp Business no celular e leia o c\u00f3digo.",
+      "scanDescription": "Abra o WhatsApp Business no celular e leia o c\u00f3digo. Passe o mouse ou toque no QR para ampliar.",
       "generateDescription": "O c\u00f3digo expira rapidamente. Gere um novo quando estiver pronto.",
+      "expandQr": "Ampliar QR code",
+      "expandQrHint": "Passe o mouse ou toque para ampliar o QR code",
       "generate": "Gerar QR",
       "generating": "Gerando\u2026",
       "pairNew": "Conectar um novo n\u00famero",
@@ -888,7 +890,10 @@
       "errors": {
         "load": "O WhatsApp est\u00e1 indispon\u00edvel.",
         "statusStale": "N\u00e3o foi poss\u00edvel atualizar o status de alguns n\u00fameros. Voc\u00ea ainda pode criar ou parear.",
-        "action": "A a\u00e7\u00e3o do WhatsApp falhou."
+        "action": "A a\u00e7\u00e3o do WhatsApp falhou.",
+        "subscriptionInactive": "A assinatura Whatsmiau Cloud deste servidor n\u00e3o est\u00e1 ativa. Ative ou renove em https://whatsmiau.dev, confirme que WHATSMIAU_API_KEY pertence a essa conta e tente de novo.",
+        "instanceSuspended": "Esta inst\u00e2ncia Whatsmiau est\u00e1 suspensa. Verifique cobran\u00e7a ou status administrativo em https://whatsmiau.dev e tente de novo.",
+        "deleteFailed": "O Whatsmiau n\u00e3o conseguiu excluir esta inst\u00e2ncia. Corrija o erro no provedor e tente excluir de novo no Mend."
       },
       "connectedToast": "WhatsApp conectado"
     },

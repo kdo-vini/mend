@@ -247,6 +247,7 @@ const fakeProvider = (): WhatsmiauProviderPort => ({
   getQrCode: async () => Buffer.from("qr"),
   getConnectionState: async () => ({ state: "open" }),
   disconnect: async () => undefined,
+  deleteInstance: async () => undefined,
   sendText: async () => ({ key: { id: "provider-message-1" } }),
   sendMedia: async () => ({ key: { id: "provider-message-2" } }),
   sendAudio: async () => ({ key: { id: "provider-message-3" } }),
@@ -1859,6 +1860,36 @@ describe("Supabase API adapters", () => {
     expect(disconnect).toHaveBeenCalledExactlyOnceWith("mend-existing");
     expect(deleteInstance).toHaveBeenCalledExactlyOnceWith("mend-existing");
     expect(client.rows.get("channel_connections")).toEqual([]);
+  });
+
+  it("keeps the Mend channel when Whatsmiau delete fails", async () => {
+    const client = new FakeClient({
+      channel_connections: [
+        {
+          id: "channel-existing",
+          workspace_id: workspaceId,
+          provider: "whatsmiau",
+          provider_instance_name: "mend-existing",
+          status: "closed",
+        },
+      ],
+    });
+    const deleteInstance = vi.fn(async () => {
+      throw new WhatsmiauApiError("Whatsmiau request failed: 500", 500, "{}");
+    });
+    const dependencies = adapters(client, {
+      ...fakeProvider(),
+      deleteInstance,
+    });
+
+    await expect(
+      dependencies.channels.remove(
+        { userId, workspaceId, role: "agent" },
+        "channel-existing",
+      ),
+    ).rejects.toThrow("whatsapp_provider_delete_failed");
+    expect(deleteInstance).toHaveBeenCalledExactlyOnceWith("mend-existing");
+    expect(client.rows.get("channel_connections")).toHaveLength(1);
   });
 
   it("accepts a bounded browser data URL, stores it privately, and sends only an expiring provider URL", async () => {

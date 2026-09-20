@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { QrCode, RefreshCw, Smartphone, Trash2, Unplug } from "lucide-react";
+import {
+  QrCode,
+  RefreshCw,
+  Smartphone,
+  Trash2,
+  Unplug,
+  ZoomIn,
+} from "lucide-react";
 import {
   createLiveChannel,
   disconnectLiveChannel,
@@ -10,6 +17,7 @@ import {
   removeLiveChannel,
   type WhatsAppInstance,
 } from "../api";
+import { LiveActionError } from "../../../api/transport";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import {
   SettingsError,
@@ -19,11 +27,26 @@ import {
   SettingsWorkspaceRequired,
 } from "../components/SettingsShared";
 import type { SettingsWorkspacePageProps } from "./SettingsWorkspacePage";
+import type { TFunction } from "i18next";
 
 function fallbackChannelState(channel: WhatsAppInstance): WhatsAppInstance {
   const state =
     channel.state && channel.state !== "unknown" ? channel.state : "closed";
   return { ...channel, state };
+}
+
+function whatsAppActionError(reason: unknown, t: TFunction) {
+  if (reason instanceof LiveActionError) {
+    if (reason.code === "whatsapp_subscription_inactive")
+      return t("v2.whatsapp.errors.subscriptionInactive", { ns: "settings" });
+    if (reason.code === "whatsapp_instance_suspended")
+      return t("v2.whatsapp.errors.instanceSuspended", { ns: "settings" });
+    if (reason.code === "whatsapp_provider_delete_failed")
+      return t("v2.whatsapp.errors.deleteFailed", { ns: "settings" });
+    if (reason.message.trim()) return reason.message;
+  }
+  if (reason instanceof Error && reason.message.trim()) return reason.message;
+  return t("v2.whatsapp.errors.action", { ns: "settings" });
 }
 
 export function SettingsWhatsAppPage({
@@ -36,6 +59,7 @@ export function SettingsWhatsAppPage({
   const [channels, setChannels] = useState<WhatsAppInstance[]>([]);
   const [selected, setSelected] = useState<WhatsAppInstance | null>(null);
   const [qr, setQr] = useState<string | null>(null);
+  const [qrExpanded, setQrExpanded] = useState(false);
   const [pairingChannelId, setPairingChannelId] = useState<string | null>(null);
   const [instanceName, setInstanceName] = useState("mend-techne");
   const [loading, setLoading] = useState(true);
@@ -59,6 +83,11 @@ export function SettingsWhatsAppPage({
     },
     [onChannelChange],
   );
+
+  const showQr = useCallback((next: string | null) => {
+    setQr(next);
+    if (!next) setQrExpanded(false);
+  }, []);
 
   const load = useCallback(async () => {
     if (!workspaceId) {
@@ -92,19 +121,23 @@ export function SettingsWhatsAppPage({
       setChannels(rows);
       applyChannel(next);
       if (next?.state === "open") {
-        setQr(null);
+        showQr(null);
         setPairingChannelId(null);
       }
     } catch (reason) {
       setChannels([]);
       applyChannel(null);
       setError(
-        reason instanceof Error ? reason.message : t("v2.whatsapp.errors.load"),
+        reason instanceof LiveActionError
+          ? whatsAppActionError(reason, t)
+          : reason instanceof Error
+            ? reason.message
+            : t("v2.whatsapp.errors.load"),
       );
     } finally {
       setLoading(false);
     }
-  }, [applyChannel, t, workspaceId]);
+  }, [applyChannel, showQr, t, workspaceId]);
 
   useEffect(() => void load(), [load]);
 
@@ -121,7 +154,7 @@ export function SettingsWhatsAppPage({
           setStatusWarning(false);
           applyChannel(next);
           if (next.state === "open") {
-            setQr(null);
+            showQr(null);
             setPairingChannelId(null);
             if (selected.state !== "open")
               onToast(t("v2.whatsapp.connectedToast"));
@@ -140,7 +173,7 @@ export function SettingsWhatsAppPage({
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [action, applyChannel, loading, onToast, selected, t, workspaceId]);
+  }, [action, applyChannel, loading, onToast, selected, showQr, t, workspaceId]);
 
   useEffect(() => {
     if (
@@ -159,12 +192,12 @@ export function SettingsWhatsAppPage({
       void getLiveChannelQr({ workspaceId, channelId: pairingChannelId })
         .then((result) => {
           if (stopped) return;
-          setQr(result.data);
+          showQr(result.data);
           setError(null);
         })
         .catch(() => {
           if (stopped) return;
-          setQr(null);
+          showQr(null);
           setError(t("v2.whatsapp.errors.action"));
         })
         .finally(() => {
@@ -180,6 +213,7 @@ export function SettingsWhatsAppPage({
     isConnected,
     pairingChannelId,
     selected?.channelId,
+    showQr,
     t,
     workspaceId,
   ]);
@@ -192,19 +226,15 @@ export function SettingsWhatsAppPage({
     setAction(name);
     setError(null);
     if (name === "qr") {
-      setQr(null);
+      showQr(null);
       setPairingChannelId(options?.channelId ?? selected?.channelId ?? null);
     }
     try {
       const result = await task();
-      if ("data" in result) setQr(result.data);
+      if ("data" in result) showQr(result.data);
       else applyChannel(result);
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : t("v2.whatsapp.errors.action"),
-      );
+      setError(whatsAppActionError(reason, t));
     } finally {
       setAction(null);
     }
@@ -250,7 +280,7 @@ export function SettingsWhatsAppPage({
     await runChannelAction("disconnect", () =>
       disconnectLiveChannel({ workspaceId, channelId: selected.channelId! }),
     );
-    setQr(null);
+    showQr(null);
     setPairingChannelId(null);
   };
 
@@ -274,16 +304,12 @@ export function SettingsWhatsAppPage({
         workspaceId,
         channelId: channel.channelId,
       });
-      setQr(null);
+      showQr(null);
       setPairingChannelId(null);
       onToast(t("v2.whatsapp.removedToast"));
       await load();
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : t("v2.whatsapp.errors.action"),
-      );
+      setError(whatsAppActionError(reason, t));
     } finally {
       setAction(null);
     }
@@ -293,7 +319,7 @@ export function SettingsWhatsAppPage({
     if (!workspaceId || !instanceName.trim()) return;
     setAction("create");
     setError(null);
-    setQr(null);
+    showQr(null);
     try {
       const created = await createLiveChannel({
         workspaceId,
@@ -303,7 +329,7 @@ export function SettingsWhatsAppPage({
       applyChannel(created);
       setStatusWarning(false);
       if (created.qr) {
-        setQr(created.qr);
+        showQr(created.qr);
         setPairingChannelId(created.channelId ?? null);
         setAction(null);
         return;
@@ -311,11 +337,7 @@ export function SettingsWhatsAppPage({
       setAction(null);
       if (created.channelId) await startPairing(created);
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : t("v2.whatsapp.errors.action"),
-      );
+      setError(whatsAppActionError(reason, t));
       setAction(null);
     }
   };
@@ -398,7 +420,7 @@ export function SettingsWhatsAppPage({
                         type="button"
                         onClick={() => {
                           applyChannel(channel);
-                          setQr(null);
+                          showQr(null);
                           setPairingChannelId(null);
                         }}
                         disabled={action !== null}
@@ -458,11 +480,23 @@ export function SettingsWhatsAppPage({
             >
               <div className="settings-v2-pairing">
                 {qr ? (
-                  <img
-                    className="qr-image"
-                    src={qr}
-                    alt={t("whatsapp.qrAlt")}
-                  />
+                  <button
+                    type="button"
+                    className={`settings-v2-qr-zoom${qrExpanded ? " is-expanded" : ""}`}
+                    onClick={() => setQrExpanded((open) => !open)}
+                    aria-expanded={qrExpanded}
+                    aria-label={t("v2.whatsapp.expandQr")}
+                    title={t("v2.whatsapp.expandQrHint")}
+                  >
+                    <img
+                      className="qr-image"
+                      src={qr}
+                      alt={t("whatsapp.qrAlt")}
+                    />
+                    <span className="settings-v2-qr-zoom-hint" aria-hidden>
+                      <ZoomIn size={16} strokeWidth={2} />
+                    </span>
+                  </button>
                 ) : (
                   <div className="settings-v2-qr-placeholder">
                     <QrCode size={30} />

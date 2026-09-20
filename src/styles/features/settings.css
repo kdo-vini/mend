@@ -1660,14 +1660,78 @@
 .settings-v2-qr-placeholder {
   display: grid;
   place-items: center;
-  width: 110px;
-  height: 110px;
+  width: 200px;
+  height: 200px;
   border: 1px dashed var(--line-strong);
   color: var(--muted-2);
 }
+.settings-v2-qr-zoom {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 200px;
+  height: 200px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: #fff;
+  cursor: zoom-in;
+  transition:
+    width 160ms ease,
+    height 160ms ease,
+    box-shadow 160ms ease;
+}
+.settings-v2-qr-zoom:hover,
+.settings-v2-qr-zoom:focus-visible,
+.settings-v2-qr-zoom.is-expanded {
+  z-index: 4;
+  width: 320px;
+  height: 320px;
+  cursor: zoom-out;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 35%);
+  outline: none;
+}
+.settings-v2-qr-zoom:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--bg, #0b0e14),
+    0 0 0 4px var(--accent),
+    0 12px 32px rgb(0 0 0 / 35%);
+}
+.settings-v2-qr-zoom .qr-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+  image-rendering: pixelated;
+}
+.settings-v2-qr-zoom-hint {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgb(11 14 20 / 78%);
+  color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+.settings-v2-qr-zoom:hover .settings-v2-qr-zoom-hint,
+.settings-v2-qr-zoom:focus-visible .settings-v2-qr-zoom-hint {
+  opacity: 1;
+}
+@media (hover: none) {
+  .settings-v2-qr-zoom-hint {
+    opacity: 0.85;
+  }
+}
 .settings-v2-pairing .qr-image {
-  width: 110px;
-  height: 110px;
+  width: 200px;
+  height: 200px;
   object-fit: contain;
   background: white;
 }

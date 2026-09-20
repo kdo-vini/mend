@@ -579,12 +579,16 @@ function messagingApiError(error: unknown): ApiHttpError | null {
       "whatsapp_qr_unavailable",
       "WhatsApp did not return a pairing QR code. Try again in a few seconds.",
     );
-  if (error instanceof WhatsmiauApiError)
+  if (error.message === "whatsapp_provider_delete_failed")
     return new ApiHttpError(
-      error.retryable ? 503 : 502,
-      "whatsapp_provider_error",
-      describeWhatsmiauApiError(error),
+      502,
+      "whatsapp_provider_delete_failed",
+      "Whatsmiau could not delete this instance. Fix the provider error, then try removing again from Mend.",
     );
+  if (error instanceof WhatsmiauApiError) {
+    const mapped = whatsmiauApiHttpError(error);
+    return new ApiHttpError(mapped.status, mapped.code, mapped.message);
+  }
   return null;
 }
 
@@ -618,6 +622,51 @@ function describeWhatsmiauApiError(error: WhatsmiauApiError): string {
   }
   if (detail) return `WhatsApp provider error (${error.status}): ${detail}`;
   return `WhatsApp provider error (${error.status}). Check the instance and try again.`;
+}
+
+/**
+ * Maps Whatsmiau billing/subscription faults to actionable API errors. Mend
+ * cannot create instances while the Cloud subscription behind WHATSMIAU_API_KEY
+ * is inactive — that must be fixed at https://whatsmiau.dev.
+ */
+export function whatsmiauApiHttpError(error: WhatsmiauApiError): {
+  status: number;
+  code: string;
+  message: string;
+} {
+  const detail = describeWhatsmiauApiError(error).toLowerCase();
+  const body = (error.responseBody ?? "").toLowerCase();
+  const haystack = `${detail} ${body}`;
+  // Instance-level suspension (HTTP 423 / suspended flag) before account billing.
+  if (
+    error.status === 423 ||
+    haystack.includes("instance suspended") ||
+    /"suspended"\s*:\s*true/.test(body)
+  )
+    return {
+      status: 423,
+      code: "whatsapp_instance_suspended",
+      message:
+        "This Whatsmiau instance is suspended. Check billing or administrative status at https://whatsmiau.dev, then retry.",
+    };
+  if (
+    haystack.includes("subscription is not active") ||
+    (haystack.includes("subscription") && haystack.includes("not active")) ||
+    haystack.includes("billing_past_due") ||
+    haystack.includes("billing_ended") ||
+    /\bbilling\b/.test(haystack)
+  )
+    return {
+      status: 402,
+      code: "whatsapp_subscription_inactive",
+      message:
+        "The Whatsmiau Cloud subscription for this server is not active. Activate or renew it at https://whatsmiau.dev, confirm WHATSMIAU_API_KEY belongs to that account, then try again.",
+    };
+  return {
+    status: error.retryable ? 503 : 502,
+    code: "whatsapp_provider_error",
+    message: describeWhatsmiauApiError(error),
+  };
 }
 
 function githubApiError(error: unknown): ApiHttpError | null {
