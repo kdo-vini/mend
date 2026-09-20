@@ -240,14 +240,32 @@ export function SettingsWhatsAppPage({
 
   const create = async () => {
     if (!workspaceId || !instanceName.trim()) return;
-    await runChannelAction("create", () =>
-      createLiveChannel({
+    setAction("create");
+    setError(null);
+    setQr(null);
+    try {
+      const created = await createLiveChannel({
         workspaceId,
         name: instanceName.trim(),
         instanceName: instanceName.trim(),
-      }),
-    );
-    await load();
+      });
+      applyChannel(created);
+      if (created.qr) {
+        setQr(created.qr);
+        setPairingChannelId(created.channelId ?? null);
+        setAction(null);
+        return;
+      }
+      setAction(null);
+      if (created.channelId) await startPairing(created);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : t("v2.whatsapp.errors.action"),
+      );
+      setAction(null);
+    }
   };
 
   const health =

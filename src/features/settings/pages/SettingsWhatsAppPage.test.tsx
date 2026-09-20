@@ -178,6 +178,28 @@ describe("WhatsApp connection status", () => {
     );
   });
 
+  it("shows the QR returned when creating a new instance", async () => {
+    vi.mocked(settingsApi.listLiveChannels).mockResolvedValue([]);
+    vi.mocked(settingsApi.createLiveChannel).mockResolvedValue({
+      channelId: "channel-new",
+      instanceName: "mend-new",
+      state: "qr-code",
+      qr: "data:image/png;base64,created=",
+    });
+    await render();
+
+    const createButton = [...container.querySelectorAll("button")].find(
+      (item) => item.textContent?.includes("Create instance"),
+    );
+    expect(createButton).toBeDefined();
+    await act(async () => createButton!.click());
+
+    expect(settingsApi.createLiveChannel).toHaveBeenCalled();
+    expect(container.querySelector(".qr-image")?.getAttribute("src")).toBe(
+      "data:image/png;base64,created=",
+    );
+  });
+
   it("renews the QR while pairing and stops requesting it after connection", async () => {
     vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
       ...connected,

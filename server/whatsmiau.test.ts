@@ -316,6 +316,15 @@ describe("Whatsmiau normalization", () => {
         );
       if (url.endsWith("/instance/connect/mend-test/image"))
         return new Response(null, { status: 204 });
+      if (url.endsWith("/instance/create"))
+        return new Response(
+          JSON.stringify({
+            instanceName: "mend-created",
+            state: "connecting",
+            base64: "data:image/png;base64,from-create",
+          }),
+          { status: 200 },
+        );
       return new Response(null, { status: 404 });
     };
 
@@ -329,6 +338,12 @@ describe("Whatsmiau normalization", () => {
         pairingCode: "123-456",
       });
       await expect(provider.getQrCode("mend-test")).resolves.toBeNull();
+      await expect(
+        provider.createInstance({ instanceName: "mend-created", qrcode: true }),
+      ).resolves.toMatchObject({
+        instanceName: "mend-created",
+        qrcode: "data:image/png;base64,from-create",
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }

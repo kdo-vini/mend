@@ -48,6 +48,18 @@ function isMissingProviderInstance(error: unknown): boolean {
   return error instanceof WhatsmiauApiError && error.status === 404;
 }
 
+function isConflictProviderInstance(error: unknown): boolean {
+  if (!(error instanceof WhatsmiauApiError)) return false;
+  if (error.status === 409 || error.status === 422) return true;
+  const body = (error.responseBody ?? error.message).toLowerCase();
+  return (
+    error.status === 400 &&
+    (body.includes("already") ||
+      body.includes("exists") ||
+      body.includes("duplicate"))
+  );
+}
+
 export class SupabaseChannelAdapter implements ChannelPort {
   constructor(
     private readonly client: AnySupabaseClient,
@@ -122,14 +134,28 @@ export class SupabaseChannelAdapter implements ChannelPort {
     const existing = checked("channel_connections.existing", existingResult);
     if (existing) {
       const existingRow = row(existing);
-      await this.ensureWebhook(existingRow);
-      return channel(existingRow);
+      await this.ensureWebhook(existingRow).catch(() => undefined);
+      const pairing = await this.startPairing(existingRow).catch(() => null);
+      const status = pairing
+        ? pairing.result.qrcode || pairing.result.pairingCode
+          ? "qr-code"
+          : "connecting"
+        : providerStatus(existingRow.status);
+      const updated =
+        (await this.updateState(context, str(existingRow.id), status)) ??
+        channel(existingRow);
+      return {
+        ...updated,
+        ...(pairing?.result.qrcode
+          ? { qr: asWhatsAppQrDataUri(pairing.result.qrcode) }
+          : {}),
+      };
     }
 
     const webhook = this.webhookConfiguration();
     let providerCreated = false;
     try {
-      const instance = await this.provider.createInstance({
+      let instance = await this.provider.createInstance({
         instanceName: input.providerInstanceName,
         qrcode: true,
         syncFullHistory: true,
@@ -138,6 +164,31 @@ export class SupabaseChannelAdapter implements ChannelPort {
           : {}),
       });
       providerCreated = true;
+      let pairingQr = instance.qrcode;
+      if (!pairingQr) {
+        const connected = await this.provider
+          .connectInstance(input.providerInstanceName)
+          .catch(() => null);
+        pairingQr = connected?.qrcode;
+        if (connected?.qrcode || connected?.pairingCode)
+          instance = {
+            ...instance,
+            state: "qr-code",
+            ...(connected?.qrcode ? { qrcode: connected.qrcode } : {}),
+            ...(connected?.pairingCode
+              ? { pairingCode: connected.pairingCode }
+              : {}),
+          };
+      }
+      if (!pairingQr) {
+        const image = await this.provider.getQrCode(
+          input.providerInstanceName,
+          5,
+          700,
+        );
+        if (image)
+          pairingQr = `data:image/png;base64,${Buffer.from(image).toString("base64")}`;
+      }
       const result = await this.client
         .from("channel_connections")
         .insert({
@@ -147,7 +198,9 @@ export class SupabaseChannelAdapter implements ChannelPort {
           provider_instance_name: input.providerInstanceName,
           phone_number: input.phoneNumber ?? instance.phoneNumber ?? null,
           profile_name: input.profileName ?? null,
-          status: providerStatus(instance.state),
+          status: providerStatus(
+            pairingQr ? "qr-code" : instance.state || "connecting",
+          ),
           connected_at:
             providerStatus(instance.state) === "open"
               ? new Date().toISOString()
@@ -155,12 +208,58 @@ export class SupabaseChannelAdapter implements ChannelPort {
         })
         .select("*")
         .single();
-      return channel(row(checked("channel_connections.create", result)));
+      const created = channel(
+        row(checked("channel_connections.create", result)),
+      );
+      return {
+        ...created,
+        ...(pairingQr ? { qr: asWhatsAppQrDataUri(pairingQr) } : {}),
+      };
     } catch (error) {
       if (providerCreated)
         await this.provider
           .disconnect(input.providerInstanceName)
           .catch(() => undefined);
+      // Provider already has this name (e.g. previous Mend row deleted). Adopt
+      // it into the workspace instead of leaving Settings unable to create.
+      if (isConflictProviderInstance(error)) {
+        const connected = await this.provider.connectInstance(
+          input.providerInstanceName,
+        );
+        const result = await this.client
+          .from("channel_connections")
+          .insert({
+            workspace_id: context.workspaceId,
+            provider: "whatsmiau",
+            name: input.name,
+            provider_instance_name: input.providerInstanceName,
+            phone_number: input.phoneNumber ?? null,
+            profile_name: input.profileName ?? null,
+            status:
+              connected.qrcode || connected.pairingCode
+                ? "qr-code"
+                : "connecting",
+          })
+          .select("*")
+          .single();
+        const created = channel(
+          row(checked("channel_connections.adopt", result)),
+        );
+        let pairingQr = connected.qrcode;
+        if (!pairingQr) {
+          const image = await this.provider.getQrCode(
+            input.providerInstanceName,
+            5,
+            700,
+          );
+          if (image)
+            pairingQr = `data:image/png;base64,${Buffer.from(image).toString("base64")}`;
+        }
+        return {
+          ...created,
+          ...(pairingQr ? { qr: asWhatsAppQrDataUri(pairingQr) } : {}),
+        };
+      }
       throw error;
     }
   }
@@ -270,10 +369,30 @@ export class SupabaseChannelAdapter implements ChannelPort {
         mimeType: "image/png",
       };
     }
-    const qr = await this.provider.getQrCode(instanceName);
-    if (!qr) return null;
+    const qr = await this.provider.getQrCode(instanceName, 6, 700);
+    if (qr) {
+      return {
+        data: `data:image/png;base64,${Buffer.from(qr).toString("base64")}`,
+        mimeType: "image/png",
+      };
+    }
+    // Re-issue connect once more — create-with-qrcode can leave the session in
+    // a state where the first connect returns no base64 payload.
+    const retry = await this.provider
+      .connectInstance(instanceName)
+      .catch(() => null);
+    if (retry?.qrcode) {
+      await this.updateState(context, channelId, "qr-code");
+      return {
+        data: asWhatsAppQrDataUri(retry.qrcode),
+        mimeType: "image/png",
+      };
+    }
+    const finalQr = await this.provider.getQrCode(instanceName, 3, 700);
+    if (!finalQr) throw new Error("whatsapp_qr_unavailable");
+    await this.updateState(context, channelId, "qr-code");
     return {
-      data: `data:image/png;base64,${Buffer.from(qr).toString("base64")}`,
+      data: `data:image/png;base64,${Buffer.from(finalQr).toString("base64")}`,
       mimeType: "image/png",
     };
   }

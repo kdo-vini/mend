@@ -39,6 +39,7 @@ import {
   OutboundSendError,
   type OutboundSendReason,
 } from "./whatsapp-service.js";
+import { WhatsmiauApiError } from "./whatsmiau.js";
 
 const roleRank: Record<WorkspaceRole, number> = {
   viewer: 0,
@@ -571,6 +572,18 @@ function messagingApiError(error: unknown): ApiHttpError | null {
       400,
       "message_text_invalid",
       "The message is empty or longer than the allowed limit.",
+    );
+  if (error.message === "whatsapp_qr_unavailable")
+    return new ApiHttpError(
+      502,
+      "whatsapp_qr_unavailable",
+      "WhatsApp did not return a pairing QR code. Try again in a few seconds.",
+    );
+  if (error instanceof WhatsmiauApiError)
+    return new ApiHttpError(
+      error.retryable ? 503 : 502,
+      "whatsapp_provider_error",
+      "WhatsApp provider request failed. Check the instance and try again.",
     );
   return null;
 }

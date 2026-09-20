@@ -1681,7 +1681,7 @@ describe("Supabase API adapters", () => {
       await dependencies.channels.connect(context, "channel-existing");
       await dependencies.channels.refresh(context, "channel-existing");
 
-      expect(configureWebhook).toHaveBeenCalledTimes(2);
+      expect(configureWebhook).toHaveBeenCalledTimes(3);
       expect(configureWebhook).toHaveBeenCalledWith({
         instanceName: "mend-existing",
         url: "https://hooks.example.test/mend/webhooks/whatsmiau",
@@ -1731,6 +1731,29 @@ describe("Supabase API adapters", () => {
     expect(connectInstance).toHaveBeenCalledExactlyOnceWith("mend-existing");
     expect(getQrCode).not.toHaveBeenCalled();
     expect(client.rows.get("channel_connections")?.[0].status).toBe("qr-code");
+  });
+
+  it("returns a pairing QR when creating a Whatsmiau channel", async () => {
+    const client = new FakeClient({ channel_connections: [] });
+    const dependencies = adapters(client, {
+      ...fakeProvider(),
+      createInstance: async () => ({
+        instanceName: "mend-new",
+        state: "qr-code",
+        qrcode: "data:image/png;base64,created",
+      }),
+    });
+
+    await expect(
+      dependencies.channels.createWhatsmiau(
+        { userId, workspaceId, role: "agent" },
+        { name: "Support", providerInstanceName: "mend-new" },
+      ),
+    ).resolves.toMatchObject({
+      providerInstanceName: "mend-new",
+      status: "qr-code",
+      qr: "data:image/png;base64,created",
+    });
   });
 
   it("recreates a missing provider instance when reconnecting", async () => {

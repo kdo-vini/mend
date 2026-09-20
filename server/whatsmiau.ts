@@ -4,6 +4,9 @@ export interface MessagingInstance {
   instanceName: string;
   state: string;
   phoneNumber?: string;
+  /** Browser-ready PNG data URI when the provider returned a pairing QR. */
+  qrcode?: string;
+  pairingCode?: string;
 }
 export interface ConnectionState {
   state: "open" | "closed" | "connecting" | "qr-code" | string;
@@ -171,19 +174,23 @@ export function asWhatsAppQrDataUri(value: string): string {
 
 /**
  * Whatsmiau/Evolution may return the pairing QR as a string, a nested
- * `{ base64 }` object, or a top-level `base64` field. Pairing must read all
- * of these shapes or Settings shows an empty placeholder after reconnect.
+ * `{ base64 }` object, a top-level `base64` field, or wrapped under `data`.
+ * Pairing must read all of these shapes or Settings shows an empty placeholder.
  */
 export function extractWhatsmiauConnectQr(result: unknown): {
   qrcode?: string;
   pairingCode?: string;
 } {
-  const record = asRecord(result);
+  const root = asRecord(result);
+  const wrapped = asRecord(root.data);
+  const record =
+    Object.keys(wrapped).length > 0 ? { ...root, ...wrapped } : root;
   const nested = asRecord(record.qrcode);
   const raw = stringValue(
     typeof record.qrcode === "string" ? record.qrcode : undefined,
     nested.base64,
     record.base64,
+    wrapped.base64,
   );
   const pairingCode = stringValue(
     record.pairingCode,
@@ -193,6 +200,31 @@ export function extractWhatsmiauConnectQr(result: unknown): {
   return {
     ...(raw ? { qrcode: asWhatsAppQrDataUri(raw) } : {}),
     ...(pairingCode ? { pairingCode } : {}),
+  };
+}
+
+export function normalizeMessagingInstance(
+  result: unknown,
+  fallbackName: string,
+): MessagingInstance {
+  const root = asRecord(result);
+  const nested = asRecord(root.instance);
+  const qr = extractWhatsmiauConnectQr(result);
+  const phoneNumber = stringValue(
+    root.phoneNumber,
+    root.owner,
+    nested.phoneNumber,
+    nested.owner,
+  );
+  return {
+    instanceName:
+      stringValue(root.instanceName, nested.instanceName, fallbackName) ??
+      fallbackName,
+    state:
+      stringValue(root.state, nested.state, nested.status, root.status) ??
+      "closed",
+    ...(phoneNumber ? { phoneNumber } : {}),
+    ...qr,
   };
 }
 
@@ -450,7 +482,7 @@ export class WhatsmiauMessagingProvider {
     return this.request<MessagingInstance[]>("/instance/fetchInstances");
   }
   async createInstance(input: CreateInstanceInput) {
-    const instance = await this.request<MessagingInstance>("/instance/create", {
+    const raw = await this.request<unknown>("/instance/create", {
       method: "POST",
       body: JSON.stringify({
         instanceName: input.instanceName,
@@ -472,7 +504,7 @@ export class WhatsmiauMessagingProvider {
         throw error;
       }
     }
-    return instance;
+    return normalizeMessagingInstance(raw, input.instanceName);
   }
   async connectInstance(instanceName: string) {
     const result = await this.request<unknown>(
@@ -480,16 +512,26 @@ export class WhatsmiauMessagingProvider {
     );
     return extractWhatsmiauConnectQr(result);
   }
-  async getQrCode(instanceName: string) {
-    const response = await fetch(
-      `${this.baseUrl}/instance/connect/${encodeURIComponent(instanceName)}/image`,
-      { headers: { apikey: this.apiKey } },
-    );
-    // 204 = already connected (no QR). Other non-OK responses mean pairing
-    // has not started or the image is unavailable yet.
-    if (response.status === 204 || !response.ok) return null;
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return buffer.byteLength > 0 ? buffer : null;
+  /**
+   * Polls the PNG endpoint briefly. After create/connect the QR is often not
+   * ready on the first image request; returning null immediately left Settings
+   * with an empty placeholder.
+   */
+  async getQrCode(instanceName: string, attempts = 1, delayMs = 0) {
+    for (let attempt = 0; attempt < Math.max(1, attempts); attempt += 1) {
+      if (attempt > 0 && delayMs > 0)
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const response = await fetch(
+        `${this.baseUrl}/instance/connect/${encodeURIComponent(instanceName)}/image`,
+        { headers: { apikey: this.apiKey } },
+      );
+      // 204 = already connected (no QR).
+      if (response.status === 204) return null;
+      if (!response.ok) continue;
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.byteLength > 0) return buffer;
+    }
+    return null;
   }
   deleteInstance(instanceName: string) {
     return this.request<void>(

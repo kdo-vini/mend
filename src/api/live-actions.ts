@@ -2211,6 +2211,7 @@ type ApiChannel = {
   phoneNumber?: string | null;
   phone_number?: string | null;
   status: string;
+  qr?: string | null;
   lastEventAt?: string | null;
   last_event_at?: string | null;
   connectedAt?: string | null;
@@ -2233,6 +2234,7 @@ function channelToInstance(channel: ApiChannel): WhatsAppInstance {
     name: channel.name,
     phoneNumber: channel.phoneNumber ?? channel.phone_number ?? null,
     state: channel.status,
+    qr: channel.qr ?? null,
     lastEventAt: channel.lastEventAt ?? channel.last_event_at ?? null,
     connectedAt: channel.connectedAt ?? channel.connected_at ?? null,
     historySyncProgress:

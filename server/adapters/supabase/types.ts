@@ -20,7 +20,11 @@ export interface WhatsmiauProviderPort extends WhatsAppProvider {
   connectInstance(
     instanceName: string,
   ): Promise<{ qrcode?: string; pairingCode?: string }>;
-  getQrCode(instanceName: string): Promise<Uint8Array | null>;
+  getQrCode(
+    instanceName: string,
+    attempts?: number,
+    delayMs?: number,
+  ): Promise<Uint8Array | null>;
   getConnectionState(instanceName: string): Promise<{ state: string }>;
   disconnect(instanceName: string): Promise<unknown>;
 }
