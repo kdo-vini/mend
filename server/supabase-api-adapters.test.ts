@@ -1802,6 +1802,67 @@ describe("Supabase API adapters", () => {
     expect(connectInstance).toHaveBeenCalledTimes(2);
   });
 
+  it("marks a missing provider instance as closed instead of failing refresh", async () => {
+    const client = new FakeClient({
+      channel_connections: [
+        {
+          id: "channel-existing",
+          workspace_id: workspaceId,
+          provider: "whatsmiau",
+          provider_instance_name: "mend-missing",
+          status: "open",
+        },
+      ],
+    });
+    const dependencies = adapters(client, {
+      ...fakeProvider(),
+      getConnectionState: vi.fn(async () => {
+        throw new WhatsmiauApiError("Whatsmiau request failed: 404", 404);
+      }),
+    });
+
+    await expect(
+      dependencies.channels.refresh(
+        { userId, workspaceId, role: "agent" },
+        "channel-existing",
+      ),
+    ).resolves.toMatchObject({
+      id: "channel-existing",
+      status: "closed",
+    });
+  });
+
+  it("removes a channel from Mend and deletes the provider instance", async () => {
+    const client = new FakeClient({
+      channel_connections: [
+        {
+          id: "channel-existing",
+          workspace_id: workspaceId,
+          provider: "whatsmiau",
+          provider_instance_name: "mend-existing",
+          status: "closed",
+        },
+      ],
+    });
+    const disconnect = vi.fn(async () => undefined);
+    const deleteInstance = vi.fn(async () => undefined);
+    const dependencies = adapters(client, {
+      ...fakeProvider(),
+      disconnect,
+      deleteInstance,
+    });
+
+    await expect(
+      dependencies.channels.remove(
+        { userId, workspaceId, role: "agent" },
+        "channel-existing",
+      ),
+    ).resolves.toBe(true);
+    expect(disconnect).toHaveBeenCalledExactlyOnceWith("mend-existing");
+    expect(deleteInstance).toHaveBeenCalledExactlyOnceWith("mend-existing");
+    expect(client.rows.get("channel_connections")).toEqual([]);
+  });
+
   it("accepts a bounded browser data URL, stores it privately, and sends only an expiring provider URL", async () => {
     const client = new FakeClient({
       conversations: [

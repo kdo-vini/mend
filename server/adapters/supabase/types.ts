@@ -27,4 +27,5 @@ export interface WhatsmiauProviderPort extends WhatsAppProvider {
   ): Promise<Uint8Array | null>;
   getConnectionState(instanceName: string): Promise<{ state: string }>;
   disconnect(instanceName: string): Promise<unknown>;
+  deleteInstance?(instanceName: string): Promise<unknown>;
 }

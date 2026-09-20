@@ -126,6 +126,18 @@ export function registerChannelRoutes(context: ApiRouteModuleContext) {
       );
     }),
   );
+  router.delete(
+    "/api/channels/:id",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      const removed = await dependencies.channels.remove(
+        context,
+        pathId(request),
+      );
+      if (!removed) requireFound(null, "channel");
+      send(response, 200, { removed: true });
+    }),
+  );
   router.post(
     "/api/channels/:id/refresh",
     asyncRoute(async (request, response) => {

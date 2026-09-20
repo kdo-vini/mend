@@ -414,13 +414,43 @@ export class SupabaseChannelAdapter implements ChannelPort {
     return this.updateState(context, channelId, "closed");
   }
 
+  /**
+   * Permanently removes the channel from Mend and best-effort deletes the
+   * Whatsmiau instance so a new name (or the same name) can be paired cleanly.
+   */
+  async remove(context: RequestContext, channelId: string) {
+    const value = await this.getRow(context, channelId);
+    if (!value) return false;
+    const instanceName = str(value.provider_instance_name);
+    await this.provider.disconnect(instanceName).catch(() => undefined);
+    if (this.provider.deleteInstance)
+      await this.provider.deleteInstance(instanceName).catch(() => undefined);
+    const result = await this.client
+      .from("channel_connections")
+      .delete()
+      .eq("id", channelId)
+      .eq("workspace_id", context.workspaceId)
+      .select("id")
+      .maybeSingle();
+    return Boolean(checked("channel_connections.remove", result));
+  }
+
   async refresh(context: RequestContext, channelId: string) {
     const value = await this.getRow(context, channelId);
     if (!value) return null;
-    const result = await this.provider.getConnectionState(
-      str(value.provider_instance_name),
-    );
-    return this.updateState(context, channelId, providerStatus(result.state));
+    try {
+      const result = await this.provider.getConnectionState(
+        str(value.provider_instance_name),
+      );
+      return this.updateState(context, channelId, providerStatus(result.state));
+    } catch (error) {
+      // A missing/stale provider instance must not make Settings report the
+      // whole WhatsApp integration as unavailable. Mark closed so the operator
+      // can pair again or remove the channel.
+      if (isMissingProviderInstance(error))
+        return this.updateState(context, channelId, "closed");
+      return channel(value);
+    }
   }
 
   private async updateState(

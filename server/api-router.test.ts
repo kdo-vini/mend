@@ -179,7 +179,15 @@ function createFakeDependencies(
         id === channelId ? { data: "base64-qr", mimeType: "image/png" } : null,
       ),
       disconnect: vi.fn(async (_context, id) => ({ id, status: "closed" })),
+      remove: vi.fn(async (_context, id) => id === channelId),
       refresh: vi.fn(async (_context, id) => ({ id, status: "open" })),
+      getSettings: vi.fn(async (_context, id) =>
+        id === channelId ? { channelId: id, settings: {} } : null,
+      ),
+      updateSettings: vi.fn(async (_context, id, settings) => ({
+        id,
+        settings,
+      })),
     },
     conversations: {
       list: vi.fn(async () => [{ id: conversationId, workspaceId }]),

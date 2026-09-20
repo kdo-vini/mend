@@ -169,6 +169,7 @@ export interface ChannelPort {
     context: RequestContext,
     channelId: string,
   ): Promise<unknown | null>;
+  remove(context: RequestContext, channelId: string): Promise<boolean>;
   refresh(context: RequestContext, channelId: string): Promise<unknown | null>;
   getSettings(
     context: RequestContext,

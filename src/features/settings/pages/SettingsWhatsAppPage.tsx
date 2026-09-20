@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { QrCode, RefreshCw, Smartphone, Unplug } from "lucide-react";
+import { QrCode, RefreshCw, Smartphone, Trash2, Unplug } from "lucide-react";
 import {
   createLiveChannel,
   disconnectLiveChannel,
   getLiveChannelQr,
   listLiveChannels,
   refreshLiveChannel,
+  removeLiveChannel,
   type WhatsAppInstance,
 } from "../api";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
@@ -18,6 +19,12 @@ import {
   SettingsWorkspaceRequired,
 } from "../components/SettingsShared";
 import type { SettingsWorkspacePageProps } from "./SettingsWorkspacePage";
+
+function fallbackChannelState(channel: WhatsAppInstance): WhatsAppInstance {
+  const state =
+    channel.state && channel.state !== "unknown" ? channel.state : "closed";
+  return { ...channel, state };
+}
 
 export function SettingsWhatsAppPage({
   workspaceId,
@@ -34,9 +41,7 @@ export function SettingsWhatsAppPage({
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const statusUnavailable = channels.some(
-    (channel) => channel.state === "unknown",
-  );
+  const [statusWarning, setStatusWarning] = useState(false);
   const isConnected = selected?.state === "open";
 
   const applyChannel = useCallback(
@@ -62,25 +67,34 @@ export function SettingsWhatsAppPage({
     }
     setLoading(true);
     setError(null);
+    setStatusWarning(false);
     try {
       const stored = await listLiveChannels(workspaceId);
+      let refreshFailed = false;
       const rows = await Promise.all(
         stored.map(async (channel) => {
-          if (!channel.channelId) return { ...channel, state: "unknown" };
+          if (!channel.channelId) return fallbackChannelState(channel);
           try {
             return await refreshLiveChannel({
               workspaceId,
               channelId: channel.channelId,
             });
           } catch {
-            return { ...channel, state: "unknown" };
+            // A stale Whatsmiau instance must not block create/pair. Keep the
+            // stored status (or closed) instead of marking the whole page down.
+            refreshFailed = true;
+            return fallbackChannelState(channel);
           }
         }),
       );
+      setStatusWarning(refreshFailed);
       const next = rows.find((row) => row.state === "open") ?? rows[0] ?? null;
       setChannels(rows);
       applyChannel(next);
-      if (next?.state === "open") setQr(null);
+      if (next?.state === "open") {
+        setQr(null);
+        setPairingChannelId(null);
+      }
     } catch (reason) {
       setChannels([]);
       applyChannel(null);
@@ -104,6 +118,7 @@ export function SettingsWhatsAppPage({
       void refreshLiveChannel({ workspaceId, channelId: selected.channelId! })
         .then((next) => {
           if (stopped) return;
+          setStatusWarning(false);
           applyChannel(next);
           if (next.state === "open") {
             setQr(null);
@@ -113,8 +128,9 @@ export function SettingsWhatsAppPage({
           }
         })
         .catch(() => {
-          if (stopped) return;
-          applyChannel({ ...selected, state: "unknown" });
+          // Keep the current selection usable for pairing; do not flip to
+          // "unknown" and surface a false global outage.
+          if (!stopped) setStatusWarning(true);
         })
         .finally(() => {
           pending = false;
@@ -238,6 +254,41 @@ export function SettingsWhatsAppPage({
     setPairingChannelId(null);
   };
 
+  const remove = async (channel: WhatsAppInstance) => {
+    if (!workspaceId || !channel.channelId) return;
+    if (
+      !(await onConfirm({
+        title: t("v2.whatsapp.removeTitle"),
+        description: t("v2.whatsapp.removeDescription", {
+          name: channel.instanceName,
+        }),
+        confirmLabel: t("v2.whatsapp.confirmRemove"),
+        destructive: true,
+      }))
+    )
+      return;
+    setAction("remove");
+    setError(null);
+    try {
+      await removeLiveChannel({
+        workspaceId,
+        channelId: channel.channelId,
+      });
+      setQr(null);
+      setPairingChannelId(null);
+      onToast(t("v2.whatsapp.removedToast"));
+      await load();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : t("v2.whatsapp.errors.action"),
+      );
+    } finally {
+      setAction(null);
+    }
+  };
+
   const create = async () => {
     if (!workspaceId || !instanceName.trim()) return;
     setAction("create");
@@ -250,6 +301,7 @@ export function SettingsWhatsAppPage({
         instanceName: instanceName.trim(),
       });
       applyChannel(created);
+      setStatusWarning(false);
       if (created.qr) {
         setQr(created.qr);
         setPairingChannelId(created.channelId ?? null);
@@ -293,9 +345,9 @@ export function SettingsWhatsAppPage({
         }
       />
       {error && <SettingsError message={error} onRetry={() => void load()} />}
-      {statusUnavailable && !error && (
+      {statusWarning && !error && (
         <SettingsError
-          message={t("v2.whatsapp.errors.load")}
+          message={t("v2.whatsapp.errors.statusStale")}
           onRetry={() => void load()}
         />
       )}
@@ -380,6 +432,14 @@ export function SettingsWhatsAppPage({
                           {t("v2.whatsapp.connect")}
                         </button>
                       )}
+                      <button
+                        className="button button-ghost button-small"
+                        type="button"
+                        onClick={() => void remove(channel)}
+                        disabled={action !== null || !channel.channelId}
+                      >
+                        <Trash2 size={13} /> {t("v2.whatsapp.remove")}
+                      </button>
                     </div>
                   </div>
                 ))}

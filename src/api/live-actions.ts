@@ -2347,6 +2347,17 @@ export async function disconnectLiveChannel(input: {
   return channelToInstance(result);
 }
 
+export async function removeLiveChannel(input: {
+  workspaceId: string;
+  channelId: string;
+}): Promise<void> {
+  await apiRequest<{ removed: boolean }>(
+    `/api/channels/${encodeURIComponent(input.channelId)}`,
+    { method: "DELETE" },
+    input.workspaceId,
+  );
+}
+
 export function listWhatsAppInstances() {
   return apiRequest<WhatsAppInstance[]>("/api/whatsapp/instances");
 }

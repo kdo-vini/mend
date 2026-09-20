@@ -349,6 +349,33 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
+  it("normalizes nested connection state payloads", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/instance/connectionState/mend-test"))
+        return new Response(
+          JSON.stringify({
+            instance: { instanceName: "mend-test", state: "open" },
+          }),
+          { status: 200 },
+        );
+      return new Response(null, { status: 404 });
+    };
+
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await expect(provider.getConnectionState("mend-test")).resolves.toEqual({
+        state: "open",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("configures path fallback and bearer authentication for all message events", async () => {
     const originalFetch = globalThis.fetch;
     let webhookBody: Record<string, unknown> | undefined;

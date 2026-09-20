@@ -879,8 +879,14 @@
       "disconnectTitle": "Disconnect WhatsApp?",
       "disconnectDescription": "The number will stop receiving messages until it is paired again.",
       "confirmDisconnect": "Disconnect",
+      "remove": "Remove",
+      "removeTitle": "Remove WhatsApp instance?",
+      "removeDescription": "Delete {{name}} from Mend and Whatsmiau so you can create a fresh instance.",
+      "confirmRemove": "Remove instance",
+      "removedToast": "WhatsApp instance removed",
       "errors": {
         "load": "WhatsApp is unavailable.",
+        "statusStale": "Live status could not be refreshed for some numbers. You can still create or pair.",
         "action": "The WhatsApp action failed."
       },
       "connectedToast": "WhatsApp connected"

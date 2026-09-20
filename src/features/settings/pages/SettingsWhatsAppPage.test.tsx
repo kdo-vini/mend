@@ -20,6 +20,7 @@ vi.mock("../api", () => ({
   refreshLiveChannel: vi.fn(),
   createLiveChannel: vi.fn(),
   disconnectLiveChannel: vi.fn(),
+  removeLiveChannel: vi.fn(),
   getLiveChannelQr: vi.fn(),
 }));
 
@@ -109,7 +110,7 @@ describe("WhatsApp connection status", () => {
     expect(container.textContent).toContain("Provider state: closed");
   });
 
-  it("does not keep claiming a verified connection when live status fails", async () => {
+  it("keeps the channel usable when live status refresh fails", async () => {
     await render();
     vi.mocked(settingsApi.refreshLiveChannel).mockRejectedValue(
       new Error("upstream unavailable"),
@@ -119,12 +120,25 @@ describe("WhatsApp connection status", () => {
 
     expect(
       container.querySelector(".settings-v2-status")?.textContent?.trim(),
-    ).toBe("Needs attention");
-    expect(container.textContent).toContain("Provider state: unavailable");
-    expect(onChannelChange).toHaveBeenLastCalledWith({
-      ...connected,
-      state: "unknown",
-    });
+    ).toBe("Connected");
+    expect(container.textContent).toContain(
+      "Live status could not be refreshed for some numbers",
+    );
+    expect(container.textContent).not.toContain("WhatsApp is unavailable.");
+  });
+
+  it("does not treat a failed provider refresh as a global outage on load", async () => {
+    vi.mocked(settingsApi.refreshLiveChannel).mockRejectedValue(
+      new Error("upstream unavailable"),
+    );
+
+    await render();
+
+    expect(container.textContent).toContain("Provider state: open");
+    expect(container.textContent).toContain(
+      "Live status could not be refreshed for some numbers",
+    );
+    expect(container.textContent).not.toContain("WhatsApp is unavailable.");
   });
 
   async function generateQr() {

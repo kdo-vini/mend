@@ -539,10 +539,21 @@ export class WhatsmiauMessagingProvider {
       { method: "DELETE" },
     );
   }
-  getConnectionState(instanceName: string) {
-    return this.request<ConnectionState>(
+  async getConnectionState(instanceName: string): Promise<ConnectionState> {
+    const raw = await this.request<unknown>(
       `/instance/connectionState/${encodeURIComponent(instanceName)}`,
     );
+    const root = asRecord(raw);
+    const nested = asRecord(root.instance);
+    const state =
+      stringValue(root.state, nested.state, nested.status, root.status) ??
+      "closed";
+    return {
+      state,
+      ...(root.suspended === true || nested.suspended === true
+        ? { suspended: true }
+        : {}),
+    };
   }
   async getGroupInfo(input: {
     instanceName: string;

@@ -879,8 +879,14 @@
       "disconnectTitle": "Desconectar WhatsApp?",
       "disconnectDescription": "O n\u00famero parar\u00e1 de receber mensagens at\u00e9 ser conectado novamente.",
       "confirmDisconnect": "Desconectar",
+      "remove": "Excluir",
+      "removeTitle": "Excluir inst\u00e2ncia do WhatsApp?",
+      "removeDescription": "Remove {{name}} do Mend e do Whatsmiau para poder criar uma inst\u00e2ncia nova.",
+      "confirmRemove": "Excluir inst\u00e2ncia",
+      "removedToast": "Inst\u00e2ncia do WhatsApp exclu\u00edda",
       "errors": {
         "load": "O WhatsApp est\u00e1 indispon\u00edvel.",
+        "statusStale": "N\u00e3o foi poss\u00edvel atualizar o status de alguns n\u00fameros. Voc\u00ea ainda pode criar ou parear.",
         "action": "A a\u00e7\u00e3o do WhatsApp falhou."
       },
       "connectedToast": "WhatsApp conectado"

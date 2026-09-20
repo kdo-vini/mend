@@ -21,6 +21,7 @@ export {
   saveLiveAgentRoutingPolicy,
   createWhatsAppInstance,
   disconnectLiveChannel,
+  removeLiveChannel,
   disconnectWhatsAppInstance,
   getLiveChannelQr,
   getWhatsAppQr,
