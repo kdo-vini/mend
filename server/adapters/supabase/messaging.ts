@@ -18,7 +18,7 @@ import {
   SupabaseInboxPort,
   type ConversationAction,
 } from "../../inbox-service.js";
-import { normalizeLocale } from "../../locale.js";
+import { normalizeLocale, type SupportedLocale } from "../../locale.js";
 import { SupabaseMediaPipeline } from "../../media-pipeline.js";
 import { SupabaseMediaStorage, validateRemoteMediaUrl } from "../../media.js";
 import {
@@ -27,6 +27,7 @@ import {
   type SupportAiProvider,
 } from "../../providers.js";
 import type { AnySupabaseClient, WhatsmiauProviderPort } from "./types.js";
+import { formatHumanWhatsAppText } from "../../whatsapp-agent-intro.js";
 import {
   WhatsAppService,
   type WhatsAppProvider,
@@ -324,6 +325,43 @@ export class SupabaseConversationAdapter implements ConversationPort {
     checked(`workflow_facts.${factType}`, result);
   }
 
+  /**
+   * Resolves the operator label and workspace language used to introduce the
+   * human agent on WhatsApp ("Lucas está te atendendo").
+   */
+  private async humanWhatsAppText(
+    context: RequestContext,
+    body: string,
+  ): Promise<string> {
+    const [memberResult, workspaceResult] = await Promise.all([
+      this.client
+        .from("workspace_members")
+        .select("display_name")
+        .eq("workspace_id", context.workspaceId)
+        .eq("user_id", context.userId)
+        .maybeSingle(),
+      this.client
+        .from("workspaces")
+        .select("default_language")
+        .eq("id", context.workspaceId)
+        .maybeSingle(),
+    ]);
+    const member = checked("workspace_members.agent_intro", memberResult) as {
+      display_name?: unknown;
+    } | null;
+    const workspace = checked(
+      "workspaces.agent_intro_language",
+      workspaceResult,
+    ) as { default_language?: unknown } | null;
+    const locale: SupportedLocale = normalizeLocale(
+      workspace?.default_language,
+    );
+    const displayName =
+      str(member?.display_name).trim() ||
+      (locale === "en-US" ? "Support" : "Suporte");
+    return formatHumanWhatsAppText(displayName, body, locale);
+  }
+
   async list(context: RequestContext, query: ConversationListQuery) {
     let request = this.client
       .from("conversations")
@@ -415,7 +453,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
         channelConnectionId: str(connection.id),
         instanceName: str(connection.provider_instance_name),
         phoneNumber: input.phoneNumber,
-        text: input.message,
+        text: await this.humanWhatsAppText(context, input.message),
       },
     );
     return { conversationId: message.conversationId };
@@ -715,7 +753,9 @@ export class SupabaseConversationAdapter implements ConversationPort {
             media: providerUrl.url,
             mimeType: asset.detectedMimeType ?? asset.declaredMimeType,
             fileName: asset.originalFileName,
-            caption: attachment.caption,
+            caption: attachment.caption
+              ? await this.humanWhatsAppText(context, attachment.caption)
+              : attachment.caption,
             mediaType: attachment.messageType,
             mediaStoragePathOverride: asset.originalStoragePath,
           });
@@ -758,7 +798,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
       // Forward the composer's key: a retry after a failed or timed-out send
       // must reach the provider as the same message, not as a second one.
       await this.whatsapp.sendText(actor, conversationId, {
-        text: input.text ?? "",
+        text: await this.humanWhatsAppText(context, input.text ?? ""),
         ...(input.idempotencyKey
           ? { idempotencyKey: input.idempotencyKey }
           : {}),
@@ -768,7 +808,9 @@ export class SupabaseConversationAdapter implements ConversationPort {
         media: input.mediaDataUrl ?? input.mediaUrl ?? "",
         mimeType: input.mimeType,
         fileName: input.fileName,
-        caption: input.caption,
+        caption: input.caption
+          ? await this.humanWhatsAppText(context, input.caption)
+          : input.caption,
         mediaType: input.messageType as
           | "image"
           | "video"
