@@ -409,7 +409,7 @@ describe("POST /api/conversations", () => {
     expect(provider.sendText).toHaveBeenCalledWith({
       instanceName: "techne-support",
       number: "5511999999999",
-      text: "*Lucas* está te atendendo\n\nHi, this is Téchne support.",
+      text: "_*Lucas está te atendendo*_\n\nHi, this is Téchne support.",
     });
     expect(client.rpcCalls).toHaveLength(1);
     expect(client.rpcCalls[0].name).toBe("inbox_ingest_message");
@@ -419,7 +419,7 @@ describe("POST /api/conversations", () => {
       p_phone_number: "5511999999999",
       p_direction: "outbound",
       p_message_type: "text",
-      p_text: "*Lucas* está te atendendo\n\nHi, this is Téchne support.",
+      p_text: "_*Lucas está te atendendo*_\n\nHi, this is Téchne support.",
     });
   });
 
@@ -444,7 +444,7 @@ describe("POST /api/conversations", () => {
     expect(provider.sendText).toHaveBeenCalledWith({
       instanceName: "techne-support",
       number: "5511988887777",
-      text: "*Lucas* está te atendendo\n\nHello",
+      text: "_*Lucas está te atendendo*_\n\nHello",
     });
     // The contact is stored under the resolved number, so the customer's reply
     // arriving under that JID joins this conversation instead of opening a

@@ -571,11 +571,13 @@ export class SupabaseConversationAdapter implements ConversationPort {
 
   /**
    * Resolves the operator label and workspace language used to introduce the
-   * human agent on WhatsApp ("Lucas está te atendendo").
+   * human agent on WhatsApp ("_*Lucas está te atendendo*_"). The intro is
+   * added only on the first human outbound in the conversation.
    */
   private async humanWhatsAppText(
     context: RequestContext,
     body: string,
+    options?: { conversationId?: string },
   ): Promise<string> {
     const [memberResult, workspaceResult] = await Promise.all([
       this.client
@@ -603,7 +605,32 @@ export class SupabaseConversationAdapter implements ConversationPort {
     const displayName =
       str(member?.display_name).trim() ||
       (locale === "en-US" ? "Support" : "Suporte");
-    return formatHumanWhatsAppText(displayName, body, locale);
+    const includeIntro = options?.conversationId
+      ? !(await this.hasPriorHumanOutbound(
+          context,
+          options.conversationId,
+        ))
+      : true;
+    return formatHumanWhatsAppText(displayName, body, locale, {
+      includeIntro,
+    });
+  }
+
+  /** True when a non-AI operator already sent something in this thread. */
+  private async hasPriorHumanOutbound(
+    context: RequestContext,
+    conversationId: string,
+  ): Promise<boolean> {
+    const result = await this.client
+      .from("messages")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .eq("direction", "outbound")
+      .eq("ai_generated", false)
+      .limit(1)
+      .maybeSingle();
+    return Boolean(checked("messages.prior_human_outbound", result));
   }
 
   async list(context: RequestContext, query: ConversationListQuery) {
@@ -998,7 +1025,9 @@ export class SupabaseConversationAdapter implements ConversationPort {
             mimeType: asset.detectedMimeType ?? asset.declaredMimeType,
             fileName: asset.originalFileName,
             caption: attachment.caption
-              ? await this.humanWhatsAppText(context, attachment.caption)
+              ? await this.humanWhatsAppText(context, attachment.caption, {
+                  conversationId,
+                })
               : attachment.caption,
             mediaType: attachment.messageType,
             mediaStoragePathOverride: asset.originalStoragePath,
@@ -1042,7 +1071,9 @@ export class SupabaseConversationAdapter implements ConversationPort {
       // Forward the composer's key: a retry after a failed or timed-out send
       // must reach the provider as the same message, not as a second one.
       await this.whatsapp.sendText(actor, conversationId, {
-        text: await this.humanWhatsAppText(context, input.text ?? ""),
+        text: await this.humanWhatsAppText(context, input.text ?? "", {
+          conversationId,
+        }),
         ...(input.idempotencyKey
           ? { idempotencyKey: input.idempotencyKey }
           : {}),
@@ -1053,7 +1084,9 @@ export class SupabaseConversationAdapter implements ConversationPort {
         mimeType: input.mimeType,
         fileName: input.fileName,
         caption: input.caption
-          ? await this.humanWhatsAppText(context, input.caption)
+          ? await this.humanWhatsAppText(context, input.caption, {
+              conversationId,
+            })
           : input.caption,
         mediaType: input.messageType as
           | "image"
