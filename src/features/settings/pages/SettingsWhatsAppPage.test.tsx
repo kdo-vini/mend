@@ -18,7 +18,6 @@ import type { WhatsAppInstance } from "../api";
 vi.mock("../api", () => ({
   listLiveChannels: vi.fn(),
   refreshLiveChannel: vi.fn(),
-  connectLiveChannel: vi.fn(),
   createLiveChannel: vi.fn(),
   disconnectLiveChannel: vi.fn(),
   getLiveChannelQr: vi.fn(),
@@ -145,6 +144,35 @@ describe("WhatsApp connection status", () => {
     vi.mocked(settingsApi.getLiveChannelQr).mockResolvedValue({ data });
     await render();
     await generateQr();
+    expect(container.querySelector(".qr-image")?.getAttribute("src")).toBe(
+      data,
+    );
+  });
+
+  it("starts pairing and shows the QR when connecting a closed channel", async () => {
+    vi.mocked(settingsApi.refreshLiveChannel)
+      .mockResolvedValueOnce({
+        ...connected,
+        state: "closed",
+      })
+      .mockResolvedValue({
+        ...connected,
+        state: "qr-code",
+      });
+    const data = "data:image/png;base64,reconnect=";
+    vi.mocked(settingsApi.getLiveChannelQr).mockResolvedValue({ data });
+    await render();
+
+    const button = [...container.querySelectorAll("button")].find((item) =>
+      item.textContent?.includes("Connect"),
+    );
+    expect(button).toBeDefined();
+    await act(async () => button!.click());
+
+    expect(settingsApi.getLiveChannelQr).toHaveBeenCalledWith({
+      workspaceId: "workspace-test",
+      channelId: "channel-test",
+    });
     expect(container.querySelector(".qr-image")?.getAttribute("src")).toBe(
       data,
     );

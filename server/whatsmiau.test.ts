@@ -302,6 +302,38 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
+  it("normalizes connect QR payloads and ignores empty image responses", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/instance/connect/mend-test"))
+        return new Response(
+          JSON.stringify({
+            qrcode: { base64: "data:image/png;base64,abc123" },
+            pairingCode: "123-456",
+          }),
+          { status: 200 },
+        );
+      if (url.endsWith("/instance/connect/mend-test/image"))
+        return new Response(null, { status: 204 });
+      return new Response(null, { status: 404 });
+    };
+
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await expect(provider.connectInstance("mend-test")).resolves.toEqual({
+        qrcode: "data:image/png;base64,abc123",
+        pairingCode: "123-456",
+      });
+      await expect(provider.getQrCode("mend-test")).resolves.toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("configures path fallback and bearer authentication for all message events", async () => {
     const originalFetch = globalThis.fetch;
     let webhookBody: Record<string, unknown> | undefined;

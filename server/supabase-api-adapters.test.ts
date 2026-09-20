@@ -14,6 +14,7 @@ import type {
 import { encryptConnectionSecret } from "./connection-crypto.js";
 import { issueCreateSchema } from "./issue-service.js";
 import { decryptMcpSecret } from "./mcp.js";
+import { WhatsmiauApiError } from "./whatsmiau.js";
 
 type Row = Record<string, unknown>;
 type Result = { data: unknown; error: { message: string } | null };
@@ -1694,6 +1695,88 @@ describe("Supabase API adapters", () => {
         delete process.env.WHATSMIAU_WEBHOOK_URL;
       else process.env.WHATSMIAU_WEBHOOK_URL = previousWebhookUrl;
     }
+  });
+
+  it("starts provider pairing before returning a reconnect QR code", async () => {
+    const client = new FakeClient({
+      channel_connections: [
+        {
+          id: "channel-existing",
+          workspace_id: workspaceId,
+          provider: "whatsmiau",
+          provider_instance_name: "mend-existing",
+          status: "closed",
+        },
+      ],
+    });
+    const connectInstance = vi.fn(async () => ({
+      qrcode: "data:image/png;base64,pairing",
+    }));
+    const getQrCode = vi.fn(async () => Buffer.from("unused"));
+    const dependencies = adapters(client, {
+      ...fakeProvider(),
+      connectInstance,
+      getQrCode,
+    });
+
+    await expect(
+      dependencies.channels.qr(
+        { userId, workspaceId, role: "agent" },
+        "channel-existing",
+      ),
+    ).resolves.toEqual({
+      data: "data:image/png;base64,pairing",
+      mimeType: "image/png",
+    });
+    expect(connectInstance).toHaveBeenCalledExactlyOnceWith("mend-existing");
+    expect(getQrCode).not.toHaveBeenCalled();
+    expect(client.rows.get("channel_connections")?.[0].status).toBe("qr-code");
+  });
+
+  it("recreates a missing provider instance when reconnecting", async () => {
+    const client = new FakeClient({
+      channel_connections: [
+        {
+          id: "channel-existing",
+          workspace_id: workspaceId,
+          provider: "whatsmiau",
+          provider_instance_name: "mend-existing",
+          status: "closed",
+        },
+      ],
+    });
+    const createInstance = vi.fn(async () => ({
+      instanceName: "mend-existing",
+      state: "closed",
+    }));
+    const connectInstance = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new WhatsmiauApiError("Whatsmiau request failed: 404", 404),
+      )
+      .mockResolvedValueOnce({ qrcode: "data:image/png;base64,rebuilt" });
+    const dependencies = adapters(client, {
+      ...fakeProvider(),
+      createInstance,
+      connectInstance,
+      getQrCode: vi.fn(async () => null),
+    });
+
+    await expect(
+      dependencies.channels.qr(
+        { userId, workspaceId, role: "agent" },
+        "channel-existing",
+      ),
+    ).resolves.toEqual({
+      data: "data:image/png;base64,rebuilt",
+      mimeType: "image/png",
+    });
+    expect(createInstance).toHaveBeenCalledExactlyOnceWith({
+      instanceName: "mend-existing",
+      qrcode: true,
+      syncFullHistory: true,
+    });
+    expect(connectInstance).toHaveBeenCalledTimes(2);
   });
 
   it("accepts a bounded browser data URL, stores it privately, and sends only an expiring provider URL", async () => {

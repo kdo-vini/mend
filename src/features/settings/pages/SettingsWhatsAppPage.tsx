@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { QrCode, RefreshCw, Smartphone, Unplug } from "lucide-react";
 import {
-  connectLiveChannel,
   createLiveChannel,
   disconnectLiveChannel,
   getLiveChannelQr,
@@ -172,12 +171,13 @@ export function SettingsWhatsAppPage({
   const runChannelAction = async (
     name: string,
     task: () => Promise<WhatsAppInstance | { data: string }>,
+    options?: { channelId?: string | null },
   ) => {
     setAction(name);
     setError(null);
     if (name === "qr") {
       setQr(null);
-      setPairingChannelId(selected?.channelId ?? null);
+      setPairingChannelId(options?.channelId ?? selected?.channelId ?? null);
     }
     try {
       const result = await task();
@@ -192,6 +192,32 @@ export function SettingsWhatsAppPage({
     } finally {
       setAction(null);
     }
+  };
+
+  const startPairing = async (channel: WhatsAppInstance) => {
+    if (!workspaceId || !channel.channelId) return;
+    applyChannel(channel);
+    await runChannelAction(
+      "qr",
+      async () => {
+        const result = await getLiveChannelQr({
+          workspaceId,
+          channelId: channel.channelId!,
+        });
+        try {
+          applyChannel(
+            await refreshLiveChannel({
+              workspaceId,
+              channelId: channel.channelId!,
+            }),
+          );
+        } catch {
+          applyChannel({ ...channel, state: "qr-code" });
+        }
+        return result;
+      },
+      { channelId: channel.channelId },
+    );
   };
 
   const disconnect = async () => {
@@ -330,15 +356,7 @@ export function SettingsWhatsAppPage({
                         <button
                           className="button button-primary button-small"
                           type="button"
-                          onClick={() =>
-                            channel.channelId &&
-                            void runChannelAction("connect", () =>
-                              connectLiveChannel({
-                                workspaceId: workspaceId!,
-                                channelId: channel.channelId!,
-                              }),
-                            )
-                          }
+                          onClick={() => void startPairing(channel)}
                           disabled={action !== null || !channel.channelId}
                         >
                           {t("v2.whatsapp.connect")}
@@ -381,14 +399,7 @@ export function SettingsWhatsAppPage({
                   className="button button-secondary"
                   type="button"
                   disabled={action !== null || !selected.channelId}
-                  onClick={() =>
-                    void runChannelAction("qr", () =>
-                      getLiveChannelQr({
-                        workspaceId: workspaceId!,
-                        channelId: selected.channelId!,
-                      }),
-                    )
-                  }
+                  onClick={() => void startPairing(selected)}
                 >
                   <QrCode size={14} />{" "}
                   {action === "qr"

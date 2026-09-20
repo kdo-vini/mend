@@ -32,6 +32,7 @@ import {
   WhatsAppService,
   type WhatsAppProvider,
 } from "../../whatsapp-service.js";
+import { asWhatsAppQrDataUri, WhatsmiauApiError } from "../../whatsmiau.js";
 import {
   channel,
   checked,
@@ -42,6 +43,11 @@ import {
   str,
   type Row,
 } from "../supabase-mappers.js";
+
+function isMissingProviderInstance(error: unknown): boolean {
+  return error instanceof WhatsmiauApiError && error.status === 404;
+}
+
 export class SupabaseChannelAdapter implements ChannelPort {
   constructor(
     private readonly client: AnySupabaseClient,
@@ -203,13 +209,43 @@ export class SupabaseChannelAdapter implements ChannelPort {
     return data ? channel(row(data)) : null;
   }
 
+  /**
+   * Starts WhatsApp pairing for a stored channel. Webhook repair is best-effort
+   * so a stale hook cannot block QR generation after logout. When the provider
+   * no longer has the instance (404), recreate it under the same name so the
+   * existing channel_connections row can reconnect.
+   */
+  private async startPairing(value: Row) {
+    const instanceName = str(value.provider_instance_name);
+    await this.ensureWebhook(value).catch(() => undefined);
+
+    try {
+      return {
+        instanceName,
+        result: await this.provider.connectInstance(instanceName),
+      };
+    } catch (error) {
+      if (!isMissingProviderInstance(error)) throw error;
+      const webhook = this.webhookConfiguration();
+      await this.provider.createInstance({
+        instanceName,
+        qrcode: true,
+        syncFullHistory: true,
+        ...(webhook
+          ? { webhookUrl: webhook.url, webhookSecret: webhook.secret }
+          : {}),
+      });
+      return {
+        instanceName,
+        result: await this.provider.connectInstance(instanceName),
+      };
+    }
+  }
+
   async connect(context: RequestContext, channelId: string) {
     const value = await this.getRow(context, channelId);
     if (!value) return null;
-    await this.ensureWebhook(value);
-    const result = await this.provider.connectInstance(
-      str(value.provider_instance_name),
-    );
+    const { result } = await this.startPairing(value);
     return this.updateState(
       context,
       channelId,
@@ -220,7 +256,21 @@ export class SupabaseChannelAdapter implements ChannelPort {
   async qr(context: RequestContext, channelId: string) {
     const value = await this.getRow(context, channelId);
     if (!value) return null;
-    const qr = await this.provider.getQrCode(str(value.provider_instance_name));
+    // Pairing must call /instance/connect before /image. Fetching the PNG
+    // alone returns empty/404 after logout because the session was never started.
+    const { instanceName, result } = await this.startPairing(value);
+    await this.updateState(
+      context,
+      channelId,
+      result.qrcode || result.pairingCode ? "qr-code" : "connecting",
+    );
+    if (result.qrcode) {
+      return {
+        data: asWhatsAppQrDataUri(result.qrcode),
+        mimeType: "image/png",
+      };
+    }
+    const qr = await this.provider.getQrCode(instanceName);
     if (!qr) return null;
     return {
       data: `data:image/png;base64,${Buffer.from(qr).toString("base64")}`,
@@ -231,7 +281,17 @@ export class SupabaseChannelAdapter implements ChannelPort {
   async disconnect(context: RequestContext, channelId: string) {
     const value = await this.getRow(context, channelId);
     if (!value) return null;
-    await this.provider.disconnect(str(value.provider_instance_name));
+    const instanceName = str(value.provider_instance_name);
+    try {
+      await this.provider.disconnect(instanceName);
+    } catch (error) {
+      // Logout is idempotent from the operator's point of view: if the provider
+      // session is already gone, still mark the channel closed in Mend.
+      const state = await this.provider
+        .getConnectionState(instanceName)
+        .catch(() => null);
+      if (state && providerStatus(state.state) === "open") throw error;
+    }
     return this.updateState(context, channelId, "closed");
   }
 

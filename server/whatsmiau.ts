@@ -162,6 +162,40 @@ const numberValue = (...values: unknown[]) =>
       typeof value === "number" && Number.isFinite(value),
   );
 
+/** Normalize provider QR payloads into a browser-ready PNG data URI. */
+export function asWhatsAppQrDataUri(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("data:")) return trimmed;
+  return `data:image/png;base64,${trimmed}`;
+}
+
+/**
+ * Whatsmiau/Evolution may return the pairing QR as a string, a nested
+ * `{ base64 }` object, or a top-level `base64` field. Pairing must read all
+ * of these shapes or Settings shows an empty placeholder after reconnect.
+ */
+export function extractWhatsmiauConnectQr(result: unknown): {
+  qrcode?: string;
+  pairingCode?: string;
+} {
+  const record = asRecord(result);
+  const nested = asRecord(record.qrcode);
+  const raw = stringValue(
+    typeof record.qrcode === "string" ? record.qrcode : undefined,
+    nested.base64,
+    record.base64,
+  );
+  const pairingCode = stringValue(
+    record.pairingCode,
+    record.pairing_code,
+    nested.pairingCode,
+  );
+  return {
+    ...(raw ? { qrcode: asWhatsAppQrDataUri(raw) } : {}),
+    ...(pairingCode ? { pairingCode } : {}),
+  };
+}
+
 function publicMediaUrl(...values: unknown[]): string | undefined {
   for (const value of values) {
     const candidate = stringValue(value);
@@ -440,19 +474,27 @@ export class WhatsmiauMessagingProvider {
     }
     return instance;
   }
-  connectInstance(instanceName: string) {
-    return this.request<{ qrcode?: string; pairingCode?: string }>(
+  async connectInstance(instanceName: string) {
+    const result = await this.request<unknown>(
       `/instance/connect/${encodeURIComponent(instanceName)}`,
     );
+    return extractWhatsmiauConnectQr(result);
   }
-  getQrCode(instanceName: string) {
-    return fetch(
+  async getQrCode(instanceName: string) {
+    const response = await fetch(
       `${this.baseUrl}/instance/connect/${encodeURIComponent(instanceName)}/image`,
       { headers: { apikey: this.apiKey } },
-    ).then((response) =>
-      response.ok
-        ? response.arrayBuffer().then((value) => Buffer.from(value))
-        : null,
+    );
+    // 204 = already connected (no QR). Other non-OK responses mean pairing
+    // has not started or the image is unavailable yet.
+    if (response.status === 204 || !response.ok) return null;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return buffer.byteLength > 0 ? buffer : null;
+  }
+  deleteInstance(instanceName: string) {
+    return this.request<void>(
+      `/instance/delete/${encodeURIComponent(instanceName)}`,
+      { method: "DELETE" },
     );
   }
   getConnectionState(instanceName: string) {
