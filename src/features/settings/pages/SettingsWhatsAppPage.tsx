@@ -412,7 +412,7 @@ export function SettingsWhatsAppPage({
                       </button>
                       {channel.state === "open" ? (
                         <button
-                          className="button button-danger button-small"
+                          className="button button-ghost button-small"
                           type="button"
                           onClick={() => {
                             applyChannel(channel);
@@ -433,12 +433,17 @@ export function SettingsWhatsAppPage({
                         </button>
                       )}
                       <button
-                        className="button button-ghost button-small"
+                        className="button button-danger button-small"
                         type="button"
                         onClick={() => void remove(channel)}
                         disabled={action !== null || !channel.channelId}
+                        aria-label={t("v2.whatsapp.remove")}
                       >
-                        <Trash2 size={13} /> {t("v2.whatsapp.remove")}
+                        <Trash2 size={13} />{" "}
+                        {action === "remove" &&
+                        selected?.channelId === channel.channelId
+                          ? t("v2.whatsapp.removing")
+                          : t("v2.whatsapp.remove")}
                       </button>
                     </div>
                   </div>
@@ -483,6 +488,17 @@ export function SettingsWhatsAppPage({
                   {action === "qr"
                     ? t("v2.whatsapp.generating")
                     : t("v2.whatsapp.generate")}
+                </button>
+                <button
+                  className="button button-danger"
+                  type="button"
+                  disabled={action !== null || !selected.channelId}
+                  onClick={() => void remove(selected)}
+                >
+                  <Trash2 size={14} />{" "}
+                  {action === "remove"
+                    ? t("v2.whatsapp.removing")
+                    : t("v2.whatsapp.remove")}
                 </button>
               </div>
             </SettingsSection>

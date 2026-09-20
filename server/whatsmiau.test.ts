@@ -262,7 +262,7 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
-  it("cleans up a provider instance when webhook setup fails", async () => {
+  it("keeps the provider instance when webhook setup fails", async () => {
     const originalFetch = globalThis.fetch;
     const calls: string[] = [];
     globalThis.fetch = async (input, init) => {
@@ -270,7 +270,11 @@ describe("Whatsmiau normalization", () => {
       calls.push(`${init?.method ?? "GET"} ${url}`);
       if (url.endsWith("/instance/create"))
         return new Response(
-          JSON.stringify({ instanceName: "mend-test", state: "closed" }),
+          JSON.stringify({
+            instanceName: "mend-test",
+            state: "closed",
+            base64: "data:image/png;base64,qr",
+          }),
           { status: 200 },
         );
       if (url.includes("/webhook/set/"))
@@ -291,11 +295,13 @@ describe("Whatsmiau normalization", () => {
           webhookUrl: "https://mend.test/webhook",
           webhookSecret: "secret",
         }),
-      ).rejects.toMatchObject({ status: 400 });
+      ).resolves.toMatchObject({
+        instanceName: "mend-test",
+        qrcode: "data:image/png;base64,qr",
+      });
       expect(calls).toEqual([
         "POST https://provider.test/v2/instance/create",
         "POST https://provider.test/v2/webhook/set/mend-test",
-        "DELETE https://provider.test/v2/instance/logout/mend-test",
       ]);
     } finally {
       globalThis.fetch = originalFetch;

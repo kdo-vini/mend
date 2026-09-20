@@ -214,6 +214,25 @@ describe("WhatsApp connection status", () => {
     );
   });
 
+  it("shows a remove action for a disconnected channel", async () => {
+    vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
+      ...connected,
+      state: "closed",
+    });
+    vi.mocked(settingsApi.removeLiveChannel).mockResolvedValue();
+    await render();
+
+    const removeButton = [...container.querySelectorAll("button")].find(
+      (item) => item.textContent?.includes("Remove"),
+    );
+    expect(removeButton).toBeDefined();
+    await act(async () => removeButton!.click());
+    expect(settingsApi.removeLiveChannel).toHaveBeenCalledWith({
+      workspaceId: "workspace-test",
+      channelId: "channel-test",
+    });
+  });
+
   it("renews the QR while pairing and stops requesting it after connection", async () => {
     vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
       ...connected,

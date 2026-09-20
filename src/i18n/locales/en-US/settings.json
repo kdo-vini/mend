@@ -880,6 +880,7 @@
       "disconnectDescription": "The number will stop receiving messages until it is paired again.",
       "confirmDisconnect": "Disconnect",
       "remove": "Remove",
+      "removing": "Removing…",
       "removeTitle": "Remove WhatsApp instance?",
       "removeDescription": "Delete {{name}} from Mend and Whatsmiau so you can create a fresh instance.",
       "confirmRemove": "Remove instance",

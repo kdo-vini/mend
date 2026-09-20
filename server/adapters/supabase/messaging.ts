@@ -53,11 +53,21 @@ function isConflictProviderInstance(error: unknown): boolean {
   if (error.status === 409 || error.status === 422) return true;
   const body = (error.responseBody ?? error.message).toLowerCase();
   return (
-    error.status === 400 &&
+    (error.status === 400 || error.status === 403) &&
     (body.includes("already") ||
       body.includes("exists") ||
-      body.includes("duplicate"))
+      body.includes("duplicate") ||
+      body.includes("in use"))
   );
+}
+
+async function rollbackProviderInstance(
+  provider: WhatsmiauProviderPort,
+  instanceName: string,
+) {
+  await provider.disconnect(instanceName).catch(() => undefined);
+  if (provider.deleteInstance)
+    await provider.deleteInstance(instanceName).catch(() => undefined);
 }
 
 export class SupabaseChannelAdapter implements ChannelPort {
@@ -217,15 +227,16 @@ export class SupabaseChannelAdapter implements ChannelPort {
       };
     } catch (error) {
       if (providerCreated)
-        await this.provider
-          .disconnect(input.providerInstanceName)
-          .catch(() => undefined);
+        await rollbackProviderInstance(
+          this.provider,
+          input.providerInstanceName,
+        );
       // Provider already has this name (e.g. previous Mend row deleted). Adopt
       // it into the workspace instead of leaving Settings unable to create.
       if (isConflictProviderInstance(error)) {
-        const connected = await this.provider.connectInstance(
-          input.providerInstanceName,
-        );
+        const connected = await this.provider
+          .connectInstance(input.providerInstanceName)
+          .catch(() => ({}) as { qrcode?: string; pairingCode?: string });
         const result = await this.client
           .from("channel_connections")
           .insert({
@@ -242,9 +253,8 @@ export class SupabaseChannelAdapter implements ChannelPort {
           })
           .select("*")
           .single();
-        const created = channel(
-          row(checked("channel_connections.adopt", result)),
-        );
+        const adopted = row(checked("channel_connections.adopt", result));
+        const created = channel(adopted);
         let pairingQr = connected.qrcode;
         if (!pairingQr) {
           const image = await this.provider.getQrCode(
@@ -255,6 +265,7 @@ export class SupabaseChannelAdapter implements ChannelPort {
           if (image)
             pairingQr = `data:image/png;base64,${Buffer.from(image).toString("base64")}`;
         }
+        await this.ensureWebhook(adopted).catch(() => undefined);
         return {
           ...created,
           ...(pairingQr ? { qr: asWhatsAppQrDataUri(pairingQr) } : {}),

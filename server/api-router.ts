@@ -583,9 +583,38 @@ function messagingApiError(error: unknown): ApiHttpError | null {
     return new ApiHttpError(
       error.retryable ? 503 : 502,
       "whatsapp_provider_error",
-      "WhatsApp provider request failed. Check the instance and try again.",
+      describeWhatsmiauApiError(error),
     );
   return null;
+}
+
+function describeWhatsmiauApiError(error: WhatsmiauApiError): string {
+  const raw = (error.responseBody ?? "").trim();
+  let detail = "";
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const candidate = [
+        parsed.message,
+        parsed.error,
+        parsed.msg,
+        parsed.response,
+      ]
+        .map((value) =>
+          typeof value === "string"
+            ? value
+            : value && typeof value === "object" && "message" in value
+              ? String((value as { message: unknown }).message)
+              : "",
+        )
+        .find((value) => value.trim().length > 0);
+      detail = (candidate ?? "").trim().slice(0, 160);
+    } catch {
+      detail = raw.replace(/\s+/g, " ").slice(0, 160);
+    }
+  }
+  if (detail) return `WhatsApp provider error (${error.status}): ${detail}`;
+  return `WhatsApp provider error (${error.status}). Check the instance and try again.`;
 }
 
 function githubApiError(error: unknown): ApiHttpError | null {

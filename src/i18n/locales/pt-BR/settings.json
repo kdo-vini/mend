@@ -880,6 +880,7 @@
       "disconnectDescription": "O n\u00famero parar\u00e1 de receber mensagens at\u00e9 ser conectado novamente.",
       "confirmDisconnect": "Desconectar",
       "remove": "Excluir",
+      "removing": "Excluindo\u2026",
       "removeTitle": "Excluir inst\u00e2ncia do WhatsApp?",
       "removeDescription": "Remove {{name}} do Mend e do Whatsmiau para poder criar uma inst\u00e2ncia nova.",
       "confirmRemove": "Excluir inst\u00e2ncia",

@@ -490,8 +490,8 @@ export class WhatsmiauMessagingProvider {
         syncFullHistory: input.syncFullHistory ?? true,
       }),
     });
-    // Creating the instance and configuring its webhook are two provider calls.
-    // Do not leave an orphaned provider instance when the second call fails.
+    // Webhook setup must not roll back a freshly created instance. Pairing/QR
+    // can proceed without inbound events; ensureWebhook repairs the hook later.
     if (input.webhookUrl && input.webhookSecret) {
       try {
         await this.configureWebhook({
@@ -499,9 +499,8 @@ export class WhatsmiauMessagingProvider {
           url: input.webhookUrl,
           secret: input.webhookSecret,
         });
-      } catch (error) {
-        await this.disconnect(input.instanceName).catch(() => undefined);
-        throw error;
+      } catch {
+        // Best-effort: keep the instance so Settings can still show a QR.
       }
     }
     return normalizeMessagingInstance(raw, input.instanceName);
