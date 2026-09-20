@@ -128,6 +128,11 @@ import {
   inboxFilterValues,
   type InboxFilter,
 } from "../inbox-filters";
+import {
+  mergeConversationSnapshot,
+  sortConversations,
+  stripHumanWhatsAppIntro,
+} from "../conversation-snapshot";
 
 /** Server delivery-failure codes, mapped to the inbox message for each. */
 const sendErrorKeys: Record<string, string> = {
@@ -165,14 +170,6 @@ interface LightboxMedia {
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function sortConversations(items: Conversation[]) {
-  return [...items].sort((left, right) => {
-    const rightTime = Date.parse(right.lastMessageAt || "") || 0;
-    const leftTime = Date.parse(left.lastMessageAt || "") || 0;
-    return rightTime - leftTime;
-  });
-}
-
 function shouldShowConversationAiDetails() {
   return (
     typeof window === "undefined" ||
@@ -196,59 +193,6 @@ function aiDecisionDismissalSignature(conversation: Conversation) {
 
 function aiDraftDismissalSignature(draft: AiDraft) {
   return JSON.stringify([draft.id, draft.updatedAt, draft.status, draft.body]);
-}
-
-function mergeConversationSnapshot(
-  current: Conversation[],
-  snapshot: Conversation,
-): Conversation[] {
-  const existing = current.find((item) => item.id === snapshot.id);
-  const persistedTextCounts = new Map(
-    snapshot.messages.map((message) => [
-      `${message.direction}:${message.text}`,
-      snapshot.messages.filter(
-        (candidate) =>
-          candidate.direction === message.direction &&
-          candidate.text === message.text,
-      ).length,
-    ]),
-  );
-  const pending = (existing?.messages ?? []).filter((message) => {
-    if (!message.id.startsWith("temp:")) return false;
-    const key = `${message.direction}:${message.text}`;
-    const remaining = persistedTextCounts.get(key) ?? 0;
-    if (remaining > 0) {
-      persistedTextCounts.set(key, remaining - 1);
-      return false;
-    }
-    return true;
-  });
-  const pendingReactions = new Map(
-    (existing?.messages ?? [])
-      .filter((message) => message.pendingReaction !== undefined)
-      .map((message) => [message.id, message]),
-  );
-  const merged = {
-    ...snapshot,
-    messages: [
-      ...snapshot.messages.map((message) => {
-        const pendingReaction = pendingReactions.get(message.id);
-        return pendingReaction
-          ? {
-              ...message,
-              reactions: pendingReaction.reactions,
-              pendingReaction: pendingReaction.pendingReaction,
-            }
-          : message;
-      }),
-      ...pending,
-    ],
-  };
-  return sortConversations(
-    existing
-      ? current.map((item) => (item.id === snapshot.id ? merged : item))
-      : [merged, ...current],
-  );
 }
 
 export function InboxPage({
@@ -446,6 +390,27 @@ export function InboxPage({
   const olderMessagesLoadingRef = useRef(false);
   const exhaustedConversationIdsRef = useRef(new Set<string>());
 
+  // The inbox list only embeds the latest message per conversation. Opening a
+  // thread must load the recent history or the canvas stays on a single bubble.
+  useEffect(() => {
+    if (!liveMode || !workspaceId || !selectedConversationId) return;
+    let cancelled = false;
+    exhaustedConversationIdsRef.current.delete(selectedConversationId);
+    void loadLiveConversationSnapshot(workspaceId, selectedConversationId)
+      .then((snapshot) => {
+        if (cancelled || !snapshot) return;
+        setConversations((current) =>
+          mergeConversationSnapshot(current, snapshot),
+        );
+      })
+      .catch(() => {
+        // Keep the list preview when the full thread cannot load.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [liveMode, selectedConversationId, setConversations, workspaceId]);
+
   useEffect(() => {
     const canvas = messageCanvasRef.current;
     const conversationId = selected?.id;
@@ -458,13 +423,14 @@ export function InboxPage({
     const loadOlder = () => {
       if (
         canvas.scrollTop > 24 ||
-        canvas.scrollHeight <= canvas.clientHeight + 24 ||
         olderMessagesLoadingRef.current ||
         exhaustedConversationIdsRef.current.has(conversationId)
       )
         return;
       olderMessagesLoadingRef.current = true;
       const previousHeight = canvas.scrollHeight;
+      const filledViewport =
+        canvas.scrollHeight <= canvas.clientHeight + 24;
       void loadOlderLiveConversationMessages(
         workspaceId,
         conversationId,
@@ -491,7 +457,10 @@ export function InboxPage({
             }),
           );
           window.requestAnimationFrame(() => {
-            canvas.scrollTop += canvas.scrollHeight - previousHeight;
+            // Preserve anchor when the user scrolled; when we auto-filled an
+            // undersized canvas, keep them at the bottom of the thread.
+            if (filledViewport) scrollMessagesToBottom("auto");
+            else canvas.scrollTop += canvas.scrollHeight - previousHeight;
           });
         })
         .catch((error) =>
@@ -503,13 +472,20 @@ export function InboxPage({
     };
 
     canvas.addEventListener("scroll", loadOlder, { passive: true });
-    return () => canvas.removeEventListener("scroll", loadOlder);
+    // When the preview (or a short page) does not overflow, scroll never
+    // fires — pull older messages until the canvas fills or history ends.
+    const fillTimer = window.setTimeout(loadOlder, 0);
+    return () => {
+      canvas.removeEventListener("scroll", loadOlder);
+      window.clearTimeout(fillTimer);
+    };
   }, [
     liveMode,
     messageCanvasRef,
+    messageSignature,
     onToast,
+    scrollMessagesToBottom,
     selected?.id,
-    selected?.messages,
     setConversations,
     t,
     workspaceId,
@@ -871,6 +847,22 @@ export function InboxPage({
           text: text.trim(),
           idempotencyKey: clientId,
         });
+        // Promote the optimistic bubble immediately so a slow/partial refresh
+        // cannot leave the thread stuck on "Sending…" or a single bubble.
+        setConversations((current) =>
+          current.map((item) =>
+            item.id === conversationId
+              ? {
+                  ...item,
+                  messages: item.messages.map((message) =>
+                    message.id === optimistic.id
+                      ? { ...message, status: "sent" as const }
+                      : message,
+                  ),
+                }
+              : item,
+          ),
+        );
         const snapshot = await loadLiveConversationSnapshot(
           workspaceId,
           conversationId,
@@ -2921,7 +2913,9 @@ function MessageBubble({
               </span>
             </div>
           ) : message.type === "text" ? (
-            <div className="message-bubble">{message.text}</div>
+            <div className="message-bubble">
+              {stripHumanWhatsAppIntro(message.text)}
+            </div>
           ) : (
             <MessageMedia
               workspaceId={messageWorkspaceId}
@@ -3034,7 +3028,7 @@ function MessageBubble({
           aria-label={message.status ?? t("ui.sent")}
         >
           {message.status === "sending" ? (
-            "Sending…"
+            t("ui.sending")
           ) : message.status === "failed" ? (
             "Failed"
           ) : message.status === "read" || message.status === "delivered" ? (

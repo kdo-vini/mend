@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -54,6 +54,7 @@ export function NotificationCenter({
     maxHeight: number;
     side: "left" | "right";
   } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const unread = notifications.filter((notification) => !notification.read_at);
@@ -113,14 +114,51 @@ export function NotificationCenter({
       });
     };
 
+    const onWindowScroll = (event: Event) => {
+      // Scrolling the notification list itself must not reposition/close the
+      // panel — only page/shell scrolls should recalculate placement.
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        panelRef.current &&
+        panelRef.current.contains(target)
+      )
+        return;
+      updatePanelPosition();
+    };
+
     updatePanelPosition();
     window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
+    window.addEventListener("scroll", onWindowScroll, true);
     return () => {
       window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
+      window.removeEventListener("scroll", onWindowScroll, true);
     };
   }, [open, notifications.length, pushStatus]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const root = rootRef.current;
+      const panel = panelRef.current;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (root?.contains(target) || panel?.contains(target)) return;
+      setOpen(false);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   const openNotification = (notification: WorkspaceNotification) => {
     onDismissNotification(notification.id);
@@ -129,7 +167,7 @@ export function NotificationCenter({
   };
 
   return (
-    <div className="notification-center">
+    <div className="notification-center" ref={rootRef}>
       <button
         ref={triggerRef}
         className="icon-button subtle notification-trigger"
@@ -140,6 +178,7 @@ export function NotificationCenter({
             : "",
         })}
         aria-expanded={open}
+        aria-haspopup="dialog"
         onClick={() => {
           setPanelPosition(null);
           setOpen((current) => !current);
@@ -182,7 +221,14 @@ export function NotificationCenter({
               </button>
             )}
           </div>
-          <div className="notification-list">
+          <div
+            className="notification-list"
+            onWheel={(event) => {
+              // Keep wheel scrolling inside the list; do not let it bubble to
+              // page listeners that reposition or dismiss the panel.
+              event.stopPropagation();
+            }}
+          >
             {notifications.length === 0 ? (
               <div className="notification-empty">
                 {t("navigation.noNotifications")}

@@ -18,6 +18,10 @@ import type {
   CodingRun,
   Message,
 } from "./types";
+import {
+  mergeConversationSnapshot,
+  sortConversations,
+} from "./features/inbox/conversation-snapshot";
 import { supabase } from "./lib/supabase";
 import { normalizeLocale, type SupportedLocale } from "./i18n/resources";
 import { currentInterfaceLanguage } from "./i18n/preferences";
@@ -133,67 +137,6 @@ const localOperatorMode =
 interface AssigneeOption {
   value: string;
   label: string;
-}
-
-function sortConversations(items: Conversation[]) {
-  return [...items].sort((left, right) => {
-    const rightTime = Date.parse(right.lastMessageAt || "") || 0;
-    const leftTime = Date.parse(left.lastMessageAt || "") || 0;
-    return rightTime - leftTime;
-  });
-}
-
-function mergeConversationSnapshot(
-  current: Conversation[],
-  snapshot: Conversation,
-): Conversation[] {
-  const existing = current.find((item) => item.id === snapshot.id);
-  const persistedTextCounts = new Map(
-    snapshot.messages.map((message) => [
-      `${message.direction}:${message.text}`,
-      snapshot.messages.filter(
-        (candidate) =>
-          candidate.direction === message.direction &&
-          candidate.text === message.text,
-      ).length,
-    ]),
-  );
-  const pending = (existing?.messages ?? []).filter((message) => {
-    if (!message.id.startsWith("temp:")) return false;
-    const key = `${message.direction}:${message.text}`;
-    const remaining = persistedTextCounts.get(key) ?? 0;
-    if (remaining > 0) {
-      persistedTextCounts.set(key, remaining - 1);
-      return false;
-    }
-    return true;
-  });
-  const pendingReactions = new Map(
-    (existing?.messages ?? [])
-      .filter((message) => message.pendingReaction !== undefined)
-      .map((message) => [message.id, message]),
-  );
-  const merged = {
-    ...snapshot,
-    messages: [
-      ...snapshot.messages.map((message) => {
-        const pendingReaction = pendingReactions.get(message.id);
-        return pendingReaction
-          ? {
-              ...message,
-              reactions: pendingReaction.reactions,
-              pendingReaction: pendingReaction.pendingReaction,
-            }
-          : message;
-      }),
-      ...pending,
-    ],
-  };
-  return sortConversations(
-    existing
-      ? current.map((item) => (item.id === snapshot.id ? merged : item))
-      : [merged, ...current],
-  );
 }
 
 function App() {
@@ -476,7 +419,11 @@ function App() {
         if (!active) return;
         setConversations((current) =>
           liveData.conversations.reduce(
-            (merged, snapshot) => mergeConversationSnapshot(merged, snapshot),
+            (merged, snapshot) =>
+              mergeConversationSnapshot(merged, snapshot, {
+                // The workspace list only embeds the latest message per thread.
+                partialMessages: true,
+              }),
             current.filter((conversation) =>
               liveData.conversations.some(
                 (snapshot) => snapshot.id === conversation.id,

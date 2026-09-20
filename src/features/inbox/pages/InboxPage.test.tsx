@@ -50,7 +50,20 @@ const startConversation = vi.fn(async (_input: unknown) => ({
   created: true,
 }));
 const loadLiveConversationSnapshot = vi.fn(
-  async (_workspaceId: string, _conversationId: string) => startedConversation,
+  async (_workspaceId: string, conversationId: string) => {
+    if (conversationId === startedConversation.id) return startedConversation;
+    return (
+      seedConversations.find((conversation) => conversation.id === conversationId) ??
+      null
+    );
+  },
+);
+const loadOlderLiveConversationMessages = vi.fn(
+  async (
+    _workspaceId: string,
+    _conversationId: string,
+    _before: string,
+  ) => [],
 );
 const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);
@@ -70,6 +83,11 @@ vi.mock("../api", () => ({
   startConversation: (input: unknown) => startConversation(input),
   loadLiveConversationSnapshot: (workspaceId: string, conversationId: string) =>
     loadLiveConversationSnapshot(workspaceId, conversationId),
+  loadOlderLiveConversationMessages: (
+    workspaceId: string,
+    conversationId: string,
+    before: string,
+  ) => loadOlderLiveConversationMessages(workspaceId, conversationId, before),
   deleteLiveConversation: (input: unknown) => deleteLiveConversation(input),
   deleteLiveMessage: vi.fn(),
   markLiveConversationRead: vi.fn(),
@@ -175,6 +193,7 @@ describe("InboxPage new chat", () => {
     root = createRoot(container);
     startConversation.mockClear();
     loadLiveConversationSnapshot.mockClear();
+    loadOlderLiveConversationMessages.mockClear();
     deleteLiveConversation.mockClear();
     updateLiveConversation.mockClear();
     sendLiveMessage.mockReset();
@@ -184,6 +203,80 @@ describe("InboxPage new chat", () => {
   afterEach(async () => {
     await act(async () => root.unmount());
     container.remove();
+  });
+
+  it("hydrates the open thread beyond the list preview message", async () => {
+    const previewOnly: Conversation = {
+      ...seedConversations[0],
+      messages: [seedConversations[0].messages.at(-1)!],
+    };
+    const fullThread: Conversation = {
+      ...seedConversations[0],
+      messages: [
+        {
+          id: "m-history-1",
+          conversationId: seedConversations[0].id,
+          direction: "inbound",
+          sender: seedConversations[0].name,
+          text: "Boa noite",
+          time: "19:00",
+          type: "text",
+          createdAt: "2026-09-20T22:00:00.000Z",
+        },
+        {
+          id: "m-history-2",
+          conversationId: seedConversations[0].id,
+          direction: "inbound",
+          sender: seedConversations[0].name,
+          text: "Meus site está com inconsistência",
+          time: "20:10",
+          type: "text",
+          createdAt: "2026-09-20T23:10:00.000Z",
+        },
+      ],
+    };
+    loadLiveConversationSnapshot.mockResolvedValueOnce(fullThread);
+
+    function PreviewHarness() {
+      const [conversations, setConversations] = useState<Conversation[]>([
+        previewOnly,
+      ]);
+      const [selectedConversationId, setSelectedConversationId] = useState(
+        previewOnly.id,
+      );
+      return (
+        <MemoryRouter initialEntries={["/inbox"]}>
+          <InboxPage
+            workspaceId="workspace-1"
+            conversations={conversations}
+            setConversations={setConversations}
+            selectedConversationId={selectedConversationId}
+            setSelectedConversationId={setSelectedConversationId}
+            issues={[]}
+            onOpenIssue={() => undefined}
+            onToast={() => undefined}
+            onConfirm={async () => true}
+            liveMode
+            senderNames={{}}
+            knowledgeArticles={[]}
+            assigneeOptions={[{ value: "Marina", label: "Marina" }]}
+            assigneeLabel={(value) => value}
+          />
+        </MemoryRouter>
+      );
+    }
+
+    await act(async () => root.render(<PreviewHarness />));
+    await act(async () => undefined);
+
+    expect(loadLiveConversationSnapshot).toHaveBeenCalledWith(
+      "workspace-1",
+      previewOnly.id,
+    );
+    expect(document.body.textContent).toContain("Boa noite");
+    expect(document.body.textContent).toContain(
+      "Meus site está com inconsistência",
+    );
   });
 
   it("opens the conversation it just started instead of the first one in the list", async () => {
