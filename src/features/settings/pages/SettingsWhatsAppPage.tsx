@@ -173,7 +173,16 @@ export function SettingsWhatsAppPage({
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [action, applyChannel, loading, onToast, selected, showQr, t, workspaceId]);
+  }, [
+    action,
+    applyChannel,
+    loading,
+    onToast,
+    selected,
+    showQr,
+    t,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (

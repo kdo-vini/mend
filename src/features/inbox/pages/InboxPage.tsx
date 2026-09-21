@@ -429,8 +429,7 @@ export function InboxPage({
         return;
       olderMessagesLoadingRef.current = true;
       const previousHeight = canvas.scrollHeight;
-      const filledViewport =
-        canvas.scrollHeight <= canvas.clientHeight + 24;
+      const filledViewport = canvas.scrollHeight <= canvas.clientHeight + 24;
       void loadOlderLiveConversationMessages(
         workspaceId,
         conversationId,

@@ -18,10 +18,7 @@ import type {
   CodingRun,
   Message,
 } from "./types";
-import {
-  mergeConversationSnapshot,
-  sortConversations,
-} from "./features/inbox/conversation-snapshot";
+import { mergeConversationSnapshot } from "./features/inbox/conversation-snapshot";
 import { supabase } from "./lib/supabase";
 import { normalizeLocale, type SupportedLocale } from "./i18n/resources";
 import { currentInterfaceLanguage } from "./i18n/preferences";

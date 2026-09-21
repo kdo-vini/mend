@@ -29,9 +29,9 @@ describe("whatsapp-agent-intro", () => {
     expect(formatHumanWhatsAppText("Lucas", "Boa tarde!", "pt-BR")).toBe(
       "_*Lucas está te atendendo*_\n\nBoa tarde!",
     );
-    expect(
-      formatHumanWhatsAppText("Lucas Silva", "Hello there", "en-US"),
-    ).toBe("_*Lucas is assisting you*_\n\nHello there");
+    expect(formatHumanWhatsAppText("Lucas Silva", "Hello there", "en-US")).toBe(
+      "_*Lucas is assisting you*_\n\nHello there",
+    );
   });
 
   it("skips the intro when includeIntro is false", () => {

@@ -53,17 +53,14 @@ const loadLiveConversationSnapshot = vi.fn(
   async (_workspaceId: string, conversationId: string) => {
     if (conversationId === startedConversation.id) return startedConversation;
     return (
-      seedConversations.find((conversation) => conversation.id === conversationId) ??
-      null
+      seedConversations.find(
+        (conversation) => conversation.id === conversationId,
+      ) ?? null
     );
   },
 );
 const loadOlderLiveConversationMessages = vi.fn(
-  async (
-    _workspaceId: string,
-    _conversationId: string,
-    _before: string,
-  ) => [],
+  async (_workspaceId: string, _conversationId: string, _before: string) => [],
 );
 const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);

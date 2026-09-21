@@ -82,10 +82,7 @@ async function deleteProviderInstance(
     await provider.deleteInstance(instanceName);
   } catch (error) {
     if (isMissingProviderInstance(error)) return;
-    if (
-      error instanceof WhatsmiauApiError &&
-      error.status === 409
-    ) {
+    if (error instanceof WhatsmiauApiError && error.status === 409) {
       await new Promise((resolve) => setTimeout(resolve, 800));
       try {
         await provider.deleteInstance(instanceName);
@@ -606,10 +603,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
       str(member?.display_name).trim() ||
       (locale === "en-US" ? "Support" : "Suporte");
     const includeIntro = options?.conversationId
-      ? !(await this.hasPriorHumanOutbound(
-          context,
-          options.conversationId,
-        ))
+      ? !(await this.hasPriorHumanOutbound(context, options.conversationId))
       : true;
     return formatHumanWhatsAppText(displayName, body, locale, {
       includeIntro,

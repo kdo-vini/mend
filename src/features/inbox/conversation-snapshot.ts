@@ -10,10 +10,7 @@ export function stripHumanWhatsAppIntro(text: string): string {
   if (!trimmed) return trimmed;
   const stripped = trimmed
     .replace(/^_\*[^*\n]+?\*_\s*\n+/, "")
-    .replace(
-      /^\*[^*\n]+?\*\s+(está te atendendo|is assisting you)\s*\n+/i,
-      "",
-    );
+    .replace(/^\*[^*\n]+?\*\s+(está te atendendo|is assisting you)\s*\n+/i, "");
   return stripped.trim() || trimmed;
 }
 
@@ -116,7 +113,9 @@ export function mergeConversationSnapshot(
 
   let nextMessages: Message[];
   if (treatAsPartial && existing) {
-    const byId = new Map(localPersisted.map((message) => [message.id, message]));
+    const byId = new Map(
+      localPersisted.map((message) => [message.id, message]),
+    );
     for (const message of withPendingReactions(existing, snapshot.messages)) {
       if (message.id.startsWith("temp:")) continue;
       byId.set(message.id, message);
