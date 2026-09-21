@@ -920,7 +920,7 @@
       "safeAutoReply": "Safe auto-reply",
       "conversationSummary": "{{total}} live conversations · {{off}} off · {{drafts}} drafts · {{autoReply}} auto-replies",
       "triageTitle": "AI triage routing",
-      "triageDescription": "By default the AI answers every topic. Only choose “Escalate to a person” or “No action” for topics you want to block manually.",
+      "triageDescription": "By default the AI answers from published knowledge. Billing and incidents escalate to a human. Bugs go through automated triage and only escalate when unresolved. Use “Escalate to a person” or “No action” only for extra topics you want to block.",
       "autonomyTitle": "Workspace AI autonomy",
       "autonomyDescription": "Choose the channels, integrations and actions available to the AI.",
       "allowedChannels": "Allowed channels",

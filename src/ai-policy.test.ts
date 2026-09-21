@@ -20,11 +20,11 @@ describe("workspace AI policy", () => {
       "how_to",
       "status",
       "social",
-      "billing",
       "feature",
       "other",
     ]);
     expect(policy.routes.social).toBe("safe_auto_reply");
+    expect(policy.routes.billing).toBe("human_escalation");
     expect(policy.allowedActions).toContain("investigate");
     expect(policy.humanApprovalActions).toEqual(
       expect.arrayContaining(["publish", "deploy", "delete"]),
@@ -73,7 +73,6 @@ describe("workspace AI policy", () => {
         "how_to",
         "status",
         "social",
-        "billing",
         "feature",
         "other",
       ],
@@ -122,11 +121,13 @@ describe("workspace AI policy", () => {
         social: "human_escalation",
         how_to: "human_escalation",
         incident: "human_escalation",
+        billing: "human_escalation",
       }),
     ).toMatchObject({
       social: "safe_auto_reply",
       how_to: "knowledge_auto_reply",
       incident: "human_escalation",
+      billing: "human_escalation",
     });
   });
 });

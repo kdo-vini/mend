@@ -920,7 +920,7 @@
       "safeAutoReply": "Resposta autom\u00e1tica segura",
       "conversationSummary": "{{total}} conversas ativas \u00b7 {{off}} desligadas \u00b7 {{drafts}} rascunhos \u00b7 {{autoReply}} respostas autom\u00e1ticas",
       "triageTitle": "Roteamento da triagem da IA",
-      "triageDescription": "Por padr\u00e3o a IA responde a todos os t\u00f3picos. Escolha \u201cEscalar e avisar uma pessoa\u201d ou \u201cNenhuma a\u00e7\u00e3o\u201d s\u00f3 nos t\u00f3picos que quiser bloquear manualmente.",
+      "triageDescription": "Por padr\u00e3o a IA responde com base publicada. Faturamento e incidentes escalam para humano. Bugs passam por triagem autom\u00e1tica e s\u00f3 sobem quando n\u00e3o resolvem. Use \u201cEscalar e avisar uma pessoa\u201d ou \u201cNenhuma a\u00e7\u00e3o\u201d s\u00f3 nos t\u00f3picos extras que quiser bloquear.",
       "autonomyTitle": "Autonomia da IA no workspace",
       "autonomyDescription": "Escolha os canais, integra\u00e7\u00f5es e a\u00e7\u00f5es dispon\u00edveis para a IA.",
       "allowedChannels": "Canais permitidos",

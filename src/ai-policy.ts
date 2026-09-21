@@ -81,7 +81,7 @@ export const DEFAULT_AI_ROUTE_MAP: AiRouteMap = {
   status: "knowledge_auto_reply",
   bug: "bug_triage",
   incident: "human_escalation",
-  billing: "knowledge_auto_reply",
+  billing: "human_escalation",
   feature: "safe_auto_reply",
   social: "safe_auto_reply",
   other: "safe_auto_reply",
@@ -112,7 +112,6 @@ export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
     "how_to",
     "status",
     "social",
-    "billing",
     "feature",
     "other",
   ],
@@ -253,12 +252,20 @@ export function autoReplyIntentsFromRoutes(routes: AiRouteMap): TriageIntent[] {
 
 /**
  * One-time/open defaults helper: reopen intents that were stuck on human
- * escalation, except incident which stays founder-blocked by default.
+ * escalation. Incident and billing stay founder-blocked by default because
+ * money and outages need a person.
  */
 export function ensureOpenAutomationRoutes(routes: AiRouteMap): AiRouteMap {
   const next = { ...routes };
+  const preserveHumanEscalation = new Set<TriageIntent>([
+    "incident",
+    "billing",
+  ]);
   for (const intent of triageIntentValues) {
-    if (next[intent] === "human_escalation" && intent !== "incident") {
+    if (
+      next[intent] === "human_escalation" &&
+      !preserveHumanEscalation.has(intent)
+    ) {
       next[intent] = DEFAULT_AI_ROUTE_MAP[intent];
     }
   }
