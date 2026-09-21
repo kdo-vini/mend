@@ -1,18 +1,15 @@
 import type { Conversation, Message } from "../../types";
+import {
+  conversationPreviewText,
+  stripHumanWhatsAppIntro,
+} from "../../shared/conversation-preview";
 
-/**
- * Human WhatsApp replies may be stored with the attending intro above the
- * composer body (`_*Name está te atendendo*_\n\n…`). Optimistic bubbles only
- * have the body — strip the intro so snapshot merge can retire `temp:` rows.
- */
-export function stripHumanWhatsAppIntro(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return trimmed;
-  const stripped = trimmed
-    .replace(/^_\*[^*\n]+?\*_\s*\n+/, "")
-    .replace(/^\*[^*\n]+?\*\s+(está te atendendo|is assisting you)\s*\n+/i, "");
-  return stripped.trim() || trimmed;
-}
+export {
+  conversationPreviewLabels,
+  conversationPreviewText,
+  stripHumanWhatsAppIntro,
+  type ConversationPreviewLabels,
+} from "../../shared/conversation-preview";
 
 function messageMatchKey(message: Pick<Message, "direction" | "text">): string {
   return `${message.direction}:${stripHumanWhatsAppIntro(message.text)}`;
@@ -136,6 +133,7 @@ export function mergeConversationSnapshot(
   const merged: Conversation = {
     ...snapshot,
     messages: nextMessages,
+    lastMessage: conversationPreviewText(nextMessages.at(-1)),
   };
   return sortConversations(
     existing

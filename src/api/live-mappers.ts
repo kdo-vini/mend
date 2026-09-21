@@ -32,6 +32,7 @@ import type {
   CodingAgentProvider,
 } from "../types";
 import { currentInterfaceLanguage } from "../i18n/preferences";
+import { conversationPreviewText } from "../shared/conversation-preview";
 
 type Tables = Database["public"]["Tables"];
 export type ContactRecord = Tables["contacts"]["Row"];
@@ -316,7 +317,7 @@ export function toUiConversation(
     ...(aiState?.current_summary ? { aiSummary: aiState.current_summary } : {}),
     ...(aiDraft ? { aiDraft } : {}),
     unread: record.unread_count,
-    lastMessage: last?.text || "No messages yet",
+    lastMessage: conversationPreviewText(last),
     lastTime: displayTime(record.last_message_at ?? last?.time),
     lastMessageAt: record.last_message_at ?? record.updated_at,
     issueId: issue?.id,

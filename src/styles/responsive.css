@@ -161,6 +161,13 @@
   }
   .conversation-header {
     padding: 12px;
+    gap: var(--space-2) var(--space-3);
+  }
+  .conversation-identity {
+    flex: 1 1 140px;
+  }
+  .conversation-controls {
+    flex: 1 1 160px;
   }
   .conversation-controls .mode-label {
     display: none;

@@ -130,10 +130,11 @@
 }
 .conversation-assignee .custom-select {
   width: auto;
-  min-width: 104px;
+  min-width: 0;
   flex: 1;
 }
 .conversation-assignee .custom-select-trigger {
+  min-width: 0;
   min-height: 24px;
   padding: 0 6px;
   border: 0;

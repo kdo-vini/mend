@@ -474,9 +474,10 @@
 }
 .conversation-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-3) var(--space-4);
   min-height: 71px;
   padding: 13px 20px;
   border-bottom: 1px solid var(--line);
@@ -486,17 +487,24 @@
   display: flex;
   align-items: center;
   gap: 11px;
+  flex: 1 1 180px;
   min-width: 0;
+}
+.conversation-identity > div:last-child {
+  min-width: 0;
+  flex: 1;
 }
 .identity-name {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
 }
 .identity-name-editor {
   display: flex;
   align-items: center;
   gap: 3px;
+  min-width: 0;
 }
 .identity-name-editor input {
   width: min(240px, 42vw);
@@ -509,6 +517,7 @@
   font: inherit;
 }
 .identity-name-edit {
+  flex: 0 0 auto;
   width: 24px;
   height: 24px;
   padding: 0;
@@ -519,6 +528,7 @@
 }
 .identity-name h2 {
   overflow: hidden;
+  max-width: 100%;
   font-size: 14px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -527,32 +537,41 @@
 .identity-name p,
 .conversation-identity p {
   margin-top: 3px;
+  overflow: hidden;
   color: var(--muted);
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .conversation-controls {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 220px;
+  flex-wrap: wrap;
   gap: 7px;
+  min-width: 0;
 }
 .conversation-assignee {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  max-width: 150px;
+  flex: 0 1 150px;
+  max-width: min(150px, 100%);
+  min-width: 0;
   padding: 5px 7px;
   border: 1px solid var(--line);
   border-radius: 5px;
   color: var(--muted);
   font-size: 10px;
 }
-.conversation-assignee select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  opacity: 0;
-  cursor: pointer;
+.conversation-assignee > svg {
+  flex: 0 0 auto;
+}
+.conversation-controls > .icon-button,
+.conversation-controls > .menu-wrap {
+  flex: 0 0 auto;
 }
 .conversation-assignee-label {
   overflow: hidden;
@@ -563,9 +582,13 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  max-width: min(220px, 100%);
   padding: 5px 7px;
   border-radius: 5px;
+  overflow: hidden;
   font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mode-label.draft {
   background: var(--accent-wash);
@@ -584,9 +607,13 @@
   color: var(--warning, #e9a75d);
 }
 .ai-reason {
+  max-width: min(140px, 100%);
+  overflow: hidden;
   color: var(--muted);
   font-size: 10px;
+  text-overflow: ellipsis;
   text-transform: capitalize;
+  white-space: nowrap;
 }
 .conversation-insights:not(.ai-details-open) {
   display: none;

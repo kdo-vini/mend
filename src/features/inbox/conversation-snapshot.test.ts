@@ -1,9 +1,42 @@
 import { describe, expect, it } from "vitest";
 import type { Conversation, Message } from "../../types";
 import {
+  conversationPreviewText,
   mergeConversationSnapshot,
   stripHumanWhatsAppIntro,
 } from "./conversation-snapshot";
+
+describe("conversationPreviewText", () => {
+  const labels = {
+    empty: "No messages yet",
+    audio: "Audio message",
+    image: "Image",
+    video: "Video",
+    document: "Document",
+  };
+
+  it("labels an empty audio message instead of the empty-state copy", () => {
+    expect(
+      conversationPreviewText(
+        {
+          type: "audio",
+          text: "",
+          attachment: { name: "voice.ogg", meta: "audio/ogg" },
+        },
+        labels,
+      ),
+    ).toBe("Audio message");
+  });
+
+  it("keeps a transcript or caption when the media message has text", () => {
+    expect(
+      conversationPreviewText(
+        { type: "audio", text: "Preciso de ajuda" },
+        labels,
+      ),
+    ).toBe("Preciso de ajuda");
+  });
+});
 
 function message(
   partial: Partial<Message> & Pick<Message, "id" | "direction" | "text">,

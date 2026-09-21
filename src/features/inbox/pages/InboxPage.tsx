@@ -129,6 +129,7 @@ import {
   type InboxFilter,
 } from "../inbox-filters";
 import {
+  conversationPreviewText,
   mergeConversationSnapshot,
   sortConversations,
   stripHumanWhatsAppIntro,
@@ -968,7 +969,8 @@ export function InboxPage({
                   ...pending.map((item) => item.optimistic),
                 ],
                 lastMessage:
-                  pending.at(-1)?.optimistic.text || t("ui.attachment"),
+                  conversationPreviewText(pending.at(-1)?.optimistic) ||
+                  t("ui.attachment"),
                 lastTime: t("ui.now"),
                 lastMessageAt: new Date().toISOString(),
                 attention: "waiting_customer",

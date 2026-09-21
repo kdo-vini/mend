@@ -1082,7 +1082,8 @@
     backdrop-filter: blur(18px) saturate(1.15);
   }
   .conversation-identity {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .conversation-avatar.large {
     width: 32px;

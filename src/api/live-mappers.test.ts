@@ -91,6 +91,58 @@ describe("live message mapper", () => {
 });
 
 describe("live conversation mapper", () => {
+  it("shows an audio preview when the latest message has no transcript yet", () => {
+    const result = toUiConversation(
+      {
+        id: "conversation-1",
+        workspace_id: "workspace-1",
+        contact_id: "contact-1",
+        channel_connection_id: "channel-1",
+        status: "open",
+        attention_state: "needs_attention",
+        ai_mode: "draft",
+        assigned_user_id: null,
+        unread_count: 1,
+        last_message_at: "2026-08-03T20:00:00.000Z",
+        last_inbound_at: "2026-08-03T20:00:00.000Z",
+        last_outbound_at: null,
+        last_read_at: null,
+        resolved_at: null,
+        snoozed_until: null,
+        created_at: "2026-08-03T00:00:00.000Z",
+        support_flow_state_json: {},
+        updated_at: "2026-08-03T20:00:00.000Z",
+      },
+      {
+        id: "contact-1",
+        workspace_id: "workspace-1",
+        channel_connection_id: "channel-1",
+        display_name: "Lucas Ferreira",
+        phone_number: "5511999999999",
+        company_name: null,
+        notes: null,
+        profile_picture_url: null,
+        provider_contact_id: null,
+        created_at: "2026-08-03T00:00:00.000Z",
+        updated_at: "2026-08-03T00:00:00.000Z",
+      },
+      [
+        {
+          ...baseMessage,
+          message_type: "audio",
+          text: null,
+          caption: null,
+          mime_type: "audio/ogg",
+          file_name: "voice.ogg",
+          media_remote_url: null,
+          media_storage_path: "workspace-1/conversation-1/voice.ogg",
+        },
+      ],
+    );
+
+    expect(result.lastMessage).toMatch(/áudio|Audio message/i);
+  });
+
   it("keeps only the latest operator reaction after repeated sends", () => {
     const result = toUiConversation(
       {
