@@ -92,6 +92,8 @@ export interface LiveWorkerSendAiReplyInput {
   idempotencyKey: string;
   body: string;
   triage: TriageResult;
+  /** Pause AI only after the outbound message is accepted by the provider. */
+  pauseAfterSendReason?: string;
 }
 
 export interface LiveWorkerCodexStarterInput {

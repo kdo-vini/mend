@@ -256,6 +256,28 @@ describe("live worker automation decisions", () => {
     ).toMatchObject({ action: "draft", allowed: true });
   });
 
+  it("blocks policyDecision for incident and bug routes (handoff/ack bypass them in the worker)", () => {
+    const policy = normalizeAiPolicy({});
+    expect(
+      policyDecision(
+        "safe_auto",
+        { ...triage, intent: "incident" },
+        policy,
+        false,
+        "human_escalation",
+      ),
+    ).toMatchObject({ action: "blocked", allowed: false });
+    expect(
+      policyDecision(
+        "safe_auto",
+        { ...triage, intent: "bug" },
+        policy,
+        false,
+        "bug_triage",
+      ),
+    ).toMatchObject({ action: "blocked", allowed: false });
+  });
+
   it("blocks auto-reply when autonomy does not allow respond", () => {
     const policy = normalizeAiPolicy({
       allowed_actions: ["triage", "create_issue"],

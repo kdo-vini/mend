@@ -490,16 +490,13 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           matchedKnowledge.length > 0,
           route,
         ),
-        ...(allowHumanHandoffReply || allowBugAutoReply
+        // Incident handoff asks for a human, but keep last_decision as the
+        // auto-reply we still send before pausing.
+        ...(allowHumanHandoffReply
           ? {
               needs_human: true,
-              needs_human_reason: allowHumanHandoffReply
-                ? "Workspace policy routes this intent to a human."
-                : "Workspace policy routes this intent to bug triage.",
-              last_decision: "blocked",
-              last_decision_reason: allowHumanHandoffReply
-                ? "Workspace policy routes this intent to a human."
-                : "Workspace policy routes this intent to bug triage.",
+              needs_human_reason:
+                "Workspace policy routes this intent to a human.",
             }
           : {}),
       },
@@ -507,13 +504,22 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     );
     if (error)
       throw new Error(`supabase:conversation_ai_state:${error.message}`);
+    const canSend =
+      Boolean(draft && decision.allowed) &&
+      decision.action === "auto_reply" &&
+      (modePolicy.mode === "safe_auto" ||
+        modePolicy.policy.safeAutoSendEnabled);
+    // Never pause before enqueueing send_ai_reply — claim_ai_reply_send
+    // requires automation_state=ai_active. Incidents pause after send.
+    // Bugs stay ai_active while triage/investigation runs; human takeover
+    // happens only when investigation cannot resolve the case.
     const takeoverReason = triage.unsafe
       ? "unsafe_intent"
-      : allowHumanHandoffReply || allowBugAutoReply
-        ? "manual_pause"
-        : modePolicy.mode === "safe_auto" &&
-            triage.confidence < modePolicy.policy.safeAutoMinConfidence
-          ? "low_confidence"
+      : modePolicy.mode === "safe_auto" &&
+          triage.confidence < modePolicy.policy.safeAutoMinConfidence
+        ? "low_confidence"
+        : allowHumanHandoffReply && !(canSend && draft)
+          ? "manual_pause"
           : null;
     if (takeoverReason) {
       await this.recordWorkflowFact(
@@ -531,11 +537,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           `supabase:conversation_ai.pause:${takeover.error.message}`,
         );
     }
-    const canSend =
-      Boolean(draft && decision.allowed) &&
-      decision.action === "auto_reply" &&
-      (modePolicy.mode === "safe_auto" ||
-        modePolicy.policy.safeAutoSendEnabled);
     const result: LiveWorkerAutomationResult = {
       ...(issue ? { issue } : {}),
       ...(draft ? { draft } : {}),
@@ -548,6 +549,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
               idempotencyKey: draft.idempotencyKey,
               body: draft.body,
               triage,
+              ...(allowHumanHandoffReply
+                ? { pauseAfterSendReason: "manual_pause" }
+                : {}),
             },
           }
         : {}),
@@ -691,6 +695,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         await this.auditDecision(input, input.triage, "ai.human_paused", {
           stage: "send_ai_reply",
         });
+        // Surface the draft for manual insert only when auto-send could not run.
+        await this.markDraftStatus(input, "pending_review");
         return;
       }
       throw new Error(`supabase:claim_ai_reply_send:${claim.error.message}`);
@@ -699,7 +705,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       Array.isArray(claim.data) ? claim.data[0] : claim.data
     ) as Record<string, unknown> | null;
     if (!row?.id) throw new Error("supabase:claim_ai_reply_send:empty_result");
-    if (row.status === "sent") return;
+    if (row.status === "sent") {
+      await this.markDraftStatus(input, "sent");
+      return;
+    }
     try {
       await this.whatsapp.sendText(
         {
@@ -729,6 +738,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           },
         },
       );
+      await this.markDraftStatus(input, "sent");
       await this.auditDecision(input, input.triage, "ai.auto_reply.sent", {
         sourceMessageId: input.sourceMessageId,
       });
@@ -743,6 +753,28 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         "ai_resolved",
         "auto-reply-sent",
       );
+      if (input.pauseAfterSendReason) {
+        await this.recordWorkflowFact(
+          {
+            binding: input.binding,
+            persisted: {
+              id: input.sourceMessageId,
+              conversationId: input.conversationId,
+            },
+          },
+          "policy_required_touch",
+          input.pauseAfterSendReason,
+        );
+        const takeover = await this.client.rpc("pause_conversation_ai", {
+          p_workspace_id: input.binding.workspaceId,
+          p_conversation_id: input.conversationId,
+          p_reason: input.pauseAfterSendReason,
+        });
+        if (takeover.error)
+          throw new Error(
+            `supabase:conversation_ai.pause:${takeover.error.message}`,
+          );
+      }
     } catch (error) {
       await this.metadataClient
         .from("ai_outbound_messages")
@@ -752,8 +784,29 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           updated_at: new Date().toISOString(),
         })
         .eq("id", String(row.id));
+      await this.markDraftStatus(input, "pending_review");
       throw error;
     }
+  }
+
+  private async markDraftStatus(
+    input: Pick<
+      LiveWorkerSendAiReplyInput,
+      "binding" | "idempotencyKey" | "conversationId"
+    >,
+    status: "sent" | "pending_review",
+  ): Promise<void> {
+    const updated = await this.client
+      .from("ai_drafts")
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("workspace_id", input.binding.workspaceId)
+      .eq("idempotency_key", input.idempotencyKey)
+      .in("status", ["pending_review", "auto_eligible"]);
+    if (updated.error)
+      throw new Error(`supabase:ai_drafts:${updated.error.message}`);
   }
 
   private async aiMode(
@@ -1075,6 +1128,11 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       `ai-agent-fix-ready:${payload.runId}`,
       payload.issue.id,
     );
+    await this.pauseConversationForUnresolvedBug(
+      payload.workspaceId,
+      payload.bugCaseId,
+      "manual_pause",
+    );
   }
 
   private async completeInvestigation(
@@ -1121,7 +1179,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       `ai-agent-ready:${payload.runId}`,
       payload.issue.id,
     );
-    if (shouldAutoFix)
+    if (shouldAutoFix) {
       await this.startFixForBug(
         input,
         payload.issue,
@@ -1133,6 +1191,13 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         },
         payload.triage,
       );
+      return;
+    }
+    await this.pauseConversationForUnresolvedBug(
+      payload.workspaceId,
+      payload.bugCaseId,
+      "manual_pause",
+    );
   }
 
   private async failInvestigation(
@@ -1150,6 +1215,11 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       metadata: { runId: payload.runId },
       lastError: error instanceof Error ? error.message : String(error),
     });
+    await this.pauseConversationForUnresolvedBug(
+      payload.workspaceId,
+      payload.bugCaseId,
+      "manual_pause",
+    );
   }
 
   private async failFix(
@@ -1167,6 +1237,50 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       metadata: { runId: payload.runId },
       lastError: error instanceof Error ? error.message : String(error),
     });
+    await this.pauseConversationForUnresolvedBug(
+      payload.workspaceId,
+      payload.bugCaseId,
+      "manual_pause",
+    );
+  }
+
+  private async pauseConversationForUnresolvedBug(
+    workspaceId: string,
+    bugCaseId: string,
+    reason: string,
+  ): Promise<void> {
+    const bugCase = await this.client
+      .from("bug_cases")
+      .select("conversation_id")
+      .eq("workspace_id", workspaceId)
+      .eq("id", bugCaseId)
+      .maybeSingle();
+    if (bugCase.error)
+      throw new Error(`supabase:bug_cases:${bugCase.error.message}`);
+    const conversationId = String(
+      (bugCase.data as { conversation_id?: string } | null)?.conversation_id ??
+        "",
+    );
+    if (!conversationId) return;
+    await this.metadataClient
+      .from("conversation_ai_state")
+      .update({
+        needs_human: true,
+        needs_human_reason:
+          "Bug investigation needs a human before the case can continue.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("workspace_id", workspaceId)
+      .eq("conversation_id", conversationId);
+    const takeover = await this.client.rpc("pause_conversation_ai", {
+      p_workspace_id: workspaceId,
+      p_conversation_id: conversationId,
+      p_reason: reason,
+    });
+    if (takeover.error)
+      throw new Error(
+        `supabase:conversation_ai.pause:${takeover.error.message}`,
+      );
   }
 
   private async startCodexForBug(
@@ -1277,8 +1391,16 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
             `ai-agent-ready:${started.runId}`,
             issue.id,
           );
-          if (shouldAutoFix && bugCase)
+          if (shouldAutoFix && bugCase) {
             await this.startFixForBug(input, issue, bugCase, triage);
+            return;
+          }
+          if (bugCase)
+            await this.pauseConversationForUnresolvedBug(
+              input.binding.workspaceId,
+              bugCase.id,
+              "manual_pause",
+            );
         })
         .catch(async (error) => {
           if (bugCase) {
@@ -1293,6 +1415,11 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
               metadata: { runId: started.runId },
               lastError: error instanceof Error ? error.message : String(error),
             });
+            await this.pauseConversationForUnresolvedBug(
+              input.binding.workspaceId,
+              bugCase.id,
+              "manual_pause",
+            );
           }
           await this.notifyWorkspace(
             input,
@@ -1315,6 +1442,12 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         `ai-agent-start-failed:${issue.id}:${input.persisted.id}`,
         issue.id,
       );
+      if (bugCase)
+        await this.pauseConversationForUnresolvedBug(
+          input.binding.workspaceId,
+          bugCase.id,
+          "manual_pause",
+        );
     }
   }
 
