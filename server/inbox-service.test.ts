@@ -509,6 +509,37 @@ describe("InboxService and WhatsAppService", () => {
     expect(stored?.remoteUrl).toBeUndefined();
   });
 
+  it("stores a voice note that arrived only as base64", async () => {
+    const port = new FakeInboxPort();
+    const storage = new InMemoryMediaStorage();
+    const inbox = new InboxService(port, { mediaStorage: storage });
+    const result = await inbox.persistNormalizedMessage(
+      { workspaceId },
+      channelId,
+      {
+        ...inbound("wamid-voice"),
+        messageType: "text",
+        text: undefined,
+        raw: {
+          messageType: "audioMessage",
+          message: {
+            base64: Buffer.from([1, 2, 3]).toString("base64"),
+            mimetype: "audio/ogg",
+          },
+        },
+      },
+    );
+
+    const stored = [...port.messages.values()].find(
+      (message) => message.id === result.id,
+    );
+    expect(stored?.messageType).toBe("audio");
+    expect(stored?.storagePath).toMatch(/audio\.ogg$/);
+    expect(
+      (await storage.download(stored?.storagePath ?? "")).size,
+    ).toBeGreaterThan(0);
+  });
+
   it("stores a playable inbound audio and sends its transcript to the message context", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(

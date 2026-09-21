@@ -74,4 +74,37 @@ describe("MessageMedia", () => {
       "https://media.test/preview",
     );
   });
+
+  it("renders a playable audio control once the voice note url resolves", async () => {
+    const audio: Message = {
+      ...message,
+      type: "audio",
+      text: "",
+      attachment: { name: "voice.ogg", meta: "audio/ogg" },
+    };
+    const resolveUrl = vi.fn(async () => "https://media.test/voice.ogg");
+    await act(async () => {
+      root.render(
+        <MessageMedia
+          workspaceId="workspace-1"
+          message={audio}
+          resolveUrl={resolveUrl}
+          onError={() => undefined}
+          onOpen={() => undefined}
+        />,
+      );
+    });
+
+    expect(container.querySelector("audio")).toBeNull();
+
+    await act(async () => intersect(true));
+
+    expect(resolveUrl).toHaveBeenCalledWith("workspace-1", audio, "browser");
+    expect(container.querySelector("audio")?.getAttribute("src")).toBe(
+      "https://media.test/voice.ogg",
+    );
+    expect(container.querySelector("audio")?.hasAttribute("controls")).toBe(
+      true,
+    );
+  });
 });

@@ -304,7 +304,8 @@ export interface LiveWorkerOptions {
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
-const DEFAULT_MAX_IDLE_POLL_INTERVAL_MS = 30_000;
+/** Cap idle claim waits so inbound WhatsApp messages stay near real-time. */
+const DEFAULT_MAX_IDLE_POLL_INTERVAL_MS = 4_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 60_000;
 
 /**

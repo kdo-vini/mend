@@ -95,9 +95,15 @@ export function MessageMedia({
           <video preload="none" muted playsInline src={url} onError={onError} />
           {message.text && <span>{message.text}</span>}
         </button>
-      ) : message.type === "audio" && url ? (
+      ) : message.type === "audio" ? (
         <div className="message-bubble media-bubble">
-          <audio controls preload="none" src={url} onError={onError} />
+          {url ? (
+            <audio controls preload="metadata" src={url} onError={onError} />
+          ) : (
+            <span className="media-transcript-status">
+              {t("ui.processingMedia")}
+            </span>
+          )}
           {message.text && <span>{message.text}</span>}
           {!message.text && message.transcriptionStatus === "processing" && (
             <span className="media-transcript-status">

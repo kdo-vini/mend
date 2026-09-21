@@ -573,16 +573,18 @@ describe("live Whatsmiau worker", () => {
       inbox: new FakeInbox(),
       heartbeat,
       pollIntervalMs: 2_000,
-      maxIdlePollIntervalMs: 30_000,
+      maxIdlePollIntervalMs: 4_000,
       heartbeatIntervalMs: 60_000,
       random: () => 0.5,
     });
 
     try {
       worker.start();
-      await vi.advanceTimersByTimeAsync(61_000);
+      // Claims while idle: 0,2,6,10,...,62. Second heartbeat is due at 60s and
+      // is written on the next before_claim after that (t=62).
+      await vi.advanceTimersByTimeAsync(63_000);
 
-      expect(claim).toHaveBeenCalledTimes(6);
+      expect(claim).toHaveBeenCalledTimes(17);
       expect(heartbeat.beat).toHaveBeenCalledTimes(2);
     } finally {
       const stopping = worker.stop();

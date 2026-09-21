@@ -185,9 +185,10 @@ ser automaticamente repetida.
 - `runner_heartbeats` é backend-only; readiness expõe apenas o booleano de
   atividade recente, nunca o payload ou identificador do job.
 - O `LiveWorker` usa polling adaptativo enquanto a fila está vazia: intervalo
-  base configurável, backoff até o teto e jitter curto. Heartbeat ocioso é
-  limitado por `MEND_RUNNER_HEARTBEAT_MS`; claim e conclusão de um job ainda
-  registram checkpoints imediatos.
+  base configurável, backoff até o teto (padrão 4s, para manter o inbox perto
+  de tempo real) e jitter curto. Heartbeat ocioso é limitado por
+  `MEND_RUNNER_HEARTBEAT_MS`; claim e conclusão de um job ainda registram
+  checkpoints imediatos.
 
 Novos adapters ou processors desses domínios devem ir para `server/adapters/`
 ou `server/workers/`. Os adapters Supabase são agrupados por acesso,

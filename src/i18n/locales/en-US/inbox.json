@@ -134,6 +134,7 @@
     "configureSupportAi": "Configure Support AI",
     "aiGenerated": "AI generated",
     "messageDeleted": "Message deleted",
+    "messageUnavailable": "This message could not be loaded",
     "messageReactions": "Message reactions",
     "removeReaction": "Remove reaction",
     "removeReactionWithEmoji": "Remove reaction {{emoji}}",

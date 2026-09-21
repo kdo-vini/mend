@@ -7,6 +7,7 @@ import {
   fetchWhatsAppMedia,
   normalizeAudioForPlayback,
   parseMediaInput,
+  validateMedia,
   type MediaStorage,
   type RemoteMediaReference,
   type ValidatedMedia,
@@ -16,6 +17,10 @@ import {
   type NormalizedMessageType,
   type NormalizedWhatsmiauMessage,
 } from "./whatsmiau.js";
+import {
+  publicProviderMediaUrl,
+  readProviderMessageContent,
+} from "./whatsmiau-message.js";
 import { redactJobError } from "./jobs.js";
 import type { AudioTranscriber } from "./providers.js";
 
@@ -807,6 +812,65 @@ export class SupabaseInboxPort implements InboxPort {
   }
 }
 
+function messageWithProviderContent(
+  message: NormalizedWhatsmiauMessage,
+): NormalizedWhatsmiauMessage {
+  const content = readProviderMessageContent(message.raw ?? {});
+  const messageType =
+    content.messageType === "text" ? message.messageType : content.messageType;
+  const mediaUrl =
+    message.mediaUrl ?? publicProviderMediaUrl(...content.mediaUrlCandidates);
+  return {
+    ...message,
+    messageType,
+    ...(message.text || !content.text ? {} : { text: content.text }),
+    ...(message.caption || !content.caption
+      ? {}
+      : { caption: content.caption }),
+    ...(mediaUrl ? { mediaUrl } : {}),
+    ...(message.mimeType || !content.mimeType
+      ? {}
+      : { mimeType: content.mimeType }),
+    ...(message.fileName || !content.fileName
+      ? {}
+      : { fileName: content.fileName }),
+    ...(message.fileSize !== undefined || content.fileSize === undefined
+      ? {}
+      : { fileSize: content.fileSize }),
+    ...(message.durationSeconds !== undefined ||
+    content.durationSeconds === undefined
+      ? {}
+      : { durationSeconds: content.durationSeconds }),
+  };
+}
+
+function inlineProviderMedia(
+  message: NormalizedWhatsmiauMessage,
+): ValidatedMedia | undefined {
+  const encoded = readProviderMessageContent(message.raw ?? {}).inlineBase64;
+  if (!encoded) return undefined;
+  const dataUrl = encoded.match(/^data:([^;,]+);base64,([\s\S]+)$/i);
+  const mimeType = (
+    dataUrl?.[1] ??
+    message.mimeType ??
+    (message.messageType === "audio" ? "audio/ogg" : "")
+  )
+    .split(";")[0]
+    .trim();
+  const payload = (dataUrl?.[2] ?? encoded).replace(/\s/g, "");
+  if (!mimeType || !payload) return undefined;
+  const maxChars = Math.ceil((25 * 1024 * 1024 * 4) / 3) + 16;
+  if (payload.length > maxChars) throw new Error("media_size_limit_exceeded");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload) || payload.length % 4 === 1)
+    throw new Error("invalid_media_base64");
+  return validateMedia(
+    Uint8Array.from(Buffer.from(payload, "base64")),
+    mimeType,
+    message.fileName ??
+      (message.messageType === "audio" ? "audio.ogg" : "file"),
+  );
+}
+
 export class InboxService {
   constructor(
     private readonly port: InboxPort,
@@ -947,9 +1011,10 @@ export class InboxService {
   async persistNormalizedMessage(
     contextInput: InboxContext,
     channelConnectionId: string,
-    message: NormalizedWhatsmiauMessage,
+    input: NormalizedWhatsmiauMessage,
     options: PersistMessageOptions = {},
   ): Promise<InboxMessageRecord> {
+    const message = messageWithProviderContent(input);
     const context = this.context(contextInput);
     const connectionId = safeWorkspacePart(
       channelConnectionId,
@@ -958,6 +1023,12 @@ export class InboxService {
     const encryptedWhatsAppMedia = message.mediaUrl
       ? undefined
       : extractEncryptedWhatsAppMedia(message.raw, message.messageType);
+    const inlineBase64 = readProviderMessageContent(
+      message.raw ?? {},
+    ).inlineBase64;
+    const hasFetchableMedia = Boolean(
+      message.mediaUrl || encryptedWhatsAppMedia || inlineBase64,
+    );
     if (
       options.mediaStoragePath &&
       !options.mediaStoragePath.startsWith(`${context.workspaceId}/`)
@@ -1050,7 +1121,7 @@ export class InboxService {
         participantName: participantName.slice(0, 240),
       });
 
-    if (result.inserted && (message.mediaUrl || encryptedWhatsAppMedia))
+    if (result.inserted && hasFetchableMedia)
       await this.port.setMessageMediaStatus?.({
         workspaceId: context.workspaceId,
         messageId: result.id,
@@ -1062,22 +1133,32 @@ export class InboxService {
     if (
       result.inserted &&
       !options.mediaStoragePath &&
-      (message.mediaUrl || encryptedWhatsAppMedia) &&
+      hasFetchableMedia &&
       this.options.mediaStorage
     ) {
       try {
-        const media = encryptedWhatsAppMedia
-          ? await fetchWhatsAppMedia(encryptedWhatsAppMedia, {
-              maxBytes: this.options.mediaMaxBytes,
-            })
-          : await fetchRemoteMedia(
-              {
-                url: message.mediaUrl!,
-                mimeType: message.mimeType,
-                fileName: message.fileName,
-              },
-              { maxBytes: this.options.mediaMaxBytes },
-            );
+        let inlineMedia: ValidatedMedia | undefined;
+        if (!message.mediaUrl && inlineBase64) {
+          try {
+            inlineMedia = inlineProviderMedia(message);
+          } catch (error) {
+            if (!encryptedWhatsAppMedia) throw error;
+          }
+        }
+        const media = inlineMedia
+          ? inlineMedia
+          : encryptedWhatsAppMedia
+            ? await fetchWhatsAppMedia(encryptedWhatsAppMedia, {
+                maxBytes: this.options.mediaMaxBytes,
+              })
+            : await fetchRemoteMedia(
+                {
+                  url: message.mediaUrl!,
+                  mimeType: message.mimeType,
+                  fileName: message.fileName,
+                },
+                { maxBytes: this.options.mediaMaxBytes },
+              );
         const playbackMedia =
           message.messageType === "audio"
             ? await normalizeAudioForPlayback(media)

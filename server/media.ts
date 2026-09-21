@@ -196,6 +196,11 @@ function unwrapMediaMessage(
     "viewOnceMessage",
     "viewOnceMessageV2",
     "viewOnceMessageV2Extension",
+    "documentWithCaptionMessage",
+    "editedMessage",
+    "associatedChildMessage",
+    "groupStatusMessage",
+    "botInvokeMessage",
   ]) {
     const nested = recordValue(value[wrapper]);
     if (Object.keys(nested).length > 0)

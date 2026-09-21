@@ -3,6 +3,10 @@ import {
   selectExactChannelBinding,
   type WebhookChannelBinding,
 } from "./binding.ts";
+import {
+  publicProviderMediaUrl,
+  readProviderMessageContent,
+} from "./message-content.ts";
 
 type JsonRecord = Record<string, unknown>;
 type MessageType =
@@ -44,9 +48,6 @@ const asRecord = (value: unknown): JsonRecord =>
     ? (value as JsonRecord)
     : {};
 
-const firstRecord = (...values: unknown[]): JsonRecord =>
-  values.map(asRecord).find((value) => Object.keys(value).length > 0) ?? {};
-
 const stringValue = (...values: unknown[]): string | undefined =>
   values
     .find(
@@ -68,30 +69,6 @@ const numberValue = (...values: unknown[]): number | undefined => {
   return undefined;
 };
 
-function publicMediaUrl(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    const candidate = stringValue(value);
-    if (!candidate) continue;
-    try {
-      const url = new URL(candidate);
-      const host = url.hostname.toLowerCase();
-      if (
-        url.protocol !== "https:" ||
-        url.username ||
-        url.password ||
-        host === "whatsapp.net" ||
-        host.endsWith(".whatsapp.net") ||
-        url.pathname.toLowerCase().endsWith(".enc")
-      )
-        continue;
-      return url.toString();
-    } catch {
-      // Try the next provider media field.
-    }
-  }
-  return undefined;
-}
-
 function normalizeEventName(value: unknown): string {
   return (
     typeof value === "string" && value.trim() ? value.trim() : "messages.upsert"
@@ -105,15 +82,6 @@ function normalizePhoneNumber(value: string): string {
     .replace(/^\+/, "")
     .replace(/@[^/]+$/, "")
     .replace(/\D/g, "");
-}
-
-function messageType(message: JsonRecord): MessageType {
-  if (message.imageMessage) return "image";
-  if (message.videoMessage) return "video";
-  if (message.audioMessage) return "audio";
-  if (message.documentMessage) return "document";
-  if (message.reactionMessage) return "reaction";
-  return "text";
 }
 
 function unwrapMessages(payload: JsonRecord): JsonRecord[] {
@@ -298,14 +266,8 @@ async function normalizeMessages(
     unwrapMessages(payload).map(
       async (value): Promise<NormalizedMessage | null> => {
         const key = asRecord(value.key);
-        const message = asRecord(value.message);
-        const content = firstRecord(
-          message.imageMessage,
-          message.videoMessage,
-          message.audioMessage,
-          message.documentMessage,
-          message.reactionMessage,
-        );
+        const providerContent = readProviderMessageContent(value);
+        const message = providerContent.message;
         const extended = asRecord(message.extendedTextMessage);
         const remoteJid =
           stringValue(key.remoteJid, value.remoteJid, value.chatId) ?? "";
@@ -315,7 +277,6 @@ async function normalizeMessages(
         const providerMessageId =
           stringValue(key.id, value.id) ??
           (await stableMessageId(instanceName, event, value));
-        const type = messageType(message);
         const timestamp = numberValue(value.messageTimestamp, value.timestamp);
         const timestampMs =
           timestamp !== undefined && timestamp < 10_000_000_000
@@ -332,27 +293,9 @@ async function normalizeMessages(
           listResponse.selectedRowId,
           buttonResponse.selectedButtonId,
         );
-        const text = stringValue(
-          message.conversation,
-          extended.text,
-          content.caption,
-          asRecord(message.reactionMessage).text,
-          listResponse.title,
-          buttonResponse.selectedDisplayText,
+        const mediaUrl = publicProviderMediaUrl(
+          ...providerContent.mediaUrlCandidates,
         );
-        const caption = stringValue(content.caption);
-        const mediaUrl = publicMediaUrl(
-          asRecord(value.message).mediaUrl,
-          value.mediaUrl,
-          content.url,
-          content.directPath,
-          content.mediaUrl,
-          asRecord(value.media).url,
-        );
-        const mimeType = stringValue(content.mimetype, content.mimeType);
-        const fileName = stringValue(content.fileName, content.filename);
-        const fileSize = numberValue(content.fileLength, content.fileSize);
-        const durationSeconds = numberValue(content.seconds, content.duration);
         const quotedProviderMessageId = stringValue(
           asRecord(asRecord(quoted).key).id,
           asRecord(asRecord(message.reactionMessage).key).id,
@@ -371,14 +314,24 @@ async function normalizeMessages(
           remoteJid,
           phoneNumber,
           direction: fromMe ? "outbound" : "inbound",
-          messageType: type,
-          ...(text ? { text } : {}),
-          ...(caption ? { caption } : {}),
+          messageType: providerContent.messageType,
+          ...(providerContent.text ? { text: providerContent.text } : {}),
+          ...(providerContent.caption
+            ? { caption: providerContent.caption }
+            : {}),
           ...(mediaUrl ? { mediaUrl } : {}),
-          ...(mimeType ? { mimeType } : {}),
-          ...(fileName ? { fileName } : {}),
-          ...(fileSize !== undefined ? { fileSize } : {}),
-          ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+          ...(providerContent.mimeType
+            ? { mimeType: providerContent.mimeType }
+            : {}),
+          ...(providerContent.fileName
+            ? { fileName: providerContent.fileName }
+            : {}),
+          ...(providerContent.fileSize !== undefined
+            ? { fileSize: providerContent.fileSize }
+            : {}),
+          ...(providerContent.durationSeconds !== undefined
+            ? { durationSeconds: providerContent.durationSeconds }
+            : {}),
           ...(quotedProviderMessageId ? { quotedProviderMessageId } : {}),
           ...(interactionId ? { interactionId } : {}),
           ...(parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime())

@@ -85,6 +85,71 @@ describe("Whatsmiau normalization", () => {
     });
   });
 
+  it("keeps a view-once voice note playable instead of an empty text bubble", () => {
+    const [message] = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        key: {
+          id: "3EB04A9D406D657729A5D4",
+          remoteJid: "120363426966918405@g.us",
+          fromMe: false,
+        },
+        pushName: "Guilherme Correa",
+        messageType: "audioMessage",
+        message: {
+          viewOnceMessageV2: {
+            message: {
+              audioMessage: {
+                mimetype: "audio/ogg; codecs=opus",
+                seconds: 8,
+                ptt: true,
+                url: "https://mmg.whatsapp.net/audio.enc",
+              },
+            },
+          },
+          mediaUrl: "https://storage.googleapis.com/whatsmiau/voice.ogg",
+          base64: Buffer.from([1, 2, 3]).toString("base64"),
+        },
+      },
+    });
+
+    expect(message).toMatchObject({
+      messageType: "audio",
+      mimeType: "audio/ogg; codecs=opus",
+      durationSeconds: 8,
+      mediaUrl: "https://storage.googleapis.com/whatsmiau/voice.ogg",
+      chatType: "group",
+      participantName: "Guilherme Correa",
+    });
+    expect(message.text).toBeUndefined();
+  });
+
+  it("classifies a base64 voice note when the provider omits audioMessage", () => {
+    const [message] = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        key: {
+          id: "audio-base64",
+          remoteJid: "5511999999999@s.whatsapp.net",
+          fromMe: false,
+        },
+        messageType: "audioMessage",
+        message: {
+          base64: Buffer.from([1, 2, 3]).toString("base64"),
+          mimetype: "audio/ogg",
+        },
+      },
+    });
+
+    expect(message).toMatchObject({
+      messageType: "audio",
+      mimeType: "audio/ogg",
+    });
+    expect(message.text).toBeUndefined();
+  });
+
   it("prefers Whatsmiau's converted media URL over encrypted WhatsApp media", () => {
     const [message] = normalizeWhatsmiauEvent({
       event: "messages.upsert",

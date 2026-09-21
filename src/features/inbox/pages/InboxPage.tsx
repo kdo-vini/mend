@@ -2849,6 +2849,7 @@ function MessageBubble({
   onReact: (reaction: string) => void;
 }) {
   const { t } = useTranslation("inbox");
+  const visibleText = stripHumanWhatsAppIntro(message.text);
   const failedOutbound =
     message.direction === "outbound" && message.status === "failed";
   const pendingOutbound =
@@ -2912,8 +2913,10 @@ function MessageBubble({
               </span>
             </div>
           ) : message.type === "text" ? (
-            <div className="message-bubble">
-              {stripHumanWhatsAppIntro(message.text)}
+            <div
+              className={`message-bubble${visibleText ? "" : " unavailable-message"}`}
+            >
+              {visibleText || t("ui.messageUnavailable")}
             </div>
           ) : (
             <MessageMedia

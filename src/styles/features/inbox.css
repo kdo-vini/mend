@@ -893,7 +893,8 @@
   font-size: 12px;
   line-height: 1.5;
 }
-.deleted-message {
+.deleted-message,
+.unavailable-message {
   color: var(--muted-2);
   font-style: italic;
 }
@@ -926,7 +927,12 @@
   background: var(--bg);
 }
 .media-bubble audio {
-  width: min(330px, 64vw);
+  display: block;
+  width: min(330px, 100%);
+  min-height: 40px;
+}
+.message-bubble.media-bubble:has(audio) {
+  min-width: min(260px, 70vw);
 }
 .media-transcript-status {
   color: var(--muted);

@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import {
+  publicProviderMediaUrl,
+  readProviderMessageContent,
+} from "./whatsmiau-message.js";
 
 export interface MessagingInstance {
   instanceName: string;
@@ -162,8 +166,6 @@ const asRecord = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-const firstRecord = (...values: unknown[]) =>
-  values.map(asRecord).find((value) => Object.keys(value).length > 0) ?? {};
 const stringValue = (...values: unknown[]) =>
   values.find(
     (value): value is string => typeof value === "string" && value.length > 0,
@@ -237,30 +239,6 @@ export function normalizeMessagingInstance(
   };
 }
 
-function publicMediaUrl(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    const candidate = stringValue(value);
-    if (!candidate) continue;
-    try {
-      const url = new URL(candidate);
-      const host = url.hostname.toLowerCase();
-      if (
-        url.protocol !== "https:" ||
-        url.username ||
-        url.password ||
-        host === "whatsapp.net" ||
-        host.endsWith(".whatsapp.net") ||
-        url.pathname.toLowerCase().endsWith(".enc")
-      )
-        continue;
-      return url.toString();
-    } catch {
-      // Try the next provider media field.
-    }
-  }
-  return undefined;
-}
-
 export function normalizePhoneNumber(value: string): string {
   return value
     .replace(/^\+/, "")
@@ -278,15 +256,6 @@ export function resolveWhatsAppSendDestination(input: {
   const number = input.phoneNumber.trim();
   if (number.endsWith("@g.us")) return number;
   return normalizePhoneNumber(number || remoteJid);
-}
-
-function messageType(message: Record<string, unknown>): NormalizedMessageType {
-  if (message.imageMessage) return "image";
-  if (message.videoMessage) return "video";
-  if (message.audioMessage) return "audio";
-  if (message.documentMessage) return "document";
-  if (message.reactionMessage) return "reaction";
-  return "text";
 }
 
 function stableMessageId(
@@ -338,21 +307,14 @@ export function normalizeWhatsmiauEvent(
 
   return unwrapMessages(payload).flatMap((value) => {
     const key = asRecord(value.key);
-    const message = asRecord(value.message);
-    const content = firstRecord(
-      message.imageMessage,
-      message.videoMessage,
-      message.audioMessage,
-      message.documentMessage,
-      message.reactionMessage,
-    );
+    const content = readProviderMessageContent(value);
+    const message = content.message;
     const remoteJid =
       stringValue(key.remoteJid, value.remoteJid, value.chatId) ?? "";
     const providerMessageId =
       stringValue(key.id, value.id, value.messageId, value.keyId) ??
       stableMessageId(instanceName, event, value);
     if (!remoteJid || !providerMessageId) return [];
-    const type = messageType(message);
     const extended = asRecord(message.extendedTextMessage);
     const quoted = asRecord(extended.contextInfo).quotedMessage;
     const quotedProviderMessageId = stringValue(
@@ -370,22 +332,7 @@ export function normalizeWhatsmiauEvent(
       listResponse.selectedRowId,
       buttonResponse.selectedButtonId,
     );
-    const text = stringValue(
-      message.conversation,
-      extended.text,
-      content.caption,
-      asRecord(message.reactionMessage).text,
-      listResponse.title,
-      buttonResponse.selectedDisplayText,
-    );
-    const mediaUrl = publicMediaUrl(
-      asRecord(value.message).mediaUrl,
-      value.mediaUrl,
-      content.url,
-      content.directPath,
-      content.mediaUrl,
-      asRecord(value.media).url,
-    );
+    const mediaUrl = publicProviderMediaUrl(...content.mediaUrlCandidates);
     const fromMe = key.fromMe === true || value.fromMe === true;
     const chatType = remoteJid.endsWith("@g.us") ? "group" : "direct";
     const contactName = stringValue(
@@ -401,23 +348,17 @@ export function normalizeWhatsmiauEvent(
         remoteJid,
         phoneNumber: normalizePhoneNumber(remoteJid),
         direction: fromMe ? "outbound" : "inbound",
-        messageType: type,
-        ...(text ? { text } : {}),
-        ...(stringValue(content.caption)
-          ? { caption: stringValue(content.caption) }
-          : {}),
+        messageType: content.messageType,
+        ...(content.text ? { text: content.text } : {}),
+        ...(content.caption ? { caption: content.caption } : {}),
         ...(mediaUrl ? { mediaUrl } : {}),
-        ...(stringValue(content.mimetype, content.mimeType)
-          ? { mimeType: stringValue(content.mimetype, content.mimeType) }
+        ...(content.mimeType ? { mimeType: content.mimeType } : {}),
+        ...(content.fileName ? { fileName: content.fileName } : {}),
+        ...(content.fileSize !== undefined
+          ? { fileSize: content.fileSize }
           : {}),
-        ...(stringValue(content.fileName, content.filename)
-          ? { fileName: stringValue(content.fileName, content.filename) }
-          : {}),
-        ...(numberValue(content.fileLength, content.fileSize)
-          ? { fileSize: numberValue(content.fileLength, content.fileSize) }
-          : {}),
-        ...(numberValue(content.seconds, content.duration)
-          ? { durationSeconds: numberValue(content.seconds, content.duration) }
+        ...(content.durationSeconds !== undefined
+          ? { durationSeconds: content.durationSeconds }
           : {}),
         ...(quotedProviderMessageId ? { quotedProviderMessageId } : {}),
         ...(interactionId ? { interactionId } : {}),
