@@ -82,9 +82,9 @@ export const DEFAULT_AI_ROUTE_MAP: AiRouteMap = {
   bug: "bug_triage",
   incident: "human_escalation",
   billing: "knowledge_auto_reply",
-  feature: "draft_for_review",
+  feature: "safe_auto_reply",
   social: "safe_auto_reply",
-  other: "draft_for_review",
+  other: "safe_auto_reply",
 };
 
 const mandatoryHumanApprovalActions: AiPolicyAction[] = [
@@ -107,11 +107,19 @@ export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   draftEnabled: true,
   safeAutoEnabled: true,
   safeAutoMinConfidence: 0.85,
-  safeAutoIntents: ["question", "how_to", "status", "social"],
+  safeAutoIntents: [
+    "question",
+    "how_to",
+    "status",
+    "social",
+    "billing",
+    "feature",
+    "other",
+  ],
   safeAutoSendEnabled: false,
   requirePublishedKnowledge: true,
   routes: DEFAULT_AI_ROUTE_MAP,
-  fallbackRoute: "draft_for_review",
+  fallbackRoute: "safe_auto_reply",
   notifyOnHumanEscalation: true,
   notifyOnBug: true,
   bugAutoReplyEnabled: false,
@@ -157,6 +165,10 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
   const routes = { ...DEFAULT_AI_ROUTE_MAP };
   for (const intent of triageIntentValues) {
     if (isAiTriageRoute(rawRoutes[intent])) routes[intent] = rawRoutes[intent];
+  }
+  // Greetings must never stay stuck on human escalation from older policies.
+  if (routes.social === "human_escalation") {
+    routes.social = DEFAULT_AI_ROUTE_MAP.social;
   }
   const confidence = Number(raw.safe_auto_min_confidence);
   const safeAutoIntents = Array.isArray(raw.safe_auto_intents)
@@ -231,9 +243,7 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
   };
 }
 
-export function autoReplyIntentsFromRoutes(
-  routes: AiRouteMap,
-): TriageIntent[] {
+export function autoReplyIntentsFromRoutes(routes: AiRouteMap): TriageIntent[] {
   return triageIntentValues.filter(
     (intent) =>
       routes[intent] === "knowledge_auto_reply" ||
@@ -242,24 +252,35 @@ export function autoReplyIntentsFromRoutes(
 }
 
 /**
- * Aligns hidden send/intent gates with the conversation mode the founder
- * picks in Settings → Automation. Selecting Safe auto-reply is the explicit
- * confirmation to send; Copilot/Manual keep send disabled.
+ * One-time/open defaults helper: reopen intents that were stuck on human
+ * escalation, except incident which stays founder-blocked by default.
  */
+export function ensureOpenAutomationRoutes(routes: AiRouteMap): AiRouteMap {
+  const next = { ...routes };
+  for (const intent of triageIntentValues) {
+    if (next[intent] === "human_escalation" && intent !== "incident") {
+      next[intent] = DEFAULT_AI_ROUTE_MAP[intent];
+    }
+  }
+  return next;
+}
+
 export function alignWorkspaceAiPolicyForMode(
   policy: WorkspaceAiPolicy,
   mode: AiMode,
 ): WorkspaceAiPolicy {
+  // Preserve founder-selected routes (including manual human_escalation blocks).
   const autoReplyIntents = autoReplyIntentsFromRoutes(policy.routes);
   if (mode === "safe_auto") {
     return {
       ...policy,
       safeAutoEnabled: true,
       safeAutoSendEnabled: true,
+      bugAutoReplyEnabled: true,
       safeAutoIntents:
         autoReplyIntents.length > 0
           ? autoReplyIntents
-          : [...policy.safeAutoIntents],
+          : [...DEFAULT_WORKSPACE_AI_POLICY.safeAutoIntents],
     };
   }
   return {

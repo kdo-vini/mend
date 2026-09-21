@@ -127,7 +127,7 @@
     "composerHint": "Enter to send · Shift + Enter for newline",
     "writeReply": "Write a reply",
     "aiPausedPlaceholder": "AI paused — resume in the menu",
-    "aiHandlingPlaceholder": "AI is handling safe replies…",
+    "aiHandlingPlaceholder": "AI is generating a reply…",
     "writeReplyPlaceholder": "Write a reply…",
     "issueLinked": "Issue linked",
     "scrollLatest": "Scroll to latest messages",

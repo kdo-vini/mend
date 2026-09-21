@@ -127,7 +127,7 @@
     "composerHint": "Enter envia · Shift + Enter cria nova linha",
     "writeReply": "Escrever uma resposta",
     "aiPausedPlaceholder": "IA pausada — retome pelo menu",
-    "aiHandlingPlaceholder": "A IA está cuidando de respostas seguras…",
+    "aiHandlingPlaceholder": "A IA está gerando a resposta…",
     "writeReplyPlaceholder": "Escreva uma resposta…",
     "issueLinked": "Chamado vinculado",
     "scrollLatest": "Rolar até as mensagens mais recentes",

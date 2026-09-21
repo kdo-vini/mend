@@ -9,6 +9,7 @@ import {
   aiPolicyIntegrationValues,
   aiTriageRouteValues,
   alignWorkspaceAiPolicyForMode,
+  ensureOpenAutomationRoutes,
   triageIntentValues,
   type AiPolicyChannel,
   type AiPolicyAction,
@@ -96,7 +97,10 @@ function ReplySettings({ workspaceId, onToast }: SettingsWorkspacePageProps) {
     setError(null);
     try {
       const next = await loadLiveAiConversationPolicy(workspaceId);
-      setPolicy(next);
+      setPolicy({
+        ...next,
+        routes: ensureOpenAutomationRoutes(next.routes),
+      });
       if (next.dominantMode !== "mixed") setMode(next.dominantMode);
     } catch (reason) {
       setError(
@@ -117,9 +121,27 @@ function ReplySettings({ workspaceId, onToast }: SettingsWorkspacePageProps) {
     if (!workspaceId || !policy) return;
     setSaving(true);
     try {
-      const aligned = alignWorkspaceAiPolicyForMode(policy, mode);
-      setPolicy(aligned);
-      await saveLiveWorkspaceAiPolicy(workspaceId, aligned);
+      const aligned = alignWorkspaceAiPolicyForMode(
+        {
+          ...policy,
+          routes: ensureOpenAutomationRoutes(policy.routes),
+        },
+        mode,
+      );
+      // After opening stuck escalations, keep any intent the founder just set
+      // back to human_escalation / no_action in this editing session.
+      const routes = { ...aligned.routes };
+      for (const intent of triageIntentValues) {
+        if (
+          policy.routes[intent] === "human_escalation" ||
+          policy.routes[intent] === "no_action"
+        ) {
+          routes[intent] = policy.routes[intent];
+        }
+      }
+      const toSave = { ...aligned, routes };
+      setPolicy(toSave);
+      await saveLiveWorkspaceAiPolicy(workspaceId, toSave);
       const result = await saveLiveConversationAiPolicy(workspaceId, mode);
       onToast(
         t("v2.ai.saved", {

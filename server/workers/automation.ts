@@ -5,6 +5,10 @@ import {
 } from "../../src/shared/support-flow.js";
 import { row, run } from "../adapters/supabase-mappers.js";
 import {
+  bugAcknowledgmentReplyBody,
+  humanHandoffReplyBody,
+} from "../automation/handoff-replies.js";
+import {
   aiStateInput,
   boundedText,
   conversationReplyInput,
@@ -16,6 +20,7 @@ import {
   policyDecision,
   policyJson,
   relevantKnowledge,
+  resolveAutomationRoute,
   safeKnowledgeContext,
   triageConversationInput,
   type LiveWorkerAiMode,
@@ -251,17 +256,16 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       }
     }
     const configuredRoute = modePolicy.policy.routes[triage.intent];
-    let route =
-      configuredRoute === "knowledge_auto_reply" &&
-      modePolicy.policy.requirePublishedKnowledge &&
-      !matchedKnowledge.length &&
-      !mcpConnections.length
-        ? modePolicy.policy.fallbackRoute
-        : configuredRoute;
-    if (input.productResolution?.ambiguous && route !== "bug_triage")
-      route = "human_escalation";
-    if (mcpFailureRequiresReview && route !== "bug_triage")
-      route = "human_escalation";
+    let route = resolveAutomationRoute({
+      configuredRoute,
+      mode: modePolicy.mode,
+      requirePublishedKnowledge: modePolicy.policy.requirePublishedKnowledge,
+      hasKnowledgeOrMcp:
+        matchedKnowledge.length > 0 || mcpConnections.length > 0,
+      fallbackRoute: modePolicy.policy.fallbackRoute,
+      productAmbiguous: Boolean(input.productResolution?.ambiguous),
+      mcpFailureRequiresReview,
+    });
     if (route === "human_escalation" || route === "bug_triage")
       await this.recordWorkflowFact(input, "escalated", route);
     const provisionalDecision = policyDecision(
@@ -271,6 +275,14 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       matchedKnowledge.length > 0 || mcpConnections.length > 0,
       route,
     );
+    const allowBugAutoReply =
+      route === "bug_triage" &&
+      modePolicy.mode === "safe_auto" &&
+      !triage.unsafe;
+    const allowHumanHandoffReply =
+      route === "human_escalation" &&
+      modePolicy.mode === "safe_auto" &&
+      !triage.unsafe;
     const issue =
       route === "bug_triage"
         ? await this.upsertIssue(input, triage)
@@ -287,13 +299,44 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         })
       : undefined;
     let draft: LiveWorkerDraft | undefined;
-    if (provisionalDecision.allowed && route !== "bug_triage") {
+    const escalationDecision = {
+      action: "auto_reply" as const,
+      allowed: true,
+      reason: allowHumanHandoffReply
+        ? "Human escalation includes a customer handoff reply."
+        : "Bug acknowledgment auto-reply is enabled by workspace policy.",
+    };
+    const draftDecision =
+      allowBugAutoReply || allowHumanHandoffReply
+        ? escalationDecision
+        : provisionalDecision;
+    if (allowHumanHandoffReply) {
+      const locale = await this.workspaceLocale(input.binding.workspaceId);
+      draft = {
+        conversationId: input.persisted.conversationId,
+        messageId: input.persisted.id,
+        idempotencyKey: input.idempotencyKey,
+        body: humanHandoffReplyBody(locale),
+        knowledgeArticleIds: [],
+        triage,
+      };
+    } else if (allowBugAutoReply) {
+      const locale = await this.workspaceLocale(input.binding.workspaceId);
+      draft = {
+        conversationId: input.persisted.conversationId,
+        messageId: input.persisted.id,
+        idempotencyKey: input.idempotencyKey,
+        body: bugAcknowledgmentReplyBody(locale),
+        knowledgeArticleIds: [],
+        triage,
+      };
+    } else if (provisionalDecision.allowed && route !== "bug_triage") {
       try {
         draft = await this.buildDraft(
           input,
           triage,
           modePolicy.mode,
-          provisionalDecision,
+          draftDecision,
           matchedKnowledge,
           mcpConnections,
         );
@@ -312,7 +355,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
             input,
             triage,
             modePolicy.mode,
-            provisionalDecision,
+            draftDecision,
             matchedKnowledge,
             [],
           );
@@ -345,21 +388,26 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           .eq("tool_name", call.toolName);
       }
     }
-    const decision = policyDecision(
-      modePolicy.mode,
-      triage,
-      modePolicy.policy,
-      hasEvidence,
-      route,
-    );
-    if (draft && decision.allowed) {
+    const decision =
+      allowBugAutoReply || allowHumanHandoffReply
+        ? draftDecision
+        : policyDecision(
+            modePolicy.mode,
+            triage,
+            modePolicy.policy,
+            hasEvidence,
+            route,
+          );
+    if (draft && (decision.allowed || allowHumanHandoffReply)) {
       await this.persistDraft(
         input,
         draft,
         triage,
         modePolicy.mode,
         modePolicy.policy,
-        decision,
+        allowHumanHandoffReply || allowBugAutoReply
+          ? escalationDecision
+          : decision,
         matchedKnowledge,
       );
       if (matchedKnowledge.length)
@@ -432,10 +480,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         ),
       },
     );
-    const { error } = await this.client
-      .from("conversation_ai_state")
-      .upsert(
-        aiStateInput(
+    const { error } = await this.client.from("conversation_ai_state").upsert(
+      {
+        ...aiStateInput(
           input,
           triage,
           modePolicy.mode,
@@ -443,16 +490,31 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           matchedKnowledge.length > 0,
           route,
         ),
-        { onConflict: "conversation_id" },
-      );
+        ...(allowHumanHandoffReply || allowBugAutoReply
+          ? {
+              needs_human: true,
+              needs_human_reason: allowHumanHandoffReply
+                ? "Workspace policy routes this intent to a human."
+                : "Workspace policy routes this intent to bug triage.",
+              last_decision: "blocked",
+              last_decision_reason: allowHumanHandoffReply
+                ? "Workspace policy routes this intent to a human."
+                : "Workspace policy routes this intent to bug triage.",
+            }
+          : {}),
+      },
+      { onConflict: "conversation_id" },
+    );
     if (error)
       throw new Error(`supabase:conversation_ai_state:${error.message}`);
     const takeoverReason = triage.unsafe
       ? "unsafe_intent"
-      : modePolicy.mode === "safe_auto" &&
-          triage.confidence < modePolicy.policy.safeAutoMinConfidence
-        ? "low_confidence"
-        : null;
+      : allowHumanHandoffReply || allowBugAutoReply
+        ? "manual_pause"
+        : modePolicy.mode === "safe_auto" &&
+            triage.confidence < modePolicy.policy.safeAutoMinConfidence
+          ? "low_confidence"
+          : null;
     if (takeoverReason) {
       await this.recordWorkflowFact(
         input,
@@ -1348,6 +1410,24 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         });
       })
       .catch(() => undefined);
+  }
+
+  private async workspaceLocale(
+    workspaceId: string,
+  ): Promise<ReturnType<typeof normalizeLocale>> {
+    const workspace = await this.metadataClient
+      .from("workspaces")
+      .select("default_language")
+      .eq("id", workspaceId)
+      .maybeSingle();
+    if (workspace.error)
+      throw new Error(
+        "supabase:workspaces:language:" + workspace.error.message,
+      );
+    return normalizeLocale(
+      (workspace.data as { default_language?: unknown } | null)
+        ?.default_language,
+    );
   }
 
   private async buildDraft(

@@ -3,6 +3,7 @@ import {
   DEFAULT_AI_ROUTE_MAP,
   DEFAULT_WORKSPACE_AI_POLICY,
   alignWorkspaceAiPolicyForMode,
+  ensureOpenAutomationRoutes,
   normalizeWorkspaceAiPolicy,
   workspaceAiPolicyJson,
 } from "./ai-policy";
@@ -12,13 +13,16 @@ describe("workspace AI policy", () => {
     const policy = normalizeWorkspaceAiPolicy(null);
 
     expect(policy.routes).toEqual(DEFAULT_AI_ROUTE_MAP);
-    expect(policy.fallbackRoute).toBe("draft_for_review");
+    expect(policy.fallbackRoute).toBe("safe_auto_reply");
     expect(policy.requirePublishedKnowledge).toBe(true);
     expect(policy.safeAutoIntents).toEqual([
       "question",
       "how_to",
       "status",
       "social",
+      "billing",
+      "feature",
+      "other",
     ]);
     expect(policy.routes.social).toBe("safe_auto_reply");
     expect(policy.allowedActions).toContain("investigate");
@@ -32,6 +36,8 @@ describe("workspace AI policy", () => {
       automation_routes: {
         billing: "draft_for_review",
         bug: "not-a-route",
+        how_to: "human_escalation",
+        social: "human_escalation",
       },
       automation_fallback_route: "human_escalation",
       safe_auto_intents: ["question", "billing", "invalid"],
@@ -42,6 +48,8 @@ describe("workspace AI policy", () => {
     });
 
     expect(policy.routes.billing).toBe("draft_for_review");
+    expect(policy.routes.how_to).toBe("human_escalation");
+    expect(policy.routes.social).toBe("safe_auto_reply");
     expect(policy.routes.bug).toBe(DEFAULT_AI_ROUTE_MAP.bug);
     expect(policy.notifyOnBug).toBe(false);
     expect(policy.bugAutoDeployEnabled).toBe(true);
@@ -57,10 +65,18 @@ describe("workspace AI policy", () => {
     const serialized = workspaceAiPolicyJson(DEFAULT_WORKSPACE_AI_POLICY);
 
     expect(serialized).toMatchObject({
-      automation_fallback_route: "draft_for_review",
+      automation_fallback_route: "safe_auto_reply",
       notify_on_human_escalation: true,
       bug_auto_fix_enabled: false,
-      safe_auto_intents: ["question", "how_to", "status", "social"],
+      safe_auto_intents: [
+        "question",
+        "how_to",
+        "status",
+        "social",
+        "billing",
+        "feature",
+        "other",
+      ],
       allowed_integrations: ["knowledge", "agent", "mcp"],
     });
     expect(serialized).not.toHaveProperty("totalConversations");
@@ -81,6 +97,7 @@ describe("workspace AI policy", () => {
 
     expect(aligned.safeAutoSendEnabled).toBe(true);
     expect(aligned.safeAutoEnabled).toBe(true);
+    expect(aligned.bugAutoReplyEnabled).toBe(true);
     expect(aligned.safeAutoIntents).toEqual(
       expect.arrayContaining(["question", "billing", "social"]),
     );
@@ -96,5 +113,20 @@ describe("workspace AI policy", () => {
     expect(aligned.safeAutoIntents).toEqual(
       expect.arrayContaining(["question", "how_to", "status", "social"]),
     );
+  });
+
+  it("reopens non-incident intents stuck on human escalation", () => {
+    expect(
+      ensureOpenAutomationRoutes({
+        ...DEFAULT_AI_ROUTE_MAP,
+        social: "human_escalation",
+        how_to: "human_escalation",
+        incident: "human_escalation",
+      }),
+    ).toMatchObject({
+      social: "safe_auto_reply",
+      how_to: "knowledge_auto_reply",
+      incident: "human_escalation",
+    });
   });
 });

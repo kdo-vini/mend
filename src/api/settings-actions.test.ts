@@ -41,7 +41,7 @@ describe("workspace AI policy persistence", () => {
     expect(calls).toEqual(["workspaces"]);
     expect(updatePayload).toMatchObject({
       ai_policy_json: expect.objectContaining({
-        automation_fallback_route: "draft_for_review",
+        automation_fallback_route: "safe_auto_reply",
       }),
     });
   });

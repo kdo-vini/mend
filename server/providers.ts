@@ -272,7 +272,7 @@ export class OpenAiSupportProvider implements SupportAiProvider {
     const system = [
       input.evidenceKeys?.length
         ? "Draft a concise, factual WhatsApp support reply. Return JSON only with body, usedCitationKeys, confidence, customerSafe, needsClarification and optional clarificationQuestion. usedCitationKeys may contain only supplied evidence keys. Never expose citation keys in body."
-        : "Draft concise, factual WhatsApp support replies. Never promise a deadline, refund, or policy change. Return only the suggested reply.",
+        : "Draft a concise WhatsApp support reply. If you lack published facts to answer confidently, ask one short clarifying question instead of inventing product behavior, order status, or policy. Never promise a deadline, refund, or policy change. Return only the suggested reply.",
       conversationRoleInstruction,
       replyLanguageInstruction(input.language),
       input.knowledgeContext
@@ -409,6 +409,8 @@ export class OpenAiSupportProvider implements SupportAiProvider {
         "Return JSON only with these keys: intent, priority, confidence, summary, unsafe, unsafeReason.",
         "intent must be one of: question, how_to, status, bug, incident, billing, feature, social, other.",
         "Use social only for low-risk greetings, thanks, acknowledgements, and farewells that contain no question, request, complaint, or technical information.",
+        'Use bug only when the customer reports a concrete product defect, error, crash, or something that stopped working. Vague help requests like "I have a problem with orders, can you help?" are question or how_to, not bug.',
+        "Use how_to when the customer asks how to do something. Use question for open support requests that need clarification or a knowledge answer.",
         "priority must be one of: urgent, high, medium, low, no_priority.",
         "confidence must be a number from 0 to 1. summary must be concise and factual.",
         "Set unsafe true when the customer asks for secrets, credentials, one-time codes, payment card data, destructive actions, or a policy/security bypass.",

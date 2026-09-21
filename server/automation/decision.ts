@@ -144,6 +144,37 @@ export function policyJson(
   return workspaceAiPolicyJson(policy);
 }
 
+export function resolveAutomationRoute(input: {
+  configuredRoute: AiTriageRoute;
+  mode: LiveWorkerAiMode;
+  requirePublishedKnowledge: boolean;
+  hasKnowledgeOrMcp: boolean;
+  fallbackRoute: AiTriageRoute;
+  productAmbiguous?: boolean;
+  mcpFailureRequiresReview?: boolean;
+}): AiTriageRoute {
+  let route =
+    input.configuredRoute === "knowledge_auto_reply" &&
+    input.requirePublishedKnowledge &&
+    !input.hasKnowledgeOrMcp
+      ? input.mode === "safe_auto"
+        ? "safe_auto_reply"
+        : input.fallbackRoute === "human_escalation" ||
+            input.fallbackRoute === "no_action"
+          ? "draft_for_review"
+          : input.fallbackRoute
+      : input.configuredRoute;
+  // Never silently escalate. Ambiguous product / MCP issues become a
+  // clarification (safe_auto) or a review draft (copilot).
+  if (input.productAmbiguous && route !== "bug_triage") {
+    route = input.mode === "safe_auto" ? "safe_auto_reply" : "draft_for_review";
+  }
+  if (input.mcpFailureRequiresReview && route !== "bug_triage") {
+    route = input.mode === "safe_auto" ? "safe_auto_reply" : "draft_for_review";
+  }
+  return route;
+}
+
 export function policyDecision(
   mode: LiveWorkerAiMode,
   triage: TriageResult,
@@ -163,6 +194,7 @@ export function policyDecision(
       allowed: false,
       reason: triage.unsafeReason ?? "Unsafe request requires a human.",
     };
+  // Manual founder blocks only.
   if (route === "no_action")
     return {
       action: "blocked" as const,
@@ -175,6 +207,20 @@ export function policyDecision(
       allowed: false,
       reason: "Workspace policy routes this intent to a human.",
     };
+  // Copilot drafts for every non-blocked topic, including knowledge gaps and
+  // bug triage follow-ups the operator can edit before sending.
+  if (mode === "draft")
+    return policy.draftEnabled
+      ? {
+          action: "draft" as const,
+          allowed: true,
+          reason: "Draft is available for human review.",
+        }
+      : {
+          action: "blocked" as const,
+          allowed: false,
+          reason: "AI draft generation is disabled by workspace policy.",
+        };
   if (route === "bug_triage")
     return {
       action: "blocked" as const,
@@ -203,18 +249,6 @@ export function policyDecision(
       allowed: false,
       reason: "No relevant published knowledge was found.",
     };
-  if (mode === "draft")
-    return policy.draftEnabled
-      ? {
-          action: "draft" as const,
-          allowed: true,
-          reason: "Draft is available for human review.",
-        }
-      : {
-          action: "blocked" as const,
-          allowed: false,
-          reason: "AI draft generation is disabled by workspace policy.",
-        };
   if (!policy.safeAutoEnabled)
     return {
       action: "blocked" as const,

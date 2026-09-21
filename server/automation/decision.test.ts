@@ -7,6 +7,7 @@ import {
   normalizeAiPolicy,
   policyDecision,
   relevantKnowledge,
+  resolveAutomationRoute,
   triageConversationInput,
   type LiveWorkerKnowledgeArticle,
 } from "./decision.js";
@@ -195,6 +196,66 @@ describe("live worker automation decisions", () => {
     });
   });
 
+  it("maps missing knowledge to clarifying auto-reply in safe_auto mode", () => {
+    expect(
+      resolveAutomationRoute({
+        configuredRoute: "knowledge_auto_reply",
+        mode: "safe_auto",
+        requirePublishedKnowledge: true,
+        hasKnowledgeOrMcp: false,
+        fallbackRoute: "draft_for_review",
+      }),
+    ).toBe("safe_auto_reply");
+    expect(
+      resolveAutomationRoute({
+        configuredRoute: "knowledge_auto_reply",
+        mode: "draft",
+        requirePublishedKnowledge: true,
+        hasKnowledgeOrMcp: false,
+        fallbackRoute: "draft_for_review",
+      }),
+    ).toBe("draft_for_review");
+  });
+
+  it("asks for clarification instead of silent human escalation when the product is ambiguous", () => {
+    expect(
+      resolveAutomationRoute({
+        configuredRoute: "knowledge_auto_reply",
+        mode: "safe_auto",
+        requirePublishedKnowledge: true,
+        hasKnowledgeOrMcp: true,
+        fallbackRoute: "draft_for_review",
+        productAmbiguous: true,
+      }),
+    ).toBe("safe_auto_reply");
+    expect(
+      resolveAutomationRoute({
+        configuredRoute: "knowledge_auto_reply",
+        mode: "draft",
+        requirePublishedKnowledge: true,
+        hasKnowledgeOrMcp: true,
+        fallbackRoute: "draft_for_review",
+        productAmbiguous: true,
+      }),
+    ).toBe("draft_for_review");
+  });
+
+  it("lets Copilot draft greetings and knowledge gaps instead of blocking", () => {
+    const policy = normalizeAiPolicy({});
+    expect(
+      policyDecision("draft", triage, policy, false, "knowledge_auto_reply"),
+    ).toMatchObject({ action: "draft", allowed: true });
+    expect(
+      policyDecision(
+        "draft",
+        { ...triage, intent: "social", summary: "Greeting" },
+        policy,
+        false,
+        "safe_auto_reply",
+      ),
+    ).toMatchObject({ action: "draft", allowed: true });
+  });
+
   it("blocks auto-reply when autonomy does not allow respond", () => {
     const policy = normalizeAiPolicy({
       allowed_actions: ["triage", "create_issue"],
@@ -209,13 +270,7 @@ describe("live worker automation decisions", () => {
     const policy = normalizeAiPolicy({});
 
     expect(
-      policyDecision(
-        "draft",
-        triage,
-        policy,
-        true,
-        "knowledge_auto_reply",
-      ),
+      policyDecision("draft", triage, policy, true, "knowledge_auto_reply"),
     ).toMatchObject({ action: "draft", allowed: true });
   });
 
