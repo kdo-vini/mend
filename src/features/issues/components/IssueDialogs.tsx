@@ -256,7 +256,7 @@ export function CreateIssueDialog({
     type: IssueType;
     priority: Priority;
     conversationId?: string;
-  }) => void;
+  }) => void | Promise<void>;
 }) {
   const { t } = useTranslation("issues");
   const [title, setTitle] = useState("");
@@ -264,21 +264,35 @@ export function CreateIssueDialog({
   const [priority, setPriority] = useState<Priority>("Medium");
   const [conversationId, setConversationId] = useState("");
   const [error, setError] = useState("");
-  const submit = () => {
+  const [submitting, setSubmitting] = useState(false);
+  const close = () => {
+    if (submitting) return;
+    onClose();
+  };
+  const submit = async () => {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
       setError(t("dialogs.createTitleError"));
       return;
     }
-    onCreate({
-      title: cleanTitle,
-      type,
-      priority,
-      conversationId: conversationId || undefined,
-    });
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await onCreate({
+        title: cleanTitle,
+        type,
+        priority,
+        conversationId: conversationId || undefined,
+      });
+      onClose();
+    } catch {
+      // Parent surfaces the error toast; keep the dialog open for retry.
+    } finally {
+      setSubmitting(false);
+    }
   };
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop" role="presentation" onClick={close}>
       <div
         className="modal"
         role="dialog"
@@ -294,7 +308,8 @@ export function CreateIssueDialog({
           <button
             className="icon-button"
             type="button"
-            onClick={onClose}
+            onClick={close}
+            disabled={submitting}
             aria-label={t("dialogs.closeCreate")}
           >
             <X size={17} />
@@ -307,6 +322,7 @@ export function CreateIssueDialog({
               autoFocus
               required
               maxLength={240}
+              disabled={submitting}
               aria-invalid={Boolean(error)}
               aria-describedby={error ? "create-issue-error" : undefined}
               value={title}
@@ -339,6 +355,7 @@ export function CreateIssueDialog({
                   "Other",
                 ].map((item) => ({ value: item, label: item }))}
                 onChange={(value) => setType(value as IssueType)}
+                disabled={submitting}
               />
             </label>
             <label>
@@ -349,6 +366,7 @@ export function CreateIssueDialog({
                   (item) => ({ value: item, label: item }),
                 )}
                 onChange={(value) => setPriority(value as Priority)}
+                disabled={submitting}
               />
             </label>
           </div>
@@ -364,6 +382,7 @@ export function CreateIssueDialog({
                 })),
               ]}
               onChange={setConversationId}
+              disabled={submitting}
             />
           </label>
           <div className="modal-note">
@@ -375,17 +394,22 @@ export function CreateIssueDialog({
           <button
             className="button button-ghost"
             type="button"
-            onClick={onClose}
+            onClick={close}
+            disabled={submitting}
           >
             {t("common:actions.cancel")}
           </button>
           <button
             className="button button-primary"
             type="button"
-            disabled={!title.trim()}
-            onClick={submit}
+            disabled={!title.trim() || submitting}
+            aria-busy={submitting}
+            onClick={() => void submit()}
           >
-            {t("dialogs.createIssue")}
+            {submitting ? (
+              <LoaderCircle className="spin" size={15} aria-hidden="true" />
+            ) : null}{" "}
+            {submitting ? t("dialogs.creatingIssue") : t("dialogs.createIssue")}
           </button>
         </div>
       </div>

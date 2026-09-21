@@ -80,6 +80,7 @@
     "researchLinked": "Esta implementaÃ§Ã£o estÃ¡ vinculada ao artefato de pesquisa atual",
     "newWorkItem": "Novo item de trabalho",
     "createIssue": "Criar chamado",
+    "creatingIssue": "Criando…",
     "closeCreate": "Fechar diálogo de criação de chamado",
     "title": "Título",
     "createTitlePlaceholder": "O que precisa ser feito?",

@@ -182,6 +182,7 @@ function App() {
   const [toast, setToast] = useState<Toast | null>(null);
   const pendingRunIdsRef = useRef(new Set<string>());
   const pendingRunStartIssueIdsRef = useRef(new Set<string>());
+  const createIssueInFlightRef = useRef(false);
   const [pendingRunIds, setPendingRunIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -588,65 +589,74 @@ function App() {
     priority: Priority;
     conversationId?: string;
   }) => {
-    if (!demoMode && workspaceId) {
-      try {
-        await createLiveIssue({ workspaceId, ...input });
-        setCreateIssueOpen(false);
-        setLiveDataRetry((current) => current + 1);
-        notify(t("toasts.issueCreatedLive"));
-      } catch (error) {
-        notify(
-          error instanceof Error ? error.message : t("errors.issueCreate"),
+    if (createIssueInFlightRef.current) return;
+    createIssueInFlightRef.current = true;
+    try {
+      if (!demoMode && workspaceId) {
+        try {
+          await createLiveIssue({ workspaceId, ...input });
+          setCreateIssueOpen(false);
+          setLiveDataRetry((current) => current + 1);
+          notify(t("toasts.issueCreatedLive"));
+        } catch (error) {
+          notify(
+            error instanceof Error ? error.message : t("errors.issueCreate"),
+          );
+          throw error;
+        }
+        return;
+      }
+      const number =
+        Math.max(
+          0,
+          ...issues.map((issue) =>
+            Number(issue.identifier.replace("TEC-", "")),
+          ),
+        ) + 1;
+      const conversation = input.conversationId
+        ? conversations.find((item) => item.id === input.conversationId)
+        : undefined;
+      const issue: Issue = {
+        id: `issue-${number}`,
+        identifier: `TEC-${number}`,
+        title: input.title,
+        type: input.type,
+        priority: input.priority,
+        status: "Triage",
+        assignee: "Unassigned",
+        labels: ["new"],
+        customer: conversation?.name,
+        conversationId: input.conversationId,
+        source: conversation ? "Conversation" : "Internal",
+        summary: conversation
+          ? conversation.lastMessage
+          : t("app.internalIssueSummary"),
+        impact: t("app.issueImpactPending"),
+        updatedAt: t("states.justNow"),
+        createdAt: t("states.justNow"),
+        agentRuns: 0,
+      };
+      setIssues((current) => [issue, ...current]);
+      if (conversation) {
+        setConversations((current) =>
+          current.map((item) =>
+            item.id === conversation.id
+              ? {
+                  ...item,
+                  issueId: issue.id,
+                  issueLabel: issue.identifier,
+                  priority: issue.priority,
+                }
+              : item,
+          ),
         );
       }
-      return;
+      setInspectorIssueId(issue.id);
+      setCreateIssueOpen(false);
+      notify(t("toasts.issueCreated", { identifier: issue.identifier }));
+    } finally {
+      createIssueInFlightRef.current = false;
     }
-    const number =
-      Math.max(
-        0,
-        ...issues.map((issue) => Number(issue.identifier.replace("TEC-", ""))),
-      ) + 1;
-    const conversation = input.conversationId
-      ? conversations.find((item) => item.id === input.conversationId)
-      : undefined;
-    const issue: Issue = {
-      id: `issue-${number}`,
-      identifier: `TEC-${number}`,
-      title: input.title,
-      type: input.type,
-      priority: input.priority,
-      status: "Triage",
-      assignee: "Unassigned",
-      labels: ["new"],
-      customer: conversation?.name,
-      conversationId: input.conversationId,
-      source: conversation ? "Conversation" : "Internal",
-      summary: conversation
-        ? conversation.lastMessage
-        : t("app.internalIssueSummary"),
-      impact: t("app.issueImpactPending"),
-      updatedAt: t("states.justNow"),
-      createdAt: t("states.justNow"),
-      agentRuns: 0,
-    };
-    setIssues((current) => [issue, ...current]);
-    if (conversation) {
-      setConversations((current) =>
-        current.map((item) =>
-          item.id === conversation.id
-            ? {
-                ...item,
-                issueId: issue.id,
-                issueLabel: issue.identifier,
-                priority: issue.priority,
-              }
-            : item,
-        ),
-      );
-    }
-    setInspectorIssueId(issue.id);
-    setCreateIssueOpen(false);
-    notify(t("toasts.issueCreated", { identifier: issue.identifier }));
   };
 
   const dismissNotification = async (notificationId: string) => {
