@@ -2032,6 +2032,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       const reference = await client
         .from("ai_draft_knowledge")
         .insert({
+          workspace_id: input.binding.workspaceId,
           draft_id: draftId,
           knowledge_article_id: article.id,
           rank,
