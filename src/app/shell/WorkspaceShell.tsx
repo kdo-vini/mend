@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -54,13 +55,15 @@ export function NotificationCenter({
     maxHeight: number;
     side: "left" | "right";
   } | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const unread = notifications.filter((notification) => !notification.read_at);
 
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPanelPosition(null);
+      return;
+    }
 
     const updatePanelPosition = () => {
       const trigger = triggerRef.current;
@@ -96,8 +99,8 @@ export function NotificationCenter({
       const openAbove = belowSpace < desiredHeight && aboveSpace > belowSpace;
       const availableSpace = openAbove ? aboveSpace : belowSpace;
       const panelHeight = Math.max(
-        1,
-        Math.min(Math.floor(desiredHeight), Math.floor(availableSpace)),
+        160,
+        Math.min(Math.floor(desiredHeight), Math.floor(availableSpace) || 320),
       );
       const top = openAbove
         ? Math.max(viewportPadding, rect.top - gap - panelHeight)
@@ -114,25 +117,12 @@ export function NotificationCenter({
       });
     };
 
-    const onWindowScroll = (event: Event) => {
-      // Scrolling the notification list itself must not reposition/close the
-      // panel — only page/shell scrolls should recalculate placement.
-      const target = event.target;
-      if (
-        target instanceof Node &&
-        panelRef.current &&
-        panelRef.current.contains(target)
-      )
-        return;
-      updatePanelPosition();
-    };
-
     updatePanelPosition();
+    // Fixed to the viewport — ignore page/list scroll so wheel inside the
+    // panel cannot reposition or dismiss it. Only resize needs a recalc.
     window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", onWindowScroll, true);
     return () => {
       window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", onWindowScroll, true);
     };
   }, [open, notifications.length, pushStatus]);
 
@@ -140,11 +130,10 @@ export function NotificationCenter({
     if (!open) return;
 
     const onPointerDown = (event: PointerEvent) => {
-      const root = rootRef.current;
-      const panel = panelRef.current;
       const target = event.target;
       if (!(target instanceof Node)) return;
-      if (root?.contains(target) || panel?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
       setOpen(false);
     };
 
@@ -152,10 +141,11 @@ export function NotificationCenter({
       if (event.key === "Escape") setOpen(false);
     };
 
-    document.addEventListener("pointerdown", onPointerDown);
+    // Capture so overlays/page handlers cannot swallow the outside click.
+    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
@@ -166,8 +156,96 @@ export function NotificationCenter({
     navigate(resolveDestination(notification));
   };
 
+  const panel =
+    open && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={panelRef}
+            className={`notification-panel notification-panel-${panelPosition?.side ?? "right"}`}
+            role="dialog"
+            aria-modal="false"
+            aria-label={t("navigation.notifications")}
+            style={{
+              top: panelPosition?.top ?? 12,
+              left: panelPosition?.left ?? 12,
+              maxHeight: panelPosition?.maxHeight,
+              visibility: panelPosition ? "visible" : "hidden",
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onWheel={(event) => {
+              // Isolate wheel from page scroll listeners / overscroll chaining.
+              event.stopPropagation();
+            }}
+          >
+            <div className="notification-panel-header">
+              <div>
+                <strong>{t("navigation.notifications")}</strong>
+                <small>
+                  {unread.length
+                    ? t("navigation.unread", { count: unread.length })
+                    : t("states.allCaughtUp")}
+                </small>
+              </div>
+              {unread.length > 0 && (
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={onDismissAllNotifications}
+                >
+                  {t("navigation.dismissAll")}
+                </button>
+              )}
+            </div>
+            <div className="notification-list">
+              {notifications.length === 0 ? (
+                <div className="notification-empty">
+                  {t("navigation.noNotifications")}
+                </div>
+              ) : (
+                notifications.slice(0, 12).map((notification) => (
+                  <button
+                    className="notification-item unread"
+                    type="button"
+                    key={notification.id}
+                    onClick={() => openNotification(notification)}
+                  >
+                    <span className="notification-item-icon">
+                      <Bell size={14} />
+                    </span>
+                    <span className="notification-item-copy">
+                      <strong>{notificationText(notification).title}</strong>
+                      <span>{notificationText(notification).body}</span>
+                      <small>
+                        {formatActivityTime(notification.created_at)}
+                      </small>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="notification-panel-footer">
+              <span>
+                {pushStatus === "enabled"
+                  ? t("navigation.nativeNotificationsEnabled")
+                  : t("navigation.awayAlerts")}
+              </span>
+              {pushStatus !== "enabled" && (
+                <button
+                  className="button button-ghost"
+                  type="button"
+                  onClick={onEnablePush}
+                >
+                  {t("navigation.enableNativeAlerts")}
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div className="notification-center" ref={rootRef}>
+    <div className="notification-center">
       <button
         ref={triggerRef}
         className="icon-button subtle notification-trigger"
@@ -179,98 +257,14 @@ export function NotificationCenter({
         })}
         aria-expanded={open}
         aria-haspopup="dialog"
-        onClick={() => {
-          setPanelPosition(null);
-          setOpen((current) => !current);
-        }}
+        onClick={() => setOpen((current) => !current)}
       >
         <Bell size={16} />
         {unreadNotificationCount > 0 && (
           <span className="notification-badge">{unreadNotificationCount}</span>
         )}
       </button>
-      {open && (
-        <div
-          ref={panelRef}
-          className={`notification-panel notification-panel-${panelPosition?.side ?? "right"}`}
-          role="dialog"
-          aria-label={t("navigation.notifications")}
-          style={{
-            top: panelPosition?.top ?? 12,
-            left: panelPosition?.left ?? 12,
-            maxHeight: panelPosition?.maxHeight,
-            visibility: panelPosition ? "visible" : "hidden",
-          }}
-        >
-          <div className="notification-panel-header">
-            <div>
-              <strong>{t("navigation.notifications")}</strong>
-              <small>
-                {unread.length
-                  ? t("navigation.unread", { count: unread.length })
-                  : t("states.allCaughtUp")}
-              </small>
-            </div>
-            {unread.length > 0 && (
-              <button
-                className="text-button"
-                type="button"
-                onClick={onDismissAllNotifications}
-              >
-                {t("navigation.dismissAll")}
-              </button>
-            )}
-          </div>
-          <div
-            className="notification-list"
-            onWheel={(event) => {
-              // Keep wheel scrolling inside the list; do not let it bubble to
-              // page listeners that reposition or dismiss the panel.
-              event.stopPropagation();
-            }}
-          >
-            {notifications.length === 0 ? (
-              <div className="notification-empty">
-                {t("navigation.noNotifications")}
-              </div>
-            ) : (
-              notifications.slice(0, 12).map((notification) => (
-                <button
-                  className="notification-item unread"
-                  type="button"
-                  key={notification.id}
-                  onClick={() => openNotification(notification)}
-                >
-                  <span className="notification-item-icon">
-                    <Bell size={14} />
-                  </span>
-                  <span className="notification-item-copy">
-                    <strong>{notificationText(notification).title}</strong>
-                    <span>{notificationText(notification).body}</span>
-                    <small>{formatActivityTime(notification.created_at)}</small>
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-          <div className="notification-panel-footer">
-            <span>
-              {pushStatus === "enabled"
-                ? t("navigation.nativeNotificationsEnabled")
-                : t("navigation.awayAlerts")}
-            </span>
-            {pushStatus !== "enabled" && (
-              <button
-                className="button button-ghost"
-                type="button"
-                onClick={onEnablePush}
-              >
-                {t("navigation.enableNativeAlerts")}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {panel}
     </div>
   );
 }
