@@ -25,7 +25,7 @@ describe("CreateIssueDialog", () => {
     await i18n.changeLanguage("en-US");
   });
 
-  it("locks create and closes only after a successful submit", async () => {
+  it("closes immediately on submit and ignores duplicate clicks", async () => {
     let resolveCreate: (() => void) | undefined;
     const onCreate = vi.fn(
       () =>
@@ -71,9 +71,7 @@ describe("CreateIssueDialog", () => {
     });
 
     expect(onCreate).toHaveBeenCalledTimes(1);
-    expect(createButton()?.disabled).toBe(true);
-    expect(createButton()?.getAttribute("aria-busy")).toBe("true");
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       createButton()?.click();
@@ -84,11 +82,10 @@ describe("CreateIssueDialog", () => {
       resolveCreate?.();
     });
 
-    expect(onClose).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
 
-  it("keeps the dialog open when create fails", async () => {
+  it("still closes when create fails after submit", async () => {
     const onCreate = vi.fn(async () => {
       throw new Error("create failed");
     });
@@ -125,7 +122,7 @@ describe("CreateIssueDialog", () => {
     });
 
     expect(onCreate).toHaveBeenCalledTimes(1);
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
 });

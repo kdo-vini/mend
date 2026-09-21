@@ -591,11 +591,11 @@ function App() {
   }) => {
     if (createIssueInFlightRef.current) return;
     createIssueInFlightRef.current = true;
+    setCreateIssueOpen(false);
     try {
       if (!demoMode && workspaceId) {
         try {
           await createLiveIssue({ workspaceId, ...input });
-          setCreateIssueOpen(false);
           setLiveDataRetry((current) => current + 1);
           notify(t("toasts.issueCreatedLive"));
         } catch (error) {
@@ -652,7 +652,6 @@ function App() {
         );
       }
       setInspectorIssueId(issue.id);
-      setCreateIssueOpen(false);
       notify(t("toasts.issueCreated", { identifier: issue.identifier }));
     } finally {
       createIssueInFlightRef.current = false;

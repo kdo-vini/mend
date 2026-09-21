@@ -204,7 +204,13 @@ export class SupabaseIssueAdapter implements IssuePort {
       str(created.id),
       (input as unknown as Row).labels as string[] | undefined,
     );
-    return issue(await this.details(context, created));
+    try {
+      return issue(await this.details(context, created));
+    } catch {
+      // Insert already succeeded — never fail the create response on detail
+      // hydration, or the client keeps the modal open and retries duplicates.
+      return issue(created);
+    }
   }
 
   async get(context: IssueRequestContext, identifier: string) {

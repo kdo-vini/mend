@@ -1326,7 +1326,15 @@ export async function createLiveIssue(
         }),
       },
       input.workspaceId,
-    ).then((result) => ("issue" in result ? result.issue : result));
+    ).then((result) =>
+      result &&
+      typeof result === "object" &&
+      "issue" in result &&
+      (result as { issue?: unknown }).issue &&
+      typeof (result as { issue: unknown }).issue === "object"
+        ? (result as { issue: IssueRow }).issue
+        : (result as IssueRow),
+    );
   const db = requireClient(client);
   const identifier = await unwrap(
     db.rpc("claim_issue_number", { target_workspace_id: input.workspaceId }),

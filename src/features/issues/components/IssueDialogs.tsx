@@ -277,6 +277,9 @@ export function CreateIssueDialog({
     }
     if (submitting) return;
     setSubmitting(true);
+    // Close immediately so a slow/failing post-create response cannot leave
+    // the form open (and invite duplicate submits).
+    onClose();
     try {
       await onCreate({
         title: cleanTitle,
@@ -284,9 +287,8 @@ export function CreateIssueDialog({
         priority,
         conversationId: conversationId || undefined,
       });
-      onClose();
     } catch {
-      // Parent surfaces the error toast; keep the dialog open for retry.
+      // Parent surfaces the error toast.
     } finally {
       setSubmitting(false);
     }
