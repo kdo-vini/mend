@@ -8,6 +8,7 @@ import {
   aiPolicyChannelValues,
   aiPolicyIntegrationValues,
   aiTriageRouteValues,
+  alignWorkspaceAiPolicyForMode,
   triageIntentValues,
   type AiPolicyChannel,
   type AiPolicyAction,
@@ -116,7 +117,9 @@ function ReplySettings({ workspaceId, onToast }: SettingsWorkspacePageProps) {
     if (!workspaceId || !policy) return;
     setSaving(true);
     try {
-      await saveLiveWorkspaceAiPolicy(workspaceId, policy);
+      const aligned = alignWorkspaceAiPolicyForMode(policy, mode);
+      setPolicy(aligned);
+      await saveLiveWorkspaceAiPolicy(workspaceId, aligned);
       const result = await saveLiveConversationAiPolicy(workspaceId, mode);
       onToast(
         t("v2.ai.saved", {

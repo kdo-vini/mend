@@ -168,12 +168,55 @@ describe("live worker automation decisions", () => {
     });
   });
 
-  it("blocks safe auto-reply intents that are not allowlisted", () => {
-    const policy = normalizeAiPolicy({ safe_auto_intents: ["status"] });
+  it("follows triage auto-reply routes even when the intent allowlist is narrower", () => {
+    const policy = normalizeAiPolicy({
+      safe_auto_intents: ["status"],
+      safe_auto_send_enabled: false,
+    });
+
+    expect(
+      policyDecision("safe_auto", triage, policy, true, "knowledge_auto_reply"),
+    ).toMatchObject({ action: "auto_reply", allowed: true });
+    expect(
+      aiStateInput(
+        {
+          binding: { workspaceId: "workspace-1" },
+          persisted: { conversationId: "conversation-1", id: "message-1" },
+        },
+        triage,
+        "safe_auto",
+        policy,
+        true,
+        "knowledge_auto_reply",
+      ),
+    ).toMatchObject({
+      last_decision: "auto_reply",
+      needs_human: false,
+    });
+  });
+
+  it("blocks auto-reply when autonomy does not allow respond", () => {
+    const policy = normalizeAiPolicy({
+      allowed_actions: ["triage", "create_issue"],
+    });
 
     expect(
       policyDecision("safe_auto", triage, policy, true, "knowledge_auto_reply"),
     ).toMatchObject({ action: "blocked", allowed: false });
+  });
+
+  it("keeps Copilot mode on drafts even when routes say auto-reply", () => {
+    const policy = normalizeAiPolicy({});
+
+    expect(
+      policyDecision(
+        "draft",
+        triage,
+        policy,
+        true,
+        "knowledge_auto_reply",
+      ),
+    ).toMatchObject({ action: "draft", allowed: true });
   });
 
   it("parses native issue identifiers without accepting invalid numbers", () => {

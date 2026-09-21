@@ -472,7 +472,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     const canSend =
       Boolean(draft && decision.allowed) &&
       decision.action === "auto_reply" &&
-      modePolicy.policy.safeAutoSendEnabled;
+      (modePolicy.mode === "safe_auto" ||
+        modePolicy.policy.safeAutoSendEnabled);
     const result: LiveWorkerAutomationResult = {
       ...(issue ? { issue } : {}),
       ...(draft ? { draft } : {}),

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_AI_ROUTE_MAP,
   DEFAULT_WORKSPACE_AI_POLICY,
+  alignWorkspaceAiPolicyForMode,
   normalizeWorkspaceAiPolicy,
   workspaceAiPolicyJson,
 } from "./ai-policy";
@@ -63,5 +64,37 @@ describe("workspace AI policy", () => {
       allowed_integrations: ["knowledge", "agent", "mcp"],
     });
     expect(serialized).not.toHaveProperty("totalConversations");
+  });
+
+  it("turns on send confirmation when Safe auto-reply is selected", () => {
+    const aligned = alignWorkspaceAiPolicyForMode(
+      {
+        ...DEFAULT_WORKSPACE_AI_POLICY,
+        safeAutoSendEnabled: false,
+        routes: {
+          ...DEFAULT_AI_ROUTE_MAP,
+          billing: "knowledge_auto_reply",
+        },
+      },
+      "safe_auto",
+    );
+
+    expect(aligned.safeAutoSendEnabled).toBe(true);
+    expect(aligned.safeAutoEnabled).toBe(true);
+    expect(aligned.safeAutoIntents).toEqual(
+      expect.arrayContaining(["question", "billing", "social"]),
+    );
+  });
+
+  it("keeps send disabled for Copilot while syncing auto-reply intents from routes", () => {
+    const aligned = alignWorkspaceAiPolicyForMode(
+      DEFAULT_WORKSPACE_AI_POLICY,
+      "draft",
+    );
+
+    expect(aligned.safeAutoSendEnabled).toBe(false);
+    expect(aligned.safeAutoIntents).toEqual(
+      expect.arrayContaining(["question", "how_to", "status", "social"]),
+    );
   });
 });

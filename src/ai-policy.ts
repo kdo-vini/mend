@@ -231,6 +231,47 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
   };
 }
 
+export function autoReplyIntentsFromRoutes(
+  routes: AiRouteMap,
+): TriageIntent[] {
+  return triageIntentValues.filter(
+    (intent) =>
+      routes[intent] === "knowledge_auto_reply" ||
+      routes[intent] === "safe_auto_reply",
+  );
+}
+
+/**
+ * Aligns hidden send/intent gates with the conversation mode the founder
+ * picks in Settings → Automation. Selecting Safe auto-reply is the explicit
+ * confirmation to send; Copilot/Manual keep send disabled.
+ */
+export function alignWorkspaceAiPolicyForMode(
+  policy: WorkspaceAiPolicy,
+  mode: AiMode,
+): WorkspaceAiPolicy {
+  const autoReplyIntents = autoReplyIntentsFromRoutes(policy.routes);
+  if (mode === "safe_auto") {
+    return {
+      ...policy,
+      safeAutoEnabled: true,
+      safeAutoSendEnabled: true,
+      safeAutoIntents:
+        autoReplyIntents.length > 0
+          ? autoReplyIntents
+          : [...policy.safeAutoIntents],
+    };
+  }
+  return {
+    ...policy,
+    safeAutoSendEnabled: false,
+    safeAutoIntents:
+      autoReplyIntents.length > 0
+        ? autoReplyIntents
+        : [...policy.safeAutoIntents],
+  };
+}
+
 export function workspaceAiPolicyJson(
   policy: WorkspaceAiPolicy,
 ): Record<string, Json> {

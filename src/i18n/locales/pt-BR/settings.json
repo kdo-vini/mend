@@ -913,7 +913,7 @@
       "loading": "Carregando pol\u00edtica da IA\u2026",
       "unavailable": "A pol\u00edtica da IA est\u00e1 indispon\u00edvel.",
       "conversationMode": "Modo da conversa",
-      "conversationModeDescription": "Este modo se aplica às conversas ativas atuais. As rotas do workspace abaixo são a fonte de verdade para novas mensagens.",
+      "conversationModeDescription": "Copilot só prepara rascunhos. Resposta automática segura envia quando as rotas de triagem e a autonomia permitem. Ao salvar, este modo é aplicado às conversas atuais.",
       "mode": "Modo",
       "manual": "Manual",
       "copilot": "Copilot",

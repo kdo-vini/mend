@@ -221,11 +221,11 @@ export function policyDecision(
       allowed: false,
       reason: "Safe auto-reply is disabled by workspace policy.",
     };
-  if (!policy.safeAutoIntents.includes(triage.intent))
+  if (!policy.allowedActions.includes("respond"))
     return {
       action: "blocked" as const,
       allowed: false,
-      reason: `Intent ${triage.intent} is not enabled for safe auto-reply.`,
+      reason: "Workspace policy does not allow AI responses.",
     };
   if (triage.confidence < policy.safeAutoMinConfidence) {
     return {
@@ -311,8 +311,11 @@ export function aiStateInput(
   route: AiTriageRoute,
 ) {
   const decision = policyDecision(mode, triage, policy, hasKnowledge, route);
+  // Conversation mode `safe_auto` is the send authorization. The legacy
+  // `safe_auto_send_enabled` flag remains as an optional kill switch only.
   const autoSendReady =
-    decision.action === "auto_reply" && policy.safeAutoSendEnabled;
+    decision.action === "auto_reply" &&
+    (mode === "safe_auto" || policy.safeAutoSendEnabled);
   const needsHumanReview =
     decision.action === "draft" ||
     !decision.allowed ||
@@ -322,12 +325,6 @@ export function aiStateInput(
     : autoSendReady
       ? "auto_reply"
       : "draft";
-  const lastDecisionReason =
-    decision.action === "draft"
-      ? decision.reason
-      : decision.action === "auto_reply" && !policy.safeAutoSendEnabled
-        ? "Auto-reply requires explicit workspace confirmation."
-        : decision.reason;
   return {
     workspace_id: input.binding.workspaceId,
     conversation_id: input.persisted.conversationId,
@@ -336,17 +333,15 @@ export function aiStateInput(
     latest_confidence: triage.confidence,
     current_summary: triage.summary,
     last_decision: lastDecision,
-    last_decision_reason: lastDecisionReason,
+    last_decision_reason: decision.reason,
     last_decision_at: new Date().toISOString(),
     needs_human: needsHumanReview,
     needs_human_reason:
       decision.action === "draft"
         ? decision.reason
-        : decision.action === "auto_reply" && !policy.safeAutoSendEnabled
-          ? "Auto-reply requires explicit workspace confirmation."
-          : decision.allowed
-            ? null
-            : decision.reason,
+        : decision.allowed
+          ? null
+          : decision.reason,
     last_triaged_at: new Date().toISOString(),
   };
 }

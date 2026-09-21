@@ -913,7 +913,7 @@
       "loading": "Loading AI policy…",
       "unavailable": "AI policy is unavailable.",
       "conversationMode": "Conversation mode",
-      "conversationModeDescription": "This mode applies to current live conversations. Workspace routes below remain the source of truth for new messages.",
+      "conversationModeDescription": "Copilot only prepares drafts. Safe auto-reply sends when triage routes and autonomy allow it. Saving applies this mode to current conversations.",
       "mode": "Mode",
       "manual": "Manual",
       "copilot": "Copilot",
