@@ -139,7 +139,11 @@ function ReplySettings({ workspaceId, onToast }: SettingsWorkspacePageProps) {
           routes[intent] = policy.routes[intent];
         }
       }
-      const toSave = { ...aligned, routes };
+      const toSave: LiveWorkspaceAiPolicy = {
+        ...policy,
+        ...aligned,
+        routes,
+      };
       setPolicy(toSave);
       await saveLiveWorkspaceAiPolicy(workspaceId, toSave);
       const result = await saveLiveConversationAiPolicy(workspaceId, mode);
