@@ -55,6 +55,7 @@ import { normalizeLocale } from "../locale.js";
 import {
   connectionEncryptionKey,
   mcpArgumentsHmac,
+  McpConnectionError,
   type McpRuntimeConnection,
 } from "../mcp.js";
 import {
@@ -187,9 +188,25 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     try {
       provider = await this.providerFor(input.binding.workspaceId);
     } catch (error) {
-      if (!(error instanceof SupportAiConfigurationError)) throw error;
-      await this.markSupportConfigurationNeeded(input, error.code);
-      return;
+      if (error instanceof SupportAiConfigurationError) {
+        await this.markSupportConfigurationNeeded(input, error.code);
+        return;
+      }
+      if (
+        error instanceof McpConnectionError ||
+        /encryption is not configured/i.test(
+          error instanceof Error ? error.message : String(error),
+        )
+      ) {
+        const heuristic = await this.heuristicHumanHandoff(input, modePolicy);
+        if (heuristic) return heuristic;
+        await this.markSupportConfigurationNeeded(
+          input,
+          "support_ai_configuration_required",
+        );
+        return;
+      }
+      throw error;
     }
     if (
       input.message.messageType === "image" ||
@@ -232,7 +249,14 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     const matchedKnowledge = relevantKnowledge(input.message, input.knowledge);
     let mcpConnections: McpRuntimeConnection[] = [];
     let mcpFailureRequiresReview = false;
-    if (modePolicy.policy.allowedIntegrations.includes("mcp")) {
+    const configuredRoute = modePolicy.policy.routes[triage.intent];
+    // Billing/incident handoff must not depend on MCP credentials.
+    const skipMcp =
+      configuredRoute === "human_escalation" || configuredRoute === "no_action";
+    if (
+      !skipMcp &&
+      modePolicy.policy.allowedIntegrations.includes("mcp")
+    ) {
       const attempts =
         modePolicy.policy.mcpFailurePolicy === "retry_then_review" ? 3 : 1;
       for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -255,7 +279,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         }
       }
     }
-    const configuredRoute = modePolicy.policy.routes[triage.intent];
     let route = resolveAutomationRoute({
       configuredRoute,
       mode: modePolicy.mode,
@@ -680,6 +703,96 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       throw new Error(
         `supabase:conversations:flow_update:${result.error.message}`,
       );
+  }
+
+  private async heuristicHumanHandoff(
+    input: LiveWorkerAutomationInput,
+    modePolicy: { mode: LiveWorkerAiMode; policy: LiveWorkerAiPolicy },
+  ): Promise<LiveWorkerAutomationResult | void> {
+    if (modePolicy.mode !== "safe_auto") return;
+    const text = messageText(input.message).toLocaleLowerCase("pt-BR");
+    const billingLike =
+      /\brenov|\bmensalidad|\bassinar|\bassinatura|\bplano\b|\bcobran[cç]a|\bpagar\b|\bpagamento\b|\bcancelar\b|\bstripe\b|\bpix\b/.test(
+        text,
+      );
+    const incidentLike =
+      /\btravad|\bfora do ar|\bindispon|\bn[aã]o (estou )?conseguindo acess|\bsistema (caiu|parado)|bloquead/.test(
+        text,
+      );
+    const intent = billingLike ? "billing" : incidentLike ? "incident" : null;
+    if (!intent) return;
+    if (modePolicy.policy.routes[intent] !== "human_escalation") return;
+
+    const triage: TriageResult = {
+      intent,
+      priority: intent === "incident" ? "urgent" : "high",
+      confidence: 0.95,
+      summary:
+        intent === "billing"
+          ? "Customer asked about plan payment or renewal."
+          : "Customer reported a blocking outage or access failure.",
+      unsafe: false,
+    };
+    const locale = await this.workspaceLocale(input.binding.workspaceId);
+    const draft: LiveWorkerDraft = {
+      conversationId: input.persisted.conversationId,
+      messageId: input.persisted.id,
+      idempotencyKey: input.idempotencyKey,
+      body: humanHandoffReplyBody(locale),
+      knowledgeArticleIds: [],
+      triage,
+    };
+    const decision = {
+      action: "auto_reply" as const,
+      allowed: true,
+      reason: "Heuristic human escalation while support AI credentials are unavailable.",
+    };
+    await this.persistDraft(
+      input,
+      draft,
+      triage,
+      modePolicy.mode,
+      modePolicy.policy,
+      decision,
+      [],
+    );
+    await this.auditDecision(input, triage, "ai.triage.completed", {
+      mode: modePolicy.mode,
+      decision: "auto_reply",
+      route: "human_escalation",
+      heuristic: true,
+    });
+    const { error } = await this.client.from("conversation_ai_state").upsert(
+      {
+        workspace_id: input.binding.workspaceId,
+        conversation_id: input.persisted.conversationId,
+        last_triaged_message_id: input.persisted.id,
+        latest_intent: triage.intent,
+        latest_confidence: triage.confidence,
+        current_summary: triage.summary,
+        last_decision: "auto_reply",
+        last_decision_reason: decision.reason,
+        last_decision_at: new Date().toISOString(),
+        needs_human: true,
+        needs_human_reason: "Workspace policy routes this intent to a human.",
+        last_triaged_at: new Date().toISOString(),
+      },
+      { onConflict: "conversation_id" },
+    );
+    if (error)
+      throw new Error(`supabase:conversation_ai_state:${error.message}`);
+    return {
+      draft,
+      send: {
+        binding: input.binding,
+        conversationId: draft.conversationId,
+        sourceMessageId: draft.messageId,
+        idempotencyKey: draft.idempotencyKey,
+        body: draft.body,
+        triage,
+        pauseAfterSendReason: "manual_pause",
+      },
+    };
   }
 
   async sendAiReply(input: LiveWorkerSendAiReplyInput): Promise<void> {

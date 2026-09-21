@@ -240,6 +240,20 @@ describe("live worker automation decisions", () => {
     ).toBe("draft_for_review");
   });
 
+  it("keeps founder human-escalation routes even when MCP fails or product is ambiguous", () => {
+    expect(
+      resolveAutomationRoute({
+        configuredRoute: "human_escalation",
+        mode: "safe_auto",
+        requirePublishedKnowledge: true,
+        hasKnowledgeOrMcp: false,
+        fallbackRoute: "safe_auto_reply",
+        mcpFailureRequiresReview: true,
+        productAmbiguous: true,
+      }),
+    ).toBe("human_escalation");
+  });
+
   it("lets Copilot draft greetings and knowledge gaps instead of blocking", () => {
     const policy = normalizeAiPolicy({});
     expect(

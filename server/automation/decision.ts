@@ -165,11 +165,20 @@ export function resolveAutomationRoute(input: {
           : input.fallbackRoute
       : input.configuredRoute;
   // Never silently escalate. Ambiguous product / MCP issues become a
-  // clarification (safe_auto) or a review draft (copilot).
-  if (input.productAmbiguous && route !== "bug_triage") {
+  // clarification (safe_auto) or a review draft (copilot). Founder-blocked
+  // human escalation (billing, incident, etc.) must stay escalated.
+  if (
+    input.productAmbiguous &&
+    route !== "bug_triage" &&
+    route !== "human_escalation"
+  ) {
     route = input.mode === "safe_auto" ? "safe_auto_reply" : "draft_for_review";
   }
-  if (input.mcpFailureRequiresReview && route !== "bug_triage") {
+  if (
+    input.mcpFailureRequiresReview &&
+    route !== "bug_triage" &&
+    route !== "human_escalation"
+  ) {
     route = input.mode === "safe_auto" ? "safe_auto_reply" : "draft_for_review";
   }
   return route;

@@ -82,6 +82,7 @@ import {
   getMessageDayKey,
   getMessageDayLabel,
 } from "../message-dates";
+import { renderWhatsAppMarkup } from "../whatsapp-markup";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
@@ -2918,7 +2919,16 @@ function MessageBubble({
             <div
               className={`message-bubble${visibleText ? "" : " unavailable-message"}`}
             >
-              {visibleText || t("ui.messageUnavailable")}
+              {visibleText ? (
+                <div
+                  className="message-wa-markup"
+                  dangerouslySetInnerHTML={{
+                    __html: renderWhatsAppMarkup(visibleText),
+                  }}
+                />
+              ) : (
+                t("ui.messageUnavailable")
+              )}
             </div>
           ) : (
             <MessageMedia
