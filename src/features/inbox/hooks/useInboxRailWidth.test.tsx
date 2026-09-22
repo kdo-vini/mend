@@ -90,13 +90,14 @@ describe("useInboxRailWidth", () => {
       );
     });
     if (!latest) throw new Error("hook api missing");
+    const api = latest;
 
     await act(async () => {
-      latest!.onResizePointerDown({
+      api.onResizePointerDown({
         button: 0,
         clientX: 320,
         preventDefault() {},
-      } as Parameters<typeof latest.onResizePointerDown>[0]);
+      } as Parameters<typeof api.onResizePointerDown>[0]);
     });
     await act(async () => {
       dispatchPointer(window, "pointermove", { clientX: 380 });
@@ -105,7 +106,7 @@ describe("useInboxRailWidth", () => {
       dispatchPointer(window, "pointerup", { clientX: 380 });
     });
 
-    expect(latest.width).toBe(380);
+    expect(api.width).toBe(380);
     expect(window.localStorage.getItem(INBOX_RAIL_WIDTH_STORAGE_KEY)).toBe(
       "380",
     );
