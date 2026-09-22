@@ -2,6 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 import type { Database } from "../src/lib/database.types.js";
 import { normalizeLocale, type SupportedLocale } from "./locale.js";
+import {
+  buildNotificationCopy,
+  type NotificationCopyParams,
+} from "./notifications/copy.js";
 
 type PushClient = SupabaseClient<Database>;
 
@@ -17,23 +21,21 @@ export interface WorkspacePushPayload {
   tag?: string;
   notificationId?: string;
   kind?: string;
+  copyParams?: NotificationCopyParams;
 }
 
 function localizePushPayload(
   payload: WorkspacePushPayload,
   locale: SupportedLocale,
 ): Pick<WorkspacePushPayload, "title" | "body"> {
-  if (payload.kind !== "conversation_message")
-    return { title: payload.title, body: payload.body };
-  return locale === "pt-BR"
-    ? {
-        title: "Nova mensagem no WhatsApp",
-        body: "Uma conversa atribuída a você precisa de atenção.",
-      }
-    : {
-        title: "New WhatsApp message",
-        body: "A conversation assigned to you needs attention.",
-      };
+  if (!payload.kind) return { title: payload.title, body: payload.body };
+  const copy = buildNotificationCopy(
+    payload.kind,
+    locale,
+    payload.copyParams ?? {},
+  );
+  if (!copy) return { title: payload.title, body: payload.body };
+  return { title: copy.title, body: copy.body };
 }
 
 function pushConfig() {

@@ -1,5 +1,23 @@
 {
   "conversationMessageTitle": "New WhatsApp message",
   "conversationMessageBody": "A conversation assigned to you needs attention.",
-  "workspaceNotificationFallback": "Workspace notification"
+  "workspaceNotificationFallback": "Workspace notification",
+  "aiHumanEscalationTitle": "AI escalated to a human",
+  "aiHumanEscalationBody": "This conversation needs you: {{summary}}",
+  "aiBugReportedTitle": "Bug reported in {{identifier}}",
+  "aiBugReportedBody": "A customer reported a possible bug: {{summary}}",
+  "aiAgentStartedTitle": "Coding agent started for {{identifier}}",
+  "aiAgentStartedBody": "Automatic investigation started. Publication still requires review.",
+  "aiAgentFixStartedTitle": "Automatic fix started for {{identifier}}",
+  "aiAgentFixStartedBody": "The run is implementing the fix. Publication still requires review.",
+  "aiAgentReadyTitle": "Investigation ready for {{identifier}}",
+  "aiAgentReadyBody": "Evidence and verdict are ready for human review.",
+  "aiAgentFixReadyTitle": "Fix ready for {{identifier}}",
+  "aiAgentFixReadyBody": "Review the patch and checks before publishing.",
+  "aiAgentFailedTitle": "Investigation failed for {{identifier}}",
+  "aiAgentFailedBody": "Automatic investigation could not finish: {{detail}}",
+  "aiAgentStartFailedTitle": "Could not start the agent for {{identifier}}",
+  "aiAgentStartFailedBody": "Configure a repository before automatic fixes: {{detail}}",
+  "supportAiConfigurationTitle": "Support AI configuration required",
+  "supportAiConfigurationBody": "Configure the workspace support credential and models, then resume AI."
 }

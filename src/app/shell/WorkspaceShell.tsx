@@ -18,6 +18,7 @@ import type {
 } from "../../api/notifications";
 import { BrandMark } from "../../components/BrandLockup";
 import { formatActivityTime, identityInitials } from "../../shared/lib/format";
+import { notificationCopyKeys } from "./notification-copy";
 import { navItems } from "./navigation";
 
 export function NotificationCenter({
@@ -39,10 +40,11 @@ export function NotificationCenter({
 }) {
   const { t } = useTranslation(["common", "notifications"]);
   const notificationText = (notification: WorkspaceNotification) => {
-    if (notification.kind === "conversation_message") {
+    const copy = notificationCopyKeys(notification);
+    if (copy) {
       return {
-        title: t("conversationMessageTitle", { ns: "notifications" }),
-        body: t("conversationMessageBody", { ns: "notifications" }),
+        title: t(copy.titleKey, { ns: "notifications", ...copy.params }),
+        body: t(copy.bodyKey, { ns: "notifications", ...copy.params }),
       };
     }
     return { title: notification.title, body: notification.body };

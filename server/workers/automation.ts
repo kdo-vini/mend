@@ -8,6 +8,7 @@ import {
   bugAcknowledgmentReplyBody,
   humanHandoffReplyBody,
 } from "../automation/handoff-replies.js";
+import { buildNotificationCopy } from "../notifications/copy.js";
 import {
   aiStateInput,
   boundedText,
@@ -441,16 +442,13 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         );
     }
     if (
-      (route === "human_escalation" ||
-        (route === "knowledge_auto_reply" && !matchedKnowledge.length)) &&
-      modePolicy.policy.notifyOnHumanEscalation
+      route === "human_escalation" ||
+      (route === "knowledge_auto_reply" && !matchedKnowledge.length)
     ) {
       await this.notifyWorkspace(
         input,
         triage,
         "ai.human_escalation",
-        "AI escalated a conversation",
-        `The AI could not safely answer: ${triage.summary}`,
         `ai-human-escalation:${input.persisted.conversationId}:${input.persisted.id}`,
       );
     }
@@ -459,10 +457,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         input,
         triage,
         "ai.bug_reported",
-        `Bug reported in ${issue.identifier}`,
-        `A customer reported a possible bug: ${triage.summary}`,
         `ai-bug-reported:${issue.id}:${input.persisted.id}`,
         issue.id,
+        { identifier: issue.identifier },
       );
     }
     if (
@@ -723,17 +720,21 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (!intent) return;
     if (modePolicy.policy.routes[intent] !== "human_escalation") return;
 
+    const locale = await this.workspaceLocale(input.binding.workspaceId);
     const triage: TriageResult = {
       intent,
       priority: intent === "incident" ? "urgent" : "high",
       confidence: 0.95,
       summary:
         intent === "billing"
-          ? "Customer asked about plan payment or renewal."
-          : "Customer reported a blocking outage or access failure.",
+          ? locale === "pt-BR"
+            ? "Cliente perguntou sobre pagamento ou renovação do plano."
+            : "Customer asked about plan payment or renewal."
+          : locale === "pt-BR"
+            ? "Cliente relatou indisponibilidade ou falha de acesso."
+            : "Customer reported a blocking outage or access failure.",
       unsafe: false,
     };
-    const locale = await this.workspaceLocale(input.binding.workspaceId);
     const draft: LiveWorkerDraft = {
       conversationId: input.persisted.conversationId,
       messageId: input.persisted.id,
@@ -781,13 +782,21 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     );
     if (error)
       throw new Error(`supabase:conversation_ai_state:${error.message}`);
+    if (modePolicy.policy.notifyOnHumanEscalation !== false) {
+      await this.notifyWorkspace(
+        input,
+        triage,
+        "ai.human_escalation",
+        `ai-human-escalation:${input.persisted.conversationId}:${input.persisted.id}`,
+      );
+    }
     return {
       draft,
       send: {
         binding: input.binding,
         conversationId: draft.conversationId,
         sourceMessageId: draft.messageId,
-        idempotencyKey: draft.idempotencyKey,
+        idempotencyKey: input.idempotencyKey,
         body: draft.body,
         triage,
         pauseAfterSendReason: "manual_pause",
@@ -1045,19 +1054,44 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     input: LiveWorkerAutomationInput,
     triage: TriageResult,
     kind: string,
-    title: string,
-    body: string,
     dedupeKey: string,
     entityId = input.persisted.conversationId,
+    extras: {
+      identifier?: string;
+      detail?: string;
+      fixReady?: boolean;
+      fixStarted?: boolean;
+      startFailed?: boolean;
+    } = {},
   ): Promise<void> {
+    const locale = await this.workspaceLocale(input.binding.workspaceId);
+    const copy =
+      buildNotificationCopy(kind, locale, {
+        summary: triage.summary,
+        identifier: extras.identifier,
+        detail: extras.detail,
+        fixReady: extras.fixReady,
+        fixStarted: extras.fixStarted,
+        startFailed: extras.startFailed,
+      }) ??
+      buildNotificationCopy(kind, "en-US", {
+        summary: triage.summary,
+        identifier: extras.identifier,
+        detail: extras.detail,
+        fixReady: extras.fixReady,
+        fixStarted: extras.fixStarted,
+        startFailed: extras.startFailed,
+      });
+    const title = boundedText(copy?.title ?? kind, 240);
+    const body = boundedText(copy?.body ?? triage.summary, 2_000);
     const result = await this.metadataClient
       .from("notifications")
       .insert({
         workspace_id: input.binding.workspaceId,
         user_id: null,
         kind,
-        title: boundedText(title, 240),
-        body: boundedText(body, 2_000),
+        title,
+        body,
         entity_type:
           entityId === input.persisted.conversationId
             ? "conversation"
@@ -1067,17 +1101,25 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           intent: triage.intent,
           confidence: triage.confidence,
           summary: triage.summary,
+          ...(extras.identifier ? { identifier: extras.identifier } : {}),
+          ...(extras.detail ? { detail: extras.detail } : {}),
+          ...(extras.fixReady ? { fixReady: true } : {}),
+          ...(extras.fixStarted ? { fixStarted: true } : {}),
+          ...(extras.startFailed ? { startFailed: true } : {}),
           i18n: {
             namespace: "notifications",
-            titleKey:
-              kind === "conversation_message"
-                ? "conversationMessageTitle"
-                : "workspaceNotificationFallback",
-            bodyKey:
-              kind === "conversation_message"
-                ? "conversationMessageBody"
-                : "workspaceNotificationFallback",
-            params: {},
+            titleKey: copy?.titleKey ?? "workspaceNotificationFallback",
+            bodyKey: copy?.bodyKey ?? "workspaceNotificationFallback",
+            params: {
+              ...(extras.identifier
+                ? { identifier: extras.identifier }
+                : {}),
+              ...(triage.summary ? { summary: triage.summary } : {}),
+              ...(extras.detail ? { detail: extras.detail } : {}),
+              ...(extras.fixReady ? { fixReady: true } : {}),
+              ...(extras.fixStarted ? { fixStarted: true } : {}),
+              ...(extras.startFailed ? { startFailed: true } : {}),
+            },
           },
         },
         dedupe_key: dedupeKey,
@@ -1088,14 +1130,22 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       throw new Error(`supabase:notifications:${result.error.message}`);
     if (!result.error) {
       await this.push.notify(this.client, input.binding.workspaceId, {
-        title: boundedText(title, 240),
-        body: boundedText(body, 2_000),
+        title,
+        body,
         kind,
         url:
           entityId === input.persisted.conversationId
             ? `/inbox?conversation=${encodeURIComponent(input.persisted.conversationId)}`
             : `/issues/${encodeURIComponent(entityId)}`,
         tag: kind,
+        copyParams: {
+          summary: triage.summary,
+          identifier: extras.identifier,
+          detail: extras.detail,
+          fixReady: extras.fixReady,
+          fixStarted: extras.fixStarted,
+          startFailed: extras.startFailed,
+        },
       });
     }
   }
@@ -1236,10 +1286,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       input,
       payload.triage,
       "ai.agent_ready",
-      `Fix ready for ${payload.issue.identifier}`,
-      "Review the patch and independent checks before creating the commit and draft pull request.",
       `ai-agent-fix-ready:${payload.runId}`,
       payload.issue.id,
+      { identifier: payload.issue.identifier, fixReady: true },
     );
     await this.pauseConversationForUnresolvedBug(
       payload.workspaceId,
@@ -1287,10 +1336,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       input,
       payload.triage,
       "ai.agent_ready",
-      `Investigation ready for ${payload.issue.identifier}`,
-      "The evidence and verdict are ready for human review before a fix starts.",
       `ai-agent-ready:${payload.runId}`,
       payload.issue.id,
+      { identifier: payload.issue.identifier },
     );
     if (shouldAutoFix) {
       await this.startFixForBug(
@@ -1431,10 +1479,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         input,
         triage,
         "ai.agent_started",
-        `Coding agent started for ${issue.identifier}`,
-        `The selected coding agent is investigating this bug. Run ${started.runId} will stop for approval before publication.`,
         `ai-agent-started:${started.runId}`,
         issue.id,
+        { identifier: issue.identifier },
       );
       if (bugCase) {
         const continuation: CodingRunContinuationJobPayload = {
@@ -1499,10 +1546,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
             input,
             triage,
             "ai.agent_ready",
-            `Investigation ready for ${issue.identifier}`,
-            "The evidence and verdict are ready for human review before a fix starts.",
             `ai-agent-ready:${started.runId}`,
             issue.id,
+            { identifier: issue.identifier },
           );
           if (shouldAutoFix && bugCase) {
             await this.startFixForBug(input, issue, bugCase, triage);
@@ -1538,10 +1584,13 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
             input,
             triage,
             "ai.agent_failed",
-            `Investigation failed for ${issue.identifier}`,
-            `The automatic investigation could not be completed: ${error instanceof Error ? error.message : String(error)}`,
             `ai-agent-failed:${started.runId}`,
             issue.id,
+            {
+              identifier: issue.identifier,
+              detail:
+                error instanceof Error ? error.message : String(error),
+            },
           );
         })
         .catch(() => undefined);
@@ -1550,10 +1599,13 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         input,
         triage,
         "ai.agent_failed",
-        `Coding agent could not start for ${issue.identifier}`,
-        `Configure a repository before automatic fixes: ${error instanceof Error ? error.message : String(error)}`,
         `ai-agent-start-failed:${issue.id}:${input.persisted.id}`,
         issue.id,
+        {
+          identifier: issue.identifier,
+          detail: error instanceof Error ? error.message : String(error),
+          startFailed: true,
+        },
       );
       if (bugCase)
         await this.pauseConversationForUnresolvedBug(
@@ -1597,10 +1649,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       input,
       triage,
       "ai.agent_started",
-      `Automatic fix started for ${issue.identifier}`,
-      `Run ${started.runId} is implementing the fix. Publication still requires review.`,
       `ai-agent-fix-started:${started.runId}`,
       issue.id,
+      { identifier: issue.identifier, fixStarted: true },
     );
     const continuation: CodingRunContinuationJobPayload = {
       stage: "coding_run_continuation",
@@ -1636,10 +1687,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           input,
           triage,
           "ai.agent_ready",
-          `Fix ready for ${issue.identifier}`,
-          "Review the patch and independent checks before creating the commit and draft pull request.",
           `ai-agent-fix-ready:${started.runId}`,
           issue.id,
+          { identifier: issue.identifier, fixReady: true },
         );
       })
       .catch(async (error) => {
@@ -1873,18 +1923,30 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       );
     if (state.error)
       throw new Error(`supabase:conversation_ai_state:${state.error.message}`);
+    const locale = await this.workspaceLocale(input.binding.workspaceId);
+    const copy =
+      buildNotificationCopy("support_ai_configuration_required", locale) ??
+      buildNotificationCopy("support_ai_configuration_required", "en-US");
     const notification = await this.metadataClient
       .from("notifications")
       .insert({
         workspace_id: input.binding.workspaceId,
         kind: "support_ai_configuration_required",
-        title: "Support AI configuration required",
-        body: "Configure the workspace support credential and models, then resume AI.",
+        title: copy?.title ?? "Support AI configuration required",
+        body:
+          copy?.body ??
+          "Configure the workspace support credential and models, then resume AI.",
         entity_type: "conversation",
         entity_id: input.persisted.conversationId,
         payload_json: {
           code,
           settingsPath: "/settings/engineering/agents/support",
+          i18n: {
+            namespace: "notifications",
+            titleKey: copy?.titleKey ?? "supportAiConfigurationTitle",
+            bodyKey: copy?.bodyKey ?? "supportAiConfigurationBody",
+            params: {},
+          },
         },
         dedupe_key: `support-ai-config:${input.persisted.conversationId}`,
       });

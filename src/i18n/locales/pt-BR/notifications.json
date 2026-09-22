@@ -1,5 +1,23 @@
 {
   "conversationMessageTitle": "Nova mensagem no WhatsApp",
   "conversationMessageBody": "Uma conversa atribuída a você precisa de atenção.",
-  "workspaceNotificationFallback": "Notificação do espaço de trabalho"
+  "workspaceNotificationFallback": "Notificação do espaço de trabalho",
+  "aiHumanEscalationTitle": "IA encaminhou para atendimento humano",
+  "aiHumanEscalationBody": "A conversa precisa de você: {{summary}}",
+  "aiBugReportedTitle": "Bug reportado em {{identifier}}",
+  "aiBugReportedBody": "Um cliente relatou um possível bug: {{summary}}",
+  "aiAgentStartedTitle": "Agente iniciado para {{identifier}}",
+  "aiAgentStartedBody": "A investigação automática começou. A publicação ainda exige revisão.",
+  "aiAgentFixStartedTitle": "Correção automática iniciada para {{identifier}}",
+  "aiAgentFixStartedBody": "A execução está implementando a correção. A publicação ainda exige revisão.",
+  "aiAgentReadyTitle": "Investigação pronta para {{identifier}}",
+  "aiAgentReadyBody": "A evidência e o veredito estão prontos para revisão humana.",
+  "aiAgentFixReadyTitle": "Correção pronta para {{identifier}}",
+  "aiAgentFixReadyBody": "Revise o patch e as verificações antes de publicar.",
+  "aiAgentFailedTitle": "Falha na investigação de {{identifier}}",
+  "aiAgentFailedBody": "A investigação automática não pôde ser concluída: {{detail}}",
+  "aiAgentStartFailedTitle": "Não foi possível iniciar o agente para {{identifier}}",
+  "aiAgentStartFailedBody": "Configure um repositório antes das correções automáticas: {{detail}}",
+  "supportAiConfigurationTitle": "Configuração da IA de suporte necessária",
+  "supportAiConfigurationBody": "Configure a credencial e os modelos de suporte do espaço de trabalho e retome a IA."
 }
