@@ -253,6 +253,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle("dark", theme === "dark");
     window.localStorage.setItem("mend.theme", theme);
   }, [theme]);
 

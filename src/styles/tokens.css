@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: oklch(0.105 0 0);
   --sidebar: oklch(0.125 0.008 113);
   --surface: oklch(0.15 0.012 113);
@@ -91,6 +92,10 @@
   --sidebar-accent-foreground: var(--ink);
   --sidebar-border: var(--line);
   --sidebar-ring: var(--accent-soft);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 :root[data-theme="light"] {

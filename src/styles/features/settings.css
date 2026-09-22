@@ -144,6 +144,7 @@
 }
 .member-role-select {
   width: 116px;
+  color: var(--ink);
 }
 .member-role-readonly {
   color: var(--muted);
