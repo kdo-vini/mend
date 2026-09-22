@@ -68,7 +68,7 @@ import {
 import { WorkspacePushNotifier } from "../push.js";
 import { SupabaseMcpConnectionAdapter } from "../adapters/supabase/mcp.js";
 import { ConversationPendingActionStore } from "../adapters/supabase/pending-actions.js";
-import { runZeloPdvGerenteBridge } from "../integrations/zelopdv-gerente/bridge.js";
+import { runMendCatalogDeleteFlow } from "../integrations/zelopdv-gerente/catalog-flow.js";
 import { triageConversation, type TriageResult } from "../triage.js";
 import { WhatsAppService, type WhatsAppProvider } from "../whatsapp-service.js";
 import { normalizePhoneNumber } from "../whatsmiau.js";
@@ -182,8 +182,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (current?.automationState === "human_paused") return;
     const modePolicy = await this.aiMode(input);
     if (modePolicy.mode === "off") return;
-    const gerenteBridge = await this.tryZeloPdvGerenteBridge(input, modePolicy);
-    if (gerenteBridge) return gerenteBridge;
+    const catalogFlow = await this.tryMendCatalogDeleteFlow(input, modePolicy);
+    if (catalogFlow) return catalogFlow;
     if (
       input.message.messageType === "audio" &&
       !input.persisted.transcript?.trim()
@@ -712,7 +712,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       );
   }
 
-  private async tryZeloPdvGerenteBridge(
+  private async tryMendCatalogDeleteFlow(
     input: LiveWorkerAutomationInput,
     modePolicy: { mode: LiveWorkerAiMode; policy: LiveWorkerAiPolicy },
   ): Promise<LiveWorkerAutomationResult | void> {
@@ -723,53 +723,52 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       normalizePhoneNumber(input.message.remoteJid ?? "");
     if (!text || !phone) return;
 
-    const bridged = await runZeloPdvGerenteBridge({
+    const flowed = await runMendCatalogDeleteFlow({
       automationInput: input,
       text,
       phone,
       pendingStore: this.pendingActions,
     });
-    if (!bridged) return;
+    if (!flowed) return;
 
     const draft: LiveWorkerDraft = {
       conversationId: input.persisted.conversationId,
       messageId: input.persisted.id,
       idempotencyKey: input.idempotencyKey,
-      body: bridged.reply,
+      body: flowed.reply,
       knowledgeArticleIds: [],
-      triage: bridged.triage,
+      triage: flowed.triage,
     };
     const decision = {
       action: "auto_reply" as const,
       allowed: true,
-      reason: bridged.pendingCreated
-        ? "ZeloPDV Gerente prepared a catalog change awaiting owner confirmation."
-        : "ZeloPDV Gerente handled a catalog change after owner confirmation.",
+      reason: flowed.pendingCreated
+        ? "Mend prepared a catalog delete awaiting owner confirmation."
+        : "Mend handled a catalog delete confirmation.",
     };
     await this.persistDraft(
       input,
       draft,
-      bridged.triage,
+      flowed.triage,
       modePolicy.mode,
       modePolicy.policy,
       decision,
       [],
     );
-    await this.auditDecision(input, bridged.triage, "ai.triage.completed", {
+    await this.auditDecision(input, flowed.triage, "ai.triage.completed", {
       mode: modePolicy.mode,
       decision: "auto_reply",
-      route: "zelopdv_gerente",
-      pendingCreated: bridged.pendingCreated,
-      paired: bridged.paired,
+      route: "mend_catalog_delete",
+      pendingCreated: flowed.pendingCreated,
     });
     const { error } = await this.client.from("conversation_ai_state").upsert(
       {
         workspace_id: input.binding.workspaceId,
         conversation_id: input.persisted.conversationId,
         last_triaged_message_id: input.persisted.id,
-        latest_intent: bridged.triage.intent,
-        latest_confidence: bridged.triage.confidence,
-        current_summary: bridged.triage.summary,
+        latest_intent: flowed.triage.intent,
+        latest_confidence: flowed.triage.confidence,
+        current_summary: flowed.triage.summary,
         last_decision: "auto_reply",
         last_decision_reason: decision.reason,
         last_decision_at: new Date().toISOString(),
@@ -784,10 +783,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       throw new Error(`supabase:conversation_ai_state:${error.message}`);
     await this.recordWorkflowFact(
       input,
-      bridged.pendingCreated ? "policy_required_touch" : "ai_resolved",
-      bridged.pendingCreated
-        ? "zelopdv-gerente-pending"
-        : "zelopdv-gerente-completed",
+      flowed.pendingCreated ? "policy_required_touch" : "ai_resolved",
+      flowed.pendingCreated
+        ? "mend-catalog-pending"
+        : "mend-catalog-completed",
     );
     return {
       draft,
@@ -797,7 +796,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         sourceMessageId: draft.messageId,
         idempotencyKey: draft.idempotencyKey,
         body: draft.body,
-        triage: bridged.triage,
+        triage: flowed.triage,
       },
     };
   }
