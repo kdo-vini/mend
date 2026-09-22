@@ -2510,6 +2510,11 @@ function ConversationHeader({
   onOpenContext: () => void;
 }) {
   const { t } = useTranslation("inbox");
+  const conversationAssigneeOptions = assigneeOptions.map((option) =>
+    option.value === conversation.assignee
+      ? { ...option, disabled: false }
+      : option,
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(conversation.name);
@@ -2577,15 +2582,6 @@ function ConversationHeader({
             ) : (
               <>
                 <h2>{conversation.name}</h2>
-                <button
-                  className="icon-button subtle identity-name-edit"
-                  type="button"
-                  aria-label={t("ui.editContactName")}
-                  disabled={!conversation.contactId}
-                  onClick={() => setEditingName(true)}
-                >
-                  <PenLine size={13} />
-                </button>
                 {conversation.chatType === "group" && (
                   <span className="group-badge">{t("ui.group")}</span>
                 )}
@@ -2607,21 +2603,23 @@ function ConversationHeader({
           <Select
             ariaLabel={t("ui.conversationAssignee")}
             value={conversation.assignee}
-            options={assigneeOptions}
+            options={conversationAssigneeOptions}
             onChange={onAssign}
           />
         </label>
         <span
           className={`mode-label ${conversation.aiMode} ${conversation.automationState}`}
         >
-          <Sparkles size={13} />{" "}
-          {conversation.automationState === "human_paused"
-            ? t("ui.humanTakeover")
-            : conversation.aiMode === "safe_auto"
-              ? t("ui.autoReply")
-              : conversation.aiMode === "draft"
-                ? t("ui.copilot")
-                : t("ui.manual")}
+          <Sparkles size={13} aria-hidden="true" />
+          <span>
+            {conversation.automationState === "human_paused"
+              ? t("ui.humanTakeover")
+              : conversation.aiMode === "safe_auto"
+                ? t("ui.autoReply")
+                : conversation.aiMode === "draft"
+                  ? t("ui.copilot")
+                  : t("ui.manual")}
+          </span>
         </span>
         {conversation.humanTakeoverReason && (
           <span className="ai-reason" title={t("ui.humanTakeoverReason")}>
@@ -2669,7 +2667,6 @@ function ConversationHeader({
           {menuOpen && (
             <div className="context-menu" role="menu">
               <button
-                className="mobile-menu-control"
                 type="button"
                 role="menuitem"
                 disabled={!conversation.contactId}
@@ -2697,7 +2694,7 @@ function ConversationHeader({
                 <Select
                   ariaLabel={t("ui.conversationAssignee")}
                   value={conversation.assignee}
-                  options={assigneeOptions}
+                  options={conversationAssigneeOptions}
                   onChange={(value) => {
                     onAssign(value);
                     setMenuOpen(false);

@@ -276,6 +276,17 @@ describe("InboxPage new chat", () => {
     );
   });
 
+  it("keeps the contact name free of an inline rename control", async () => {
+    await act(async () => root.render(<InboxHarness />));
+    expect(document.body.querySelector(".identity-name-edit")).toBeNull();
+    expect(
+      document.body.querySelector(".conversation-header h2")?.textContent,
+    ).toBe(seedConversations[0].name);
+    expect(
+      document.body.querySelector(".conversation-assignee"),
+    ).not.toBeNull();
+  });
+
   it("opens the conversation it just started instead of the first one in the list", async () => {
     await act(async () => root.render(<InboxHarness />));
     expect(openConversationName()).toBe(seedConversations[0].name);

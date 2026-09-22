@@ -12,6 +12,7 @@ import { Select } from "./Select";
 export interface AssigneeOption {
   value: string;
   label: string;
+  disabled?: boolean;
 }
 
 export function PriorityDot({

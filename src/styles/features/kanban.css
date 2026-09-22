@@ -1102,9 +1102,6 @@
     font-size: 13px;
     letter-spacing: -0.01em;
   }
-  .identity-name-edit {
-    display: none;
-  }
   .conversation-controls {
     flex: 0 0 auto;
   }
