@@ -1033,6 +1033,9 @@
   .inbox-layout.mobile-conversation-open .conversation-rail {
     display: none;
   }
+  .conversation-rail-resize {
+    display: none;
+  }
   .inbox-layout.mobile-conversation-open .conversation-panel {
     min-height: 0;
     height: 100%;

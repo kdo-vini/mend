@@ -20,8 +20,9 @@
   vertical-align: 3px;
 }
 .inbox-layout {
+  --inbox-rail-width: 320px;
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(
+  grid-template-columns: var(--inbox-rail-width) minmax(0, 1fr) minmax(
       260px,
       290px
     );
@@ -33,16 +34,53 @@
   border-radius: 9px;
   background: var(--surface);
 }
+.inbox-layout.is-resizing-rail {
+  user-select: none;
+}
 .inbox-layout.no-visible-conversation .conversation-panel {
   display: none;
 }
 .conversation-rail {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--line);
   background: var(--sidebar);
+}
+.conversation-rail-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 3;
+  width: 6px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+.conversation-rail-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background var(--duration-normal) var(--ease);
+}
+.conversation-rail-resize:hover::after,
+.conversation-rail-resize:focus-visible::after,
+.conversation-rail-resize.is-dragging::after {
+  background: var(--accent);
+}
+.conversation-rail-resize:focus-visible {
+  outline: none;
 }
 .rail-heading {
   display: flex;
@@ -1461,7 +1499,7 @@
 
 @media (max-width: 1279px) {
   .inbox-page .inbox-layout {
-    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    grid-template-columns: var(--inbox-rail-width) minmax(0, 1fr);
   }
   /* iOS and mobile Chrome zoom focused form controls below 16px. */
   .inbox-page .composer textarea {

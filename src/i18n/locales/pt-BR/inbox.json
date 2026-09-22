@@ -68,6 +68,7 @@
   "ui": {
     "newWillAppear": "Novas conversas vão aparecer aqui.",
     "conversations": "Conversas",
+    "resizeConversationList": "Redimensionar lista de conversas",
     "search": "Buscar conversas",
     "filters": "Filtros de conversas",
     "noResults": "Nenhuma conversa encontrada",

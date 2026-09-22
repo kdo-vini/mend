@@ -17,7 +17,7 @@
     flex-basis: 205px;
   }
   .inbox-layout {
-    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-columns: var(--inbox-rail-width) minmax(0, 1fr);
   }
   .message-row {
     max-width: 82%;
@@ -80,7 +80,7 @@
       var(--page-padding-inline-compact);
   }
   .inbox-layout {
-    grid-template-columns: minmax(260px, 305px) minmax(0, 1fr);
+    grid-template-columns: var(--inbox-rail-width) minmax(0, 1fr);
   }
   .settings-layout {
     grid-template-columns: 1fr;
@@ -155,6 +155,9 @@
     min-height: 350px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+  .conversation-rail-resize {
+    display: none;
   }
   .conversation-panel {
     min-height: 600px;

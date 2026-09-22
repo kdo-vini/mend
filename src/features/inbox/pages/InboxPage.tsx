@@ -76,6 +76,11 @@ import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { useConversationScroll } from "../hooks/useConversationScroll";
+import {
+  INBOX_RAIL_WIDTH_MAX,
+  INBOX_RAIL_WIDTH_MIN,
+  useInboxRailWidth,
+} from "../hooks/useInboxRailWidth";
 import { MessageMedia } from "../components/MessageMedia";
 import {
   formatMessageTime,
@@ -231,6 +236,13 @@ export function InboxPage({
   const { t } = useTranslation("inbox");
   const messageDayNow = new Date();
   const location = useLocation();
+  const {
+    width: railWidth,
+    dragging: railDragging,
+    layoutStyle: railLayoutStyle,
+    onResizePointerDown,
+    onResizeKeyDown,
+  } = useInboxRailWidth();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [selectionMode, setSelectionMode] = useState(false);
@@ -1648,7 +1660,8 @@ export function InboxPage({
         </div>
       </div>
       <div
-        className={`inbox-layout ${mobileConversationOpen ? "mobile-conversation-open" : ""} ${filtered.length === 0 ? "no-visible-conversation" : ""}`}
+        className={`inbox-layout ${mobileConversationOpen ? "mobile-conversation-open" : ""} ${filtered.length === 0 ? "no-visible-conversation" : ""} ${railDragging ? "is-resizing-rail" : ""}`}
+        style={railLayoutStyle}
       >
         <section className="conversation-rail">
           <div className="rail-heading">
@@ -1795,6 +1808,17 @@ export function InboxPage({
               />
             )}
           </ScrollArea>
+          <button
+            className={`conversation-rail-resize ${railDragging ? "is-dragging" : ""}`}
+            type="button"
+            aria-label={t("ui.resizeConversationList")}
+            aria-orientation="vertical"
+            aria-valuemin={INBOX_RAIL_WIDTH_MIN}
+            aria-valuemax={INBOX_RAIL_WIDTH_MAX}
+            aria-valuenow={railWidth}
+            onPointerDown={onResizePointerDown}
+            onKeyDown={onResizeKeyDown}
+          />
         </section>
         <section className="conversation-panel">
           <ConversationHeader
