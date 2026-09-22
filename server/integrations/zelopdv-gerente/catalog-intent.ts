@@ -1,8 +1,8 @@
 /**
- * Detects imperative ZeloPDV catalog delete requests for Mend's own AI flow.
- * How-to questions stay on Knowledge.
+ * Detects imperative ZeloPDV catalog mutations that should go through Zelinho
+ * Gerente (propose → Sim/Não → RPC). How-to questions stay on Knowledge.
  */
-export function isCatalogDeleteIntent(text: string): boolean {
+export function isCatalogMutationIntent(text: string): boolean {
   const value = String(text || "")
     .trim()
     .toLocaleLowerCase("pt-BR");
@@ -13,38 +13,20 @@ export function isCatalogDeleteIntent(text: string): boolean {
     )
   )
     return false;
-  return (
-    (/\b(exclu[ií]r?|apag(a|ar|ue)|delet(a|ar|e)|remov(a|er|e))\b/.test(
+
+  const deletesCatalog =
+    /\b(exclu[ií]r?|apag(a|ar|ue)|delet(a|ar|e)|remov(a|er|e))\b/.test(value) &&
+    /\b(produto|produtos|item|itens|categoria|categorias|cat[aá]logo)\b/.test(
       value,
-    ) &&
-      /\b(produto|produtos|item|itens|categoria|categorias|cat[aá]logo)\b/.test(
-        value,
-      )) ||
-    /\b(produto|item)\b.{0,40}\b(exclu|apag|delet|remov)/.test(value)
+    );
+  return (
+    deletesCatalog ||
+    /\b(produto|item)\b.{0,40}\b(exclu|apag|delet|remov)/.test(value) ||
+    /\b(alter(a|ar)|mud(a|ar)|troc(a|ar))\s+(o\s+)?pre[cç]o\b/.test(value) ||
+    /\bpaus(a|ar|e)\b.{0,40}\b(card[aá]pio|produto|item)\b/.test(value) ||
+    /\bocult(a|ar)\b.{0,40}\b(pdv|caixa|produto|item)\b/.test(value) ||
+    /\b(cadastra|cadastre|cadastrar)\b.{0,40}\b(produto|produtos|item)\b/.test(
+      value,
+    )
   );
-}
-
-/** Pulls a product name from an imperative delete request. */
-export function extractCatalogDeleteTerm(text: string): string | null {
-  const value = String(text || "").trim();
-  if (!value) return null;
-  const patterns = [
-    /(?:exclu[ií]r?|apag(?:a|ar|ue)|delet(?:a|ar|e)|remov(?:a|er|e))\s+(?:o\s+|a\s+|os\s+|as\s+)?(?:produto|item|categoria)?\s*["“]?(.+?)["”]?$/i,
-    /(?:produto|item)\s+["“]?(.+?)["”]?\s+(?:exclu|apag|delet|remov)/i,
-  ];
-  for (const pattern of patterns) {
-    const match = pattern.exec(value);
-    const term = match?.[1]?.trim();
-    if (term && term.length >= 2) {
-      return term
-        .replace(/^(o|a|os|as|produto|item)\s+/i, "")
-        .replace(/[?.!]+$/, "")
-        .trim();
-    }
-  }
-  return null;
-}
-
-export function isPairingCode(text: string): boolean {
-  return /^\d{6}$/.test(String(text || "").trim());
 }
