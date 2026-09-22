@@ -67,8 +67,6 @@ import {
 } from "../providers.js";
 import { WorkspacePushNotifier } from "../push.js";
 import { SupabaseMcpConnectionAdapter } from "../adapters/supabase/mcp.js";
-import { ConversationPendingActionStore } from "../adapters/supabase/pending-actions.js";
-import { runZeloPdvGerenteBridge } from "../integrations/zelopdv-gerente/bridge.js";
 import { triageConversation, type TriageResult } from "../triage.js";
 import { WhatsAppService, type WhatsAppProvider } from "../whatsapp-service.js";
 import { normalizePhoneNumber } from "../whatsmiau.js";
@@ -89,7 +87,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   private readonly push = new WorkspacePushNotifier();
   private readonly bugLoop: SupabaseBugLoopStore;
   private readonly continuationJobStore?: JobStore<LiveWorkerJobPayload>;
-  private readonly pendingActions: ConversationPendingActionStore;
 
   constructor(
     private readonly client: LiveWorkerSupabaseClient,
@@ -104,11 +101,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     this.inbox = inbox ?? new InboxService(new SupabaseInboxPort(client));
     this.bugLoop = new SupabaseBugLoopStore(client);
     this.continuationJobStore = continuationJobStore;
-    this.pendingActions = new ConversationPendingActionStore(
-      this.client as unknown as ConstructorParameters<
-        typeof ConversationPendingActionStore
-      >[0],
-    );
     if (whatsappProvider)
       this.whatsapp = new WhatsAppService(this.inbox, whatsappProvider);
   }
@@ -182,8 +174,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (current?.automationState === "human_paused") return;
     const modePolicy = await this.aiMode(input);
     if (modePolicy.mode === "off") return;
-    const gerenteBridge = await this.tryZeloPdvGerenteBridge(input, modePolicy);
-    if (gerenteBridge) return gerenteBridge;
     if (
       input.message.messageType === "audio" &&
       !input.persisted.transcript?.trim()
@@ -710,96 +700,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       throw new Error(
         `supabase:conversations:flow_update:${result.error.message}`,
       );
-  }
-
-  private async tryZeloPdvGerenteBridge(
-    input: LiveWorkerAutomationInput,
-    modePolicy: { mode: LiveWorkerAiMode; policy: LiveWorkerAiPolicy },
-  ): Promise<LiveWorkerAutomationResult | void> {
-    if (modePolicy.mode !== "safe_auto") return;
-    const text = messageText(input.message).trim();
-    const phone =
-      input.message.phoneNumber?.trim() ||
-      normalizePhoneNumber(input.message.remoteJid ?? "");
-    if (!text || !phone) return;
-
-    const bridged = await runZeloPdvGerenteBridge({
-      automationInput: input,
-      text,
-      phone,
-      pendingStore: this.pendingActions,
-    });
-    if (!bridged) return;
-
-    const draft: LiveWorkerDraft = {
-      conversationId: input.persisted.conversationId,
-      messageId: input.persisted.id,
-      idempotencyKey: input.idempotencyKey,
-      body: bridged.reply,
-      knowledgeArticleIds: [],
-      triage: bridged.triage,
-    };
-    const decision = {
-      action: "auto_reply" as const,
-      allowed: true,
-      reason: bridged.pendingCreated
-        ? "ZeloPDV Gerente prepared a catalog change awaiting owner confirmation."
-        : "ZeloPDV Gerente handled a catalog change after owner confirmation.",
-    };
-    await this.persistDraft(
-      input,
-      draft,
-      bridged.triage,
-      modePolicy.mode,
-      modePolicy.policy,
-      decision,
-      [],
-    );
-    await this.auditDecision(input, bridged.triage, "ai.triage.completed", {
-      mode: modePolicy.mode,
-      decision: "auto_reply",
-      route: "zelopdv_gerente",
-      pendingCreated: bridged.pendingCreated,
-      paired: bridged.paired,
-    });
-    const { error } = await this.client.from("conversation_ai_state").upsert(
-      {
-        workspace_id: input.binding.workspaceId,
-        conversation_id: input.persisted.conversationId,
-        last_triaged_message_id: input.persisted.id,
-        latest_intent: bridged.triage.intent,
-        latest_confidence: bridged.triage.confidence,
-        current_summary: bridged.triage.summary,
-        last_decision: "auto_reply",
-        last_decision_reason: decision.reason,
-        last_decision_at: new Date().toISOString(),
-        needs_human: false,
-        needs_human_reason: null,
-        last_triaged_at: new Date().toISOString(),
-        automation_state: "ai_active",
-      },
-      { onConflict: "conversation_id" },
-    );
-    if (error)
-      throw new Error(`supabase:conversation_ai_state:${error.message}`);
-    await this.recordWorkflowFact(
-      input,
-      bridged.pendingCreated ? "policy_required_touch" : "ai_resolved",
-      bridged.pendingCreated
-        ? "zelopdv-gerente-pending"
-        : "zelopdv-gerente-completed",
-    );
-    return {
-      draft,
-      send: {
-        binding: input.binding,
-        conversationId: draft.conversationId,
-        sourceMessageId: draft.messageId,
-        idempotencyKey: draft.idempotencyKey,
-        body: draft.body,
-        triage: bridged.triage,
-      },
-    };
   }
 
   private async heuristicHumanHandoff(

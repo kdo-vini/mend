@@ -237,37 +237,6 @@ Não diga que o ZeloPDV substitui contador ou emite NFC-e automaticamente, a men
 Saldo de fiado inconsistente, estoque negativo sem explicação, ou perda de histórico de clientes.`,
   },
   {
-    title: "Como editar ou excluir produtos no ZeloPDV",
-    category: "Como fazer",
-    productKeys: ["zelopdv"],
-    body: `## Objetivo
-Orientar o cliente a alterar ou remover itens do cadastro com segurança.
-
-## Editar um produto
-1. Abra o ZeloPDV e vá em **Produtos**.
-2. Busque o produto pelo nome (ex.: Mini pizza).
-3. Abra o item e ajuste nome, preço, categoria, estoque ou disponibilidade.
-4. Salve e confira se a alteração aparece no caixa.
-
-## Excluir ou arquivar
-1. Em **Produtos**, localize o item.
-2. Use a opção de excluir/remover do cadastro.
-3. Confirme a ação quando o sistema pedir.
-4. Se o produto já teve venda, comanda ou pedido, o histórico pode ser preservado (arquivamento) em vez de apagar de vez — isso protege relatórios.
-
-## Zelinho Gerente (dono no WhatsApp)
-O dono pode pedir pelo Zelinho, por exemplo: “exclui o produto Mini pizza”.
-O Zelinho **não apaga na hora**: mostra uma confirmação (Sim / Não). Só depois do “sim” a exclusão ou arquivamento acontece.
-
-## Diferença importante
-- **Pausar no cardápio (ZeloMenu):** tira o item da venda online temporariamente.
-- **Ocultar no PDV:** some da frente de caixa, sem apagar o cadastro.
-- **Excluir/arquivar:** remove ou encerra o item no catálogo.
-
-## Quando encaminhar para humano
-Produto que some sozinho, exclusão que falha, preço que não atualiza no cardápio, ou dúvida se o item foi arquivado ou excluído.`,
-  },
-  {
     title: "Controle de acessos e funcionários no ZeloPDV",
     category: "Como fazer",
     productKeys: ["zelopdv"],
@@ -549,44 +518,23 @@ async function upsertArticle(definition) {
     ),
   });
 
+  await rest(
+    `knowledge_chunks?workspace_id=eq.${workspaceId}&article_id=eq.${article.id}`,
+    { method: "DELETE" },
+  );
   const chunks = chunkArticle(article);
   if (!chunks.length) return article;
   const vectors = await embedMany(chunks.map((chunk) => chunk.content));
-  const existingChunks =
-    (await rest(
-      `knowledge_chunks?workspace_id=eq.${workspaceId}&article_id=eq.${article.id}&select=id,chunk_index&order=chunk_index.asc`,
-    )) ?? [];
-  const byIndex = new Map(
-    existingChunks.map((row) => [Number(row.chunk_index), row]),
-  );
-  for (let index = 0; index < chunks.length; index += 1) {
-    const payload = {
-      ...chunks[index],
-      embedding: vectors[index],
-      embedding_model: embeddingModel,
-    };
-    const current = byIndex.get(index);
-    if (current?.id) {
-      await rest(`knowledge_chunks?id=eq.${current.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      });
-      byIndex.delete(index);
-    } else {
-      await rest("knowledge_chunks", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-    }
-  }
-  for (const stale of byIndex.values()) {
-    try {
-      await rest(`knowledge_chunks?id=eq.${stale.id}`, { method: "DELETE" });
-    } catch (error) {
-      // Keep chunks still cited by ai_draft_evidence; retrieval prefers current article_version.
-      console.warn(`  keep cited chunk ${stale.id}: ${String(error.message).slice(0, 120)}`);
-    }
-  }
+  await rest("knowledge_chunks", {
+    method: "POST",
+    body: JSON.stringify(
+      chunks.map((chunk, index) => ({
+        ...chunk,
+        embedding: vectors[index],
+        embedding_model: embeddingModel,
+      })),
+    ),
+  });
   console.log(`  chunks=${chunks.length}`);
   return article;
 }
