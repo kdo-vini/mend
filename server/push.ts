@@ -57,6 +57,7 @@ export class WorkspacePushNotifier {
     client: PushClient,
     workspaceId: string,
     payload: WorkspacePushPayload,
+    options: { userId?: string } = {},
   ): Promise<{ sent: number; configured: boolean }> {
     const config = pushConfig();
     if (!config) return { sent: 0, configured: false };
@@ -76,7 +77,10 @@ export class WorkspacePushNotifier {
     if (result.error)
       throw new Error(`supabase:push_subscriptions:${result.error.message}`);
 
-    const subscriptions = (result.data ?? []) as PushSubscriptionRow[];
+    const subscriptions = ((result.data ?? []) as PushSubscriptionRow[]).filter(
+      (subscription) =>
+        !options.userId || subscription.user_id === options.userId,
+    );
     const settled = await Promise.allSettled(
       subscriptions.map(async (subscription) => {
         try {

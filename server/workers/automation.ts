@@ -34,6 +34,7 @@ import {
   SupabaseBugLoopStore,
   type BugCaseReference,
 } from "../bug-loop.js";
+import { assignConversationToActiveMember } from "../automation/assignment.js";
 import type { AgentCredentialPort } from "../contracts/api-ports.js";
 import { InboxService, SupabaseInboxPort } from "../inbox-service.js";
 import type { MediaStorage } from "../media.js";
@@ -254,10 +255,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     // Billing/incident handoff must not depend on MCP credentials.
     const skipMcp =
       configuredRoute === "human_escalation" || configuredRoute === "no_action";
-    if (
-      !skipMcp &&
-      modePolicy.policy.allowedIntegrations.includes("mcp")
-    ) {
+    if (!skipMcp && modePolicy.policy.allowedIntegrations.includes("mcp")) {
       const attempts =
         modePolicy.policy.mcpFailurePolicy === "retry_then_review" ? 3 : 1;
       for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -441,6 +439,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           "knowledge-backed-draft",
         );
     }
+    if (route === "human_escalation" || route === "bug_triage")
+      await this.assignConversation(input);
     if (
       route === "human_escalation" ||
       (route === "knowledge_auto_reply" && !matchedKnowledge.length)
@@ -746,7 +746,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     const decision = {
       action: "auto_reply" as const,
       allowed: true,
-      reason: "Heuristic human escalation while support AI credentials are unavailable.",
+      reason:
+        "Heuristic human escalation while support AI credentials are unavailable.",
     };
     await this.persistDraft(
       input,
@@ -757,6 +758,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       decision,
       [],
     );
+    await this.assignConversation(input);
     await this.auditDecision(input, triage, "ai.triage.completed", {
       mode: modePolicy.mode,
       decision: "auto_reply",
@@ -1111,9 +1113,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
             titleKey: copy?.titleKey ?? "workspaceNotificationFallback",
             bodyKey: copy?.bodyKey ?? "workspaceNotificationFallback",
             params: {
-              ...(extras.identifier
-                ? { identifier: extras.identifier }
-                : {}),
+              ...(extras.identifier ? { identifier: extras.identifier } : {}),
               ...(triage.summary ? { summary: triage.summary } : {}),
               ...(extras.detail ? { detail: extras.detail } : {}),
               ...(extras.fixReady ? { fixReady: true } : {}),
@@ -1148,6 +1148,29 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         },
       });
     }
+  }
+
+  private async assignConversation(
+    input: LiveWorkerAutomationInput,
+  ): Promise<void> {
+    const result = await assignConversationToActiveMember(
+      this.client,
+      input.binding.workspaceId,
+      input.persisted.conversationId,
+    );
+    if (result.status !== "assigned" || !result.assigneeUserId) return;
+    await this.push.notify(
+      this.client,
+      input.binding.workspaceId,
+      {
+        title: "Conversation assigned to you",
+        body: "A conversation needs your attention.",
+        kind: "ai.conversation_assigned",
+        url: `/inbox?conversation=${encodeURIComponent(input.persisted.conversationId)}`,
+        tag: `ai-conversation-assigned:${input.persisted.conversationId}`,
+      },
+      { userId: result.assigneeUserId },
+    );
   }
 
   private continuationInput(
@@ -1588,8 +1611,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
             issue.id,
             {
               identifier: issue.identifier,
-              detail:
-                error instanceof Error ? error.message : String(error),
+              detail: error instanceof Error ? error.message : String(error),
             },
           );
         })

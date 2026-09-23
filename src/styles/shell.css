@@ -213,11 +213,68 @@ kbd {
   background: var(--surface);
   color: var(--ink);
 }
-.user-row-label {
-  color: var(--muted-2);
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.workspace-availability {
+  position: relative;
+  width: 100%;
+}
+.workspace-availability-trigger {
+  width: 100%;
+}
+.workspace-availability-hover-bridge {
+  position: absolute;
+  z-index: calc(var(--z-dropdown) - 1);
+  right: 0;
+  bottom: 100%;
+  width: min(192px, calc(100vw - var(--space-6)));
+  height: var(--space-2);
+}
+.workspace-availability-popover {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  width: min(192px, calc(100vw - var(--space-6)));
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--dropdown-surface);
+}
+.workspace-availability-popover button {
+  width: 100%;
+  min-height: var(--mobile-touch-target);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: left;
+}
+.workspace-availability-option.is-active > svg {
+  color: var(--success);
+}
+.workspace-availability-option.is-away > svg {
+  color: var(--warning);
+}
+.workspace-availability-popover button:hover:not(:disabled),
+.workspace-availability-popover button:focus-visible,
+.workspace-availability-popover button[aria-pressed="true"] {
+  background: var(--dropdown-selected);
+}
+.workspace-availability-popover button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.workspace-availability-popover .workspace-availability-profile {
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--muted);
 }
 .user-row {
   min-height: 42px;
@@ -344,4 +401,33 @@ kbd {
     top: 9px;
     bottom: 9px;
   }
+
+  .workspace-availability-popover {
+    right: auto;
+    bottom: 0;
+    left: calc(100% + var(--space-2));
+  }
+  .sidebar .workspace-availability-hover-bridge {
+    top: 0;
+    right: auto;
+    bottom: auto;
+    left: 100%;
+    width: var(--space-2);
+    height: 100%;
+  }
+}
+
+.sidebar-is-collapsed .workspace-availability-popover {
+  right: auto;
+  bottom: 0;
+  left: calc(100% + var(--space-2));
+}
+
+.sidebar-is-collapsed .workspace-availability-hover-bridge {
+  top: 0;
+  right: auto;
+  bottom: auto;
+  left: 100%;
+  width: var(--space-2);
+  height: 100%;
 }

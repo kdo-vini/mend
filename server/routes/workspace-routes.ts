@@ -6,6 +6,7 @@ import {
   workspaceMemberCreateSchema,
   workspaceMemberListQuerySchema,
   workspaceMemberRolePatchSchema,
+  workspaceAvailabilityPatchSchema,
   workspaceInvitationCreateSchema,
   workspaceInvitationParamSchema,
   workspaceInvitationRolePatchSchema,
@@ -34,6 +35,21 @@ export function registerWorkspaceRoutes(context: ApiRouteModuleContext) {
       send(response, 200, {
         data: await dependencies.workspaces.list(user.id),
       });
+    }),
+  );
+  router.patch(
+    "/api/workspaces/:id/availability",
+    asyncRoute(async (request, response) => {
+      const workspaceId = parse(workspaceParamSchema, request.params).id;
+      const context = await access(response, workspaceId);
+      send(
+        response,
+        200,
+        await dependencies.workspaces.setOwnAvailability(
+          context,
+          parse(workspaceAvailabilityPatchSchema, request.body).isActive,
+        ),
+      );
     }),
   );
   router.post(

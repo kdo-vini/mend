@@ -166,6 +166,10 @@
   background: color-mix(in oklch, var(--success) 13%, transparent);
   color: var(--success);
 }
+.member-status-away {
+  background: color-mix(in oklch, var(--muted) 13%, transparent);
+  color: var(--muted);
+}
 .member-status-pending {
   background: color-mix(in oklch, var(--warning) 13%, transparent);
   color: var(--warning);

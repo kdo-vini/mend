@@ -117,6 +117,11 @@ function createFakeDependencies(
         items: [{ id: "member-1", workspaceId, userId, role: "owner" }],
         query,
       })),
+      getMember: vi.fn(async (_context, memberUserId) =>
+        memberUserId === userId
+          ? { workspaceId, userId, role: "owner", isActive: true }
+          : null,
+      ),
       listInvitations: vi.fn(async () => [
         {
           id: repositoryId,
@@ -156,6 +161,11 @@ function createFakeDependencies(
         workspaceId,
         userId: memberUserId,
         ...input,
+      })),
+      setOwnAvailability: vi.fn(async (context, isActive) => ({
+        workspaceId: context.workspaceId,
+        userId: context.userId,
+        isActive,
       })),
       removeMember: vi.fn(async () => true),
       listAuditLog: vi.fn(async (_context, query) => ({
@@ -826,6 +836,49 @@ describe("Mend API router", () => {
           .send({ userId, role: "agent" })
       ).status,
     ).toBe(403);
+  });
+
+  it("changes only the authenticated member's workspace availability", async () => {
+    const dependencies = createFakeDependencies();
+    const app = makeApp(dependencies);
+    const response = await request(app)
+      .patch(`/api/workspaces/${workspaceId}/availability`)
+      .set(scoped(true))
+      .send({ isActive: true });
+
+    expect(response.status).toBe(200);
+    expect(dependencies.workspaces.setOwnAvailability).toHaveBeenCalledWith(
+      { userId, workspaceId, role: "owner" },
+      true,
+    );
+    const invalid = await request(app)
+      .patch(`/api/workspaces/${workspaceId}/availability`)
+      .set(scoped(true))
+      .send({ isActive: false, userId: "another-user" });
+    expect(invalid.status).toBe(400);
+  });
+
+  it("rejects manual assignees who are viewers or belong to another workspace", async () => {
+    const viewerDependencies = createFakeDependencies();
+    viewerDependencies.workspaces.getMember = vi.fn(async () => ({
+      workspaceId,
+      userId,
+      role: "viewer",
+    }));
+    const viewerResponse = await request(makeApp(viewerDependencies))
+      .patch(`/api/conversations/${conversationId}`)
+      .set(scoped(true))
+      .send({ assignedUserId: userId });
+    expect(viewerResponse.status).toBe(422);
+    expect(viewerDependencies.conversations.update).not.toHaveBeenCalled();
+
+    const foreignDependencies = createFakeDependencies();
+    const foreignResponse = await request(makeApp(foreignDependencies))
+      .patch(`/api/conversations/${conversationId}`)
+      .set(scoped(true))
+      .send({ assignedUserId: repositoryId });
+    expect(foreignResponse.status).toBe(422);
+    expect(foreignDependencies.conversations.update).not.toHaveBeenCalled();
   });
 
   it("routes workspace invitations through the admin-only workspace port", async () => {

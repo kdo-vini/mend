@@ -17,10 +17,7 @@ export type LocalizedNotificationCopy = {
   params: NotificationCopyParams;
 };
 
-function interpolate(
-  template: string,
-  params: NotificationCopyParams,
-): string {
+function interpolate(template: string, params: NotificationCopyParams): string {
   return template
     .replace(/\{\{summary\}\}/g, params.summary ?? "")
     .replace(/\{\{identifier\}\}/g, params.identifier ?? "")
@@ -72,6 +69,14 @@ const catalogs: Record<
       title: "Nova mensagem no WhatsApp",
       body: "Uma conversa atribuída a você precisa de atenção.",
     },
+    "ai.conversation_assigned": {
+      title: "Conversa atribuída a você",
+      body: "Uma conversa precisa da sua atenção.",
+    },
+    "ai.assignment_waiting": {
+      title: "Conversa aguardando responsável",
+      body: "Não há uma pessoa ativa disponível para assumir esta conversa.",
+    },
   },
   "en-US": {
     "ai.human_escalation": {
@@ -114,6 +119,14 @@ const catalogs: Record<
       title: "New WhatsApp message",
       body: "A conversation assigned to you needs attention.",
     },
+    "ai.conversation_assigned": {
+      title: "Conversation assigned to you",
+      body: "A conversation needs your attention.",
+    },
+    "ai.assignment_waiting": {
+      title: "Conversation waiting for an assignee",
+      body: "No active team member is available to take this conversation.",
+    },
   },
 };
 
@@ -128,6 +141,8 @@ const titleKeys: Record<string, string> = {
   "ai.agent_start_failed": "aiAgentStartFailedTitle",
   support_ai_configuration_required: "supportAiConfigurationTitle",
   conversation_message: "conversationMessageTitle",
+  "ai.conversation_assigned": "aiConversationAssignedTitle",
+  "ai.assignment_waiting": "aiAssignmentWaitingTitle",
 };
 
 const bodyKeys: Record<string, string> = {
@@ -141,14 +156,15 @@ const bodyKeys: Record<string, string> = {
   "ai.agent_start_failed": "aiAgentStartFailedBody",
   support_ai_configuration_required: "supportAiConfigurationBody",
   conversation_message: "conversationMessageBody",
+  "ai.conversation_assigned": "aiConversationAssignedBody",
+  "ai.assignment_waiting": "aiAssignmentWaitingBody",
 };
 
 function resolveCatalogKind(
   kind: string,
   params: NotificationCopyParams,
 ): string {
-  if (kind === "ai.agent_ready" && params.fixReady)
-    return "ai.agent_fix_ready";
+  if (kind === "ai.agent_ready" && params.fixReady) return "ai.agent_fix_ready";
   if (kind === "ai.agent_started" && params.fixStarted)
     return "ai.agent_fix_started";
   if (kind === "ai.agent_failed" && params.startFailed)

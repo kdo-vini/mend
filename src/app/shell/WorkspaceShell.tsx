@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
-  ChevronRight,
   LogOut,
   Menu,
   MoreHorizontal,
@@ -12,6 +11,7 @@ import {
   Search,
   Sun,
 } from "lucide-react";
+import { WorkspaceAvailability } from "./WorkspaceAvailability";
 import type {
   PushSetupResult,
   WorkspaceNotification,
@@ -276,6 +276,9 @@ export function Sidebar({
   onToggle,
   onOpenCommand,
   operator,
+  availability,
+  availabilitySaving,
+  onSetAvailability,
   theme,
   onToggleTheme,
   onSignOut,
@@ -291,6 +294,9 @@ export function Sidebar({
   onToggle: () => void;
   onOpenCommand: () => void;
   operator: { name: string; email: string };
+  availability: boolean | null;
+  availabilitySaving: boolean;
+  onSetAvailability: (isActive: boolean) => void;
   theme: "dark" | "light";
   onToggleTheme: () => void;
   onSignOut: () => void;
@@ -351,9 +357,6 @@ export function Sidebar({
       </nav>
       <div className="sidebar-bottom">
         <div className="sidebar-bottom-header">
-          <span className="sidebar-bottom-label">
-            {t("navigation.session")}
-          </span>
           <div className="sidebar-utilities">
             <NotificationCenter
               notifications={notifications}
@@ -388,24 +391,14 @@ export function Sidebar({
             </button>
           </div>
         </div>
-        <button
-          className="user-row"
-          type="button"
-          onClick={() => navigate("/profile")}
-          aria-label={t("navigation.openProfile")}
-        >
-          <div className="avatar avatar-small avatar-violet">
-            {identityInitials(operator.name)}
-          </div>
-          <span>
-            <small className="user-row-label">
-              {t("navigation.signedInAs")}
-            </small>
-            <strong>{operator.name}</strong>
-            <small>{operator.email || t("navigation.workspaceMember")}</small>
-          </span>
-          <ChevronRight size={14} />
-        </button>
+        <WorkspaceAvailability
+          name={operator.name}
+          initials={identityInitials(operator.name)}
+          isActive={availability}
+          disabled={availabilitySaving}
+          onChange={onSetAvailability}
+          onOpenProfile={() => navigate("/profile")}
+        />
       </div>
     </aside>
   );
@@ -468,15 +461,24 @@ export function MobileTopbar({
 
 export function MobileBottomNav({
   theme,
+  operator,
+  availability,
+  availabilitySaving,
+  onSetAvailability,
   onToggleTheme,
   onSignOut,
 }: {
   theme: "dark" | "light";
+  operator: { name: string; email: string };
+  availability: boolean | null;
+  availabilitySaving: boolean;
+  onSetAvailability: (isActive: boolean) => void;
   onToggleTheme: () => void;
   onSignOut: () => void;
 }) {
   const { t } = useTranslation("common");
   const { search } = useLocation();
+  const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const primary = navItems.filter(({ id }) =>
     ["inbox", "issues", "runs"].includes(id),
@@ -515,6 +517,18 @@ export function MobileBottomNav({
         </button>
         {moreOpen && (
           <div className="mobile-more-popover">
+            <WorkspaceAvailability
+              name={operator.name}
+              initials={identityInitials(operator.name)}
+              isActive={availability}
+              disabled={availabilitySaving}
+              onChange={onSetAvailability}
+              showProfileAction={false}
+              onOpenProfile={() => {
+                setMoreOpen(false);
+                navigate("/profile");
+              }}
+            />
             <NavLink to="/knowledge" onClick={() => setMoreOpen(false)}>
               {t("navigation.knowledge")}
             </NavLink>

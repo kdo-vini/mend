@@ -4147,6 +4147,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          is_active: boolean
           role: string
           user_id: string
           workspace_id: string
@@ -4155,6 +4156,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_active?: boolean
           role?: string
           user_id: string
           workspace_id: string
@@ -4163,6 +4165,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_active?: boolean
           role?: string
           user_id?: string
           workspace_id?: string
@@ -4599,10 +4602,26 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          is_active: boolean
           role: string
           user_id: string
           workspace_id: string
         }[]
+      }
+      set_workspace_member_availability: {
+        Args: {
+          p_is_active: boolean
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: Database["public"]["Tables"]["workspace_members"]["Row"]
+      }
+      assign_unassigned_conversation: {
+        Args: {
+          p_conversation_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       match_knowledge_chunks: {
         Args: {

@@ -187,6 +187,7 @@ class FakeSupabaseHandoff {
   bugCase: Record<string, unknown> | null = null;
   bugCaseEvents: Record<string, unknown>[] = [];
   notifications: Record<string, unknown>[] = [];
+  assignments: Record<string, unknown>[] = [];
   messages: Record<string, unknown>[] = [];
   draftId = "draft-1";
 
@@ -257,6 +258,13 @@ class FakeSupabaseHandoff {
   }
 
   rpc(name: string, args?: Record<string, unknown>) {
+    if (name === "assign_unassigned_conversation") {
+      this.assignments.push(args ?? {});
+      return Promise.resolve({
+        data: { status: "assigned", assignee_user_id: "agent-1" },
+        error: null,
+      });
+    }
     if (name === "claim_issue_number")
       return Promise.resolve({ data: "TEC-1", error: null });
     if (name === "advance_bug_case") {
@@ -931,6 +939,62 @@ describe("live Whatsmiau worker", () => {
     });
     expect(result).not.toHaveProperty("draft");
     expect(provider.draftReply).not.toHaveBeenCalled();
+    expect(client.assignments).toEqual([
+      {
+        p_workspace_id: binding.workspaceId,
+        p_conversation_id: "conversation-1",
+      },
+    ]);
+  });
+
+  it("automatically assigns a conversation routed to human escalation", async () => {
+    const client = new FakeSupabaseHandoff();
+    const provider: SupportAiProvider = {
+      name: "openai",
+      draftReply: vi.fn(async () => "unused"),
+      triage: vi.fn(async () =>
+        JSON.stringify({
+          intent: "billing",
+          priority: "high",
+          confidence: 0.95,
+          summary: "Customer needs help with a payment.",
+          unsafe: false,
+        }),
+      ),
+    };
+    const automation = new SupabaseLiveWorkerAutomation(
+      client as never,
+      provider,
+    );
+
+    await automation.process({
+      binding,
+      idempotencyKey: "billing-handoff",
+      job: await enqueue(
+        new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+        "billing-handoff-job",
+      ),
+      knowledge: [],
+      message,
+      persisted: {
+        id: "message-billing",
+        workspaceId: binding.workspaceId,
+        conversationId: "conversation-billing",
+        contactId: "contact-1",
+        providerMessageId: message.providerMessageId,
+        direction: "inbound",
+        messageType: "text",
+        unreadCount: 1,
+        inserted: true,
+      },
+    });
+
+    expect(client.assignments).toEqual([
+      {
+        p_workspace_id: binding.workspaceId,
+        p_conversation_id: "conversation-billing",
+      },
+    ]);
   });
 
   it("investigates a confident bug even when automatic fixing is disabled", async () => {
@@ -1107,7 +1171,7 @@ describe("live Whatsmiau worker", () => {
       draftReply: vi.fn(async () => "O preço está no artigo publicado."),
       triage: vi.fn(async () =>
         JSON.stringify({
-          intent: "billing",
+          intent: "question",
           priority: "low",
           confidence: 0.98,
           summary: "Customer asks about ZeloPDV pricing",
@@ -1153,6 +1217,7 @@ describe("live Whatsmiau worker", () => {
     });
     expect(client.issue).toBeNull();
     expect(client.notifications).toEqual([]);
+    expect(client.assignments).toEqual([]);
   });
 
   it("drafts an unanswered question without escalating it", async () => {

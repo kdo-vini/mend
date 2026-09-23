@@ -26,7 +26,9 @@ function payloadParams(
       ? (row.i18n as Record<string, unknown>)
       : null;
   const params =
-    i18n?.params && typeof i18n.params === "object" && !Array.isArray(i18n.params)
+    i18n?.params &&
+    typeof i18n.params === "object" &&
+    !Array.isArray(i18n.params)
       ? (i18n.params as Record<string, unknown>)
       : row;
   return {
@@ -57,6 +59,18 @@ export function notificationCopyKeys(
       return {
         titleKey: "conversationMessageTitle",
         bodyKey: "conversationMessageBody",
+        params: {},
+      };
+    case "ai.conversation_assigned":
+      return {
+        titleKey: "aiConversationAssignedTitle",
+        bodyKey: "aiConversationAssignedBody",
+        params: {},
+      };
+    case "ai.assignment_waiting":
+      return {
+        titleKey: "aiAssignmentWaitingTitle",
+        bodyKey: "aiAssignmentWaitingBody",
         params: {},
       };
     case "ai.human_escalation":
@@ -91,9 +105,7 @@ export function notificationCopyKeys(
         titleKey: params.fixReady
           ? "aiAgentFixReadyTitle"
           : "aiAgentReadyTitle",
-        bodyKey: params.fixReady
-          ? "aiAgentFixReadyBody"
-          : "aiAgentReadyBody",
+        bodyKey: params.fixReady ? "aiAgentFixReadyBody" : "aiAgentReadyBody",
         params: { identifier: params.identifier ?? "" },
       };
     case "ai.agent_failed":

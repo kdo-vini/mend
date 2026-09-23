@@ -222,6 +222,17 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
       .map(workspaceMemberWithEmail);
   }
 
+  async getMember(context: RequestContext, userId: string) {
+    const result = await this.client
+      .from("workspace_members")
+      .select("*")
+      .eq("workspace_id", context.workspaceId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    const member = checked("workspace_members.get_member", result);
+    return member ? workspaceMember(row(member)) : null;
+  }
+
   async addMember(context: RequestContext, input: WorkspaceMemberCreateInput) {
     const result = await this.client.rpc("add_workspace_member", {
       p_workspace_id: context.workspaceId,
@@ -243,6 +254,17 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
     });
     return workspaceMember(
       rpcRow(checked("workspace_members.update_role", result)),
+    );
+  }
+
+  async setOwnAvailability(context: RequestContext, isActive: boolean) {
+    const result = await this.client.rpc("set_workspace_member_availability", {
+      p_workspace_id: context.workspaceId,
+      p_user_id: context.userId,
+      p_is_active: isActive,
+    });
+    return workspaceMember(
+      rpcRow(checked("workspace_members.set_availability", result)),
     );
   }
 

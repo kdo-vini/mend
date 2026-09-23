@@ -106,6 +106,7 @@ export interface WorkspacePort {
     context: RequestContext,
     query: WorkspaceMemberListQuery,
   ): Promise<unknown>;
+  getMember(context: RequestContext, userId: string): Promise<unknown | null>;
   addMember(
     context: RequestContext,
     input: WorkspaceMemberCreateInput,
@@ -115,6 +116,10 @@ export interface WorkspacePort {
     userId: string,
     input: WorkspaceMemberRolePatchInput,
   ): Promise<unknown | null>;
+  setOwnAvailability(
+    context: RequestContext,
+    isActive: boolean,
+  ): Promise<unknown>;
   removeMember(context: RequestContext, userId: string): Promise<boolean>;
   listInvitations(context: RequestContext): Promise<unknown>;
   createInvitation(

@@ -966,6 +966,19 @@
     background: var(--surface-2);
     box-shadow: 0 10px 26px oklch(0 0 0 / 0.28);
   }
+  .mobile-more-popover .workspace-availability {
+    margin-bottom: var(--space-1);
+    padding-bottom: var(--space-1);
+    border-bottom: 1px solid var(--line);
+  }
+  .mobile-more-popover .workspace-availability-trigger > .user-row-name {
+    display: flex;
+  }
+  .mobile-more-popover .workspace-availability-popover {
+    right: 0;
+    bottom: calc(100% + var(--space-2));
+    left: auto;
+  }
   .mobile-more-popover a {
     display: flex;
     align-items: center;

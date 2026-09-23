@@ -106,7 +106,7 @@ describe("useInboxRailWidth", () => {
       dispatchPointer(window, "pointerup", { clientX: 380 });
     });
 
-    expect(api.width).toBe(380);
+    expect(latest?.width).toBe(380);
     expect(window.localStorage.getItem(INBOX_RAIL_WIDTH_STORAGE_KEY)).toBe(
       "380",
     );

@@ -1,6 +1,10 @@
 {
   "conversationMessageTitle": "Nova mensagem no WhatsApp",
   "conversationMessageBody": "Uma conversa atribuída a você precisa de atenção.",
+  "aiConversationAssignedTitle": "Conversa atribuída a você",
+  "aiConversationAssignedBody": "Uma conversa precisa da sua atenção.",
+  "aiAssignmentWaitingTitle": "Conversa aguardando responsável",
+  "aiAssignmentWaitingBody": "Não há uma pessoa ativa disponível para assumir esta conversa.",
   "workspaceNotificationFallback": "Notificação do espaço de trabalho",
   "aiHumanEscalationTitle": "IA encaminhou para atendimento humano",
   "aiHumanEscalationBody": "A conversa precisa de você: {{summary}}",

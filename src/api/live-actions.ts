@@ -630,6 +630,7 @@ export interface LiveWorkspaceMember {
   workspaceId: string;
   userId: string;
   role: "owner" | "admin" | "agent" | "viewer" | string;
+  isActive: boolean;
   displayName?: string | null;
   email?: string | null;
   createdAt?: string | null;
@@ -693,6 +694,17 @@ export async function updateLiveWorkspaceMemberRole(input: {
   return apiRequest<LiveWorkspaceMember>(
     `/api/workspaces/${encodeURIComponent(input.workspaceId)}/members/${encodeURIComponent(input.userId)}`,
     { method: "PATCH", body: JSON.stringify({ role: input.role }) },
+    input.workspaceId,
+  );
+}
+
+export async function setLiveWorkspaceAvailability(input: {
+  workspaceId: string;
+  isActive: boolean;
+}) {
+  return apiRequest<LiveWorkspaceMember>(
+    `/api/workspaces/${encodeURIComponent(input.workspaceId)}/availability`,
+    { method: "PATCH", body: JSON.stringify({ isActive: input.isActive }) },
     input.workspaceId,
   );
 }

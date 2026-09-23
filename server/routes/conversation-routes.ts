@@ -166,6 +166,23 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
     "/api/conversations/:id",
     asyncRoute(async (request, response) => {
       const context = await scoped(request, response, "agent");
+      const input = parse(conversationPatchSchema, request.body);
+      if (input.assignedUserId) {
+        const assignee = await dependencies.workspaces.getMember(
+          context,
+          input.assignedUserId,
+        );
+        const role =
+          assignee && typeof assignee === "object" && !Array.isArray(assignee)
+            ? (assignee as { role?: unknown }).role
+            : null;
+        if (!assignee || role === "viewer")
+          throw new ApiHttpError(
+            422,
+            "invalid_conversation_assignee",
+            "The assignee must be a non-viewer member of this workspace.",
+          );
+      }
       send(
         response,
         200,
@@ -173,7 +190,7 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
           await dependencies.conversations.update(
             context,
             pathId(request),
-            parse(conversationPatchSchema, request.body),
+            input,
           ),
           "conversation",
         ),

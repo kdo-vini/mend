@@ -62,6 +62,9 @@ export const workspaceMemberCreateSchema = z
 export const workspaceMemberRolePatchSchema = z
   .object({ role: workspaceMemberRoleSchema })
   .strict();
+export const workspaceAvailabilityPatchSchema = z
+  .object({ isActive: z.boolean() })
+  .strict();
 export const workspaceInvitationCreateSchema = z
   .object({
     email: z.string().trim().email().max(320),

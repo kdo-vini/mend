@@ -52,6 +52,7 @@ import {
   startLiveAgentRun,
   updateLiveAgentRun,
   updateLiveIssue,
+  setLiveWorkspaceAvailability,
   type WhatsAppInstance,
 } from "./api/live-actions";
 import { WorkspaceOnboarding as FeatureWorkspaceOnboarding } from "./app/onboarding/WorkspaceOnboarding";
@@ -194,9 +195,10 @@ function App() {
     name: t("app.currentOperator"),
     email: "",
   });
-  const [workspaceMemberNames, setWorkspaceMemberNames] = useState<
-    Record<string, string>
+  const [workspaceMembersByUserId, setWorkspaceMembersByUserId] = useState<
+    Record<string, { name: string; role: string; isActive: boolean }>
   >({});
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
   const [inspectorIssueId, setInspectorIssueId] = useState<string | null>(null);
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const [editIssueId, setEditIssueId] = useState<string | null>(null);
@@ -327,18 +329,23 @@ function App() {
     void listWorkspaceMembers(workspaceId, supabase)
       .then((members) => {
         if (active)
-          setWorkspaceMemberNames(
+          setWorkspaceMembersByUserId(
             Object.fromEntries(
               members.map((member) => [
                 member.user_id,
-                member.display_name?.trim() ||
-                  `Workspace member ${member.user_id.slice(0, 8)}`,
+                {
+                  name:
+                    member.display_name?.trim() ||
+                    `Workspace member ${member.user_id.slice(0, 8)}`,
+                  role: member.role,
+                  isActive: member.is_active,
+                },
               ]),
             ),
           );
       })
       .catch(() => {
-        if (active) setWorkspaceMemberNames({});
+        if (active) setWorkspaceMembersByUserId({});
       });
     return () => {
       active = false;
@@ -353,16 +360,43 @@ function App() {
       ]
     : [
         { value: "Unassigned", label: t("app.unassigned") },
-        ...Object.entries(workspaceMemberNames).map(([userId, name]) => ({
-          value: userId,
-          label: userId === operatorIdentity.id ? operatorIdentity.name : name,
-        })),
+        ...Object.entries(workspaceMembersByUserId)
+          .filter(([, member]) => member.role !== "viewer")
+          .map(([userId, member]) => ({
+            value: userId,
+            label: `${userId === operatorIdentity.id ? operatorIdentity.name : member.name} (${t(member.isActive ? "app.memberActive" : "app.memberAway")})`,
+          })),
       ];
   const assigneeLabel = (value: string) =>
     assigneeOptions.find((option) => option.value === value)?.label ??
     (value === "Unassigned"
       ? t("app.unassigned")
       : t("app.user", { id: value.slice(0, 8) }));
+  const ownWorkspaceMember = workspaceMembersByUserId[operatorIdentity.id];
+  const changeAvailability = (isActive: boolean) => {
+    if (!workspaceId || demoMode || !operatorIdentity.id || availabilitySaving)
+      return;
+    setAvailabilitySaving(true);
+    void setLiveWorkspaceAvailability({ workspaceId, isActive })
+      .then(() =>
+        setWorkspaceMembersByUserId((members) => ({
+          ...members,
+          [operatorIdentity.id]: {
+            ...members[operatorIdentity.id],
+            isActive,
+          },
+        })),
+      )
+      .catch((error) =>
+        notify(
+          error instanceof Error
+            ? error.message
+            : t("errors.liveReconciliation"),
+          "error",
+        ),
+      )
+      .finally(() => setAvailabilitySaving(false));
+  };
 
   useEffect(() => {
     if (demoMode || localOperatorMode) return;
@@ -1035,6 +1069,9 @@ function App() {
         onOpenCommand={() => setCommandOpen(true)}
         operator={operatorIdentity}
         theme={theme}
+        availability={ownWorkspaceMember?.isActive ?? null}
+        availabilitySaving={availabilitySaving}
+        onSetAvailability={changeAvailability}
         onToggleTheme={() =>
           setTheme((current) => (current === "dark" ? "light" : "dark"))
         }
@@ -1108,7 +1145,11 @@ function App() {
                     onConfirm={requestConfirmation}
                     liveMode={!demoMode}
                     senderNames={{
-                      ...workspaceMemberNames,
+                      ...Object.fromEntries(
+                        Object.entries(workspaceMembersByUserId).map(
+                          ([userId, member]) => [userId, member.name],
+                        ),
+                      ),
                       ...(operatorIdentity.id
                         ? { [operatorIdentity.id]: operatorIdentity.name }
                         : {}),
@@ -1246,7 +1287,11 @@ function App() {
                     onConfirm={requestConfirmation}
                     liveMode={!demoMode}
                     senderNames={{
-                      ...workspaceMemberNames,
+                      ...Object.fromEntries(
+                        Object.entries(workspaceMembersByUserId).map(
+                          ([userId, member]) => [userId, member.name],
+                        ),
+                      ),
                       ...(operatorIdentity.id
                         ? { [operatorIdentity.id]: operatorIdentity.name }
                         : {}),
@@ -1263,6 +1308,10 @@ function App() {
       </main>
       <ShellMobileBottomNav
         theme={theme}
+        operator={operatorIdentity}
+        availability={ownWorkspaceMember?.isActive ?? null}
+        availabilitySaving={availabilitySaving}
+        onSetAvailability={changeAvailability}
         onToggleTheme={() =>
           setTheme((current) => (current === "dark" ? "light" : "dark"))
         }

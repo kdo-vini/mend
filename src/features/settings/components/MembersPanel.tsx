@@ -364,7 +364,7 @@ export function MembersPanel({
         </div>
         <div className="members-header-actions">
           <span className="section-count">
-            {members.length} {t("activeMembers", "ativos")}
+            {t("membersCount", { count: members.length })}
             {canManage && invitations.length > 0
               ? ` · ${invitations.length} ${t("pendingInvites", "pendentes")}`
               : ""}
@@ -498,8 +498,13 @@ export function MembersPanel({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className="member-status-badge member-status-active">
-                        <UserRoundCheck /> {t("activeStatus", "Ativo")}
+                      <Badge
+                        className={`member-status-badge member-status-${member.isActive ? "active" : "away"}`}
+                      >
+                        {member.isActive ? <UserRoundCheck /> : <UserRoundX />}
+                        {member.isActive
+                          ? t("activeStatus", "Ativo")
+                          : t("awayStatus", "Ausente")}
                       </Badge>
                     </TableCell>
                     <TableCell>

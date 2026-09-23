@@ -33,10 +33,20 @@ function pushClient(rows: unknown[]) {
       Promise.resolve(resolve({ error: null })),
   };
   return {
-    from: vi.fn(() => ({
-      select: vi.fn(() => select),
-      delete: vi.fn(() => remove),
-    })),
+    from: vi.fn((table: string) =>
+      table === "push_subscriptions"
+        ? {
+            select: vi.fn(() => select),
+            delete: vi.fn(() => remove),
+          }
+        : {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+              })),
+            })),
+          },
+    ),
   };
 }
 
@@ -74,6 +84,42 @@ describe("workspace web push", () => {
       "private",
     );
     expect(pushMocks.sendNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("can send an assignment notification only to the selected member", async () => {
+    process.env.VAPID_PUBLIC_KEY = "public";
+    process.env.VAPID_PRIVATE_KEY = "private";
+    pushMocks.sendNotification.mockResolvedValue({});
+    const client = pushClient([
+      {
+        id: "subscription-1",
+        user_id: "agent-1",
+        endpoint: "https://push.example/1",
+        p256dh: "p256dh",
+        auth: "auth",
+      },
+      {
+        id: "subscription-2",
+        user_id: "agent-2",
+        endpoint: "https://push.example/2",
+        p256dh: "p256dh",
+        auth: "auth",
+      },
+    ]);
+
+    await new WorkspacePushNotifier().notify(
+      client as never,
+      "workspace-1",
+      { title: "Assigned", body: "A conversation was assigned." },
+      { userId: "agent-1" },
+    );
+
+    expect(pushMocks.sendNotification).toHaveBeenCalledTimes(1);
+    expect(pushMocks.sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: "https://push.example/1" }),
+      expect.any(String),
+      expect.anything(),
+    );
   });
 
   it("localizes known notification kinds per recipient preference", async () => {

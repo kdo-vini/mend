@@ -1,6 +1,10 @@
 {
   "conversationMessageTitle": "New WhatsApp message",
   "conversationMessageBody": "A conversation assigned to you needs attention.",
+  "aiConversationAssignedTitle": "Conversation assigned to you",
+  "aiConversationAssignedBody": "A conversation needs your attention.",
+  "aiAssignmentWaitingTitle": "Conversation waiting for an assignee",
+  "aiAssignmentWaitingBody": "No active team member is available to take this conversation.",
   "workspaceNotificationFallback": "Workspace notification",
   "aiHumanEscalationTitle": "AI escalated to a human",
   "aiHumanEscalationBody": "This conversation needs you: {{summary}}",

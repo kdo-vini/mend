@@ -78,6 +78,7 @@ export function workspaceMember(rowValue: Row): Row {
     workspaceId: str(rowValue.workspace_id),
     userId: str(rowValue.user_id),
     role: str(rowValue.role, "viewer"),
+    isActive: rowValue.is_active === true,
     createdAt: nullable(rowValue.created_at),
   };
 }
