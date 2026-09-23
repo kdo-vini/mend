@@ -258,11 +258,16 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
   }
 
   async setOwnAvailability(context: RequestContext, isActive: boolean) {
-    const result = await this.client.rpc("set_workspace_member_availability", {
-      p_workspace_id: context.workspaceId,
-      p_user_id: context.userId,
-      p_is_active: isActive,
-    });
+    // The authenticated route validates membership; this user-id RPC is
+    // deliberately executable only by the service role.
+    const result = await this.requirePrivilegedClient().rpc(
+      "set_workspace_member_availability",
+      {
+        p_workspace_id: context.workspaceId,
+        p_user_id: context.userId,
+        p_is_active: isActive,
+      },
+    );
     return workspaceMember(
       rpcRow(checked("workspace_members.set_availability", result)),
     );

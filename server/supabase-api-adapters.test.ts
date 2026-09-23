@@ -4,6 +4,7 @@ import {
   createSupabaseApiAdapters,
   SupabaseCodingRunAdapter,
   SupabaseMcpConnectionAdapter,
+  SupabaseWorkspaceAdapter,
   type WhatsmiauProviderPort,
 } from "./supabase-api-adapters.js";
 import type { CodingCatalogProvider } from "./coding-agent-catalog.js";
@@ -1085,6 +1086,40 @@ describe("Supabase API adapters", () => {
           p_issue_prefix: "TEC",
           p_timezone: "UTC",
           p_default_language: "pt-BR",
+        },
+      },
+    ]);
+  });
+
+  it("uses the server client for the service-only availability RPC", async () => {
+    const caller = new FakeClient();
+    const privileged = new FakeClient();
+    privileged.rpcResults.set("set_workspace_member_availability", {
+      id: "member-1",
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "agent",
+      is_active: true,
+    });
+    const workspaces = new SupabaseWorkspaceAdapter(
+      caller as unknown as SupabaseClient,
+      privileged as unknown as SupabaseClient,
+    );
+
+    await expect(
+      workspaces.setOwnAvailability(
+        { userId, workspaceId, role: "agent" },
+        true,
+      ),
+    ).resolves.toMatchObject({ workspaceId, userId, isActive: true });
+    expect(caller.rpcCalls).toEqual([]);
+    expect(privileged.rpcCalls).toEqual([
+      {
+        name: "set_workspace_member_availability",
+        args: {
+          p_workspace_id: workspaceId,
+          p_user_id: userId,
+          p_is_active: true,
         },
       },
     ]);

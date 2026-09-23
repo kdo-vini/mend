@@ -43,7 +43,6 @@ import {
   isDemoModeRequested,
   isLiveConfigured,
   listLiveChannels,
-  listWhatsAppInstances,
   loadLiveConversationSnapshot,
   loadLiveWorkspace,
   mendApiBaseUrl,
@@ -603,11 +602,8 @@ function App() {
   }, [demoMode, selectedConversationId, t, workspaceId]);
 
   useEffect(() => {
-    if (demoMode || !mendApiBaseUrl) return;
-    const request = workspaceId
-      ? listLiveChannels(workspaceId)
-      : listWhatsAppInstances();
-    void request
+    if (demoMode || !mendApiBaseUrl || !workspaceId) return;
+    void listLiveChannels(workspaceId)
       .then((instances) =>
         setChannel(
           instances.find((item) => item.state === "open") ??

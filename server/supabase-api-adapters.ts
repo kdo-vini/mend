@@ -80,7 +80,7 @@ export interface SupabaseApiAdapterOptions {
   client?: AnySupabaseClient | null;
   /** Trusted server client used only for backend-only RPCs such as issue-number allocation. */
   privilegedClient?: AnySupabaseClient | null;
-  /** Service-role client reserved for Auth invitation delivery and member e-mail lookups. */
+  /** Service-role client for invitations, member e-mail lookups, and server-authorized workspace RPCs. */
   invitationClient?: AnySupabaseClient | null;
   /** Convenience for request-scoped RLS clients when the caller does not inject one. */
   accessToken?: string;
