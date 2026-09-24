@@ -46,6 +46,9 @@ Copy every key from `.env.example`; the important groups are:
 - Codex: `CODEX_MODEL`, `CODEX_REASONING_EFFORT`, fallback settings, limits and `CODEX_WORKSPACE_ROOT`.
 - Google connections: server-only `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` and `GOOGLE_TOKEN_ENCRYPTION_KEY`.
 - Local API: `PORT`, optional `MEND_API_TOKEN`, `MEND_WORKER_POLL_MS`.
+- Outbound WhatsApp gateway: `MEND_OUTBOUND_WHATSAPP_API_KEY`,
+  `ZELOCHAT_BASE_URL`, `ZELOCHAT_INTERNAL_API_KEY` (existing Chat key; Mend
+  only).
 
 `MEND_DEV_MODE=1` and `VITE_MEND_LOCAL_OPERATOR_MODE=1` are loopback-only escape hatches. They must be disabled in production. Never put `WHATSMIAU_API_KEY`, `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` or any other secret in a `VITE_*` variable.
 

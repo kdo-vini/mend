@@ -47,6 +47,7 @@ import { createGitHubControlPlaneFromEnv } from "./github-control-plane.js";
 import { SupabaseKnowledgeSyncProcessor } from "./workers/knowledge-sync.js";
 import { createGitHubKnowledgeWebhook } from "./github-knowledge-webhook.js";
 import { SupabaseKnowledgeMetricWriter } from "./knowledge-evals.js";
+import { registerInternalWhatsAppRoutes } from "./internal-whatsapp.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -169,6 +170,8 @@ function secretMatches(
   const right = Buffer.from(expected);
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
+
+registerInternalWhatsAppRoutes(app, { logger });
 
 app.get("/api/health", (_request, response) =>
   response.json({ ok: true, service: "mend-api" }),

@@ -104,7 +104,18 @@ MEND_AGENT_CREDENTIAL_ENCRYPTION_KEY=<same server secret used by the runner>
 MEND_AGENT_MAX_RUNTIME_SECONDS=1200
 MEND_WORKER_POLL_MS=2000
 MEND_DEV_MODE=0
+MEND_OUTBOUND_WHATSAPP_API_KEY=<dedicated Mend key for Outbound/Grok Bot>
+ZELOCHAT_BASE_URL=https://chat.zelopdv.com.br
+ZELOCHAT_INTERNAL_API_KEY=<existing ZeloChat Techne internal key>
 ```
+
+`MEND_OUTBOUND_WHATSAPP_API_KEY` is a **new** Mend-owned secret. Generate it
+once, set it on this control-plane app, and put the same value on the Outbound
+secret card. Outbound must not receive the ZeloChat key.
+
+`ZELOCHAT_INTERNAL_API_KEY` is the **existing** Chat Techne send key. Copy it
+onto Mend only. Do not add a second key on ZeloChat and do not rotate the
+ZeloChat PDV key. The Agent runner does not need these variables.
 
 ## Runner environment
 
