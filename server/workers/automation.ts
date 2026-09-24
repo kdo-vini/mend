@@ -73,6 +73,8 @@ import { WhatsAppService, type WhatsAppProvider } from "../whatsapp-service.js";
 import { normalizePhoneNumber } from "../whatsmiau.js";
 import {
   boundedEvidenceBundle,
+  sanitizeCustomerSupportReply,
+  stripOperatorOnlySupportSections,
   validateGroundedSupportReply,
   type GroundedSupportReply,
   type SupportKnowledgeEvidence,
@@ -1794,7 +1796,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         ...(article.sourcePath ? { sourcePath: article.sourcePath } : {}),
         title: article.title,
         heading: article.category,
-        content: article.body,
+        content: stripOperatorOnlySupportSections(article.body),
         trustLevel: article.trustLevel ?? "reviewed",
         audience: article.audience ?? "customer",
         score: article.retrievalScore ?? 0.2,
@@ -1806,7 +1808,10 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       source: "shared" as const,
       ambiguous: false,
     };
-    const evidenceBundle = boundedEvidenceBundle(resolution, evidence);
+    const evidenceBundle = boundedEvidenceBundle(
+      resolution,
+      evidence.filter((item) => item.content.trim()),
+    );
     const contextResult = provider.draftReplyWithContext
       ? await provider.draftReplyWithContext({
           conversation,
@@ -1830,7 +1835,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           customerSafe: true,
           needsClarification: false,
         };
-    const body = boundedText(contextResult.body, 12_000);
+    const body = sanitizeCustomerSupportReply(
+      boundedText(contextResult.body, 12_000),
+    );
     if (!body) return undefined;
     const grounded: GroundedSupportReply = {
       body,

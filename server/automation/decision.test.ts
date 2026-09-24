@@ -8,6 +8,7 @@ import {
   policyDecision,
   relevantKnowledge,
   resolveAutomationRoute,
+  safeKnowledgeContext,
   triageConversationInput,
   type LiveWorkerKnowledgeArticle,
 } from "./decision.js";
@@ -46,6 +47,26 @@ describe("live worker automation decisions", () => {
     expect(triageConversationInput(message, [article])).toContain(
       "<published_knowledge_reference>",
     );
+  });
+
+  it("omits operator escalation sections from knowledge context", () => {
+    const context = safeKnowledgeContext([
+      {
+        id: "mesas",
+        title: "Mesas",
+        category: "how_to",
+        body: [
+          "O módulo de Mesas é um add-on.",
+          "",
+          "Quando encaminhar para humano: mesa travada ou comanda que não fecha.",
+          "",
+          "Toque em uma mesa livre para abrir a comanda.",
+        ].join("\n"),
+      },
+    ]);
+    expect(context).toContain("add-on");
+    expect(context).toContain("mesa livre");
+    expect(context.toLowerCase()).not.toContain("quando encaminhar");
   });
 
   it("uses outbound messages as context and targets only the inbound contact message", () => {

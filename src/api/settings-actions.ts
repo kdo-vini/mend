@@ -117,18 +117,51 @@ export async function saveLiveWorkspaceAiPolicy(
  * The current schema stores AI behavior on each conversation, not on the
  * workspace. This updates every live conversation and returns the server's
  * affected-row count so the UI never reports a setting that was not saved.
+ * When enabling Copilot or Auto-reply, also resume paused conversations so
+ * the worker no longer short-circuits on human_paused.
  */
 export async function saveLiveConversationAiPolicy(
   workspaceId: string,
   mode: AiMode,
   client: MendSupabaseClient | null = supabase,
 ) {
+  const db = requireClient(client);
   const rows = await unwrap(
-    requireClient(client)
+    db
       .from("conversations")
       .update({ ai_mode: mode, updated_at: new Date().toISOString() })
       .eq("workspace_id", workspaceId)
       .select("id"),
   );
-  return { updatedCount: rows.length, mode };
+  let resumedCount = 0;
+  if (mode !== "off" && rows.length > 0) {
+    const paused = await unwrap(
+      db
+        .from("conversation_ai_state")
+        .select("conversation_id")
+        .eq("workspace_id", workspaceId)
+        .eq("automation_state", "human_paused"),
+    );
+    for (const row of paused) {
+      const { error } = await db.rpc("resume_conversation_ai", {
+        p_workspace_id: workspaceId,
+        p_conversation_id: row.conversation_id,
+      });
+      if (error) throw new Error(error.message);
+      resumedCount += 1;
+    }
+  }
+  return { updatedCount: rows.length, resumedCount, mode };
+}
+
+/** Prefer the majority mode; break ties toward safe_auto then draft. */
+export function preferredConversationAiMode(
+  counts: Record<AiMode, number>,
+  dominantMode: AiMode | "mixed",
+): AiMode {
+  if (dominantMode !== "mixed") return dominantMode;
+  const ranked: AiMode[] = ["safe_auto", "draft", "off"];
+  return ranked.reduce((best, mode) =>
+    counts[mode] > counts[best] ? mode : best,
+  );
 }

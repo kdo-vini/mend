@@ -1074,14 +1074,9 @@ export function InboxPage({
       }))
     )
       return;
-    if (liveMode && workspaceId)
-      void updateLiveConversation({
-        workspaceId,
-        conversationId: selected.id,
-        updates: { ai_mode: mode },
-      }).catch((error) =>
-        onToast(localizedError(error, t("errors.saveAiMode"))),
-      );
+    const previousAutomation = selected.automationState;
+    const shouldResume =
+      mode !== "off" && selected.automationState === "human_paused";
     setConversations((current) =>
       current.map((item) =>
         item.id === selected.id
@@ -1089,11 +1084,48 @@ export function InboxPage({
               ...item,
               aiMode: mode,
               attention: mode === "safe_auto" ? "ai_handling" : item.attention,
+              ...(shouldResume
+                ? {
+                    automationState: "ai_active" as const,
+                    humanTakeoverReason: undefined,
+                  }
+                : {}),
             }
           : item,
       ),
     );
-    onToast(`AI mode: ${mode === "safe_auto" ? "safe auto" : mode}`);
+    try {
+      if (liveMode && workspaceId) {
+        await updateLiveConversation({
+          workspaceId,
+          conversationId: selected.id,
+          updates: { ai_mode: mode },
+        });
+        // Selecting Copilot/Auto-reply must clear human_paused; otherwise the
+        // worker keeps short-circuiting and the mode never "stays" active.
+        if (shouldResume)
+          await resumeLiveConversationAi({
+            workspaceId,
+            conversationId: selected.id,
+          });
+      }
+      onToast(`AI mode: ${mode === "safe_auto" ? "safe auto" : mode}`);
+    } catch (error) {
+      setConversations((current) =>
+        current.map((item) =>
+          item.id === selected.id
+            ? {
+                ...item,
+                aiMode: selected.aiMode,
+                automationState: previousAutomation,
+                attention: selected.attention,
+                humanTakeoverReason: selected.humanTakeoverReason,
+              }
+            : item,
+        ),
+      );
+      onToast(localizedError(error, t("errors.saveAiMode")), "error");
+    }
   };
 
   const setAiPause = async (paused: boolean) => {
@@ -1219,16 +1251,29 @@ export function InboxPage({
     )
       return;
     setBulkPending(true);
+    const pausedIds = new Set(
+      conversations
+        .filter(
+          (conversation) =>
+            ids.includes(conversation.id) &&
+            conversation.automationState === "human_paused",
+        )
+        .map((conversation) => conversation.id),
+    );
     const results = liveMode
       ? await Promise.allSettled(
-          ids.map((conversationId) => {
-            if (!workspaceId)
-              return Promise.reject(new Error("workspace_missing"));
-            return updateLiveConversation({
+          ids.map(async (conversationId) => {
+            if (!workspaceId) throw new Error("workspace_missing");
+            await updateLiveConversation({
               workspaceId,
               conversationId,
               updates: { ai_mode: mode },
             });
+            if (mode !== "off" && pausedIds.has(conversationId))
+              await resumeLiveConversationAi({
+                workspaceId,
+                conversationId,
+              });
           }),
         )
       : ids.map(() => ({ status: "fulfilled" as const, value: undefined }));
@@ -1247,6 +1292,12 @@ export function InboxPage({
                   : conversation.attention === "ai_handling"
                     ? "none"
                     : conversation.attention,
+              ...(mode !== "off" && pausedIds.has(conversation.id)
+                ? {
+                    automationState: "ai_active" as const,
+                    humanTakeoverReason: undefined,
+                  }
+                : {}),
             }
           : conversation,
       ),

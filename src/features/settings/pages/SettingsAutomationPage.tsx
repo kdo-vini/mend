@@ -33,6 +33,7 @@ import {
 } from "../api";
 import {
   loadLiveAiConversationPolicy,
+  preferredConversationAiMode,
   saveLiveConversationAiPolicy,
   saveLiveWorkspaceAiPolicy,
   type LiveWorkspaceAiPolicy,
@@ -101,7 +102,7 @@ function ReplySettings({ workspaceId, onToast }: SettingsWorkspacePageProps) {
         ...next,
         routes: ensureOpenAutomationRoutes(next.routes),
       });
-      if (next.dominantMode !== "mixed") setMode(next.dominantMode);
+      setMode(preferredConversationAiMode(next.counts, next.dominantMode));
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : t("v2.ai.unavailable"),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   boundedEvidenceBundle,
+  sanitizeCustomerSupportReply,
   validateGroundedSupportReply,
   type SupportKnowledgeEvidence,
 } from "./support-evidence.js";
@@ -71,6 +72,53 @@ describe("support evidence", () => {
         bundle,
       ),
     ).toMatchObject({ valid: false, reason: "customer_unsafe_content" });
+  });
+
+  it("strips operator escalation playbooks from customer replies", () => {
+    const raw = [
+      "Oi! O módulo de *Mesas* é um *add-on*.",
+      "",
+      "Fluxo básico:",
+      "1. Acesse o mapa de mesas.",
+      "2. Toque em uma mesa livre.",
+      "",
+      "Quando encaminhar para humano: mesa travada, comanda que não fecha, add-on ativo mas módulo inacessível.",
+      "",
+      "Quer que eu te guie passo a passo no app agora?",
+    ].join("\n");
+    const cleaned = sanitizeCustomerSupportReply(raw);
+    expect(cleaned).toContain("1. Acesse o mapa de mesas.");
+    expect(cleaned).toContain("Quer que eu te guie");
+    expect(cleaned.toLowerCase()).not.toContain("quando encaminhar");
+    expect(cleaned.toLowerCase()).not.toContain("mesa travada");
+    expect(cleaned).not.toContain("Fluxo básico");
+  });
+
+  it("keeps short model answers while dropping the label", () => {
+    const cleaned = sanitizeCustomerSupportReply(
+      [
+        "Resposta curta modelo:",
+        '"No ZeloPDV, Mesas é um add-on. Quer o passo a passo?"',
+      ].join("\n"),
+    );
+    expect(cleaned).toContain("Mesas é um add-on");
+    expect(cleaned.toLowerCase()).not.toContain("resposta curta modelo");
+  });
+
+  it("rejects unsanitized operator playbook leaks", () => {
+    const bundle = boundedEvidenceBundle(resolution, [evidence]);
+    expect(
+      validateGroundedSupportReply(
+        {
+          body: "Abra o caixa. Quando encaminhar para humano: falha no PDV.",
+          usedCitationKeys: ["kb:one"],
+          confidence: 0.9,
+          customerSafe: true,
+          needsClarification: false,
+        },
+        bundle,
+      ),
+    ).toMatchObject({ valid: false, reason: "operator_playbook_leak" });
   });
 
   it("requires clarification for ambiguous products", () => {

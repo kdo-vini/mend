@@ -145,215 +145,169 @@ const articles = [
     title: "Como cadastrar produtos no ZeloPDV",
     category: "Como fazer",
     productKeys: ["zelopdv"],
-    body: `## Objetivo
-Ensinar o cliente a cadastrar produtos, categorias e preços no ZeloPDV.
+    body: `No ZeloPDV você cadastra produtos assim:
+1. Entre na conta da loja.
+2. Abra *Produtos* (ou Cadastro de produtos).
+3. Crie ou escolha uma *categoria* (ex.: Lanches, Bebidas).
+4. Toque em *Novo produto*.
+5. Preencha nome, preço e, se usar estoque, a quantidade.
+6. Salve e confira se aparece na lista e no caixa.
 
-## Passo a passo
-1. Acesse o ZeloPDV pelo navegador e entre na conta da loja.
-2. Abra o menu de **Produtos** (ou Cadastro de produtos).
-3. Crie ou escolha uma **categoria** (ex.: Lanches, Bebidas, Pizzas).
-4. Clique em **Novo produto**.
-5. Preencha nome, preço de venda e, se usar estoque, a quantidade inicial.
-6. Salve o produto e confirme que ele aparece na lista e no caixa.
+Dica: nomes curtos facilitam a busca no caixa. Se o produto não aparecer, confira se está ativo e na categoria certa. Fotos para o cliente final ficam no *ZeloMenu*, não no ZeloPDV.
 
-## Dicas
-- Use nomes curtos e claros para facilitar a busca no caixa.
-- Se o produto não aparecer no caixa, confira se está ativo e na categoria correta.
-- Fotos de produtos para o cliente final ficam no **ZeloMenu** (cardápio digital), não no ZeloPDV.
-
-## Quando encaminhar para humano
-Se o cadastro falhar com erro técnico, se produtos somem sozinhos ou se houver dúvida de permissão de usuário, chame atendimento humano.`,
+Resposta curta modelo:
+"No ZeloPDV: Produtos → Nova categoria (se precisar) → Novo produto → nome e preço → salvar. Quer que eu te guie no cadastro agora?"`,
   },
   {
     title: "Como abrir, vender e fechar o caixa no ZeloPDV",
     category: "Como fazer",
     productKeys: ["zelopdv"],
-    body: `## Objetivo
-Orientar o uso diário do caixa: abertura, venda e fechamento.
+    body: `Abrir o caixa:
+1. Entre no ZeloPDV e abra *Caixa*.
+2. Informe o valor de abertura (troco), se pedir.
+3. Confirme a abertura do turno.
 
-## Abrir o caixa
-1. Entre no ZeloPDV.
-2. Abra o módulo de **Caixa**.
-3. Informe o valor de abertura (troco inicial), se solicitado.
-4. Confirme a abertura do turno.
+Registrar uma venda:
+1. Busque o produto pelo nome.
+2. Ajuste quantidade/observações se precisar.
+3. Escolha o pagamento: dinheiro, Pix, crédito ou débito.
+4. Finalize e confira o comprovante.
 
-## Registrar uma venda
-1. No caixa, busque o produto pelo nome.
-2. Ajuste quantidade e observações se necessário.
-3. Escolha a forma de pagamento: dinheiro, Pix, crédito ou débito.
-4. Finalize a venda e confira o comprovante/resumo.
-
-## Fechar o caixa
-1. Ao final do turno, abra **Fechamento de caixa**.
-2. Confira o resumo de vendas e formas de pagamento.
-3. Informe o valor contado na gaveta, se o sistema pedir.
+Fechar o caixa:
+1. Abra *Fechamento de caixa*.
+2. Confira vendas e formas de pagamento.
+3. Informe o valor contado, se pedir.
 4. Confirme o fechamento.
 
-## Problemas comuns
-- Não consigo vender: verifique se o caixa está aberto e se o produto está ativo.
-- Valor não bate: revise cancelamentos, fiado e vendas do período antes de chamar suporte.
+Se não conseguir vender, confira se o caixa está aberto e se o produto está ativo.
 
-## Quando encaminhar para humano
-Erro ao abrir/fechar caixa, vendas duplicadas, divergência que impede o fechamento do dia.`,
+Resposta curta modelo:
+"No caixa do ZeloPDV: abra o turno, lance a venda, escolha o pagamento e finalize. No fim do dia use o fechamento de caixa. Em qual etapa você está?"`,
   },
   {
     title: "Como usar mesas e comandas no ZeloPDV",
     category: "Como fazer",
     productKeys: ["zelopdv"],
-    body: `## Objetivo
-Explicar o add-on de Mesas: abrir comanda, lançar itens e fechar a mesa.
+    body: `O módulo de *Mesas* no ZeloPDV é um *add-on*. Se não estiver ativo, o sistema mostra a opção de assinar.
 
-## Pré-requisito
-O módulo de Mesas é um add-on. Sem ele ativo, o sistema mostra upsell/assinatura para Mesas.
-
-## Fluxo básico
-1. Acesse o mapa de mesas.
+Para usar mesas e comandas:
+1. Abra o mapa de mesas.
 2. Toque em uma mesa livre para abrir a comanda.
-3. Adicione itens da comanda conforme o pedido.
-4. Quando o cliente for pagar, escolha a forma de pagamento e feche a mesa.
+3. Adicione os itens do pedido.
+4. No pagamento, escolha a forma e feche a mesa.
 5. O sistema gera a venda e libera a mesa.
 
-## Recursos úteis
-- Pagamento parcial (por valor ou por itens).
-- Pré-conta e recibo final para impressão.
-- Divisão de conta quando disponível na tela de fechamento.
+Também pode ter pagamento parcial, pré-conta e divisão de conta na tela de fechamento (quando disponível).
 
-## Quando encaminhar para humano
-Mesa travada, comanda que não fecha, add-on ativo mas módulo inacessível, ou erro ao converter comanda em venda.`,
+Resposta curta modelo:
+"No ZeloPDV, Mesas é um add-on. Abra o mapa, toque numa mesa livre, lance os itens e feche no pagamento. Quer o passo a passo no app?"`,
   },
   {
     title: "Como controlar estoque e fiado no ZeloPDV",
     category: "Como fazer",
     productKeys: ["zelopdv"],
-    body: `## Estoque
-1. Cadastre o produto com controle de estoque habilitado.
+    body: `Estoque no ZeloPDV:
+1. Cadastre o produto com estoque habilitado.
 2. Informe a quantidade inicial.
-3. Nas vendas, o estoque baixa automaticamente quando aplicável.
-4. Ajuste manualmente só quando houver inventário/contagem.
+3. Nas vendas o estoque baixa automaticamente quando aplicável.
+4. Ajuste manual só em inventário/contagem.
 
-## Fiado
-1. Cadastre o cliente na ficha de clientes.
-2. Ao vender, escolha a opção de fiado/a prazo quando disponível.
-3. Acompanhe o saldo que cada cliente deve na ficha do cliente.
-4. Registre pagamentos parciais ou quitação do fiado na própria ficha.
+Fiado:
+1. Cadastre o cliente.
+2. Na venda, escolha fiado/a prazo quando disponível.
+3. Acompanhe o saldo na ficha do cliente.
+4. Registre pagamentos parciais ou quitação na ficha.
 
-## O que não prometer
-Não diga que o ZeloPDV substitui contador ou emite NFC-e automaticamente, a menos que isso esteja confirmado para a conta do cliente.
+Não diga que o ZeloPDV substitui contador ou emite NFC-e automaticamente, a menos que isso esteja confirmado na conta.
 
-## Quando encaminhar para humano
-Saldo de fiado inconsistente, estoque negativo sem explicação, ou perda de histórico de clientes.`,
+Resposta curta modelo:
+"No ZeloPDV o estoque baixa nas vendas quando o produto está com controle ativo; o fiado fica na ficha do cliente. Você quer ajuda com estoque ou com fiado?"`,
   },
   {
     title: "Controle de acessos e funcionários no ZeloPDV",
     category: "Como fazer",
     productKeys: ["zelopdv"],
-    body: `## O que existe hoje
-O add-on **Controle de Acessos** permite convidar subusuários por e-mail, definir cargos e permissões, e auditar ações importantes. O dono (owner) continua sendo a âncora da empresa; billing e assinatura ficam com o owner.
+    body: `O add-on *Controle de Acessos* permite convidar subusuários por e-mail, definir cargos/permissões e auditar ações. O dono (owner) continua responsável pela empresa; billing fica com o owner.
 
-## Como orientar
-1. Confirme se o add-on de Acessos está ativo na assinatura.
-2. Oriente o dono a convidar o funcionário pelo e-mail.
-3. Escolha um cargo/perfil com as permissões adequadas (caixa, gestão, relatórios etc.).
-4. Peça para o funcionário ativar o convite pelo link recebido.
+Como orientar:
+1. Confirme se o add-on de Acessos está ativo.
+2. O dono convida o funcionário pelo e-mail.
+3. Escolhe o cargo/perfil (caixa, gestão, relatórios etc.).
+4. O funcionário ativa o convite pelo link.
 
-## Limites importantes
-- Há limite padrão de subusuários (em geral até 5).
-- Sem o add-on, não prometa login individual completo por funcionário.
-- Não peça senha do cliente nem códigos de autenticação no WhatsApp.
+Limites: em geral até 5 subusuários. Sem o add-on, não prometa login individual completo. Nunca peça senha ou códigos de autenticação no WhatsApp.
 
-## Quando encaminhar para humano
-Convite que não chega, permissão que não aplica, usuário sem acesso após ativação, ou pedido de alteração sensível de conta.`,
+Resposta curta modelo:
+"Com o add-on de Acessos, o dono convida o funcionário por e-mail e define o cargo. O convite chega no e-mail para ativar. Seu add-on de Acessos já está ativo?"`,
   },
   {
     title: "Como editar o cardápio digital no ZeloMenu",
     category: "Como fazer",
     productKeys: ["zelomenu"],
-    body: `## Objetivo
-Ajudar o cliente a atualizar categorias, produtos e disponibilidade no cardápio digital.
+    body: `No ZeloMenu você edita o cardápio digital assim:
+1. Abra o painel do ZeloMenu.
+2. Em *Categorias*, organize a ordem (Destaques, Lanches, Bebidas…).
+3. Em *Produtos*, edite nome, descrição, preço e disponibilidade.
+4. Marque itens esgotados como indisponíveis em vez de apagar.
+5. Salve e abra o link no celular para conferir.
 
-## Passo a passo
-1. Acesse o painel do ZeloMenu / gestão do cardápio.
-2. Abra **Categorias** e organize a ordem (ex.: Destaques, Lanches, Bebidas).
-3. Em **Produtos**, edite nome, descrição, preço e disponibilidade.
-4. Marque itens como indisponíveis quando acabarem, em vez de apagar.
-5. Salve e abra o link do cardápio no celular para conferir.
+Fotos e apresentação ficam no ZeloMenu. Caixa, estoque e fiado ficam no ZeloPDV.
 
-## Dicas
-- Fotos e apresentação visual do cardápio ficam no ZeloMenu.
-- O caixa/gestão interna continua no ZeloPDV.
-- Se o cliente pergunta só de cardápio, responda no contexto ZeloMenu; se pergunta de caixa/estoque, use ZeloPDV.
-
-## Quando encaminhar para humano
-Link do cardápio fora do ar, publicação que não atualiza, ou erro ao salvar produtos/categorias.`,
+Resposta curta modelo:
+"No ZeloMenu: Categorias e Produtos → edite preço/disponibilidade → salve e teste o link no celular. Sua dúvida é do cardápio digital ou do caixa no PDV?"`,
   },
   {
     title: "Como compartilhar o link do cardápio ZeloMenu",
     category: "Como fazer",
     productKeys: ["zelomenu"],
-    body: `## Objetivo
-Ensinar a encontrar e compartilhar o link do cardápio digital com clientes.
-
-## Passo a passo
+    body: `Para compartilhar o cardápio:
 1. Entre no painel do ZeloMenu.
-2. Localize o **link do cardápio** da loja.
-3. Copie o link e envie no WhatsApp, Instagram ou imprima em QR Code na mesa.
-4. Peça para um cliente de teste abrir o link e fazer um pedido de verificação.
+2. Copie o *link do cardápio* da loja.
+3. Envie no WhatsApp/Instagram ou use QR Code na mesa.
+4. Peça a um cliente de teste abrir o link.
 
-## Problemas comuns
-- Link antigo: confirme se está usando o link atual da loja correta.
-- Cardápio desatualizado: publique/salve as alterações e recarregue sem cache.
+Se o cardápio parecer antigo, use o link atual da loja correta, salve as alterações e recarregue sem cache.
 
-## Quando encaminhar para humano
-Link quebrado, loja errada no link, ou QR Code apontando para estabelecimento antigo.`,
+Resposta curta modelo:
+"No ZeloMenu copie o link do cardápio da loja e envie no WhatsApp ou no QR Code. Quer que eu te diga onde achar o link no painel?"`,
   },
   {
     title: "Como conectar o WhatsApp no ZeloChat",
     category: "Como fazer",
     productKeys: ["zelochat"],
-    body: `## Objetivo
-Reconectar ou conectar o WhatsApp usado no atendimento.
-
-## Passo a passo
+    body: `Para conectar o WhatsApp no ZeloChat:
 1. Abra o ZeloChat no navegador.
-2. Vá em **Configurações > WhatsApp**.
-3. Clique em **Gerar QR Code**.
-4. No celular, abra WhatsApp > Aparelhos conectados > Conectar um aparelho.
-5. Escaneie o QR Code e aguarde o status conectado.
+2. Vá em *Configurações > WhatsApp*.
+3. Clique em *Gerar QR Code*.
+4. No celular: WhatsApp > Aparelhos conectados > Conectar um aparelho.
+5. Escaneie e aguarde o status conectado.
 
-## Se desconectar com frequência
-- Evite desconectar o aparelho manualmente no WhatsApp.
-- Mantenha o celular com internet estável.
-- Não use o mesmo número em múltiplas ferramentas conflitantes sem orientação.
+Dicas: evite desconectar o aparelho manualmente; mantenha internet estável; não use o mesmo número em várias ferramentas conflitantes sem orientação.
 
-## Quando encaminhar para humano
-QR que não valida, número errado conectado, ou desconexões repetidas após vários scans.`,
+Resposta curta modelo:
+"No ZeloChat: Configurações > WhatsApp > Gerar QR Code e escaneie em Aparelhos conectados. O WhatsApp está desconectado agora?"`,
   },
   {
     title: "Como ligar, desligar e testar a IA no ZeloChat",
     category: "Como fazer",
     productKeys: ["zelochat"],
-    body: `## Objetivo
-Ajustar o modo da IA e testar respostas com segurança.
+    body: `Para ajustar a IA no ZeloChat:
+1. Abra *Cérebro IA* / configurações de IA.
+2. Escolha o modo: sempre ligada, desligada ou agendada.
+3. Revise as instruções do negócio.
+4. Teste no *Simulador* antes de enviar ao cliente.
+5. Salve só depois de validar.
 
-## Passo a passo
-1. Abra **Cérebro IA** / configurações de IA no ZeloChat.
-2. Escolha o modo: sempre ligada, desligada ou agendada por horário.
-3. Revise as instruções do negócio em linguagem natural.
-4. Use o **Simulador** para testar uma mensagem sem enviar ao cliente.
-5. Só publique/salve depois de validar a resposta.
+Se a IA não responde: confira se está ligada, se o WhatsApp está conectado e se a assinatura está ativa. Se responde errado: ajuste as instruções e teste no simulador.
 
-## Sinais de problema
-- IA não responde: confira se está ligada, se o WhatsApp está conectado e se a assinatura está ativa.
-- IA responde errado: ajuste as instruções e teste no simulador antes de voltar ao ar.
-
-## Quando encaminhar para humano
-Assinatura ativa mas IA permanentemente muda, simulador inconsistente com produção, ou pedido para alterar cobrança da IA.`,
+Resposta curta modelo:
+"No ZeloChat abra o Cérebro IA, escolha o modo, ajuste as instruções e teste no Simulador antes de publicar. Quer ligar, desligar ou corrigir uma resposta?"`,
   },
   {
     title: "Planos, preços e assinatura Zelo",
     category: "Faturamento",
     productKeys: ["zelopdv", "zelochat", "zelomenu"],
-    body: `## Preços de referência (mensal)
+    body: `Preços de referência (mensal):
 - ZeloPDV: R$ 59/mês
 - ZeloChat: R$ 149/mês
 - Pacote Gestão + Atendimento (PDV + Chat): R$ 198/mês
@@ -362,35 +316,26 @@ Assinatura ativa mas IA permanentemente muda, simulador inconsistente com produ�
 - ZeloMenu: R$ 40/mês
 - Trial do ZeloPDV: 14 dias, sem cartão. ZeloChat não tem trial gratuito.
 
-## Onde o cliente gerencia pagamento
-Orientar: **Configurações > Assinatura** no painel, usando o portal seguro (Stripe ou AbacatePay/Pix conforme a conta).
+O cliente gerencia pagamento em *Configurações > Assinatura* (portal Stripe ou AbacatePay/Pix conforme a conta).
 
-## Regra de atendimento
-A IA pode informar preços públicos e onde fica a assinatura. Para **pagamento de mensalidade, renovação, falha de cobrança, troca de cartão, cancelamento, desconto ou estorno**, encaminhe imediatamente para atendimento humano. Não peça dados de cartão no WhatsApp.`,
+A IA pode informar preços públicos e onde fica a assinatura. Para pagamento de mensalidade, renovação, falha de cobrança, troca de cartão, cancelamento, desconto ou estorno, um humano assume. Nunca peça dados de cartão no WhatsApp.
+
+Resposta curta modelo:
+"O ZeloPDV fica R$ 59/mês; Mesas e Acessos são add-ons de R$ 30/mês cada. Assinatura fica em Configurações > Assinatura. Se for cobrança ou renovação, posso te passar para o time humano."`,
   },
   {
     title: "Quando a IA resolve e quando chama humano",
     category: "Política de atendimento",
     productKeys: ["zelopdv", "zelochat", "zelomenu"],
-    body: `## A IA resolve sozinha (maioria dos casos)
-- Saudação, agradecimento e despedida
-- Como fazer no ZeloPDV, ZeloChat e ZeloMenu
-- Dúvidas de status operacional com base publicada
-- Orientação de configuração comum (produtos, caixa, cardápio, WhatsApp, IA)
-- Pedidos de recurso de baixo risco (registrar interesse e explicar o que já existe)
+    body: `A IA resolve sozinha: saudação, como fazer no ZeloPDV/ZeloChat/ZeloMenu, status operacional com base publicada, configuração comum e pedidos de recurso de baixo risco.
 
-## A IA inicia, mas pode precisar de humano depois
-- Relato de bug: a IA faz triagem, pede detalhes, abre contexto e só escala se não resolver
-- Situação ambígua de produto: a IA pergunta se é PDV, Chat ou Menu antes de inventar
+A IA inicia e pode precisar de humano depois: bug com triagem, ou produto ambíguo (perguntar se é PDV, Chat ou Menu).
 
-## Humano assume imediatamente
-- Pagamento de mensalidade, renovação, cobrança, cancelamento e desconto
-- Incidente grave (loja parada, indisponibilidade ampla)
-- Acesso à conta, exclusão de dados, reclamação intensa
-- Bug que bloqueia venda e não tem workaround seguro na base
+Humano assume imediatamente: mensalidade/renovação/cobrança/cancelamento/desconto, incidente grave, acesso à conta, exclusão de dados, reclamação intensa, ou bug que bloqueia venda sem workaround seguro.
 
-## Tom
-Português brasileiro, curto, humano, sem inventar recurso. Se não souber, diga que vai confirmar com a equipe.`,
+Tom: português brasileiro, curto, humano, sem inventar recurso. Se não souber, diga que vai confirmar com a equipe.
+
+Esta política é interna: nunca cole estes critérios na mensagem ao cliente.`,
   },
 ];
 
@@ -525,10 +470,21 @@ async function upsertArticle(definition) {
     ),
   });
 
-  await rest(
-    `knowledge_chunks?workspace_id=eq.${workspaceId}&article_id=eq.${article.id}`,
-    { method: "DELETE" },
+  const oldChunks = await rest(
+    `knowledge_chunks?workspace_id=eq.${workspaceId}&article_id=eq.${article.id}&select=id`,
   );
+  if (oldChunks?.length) {
+    const chunkIds = oldChunks.map((chunk) => chunk.id).join(",");
+    // Historical drafts may still reference old chunks; clear before replace.
+    await rest(
+      `ai_draft_evidence?workspace_id=eq.${workspaceId}&knowledge_chunk_id=in.(${chunkIds})`,
+      { method: "DELETE" },
+    );
+    await rest(
+      `knowledge_chunks?workspace_id=eq.${workspaceId}&article_id=eq.${article.id}`,
+      { method: "DELETE" },
+    );
+  }
   const chunks = chunkArticle(article);
   if (!chunks.length) return article;
   const vectors = await embedMany(chunks.map((chunk) => chunk.content));
@@ -546,6 +502,63 @@ async function upsertArticle(definition) {
   return article;
 }
 
+async function enrichZeloPdvPlaybook() {
+  const body = `O QUE É O ZELOPDV
+O ZeloPDV é o sistema de caixa e gestão interna do ecossistema Zelo: produtos, vendas, estoque, fiado, despesas e (com add-on) mesas/comandas e controle de acessos.
+
+RECURSOS QUE PODEM SER CITADOS
+- Cadastro de produtos e categorias
+- Abertura, venda e fechamento de caixa
+- Estoque e fiado
+- Add-on Mesas (mapa, comanda, fechamento)
+- Add-on Controle de Acessos (convites e permissões)
+
+O QUE NÃO DIZER
+Não diga que o ZeloPDV é cardápio digital (isso é ZeloMenu). Não diga que substitui contador ou emite NFC-e sem confirmação da conta. Não peça senha no WhatsApp.
+
+COMO RESPONDER
+1. Responda só o que o cliente perguntou, em 2-6 linhas no WhatsApp.
+2. Se a dúvida for ampla ("como funciona mesas?"), dê o essencial e ofereça o próximo passo.
+3. Se for cobrança/renovação/cancelamento, passe para humano sem explicar playbook interno.
+
+Resposta curta modelo:
+"No ZeloPDV você cuida de caixa, produtos, estoque e fiado. Mesas e acessos são add-ons. Me diga o que você quer fazer agora que eu te guio."`;
+
+  await upsertArticle({
+    title: "Playbook ZeloPDV",
+    category: "Playbooks",
+    productKeys: ["zelopdv"],
+    body,
+  });
+}
+
+async function enrichZeloChatPlaybook() {
+  const body = `O QUE É O ZELOCHAT
+O ZeloChat é o atendimento WhatsApp do ecossistema Zelo: conexão do número, fila, IA (Cérebro IA) e automações.
+
+RECURSOS QUE PODEM SER CITADOS
+- Conectar/desconectar WhatsApp via QR Code
+- Ligar, desligar ou agendar a IA
+- Simulador para testar respostas
+- Instruções do negócio em linguagem natural
+
+O QUE NÃO DIZER
+Não diga que o ZeloChat substitui o caixa. Não peça código de verificação do WhatsApp no chat de suporte. Não invente integração com iFood/Rappi.
+
+COMO RESPONDER
+Respostas curtas, uma dúvida por vez. Se for cobrança da IA ou assinatura, humano assume.
+
+Resposta curta modelo:
+"No ZeloChat você conecta o WhatsApp e controla a IA em Cérebro IA. Quer reconectar o WhatsApp ou ajustar a IA?"`;
+
+  await upsertArticle({
+    title: "Playbook ZeloChat",
+    category: "Playbooks",
+    productKeys: ["zelochat"],
+    body,
+  });
+}
+
 async function enrichZeloMenuPlaybook() {
   const body = `O QUE É O ZELOMENU
 O ZeloMenu é o cardápio digital do ecossistema Zelo para restaurantes, lanchonetes, bares e pizzarias. Ele organiza categorias e produtos, facilita pedidos pelo link/QR Code e complementa o ZeloPDV (caixa e gestão interna).
@@ -559,12 +572,12 @@ RECURSOS QUE PODEM SER CITADOS
 O QUE NÃO DIZER
 Não diga que o ZeloMenu substitui o caixa. Caixa, estoque, fiado e despesas são ZeloPDV. Não prometa integração automática com iFood/Rappi sem confirmação do plano do cliente.
 
-QUANDO ALGUÉM PERGUNTA DO CARDÁPIO
+COMO RESPONDER
 1. Confirme se a dúvida é sobre o link/cardápio digital (ZeloMenu) ou sobre cadastro interno no PDV.
 2. Oriente edição de categorias/produtos e teste do link no celular.
-3. Se pedir preço, renovação ou falha de cobrança, encaminhe para humano.
+3. Se pedir renovação ou falha de cobrança, encaminhe para humano.
 
-RESPOSTA CURTA MODELO
+Resposta curta modelo:
 "No ZeloMenu você edita o cardápio digital e compartilha o link com o cliente. Se a dúvida for de caixa, estoque ou fiado, isso fica no ZeloPDV."`;
 
   await upsertArticle({
@@ -583,6 +596,8 @@ async function main() {
   }
 
   for (const article of articles) await upsertArticle(article);
+  await enrichZeloPdvPlaybook();
+  await enrichZeloChatPlaybook();
   await enrichZeloMenuPlaybook();
 
   for (const [productId, list] of Object.entries(aliases)) {

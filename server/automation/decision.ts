@@ -6,6 +6,7 @@ import {
 } from "../../src/ai-policy.js";
 import type { TriageResult } from "../triage.js";
 import type { NormalizedWhatsmiauMessage } from "../whatsmiau.js";
+import { stripOperatorOnlySupportSections } from "../support-evidence.js";
 
 export type LiveWorkerAiPolicy = WorkspaceAiPolicy;
 export type LiveWorkerAiMode = "off" | "draft" | "safe_auto";
@@ -59,10 +60,12 @@ export function safeKnowledgeContext(
   articles: readonly LiveWorkerKnowledgeArticle[],
 ): string {
   return articles
-    .map(
-      (article) =>
-        `[evidence ${article.evidenceKey ?? `kb:${article.id}`} | ${article.title} | ${article.category}]\n${article.body}`,
-    )
+    .map((article) => {
+      const body = stripOperatorOnlySupportSections(article.body);
+      if (!body.trim()) return "";
+      return `[evidence ${article.evidenceKey ?? `kb:${article.id}`} | ${article.title} | ${article.category}]\n${body}`;
+    })
+    .filter(Boolean)
     .join("\n\n")
     .slice(0, 50_000);
 }
