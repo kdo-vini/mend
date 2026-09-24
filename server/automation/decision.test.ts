@@ -121,6 +121,31 @@ describe("live worker automation decisions", () => {
     ).toEqual([]);
   });
 
+  it("falls back to token match when retrieval scores are all zero", () => {
+    const articles: LiveWorkerKnowledgeArticle[] = [
+      {
+        id: "pedidos",
+        title: "Pedidos do cardápio",
+        category: "how_to",
+        body: "Abra Pedidos no ZeloMenu para ver os pedidos do cardápio digital.",
+        retrievalScore: 0,
+      },
+      {
+        id: "caixa",
+        title: "Caixa",
+        category: "how_to",
+        body: "Abra o caixa no ZeloPDV.",
+        retrievalScore: 0,
+      },
+    ];
+    expect(
+      relevantKnowledge(
+        { ...message, text: "quero acessar pedidos" },
+        articles,
+      ).map((entry) => entry.id),
+    ).toEqual(["pedidos"]);
+  });
+
   it("keeps safe automation behind policy and confidence gates", () => {
     const policy = normalizeAiPolicy({});
     expect(
@@ -135,6 +160,15 @@ describe("live worker automation decisions", () => {
         "knowledge_auto_reply",
       ),
     ).toMatchObject({ action: "blocked", allowed: false });
+    expect(
+      policyDecision(
+        "safe_auto",
+        { ...triage, confidence: 0.55 },
+        policy,
+        true,
+        "knowledge_auto_reply",
+      ),
+    ).toMatchObject({ action: "auto_reply", allowed: true });
     expect(
       aiStateInput(
         {

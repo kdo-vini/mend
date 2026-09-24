@@ -11,6 +11,7 @@ import {
   chunkPublishedArticle,
   OpenAiKnowledgeEmbeddings,
 } from "../../knowledge-retrieval.js";
+import { resolveSupportCredential } from "../../providers.js";
 import {
   article,
   checked,
@@ -105,13 +106,11 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
 
     let embeddings: readonly number[][] = [];
     if (this.agentCredentials) {
-      const credential = await this.agentCredentials.resolve(
+      const credential = await resolveSupportCredential(
         workspaceId,
-        "support",
-        "openai",
+        this.agentCredentials,
       );
-      if (!credential) throw new Error("support_ai_configuration_required");
-      const embeddingModel = credential?.config.embeddingModel;
+      const embeddingModel = credential.config.embeddingModel;
       if (typeof embeddingModel !== "string" || !embeddingModel.trim())
         throw new Error("support_ai_model_missing");
       embeddings = await new OpenAiKnowledgeEmbeddings(

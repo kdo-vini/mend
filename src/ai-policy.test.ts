@@ -25,6 +25,8 @@ describe("workspace AI policy", () => {
     ]);
     expect(policy.routes.social).toBe("safe_auto_reply");
     expect(policy.routes.billing).toBe("human_escalation");
+    expect(policy.safeAutoMinConfidence).toBe(0.65);
+    expect(policy.mcpFailurePolicy).toBe("generic_reply");
     expect(policy.allowedActions).toContain("investigate");
     expect(policy.humanApprovalActions).toEqual(
       expect.arrayContaining(["publish", "deploy", "delete"]),

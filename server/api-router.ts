@@ -35,6 +35,7 @@ import { registerGitHubConnectionRoutes } from "./routes/github-connection-route
 import { registerCodingControlPlaneRoutes } from "./routes/coding-control-plane-routes.js";
 import { registerImpactRoutes } from "./routes/impact-routes.js";
 import { SupportAiConfigurationError } from "./providers.js";
+import { McpConnectionError } from "./mcp.js";
 import {
   OutboundSendError,
   type OutboundSendReason,
@@ -866,6 +867,13 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
           error: {
             code: error.code,
             message: "Configure a workspace support AI credential and model.",
+          },
+        });
+      if (error instanceof McpConnectionError)
+        return send(response, error.status, {
+          error: {
+            code: error.code,
+            message: error.message,
           },
         });
       const messagingError = messagingApiError(error);

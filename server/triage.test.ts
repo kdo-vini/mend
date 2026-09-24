@@ -82,8 +82,11 @@ describe("support triage", () => {
       gateAiAction("safe_auto", { ...validTriage, unsafe: true }),
     ).toMatchObject({ action: "blocked", allowed: false });
     expect(
-      gateAiAction("safe_auto", { ...validTriage, confidence: 0.5 }).action,
+      gateAiAction("safe_auto", { ...validTriage, confidence: 0.2 }).action,
     ).toBe("blocked");
+    expect(
+      gateAiAction("safe_auto", { ...validTriage, confidence: 0.5 }).action,
+    ).toBe("auto_reply");
     expect(
       gateAiAction("safe_auto", { ...validTriage, intent: "incident" }).action,
     ).toBe("blocked");

@@ -26,6 +26,7 @@ import {
 } from "./supabase-api-adapters.js";
 import {
   createSupabaseLiveWorker,
+  resolveInboundDebounceMs,
   type LiveWorker,
   type LiveWorkerLogger,
 } from "./live-worker.js";
@@ -751,6 +752,7 @@ if (workerSupabase && processRole === "runner") {
       process.env.MEND_WORKER_MAX_IDLE_POLL_MS ?? 4_000,
     ),
     heartbeatIntervalMs: Number(process.env.MEND_RUNNER_HEARTBEAT_MS ?? 60_000),
+    inboundDebounceMs: resolveInboundDebounceMs(process.env),
     onUnmappedMessage: (input) =>
       logger.warn(
         { instanceName: input.instanceName, jobId: input.jobId },

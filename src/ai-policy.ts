@@ -106,7 +106,9 @@ export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   humanApprovalActions: ["publish", "deploy", "delete"],
   draftEnabled: true,
   safeAutoEnabled: true,
-  safeAutoMinConfidence: 0.85,
+  // Reply-first: prefer answering when confidence is moderate. Only hard-block
+  // when confidence is too low to risk an auto-send.
+  safeAutoMinConfidence: 0.65,
   safeAutoIntents: [
     "question",
     "how_to",
@@ -124,7 +126,8 @@ export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   bugAutoReplyEnabled: false,
   bugAutoFixEnabled: false,
   bugAutoDeployEnabled: false,
-  mcpFailurePolicy: "review",
+  // Prefer a short grounded reply over review queues when MCP is unavailable.
+  mcpFailurePolicy: "generic_reply",
 };
 
 export function isAiMode(value: unknown): value is AiMode {
@@ -231,9 +234,10 @@ export function normalizeWorkspaceAiPolicy(value: unknown): WorkspaceAiPolicy {
     bugAutoDeployEnabled: raw.bug_auto_deploy_enabled === true,
     mcpFailurePolicy:
       raw.mcp_failure_policy === "generic_reply" ||
-      raw.mcp_failure_policy === "retry_then_review"
+      raw.mcp_failure_policy === "retry_then_review" ||
+      raw.mcp_failure_policy === "review"
         ? raw.mcp_failure_policy
-        : "review",
+        : DEFAULT_WORKSPACE_AI_POLICY.mcpFailurePolicy,
     codingRoutingV2Enabled:
       raw.coding_routing_v2 === true || raw.codingRoutingV2Enabled === true,
     codingSubscriptionAuthEnabled:

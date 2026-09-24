@@ -12,6 +12,7 @@ import type {
   LiveWorkerSupabaseClient,
 } from "../live-worker.js";
 import type { KnowledgeMetricWriter } from "../knowledge-evals.js";
+import { resolveSupportCredential } from "../providers.js";
 export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
   constructor(
     private readonly client: LiveWorkerSupabaseClient,
@@ -137,13 +138,11 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
     if (query?.trim()) {
       let queryEmbedding: readonly number[] | undefined;
       if (this.agentCredentials) {
-        const credential = await this.agentCredentials.resolve(
+        const credential = await resolveSupportCredential(
           workspaceId,
-          "support",
-          "openai",
+          this.agentCredentials,
         );
-        if (!credential) throw new Error("support_ai_configuration_required");
-        const embeddingModel = credential?.config.embeddingModel;
+        const embeddingModel = credential.config.embeddingModel;
         if (typeof embeddingModel !== "string" || !embeddingModel.trim())
           throw new Error("support_ai_model_missing");
         queryEmbedding = await new OpenAiKnowledgeEmbeddings(
@@ -228,8 +227,19 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
             elapsedMs: Date.now() - startedAt,
           },
         });
-      return articles;
+      // Auto-reply must not go blank when hybrid retrieval misses a short
+      // follow-up ("acessar pedidos"). Manual drafts already load published
+      // articles without a query — mirror that fallback so the worker can still
+      // write a coherent how-to instead of escalating.
+      if (articles.length) return articles;
+      return this.listPublishedFallback(workspaceId);
     }
+    return this.listPublishedFallback(workspaceId);
+  }
+
+  private async listPublishedFallback(
+    workspaceId: string,
+  ): Promise<readonly LiveWorkerKnowledgeArticle[]> {
     const result = await this.client
       .from("knowledge_articles")
       .select("id, title, category, body")

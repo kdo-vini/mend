@@ -52,6 +52,8 @@ const safeAutoIntents = new Set<TriageResult["intent"]>([
   "how_to",
   "status",
   "social",
+  "feature",
+  "other",
 ]);
 const unsafeRequestPattern =
   /\b(password|passcode|api[ -]?key|secret|token|credential|credit card|card number|cvv|one[ -]?time code|otp|bypass|disable security|drop database|delete all|wire transfer)\b/i;
@@ -132,7 +134,7 @@ export async function triageConversation(
 export function gateAiAction(
   mode: AiMode,
   triage: TriageResult,
-  safeAutoConfidence = 0.85,
+  safeAutoConfidence = 0.65,
 ): AiGateDecision {
   if (mode === "off")
     return {
@@ -152,7 +154,8 @@ export function gateAiAction(
       allowed: true,
       reason: "Draft is available for human review.",
     };
-  if (triage.confidence < safeAutoConfidence) {
+  const hardFloor = Math.min(0.45, safeAutoConfidence);
+  if (triage.confidence < hardFloor) {
     return {
       action: "blocked",
       allowed: false,
@@ -164,6 +167,14 @@ export function gateAiAction(
       action: "blocked",
       allowed: false,
       reason: `Intent ${triage.intent} is not eligible for safe auto-reply.`,
+    };
+  }
+  if (triage.confidence < safeAutoConfidence) {
+    return {
+      action: "auto_reply",
+      allowed: true,
+      reason:
+        "Confidence is moderate; send a short clarifying auto-reply instead of escalating.",
     };
   }
   return {

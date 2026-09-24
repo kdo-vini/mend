@@ -81,6 +81,7 @@ const customerFacingReplyInstruction = [
   "Never copy document meta sections or labels such as Objetivo, Pré-requisito, Fluxo básico, Recursos úteis, Passo a passo, RESPOSTA CURTA MODELO, Quando encaminhar para humano, or When to escalate.",
   "Prefer a short WhatsApp reply: greeting optional, 2-6 lines or a few numbered steps that match the question, then at most one clarifying question.",
   "If knowledge includes a short model answer, adapt it to this customer; do not dump every bullet from the source.",
+  "For greetings, keep it short and ask what they need. Do not invent a menu of topics, especially billing or renewal options, unless the customer already asked about them.",
   "If the customer already reports a stuck table, failed close, inaccessible add-on, conversion error, outage, or similar blocking failure, do not teach the happy path—keep body as a short acknowledgment that a human will help, and leave escalation to workspace automation.",
   "Knowledge may contain operator-only guidance; treat it as private policy, never as reply copy.",
 ].join(" ");
@@ -166,17 +167,16 @@ export class WorkspaceSupportAudioTranscriber implements AudioTranscriber {
     mimeType: string;
     fileName: string;
   }): Promise<string> {
-    const credential = await this.credentials.resolve(
+    const credential = await resolveSupportCredential(
       input.workspaceId,
-      "support",
-      "openai",
+      this.credentials,
     );
-    const apiKey = credential?.apiKey.trim();
+    const apiKey = credential.apiKey.trim();
     if (!apiKey)
       throw new SupportAiConfigurationError(
         "support_ai_configuration_required",
       );
-    const configuredModel = credential?.config.transcriptionModel;
+    const configuredModel = credential.config.transcriptionModel;
     const model =
       typeof configuredModel === "string" ? configuredModel.trim() : "";
     if (!model)
@@ -430,8 +430,11 @@ export class OpenAiSupportProvider implements SupportAiProvider {
         "Classify this WhatsApp support conversation for an internal operations team.",
         "Return JSON only with these keys: intent, priority, confidence, summary, unsafe, unsafeReason.",
         "intent must be one of: question, how_to, status, bug, incident, billing, feature, social, other.",
+        "Prefer how_to or question whenever the customer asks how to use a feature, find a screen, access orders/menus/reports, or needs a product walkthrough. Short follow-ups after a menu stay how_to or question.",
         "Use social only for low-risk greetings, thanks, acknowledgements, and farewells that contain no question, request, complaint, or technical information.",
         'Use bug only when the customer reports a concrete product defect, error, crash, or something that stopped working. Vague help requests like "I have a problem with orders, can you help?" are question or how_to, not bug.',
+        "Use billing ONLY for payment, renewal, subscription changes, invoice, refund, or canceling a paid plan. Mentions of product plans/menus/pricing pages without paying or renewing are question or how_to, not billing.",
+        "Use incident ONLY for outages, system-wide downtime, or total inability to open the product/service. Cannot find a feature or needs navigation help is how_to, not incident.",
         "Use how_to when the customer asks how to do something. Use question for open support requests that need clarification or a knowledge answer.",
         "priority must be one of: urgent, high, medium, low, no_priority.",
         "confidence must be a number from 0 to 1. summary must be concise and factual.",
@@ -525,21 +528,76 @@ export interface SupportCredentialResolver {
   ): Promise<{ apiKey: string; config: Record<string, unknown> } | null>;
 }
 
-/** Resolves support AI exclusively from workspace-owned BYOK configuration. */
-export async function resolveSupportAiProvider(
+export type ResolvedSupportCredential = {
+  apiKey: string;
+  config: Record<string, unknown>;
+};
+
+function isLocalDevSupportFallbackAllowed(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return env.MEND_DEV_MODE === "1" && env.NODE_ENV !== "production";
+}
+
+/** Loopback-only escape hatch when BYOK secrets cannot be decrypted locally. */
+export function localDevSupportCredentialFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): ResolvedSupportCredential | null {
+  if (!isLocalDevSupportFallbackAllowed(env)) return null;
+  const apiKey = env.OPENAI_API_KEY?.trim();
+  const model = env.SUPPORT_AI_MODEL?.trim();
+  if (!apiKey || !model) return null;
+  const visionModel = env.SUPPORT_AI_VISION_MODEL?.trim() || model;
+  const transcriptionModel =
+    env.SUPPORT_AI_TRANSCRIPTION_MODEL?.trim() || "whisper-1";
+  const embeddingModel =
+    env.SUPPORT_AI_EMBEDDING_MODEL?.trim() || "text-embedding-3-small";
+  return {
+    apiKey,
+    config: {
+      supportModel: model,
+      visionModel,
+      transcriptionModel,
+      embeddingModel,
+    },
+  };
+}
+
+/**
+ * Prefer workspace BYOK. In MEND_DEV_MODE (non-production) only, fall back to
+ * OPENAI_API_KEY / SUPPORT_AI_MODEL when encryption or workspace credentials
+ * are unavailable — matches the documented local loopback setup.
+ */
+export async function resolveSupportCredential(
   workspaceId: string,
   credentials: SupportCredentialResolver,
+): Promise<ResolvedSupportCredential> {
+  try {
+    const credential = await credentials.resolve(
+      workspaceId,
+      "support",
+      "openai",
+    );
+    const apiKey = credential?.apiKey.trim();
+    if (apiKey && credential) return { apiKey, config: credential.config };
+  } catch (error) {
+    const local = localDevSupportCredentialFromEnv();
+    if (local) return local;
+    throw error;
+  }
+  const local = localDevSupportCredentialFromEnv();
+  if (local) return local;
+  throw new SupportAiConfigurationError("support_ai_configuration_required");
+}
+
+function providerFromSupportCredential(
+  credential: ResolvedSupportCredential,
   clientFactory?: (apiKey: string) => OpenAiResponsesClient,
-): Promise<SupportAiProvider> {
-  const credential = await credentials.resolve(
-    workspaceId,
-    "support",
-    "openai",
-  );
-  const apiKey = credential?.apiKey.trim();
+): SupportAiProvider {
+  const apiKey = credential.apiKey.trim();
   if (!apiKey)
     throw new SupportAiConfigurationError("support_ai_configuration_required");
-  const supportConfig = credential?.config as Partial<SupportModelConfig>;
+  const supportConfig = credential.config as Partial<SupportModelConfig>;
   const model =
     typeof supportConfig.supportModel === "string"
       ? supportConfig.supportModel.trim()
@@ -569,4 +627,25 @@ export async function resolveSupportAiProvider(
     visionModel,
     ...(clientFactory ? { client: clientFactory(apiKey) } : {}),
   });
+}
+
+/** Resolves support AI from workspace BYOK, with gated local-dev fallback. */
+export async function resolveSupportAiProvider(
+  workspaceId: string,
+  credentials: SupportCredentialResolver,
+  clientFactory?: (apiKey: string) => OpenAiResponsesClient,
+): Promise<SupportAiProvider> {
+  const credential = await resolveSupportCredential(workspaceId, credentials);
+  try {
+    return providerFromSupportCredential(credential, clientFactory);
+  } catch (error) {
+    if (
+      error instanceof SupportAiConfigurationError &&
+      error.code === "support_ai_model_missing"
+    ) {
+      const local = localDevSupportCredentialFromEnv();
+      if (local) return providerFromSupportCredential(local, clientFactory);
+    }
+    throw error;
+  }
 }

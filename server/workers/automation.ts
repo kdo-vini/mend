@@ -355,13 +355,17 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         triage,
       };
     } else if (provisionalDecision.allowed && route !== "bug_triage") {
+      // Prefer retrieval hits, but when the short follow-up misses hybrid
+      // retrieval still draft from published knowledge — same as manual drafts.
+      const draftingKnowledge =
+        matchedKnowledge.length > 0 ? matchedKnowledge : input.knowledge;
       try {
         draft = await this.buildDraft(
           input,
           triage,
           modePolicy.mode,
           draftDecision,
-          matchedKnowledge,
+          draftingKnowledge,
           mcpConnections,
         );
       } catch (error) {
@@ -371,18 +375,41 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           error:
             error instanceof Error ? error.message.slice(0, 200) : "unknown",
         });
+        const founderBlocked =
+          configuredRoute === "human_escalation" ||
+          configuredRoute === "no_action";
         if (
           modePolicy.policy.mcpFailurePolicy === "generic_reply" &&
-          matchedKnowledge.length
+          draftingKnowledge.length
         ) {
           draft = await this.buildDraft(
             input,
             triage,
             modePolicy.mode,
             draftDecision,
-            matchedKnowledge,
+            draftingKnowledge,
             [],
           );
+        } else if (!founderBlocked && modePolicy.mode === "safe_auto") {
+          // Keep answering instead of escalating: grounding/MCP miss is not a
+          // founder-blocked intent. Manual drafts already answer in this case.
+          route = "safe_auto_reply";
+          draft = await this.buildDraft(
+            input,
+            triage,
+            modePolicy.mode,
+            {
+              action: "auto_reply",
+              allowed: true,
+              reason:
+                "Clarifying auto-reply after grounded draft failed validation.",
+            },
+            draftingKnowledge,
+            [],
+            { allowUngrounded: true },
+          );
+        } else if (!founderBlocked && modePolicy.mode === "draft") {
+          route = "draft_for_review";
         } else {
           route = "human_escalation";
         }
@@ -445,7 +472,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       await this.assignConversation(input);
     if (
       route === "human_escalation" ||
-      (route === "knowledge_auto_reply" && !matchedKnowledge.length)
+      (route === "knowledge_auto_reply" &&
+        !matchedKnowledge.length &&
+        !(draft && decision.allowed && decision.action === "auto_reply"))
     ) {
       await this.notifyWorkspace(
         input,
@@ -535,10 +564,13 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     // requires automation_state=ai_active. Incidents pause after send.
     // Bugs stay ai_active while triage/investigation runs; human takeover
     // happens only when investigation cannot resolve the case.
+    // Only pause for low confidence when the policy actually blocked the send.
+    // Moderate confidence can still auto-reply (clarifying) like drafts do.
     const takeoverReason = triage.unsafe
       ? "unsafe_intent"
       : modePolicy.mode === "safe_auto" &&
-          triage.confidence < modePolicy.policy.safeAutoMinConfidence
+          triage.confidence < modePolicy.policy.safeAutoMinConfidence &&
+          !decision.allowed
         ? "low_confidence"
         : allowHumanHandoffReply && !(canSend && draft)
           ? "manual_pause"
@@ -710,12 +742,23 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
   ): Promise<LiveWorkerAutomationResult | void> {
     if (modePolicy.mode !== "safe_auto") return;
     const text = messageText(input.message).toLocaleLowerCase("pt-BR");
+    // Narrow billing: payment/renewal/cancel — not product "planos"/menus alone.
     const billingLike =
-      /\brenov|\bmensalidad|\bassinar|\bassinatura|\bplano\b|\bcobran[cç]a|\bpagar\b|\bpagamento\b|\bcancelar\b|\bstripe\b|\bpix\b/.test(
+      /\b(renov|mensalidad|assinatura|cobran[cç]a|\bpix\b|stripe|fatura|boleto|reembolso)\b/.test(
+        text,
+      ) ||
+      /\b(pagar|pagamento|cancelar)\b.{0,40}\b(plano|assinatura|mensalidade)\b/.test(
+        text,
+      ) ||
+      /\b(plano|assinatura|mensalidade)\b.{0,40}\b(pagar|pagamento|renov|cancel|pre[cç]o|valor|fatura)\b/.test(
         text,
       );
+    // Narrow incident: outage/downtime — not "can't find/access a feature".
     const incidentLike =
-      /\btravad|\bfora do ar|\bindispon|\bn[aã]o (estou )?conseguindo acess|\bsistema (caiu|parado)|bloquead/.test(
+      /\b(travad|fora do ar|indispon|sistema (caiu|parado)|bloquead|queda|outage)\b/.test(
+        text,
+      ) ||
+      /n[aã]o (estou )?conseguindo (abrir|acessar|entrar).{0,40}\b(sistema|site|app|plataforma|whatsapp|pdv|servi[cç]o)\b/.test(
         text,
       );
     const intent = billingLike ? "billing" : incidentLike ? "incident" : null;
@@ -1757,6 +1800,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     decision: ReturnType<typeof policyDecision>,
     knowledge: readonly LiveWorkerKnowledgeArticle[],
     mcpConnections: readonly McpRuntimeConnection[],
+    options: { allowUngrounded?: boolean } = {},
   ): Promise<LiveWorkerDraft | undefined> {
     if (triage.unsafe || !decision.allowed || mode === "off") return undefined;
     const workspace = await this.metadataClient
@@ -1812,13 +1856,15 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       resolution,
       evidence.filter((item) => item.content.trim()),
     );
+    const requireGrounding =
+      !options.allowUngrounded && evidenceBundle.citations.length > 0;
     const contextResult = provider.draftReplyWithContext
       ? await provider.draftReplyWithContext({
           conversation,
           knowledgeContext: safeKnowledgeContext(knowledge),
           language: normalizeLocale(workspaceRow.default_language),
           mcpConnections,
-          evidenceKeys: evidenceBundle.citations,
+          evidenceKeys: requireGrounding ? evidenceBundle.citations : [],
           onMcpApproval: (approval) =>
             this.approveMcpWrite(input, mode, mcpConnections, approval),
         })
@@ -1830,7 +1876,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           ),
           mcpEvidence: false,
           mcpCalls: [],
-          usedCitationKeys: evidenceBundle.citations,
+          usedCitationKeys: requireGrounding ? evidenceBundle.citations : [],
           confidence: triage.confidence,
           customerSafe: true,
           needsClarification: false,
@@ -1844,14 +1890,43 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       usedCitationKeys: contextResult.usedCitationKeys ?? [],
       confidence: contextResult.confidence ?? triage.confidence,
       customerSafe: contextResult.customerSafe ?? true,
-      needsClarification: contextResult.needsClarification ?? false,
+      needsClarification:
+        contextResult.needsClarification === true ||
+        options.allowUngrounded === true,
       ...(contextResult.clarificationQuestion
         ? { clarificationQuestion: contextResult.clarificationQuestion }
         : {}),
     };
-    const validation = validateGroundedSupportReply(grounded, evidenceBundle);
-    if (!validation.valid)
-      throw new Error(`support_reply_not_grounded:${validation.reason}`);
+    if (requireGrounding) {
+      const validation = validateGroundedSupportReply(grounded, evidenceBundle);
+      if (!validation.valid) {
+        // Retry once like a manual draft: answer from knowledge without the
+        // strict citation JSON contract so short follow-ups still get a reply.
+        const fallbackBody = sanitizeCustomerSupportReply(
+          boundedText(
+            await provider.draftReply(
+              conversation,
+              safeKnowledgeContext(knowledge),
+              normalizeLocale(workspaceRow.default_language),
+            ),
+            12_000,
+          ),
+        );
+        if (!fallbackBody)
+          throw new Error(`support_reply_not_grounded:${validation.reason}`);
+        return {
+          conversationId: input.persisted.conversationId,
+          messageId: input.persisted.id,
+          idempotencyKey: input.idempotencyKey,
+          body: fallbackBody,
+          knowledgeArticleIds: knowledge.map((article) => article.id),
+          usedCitationKeys: [],
+          triage,
+          mcpEvidence: false,
+          mcpCalls: contextResult.mcpCalls,
+        };
+      }
+    }
     return {
       conversationId: input.persisted.conversationId,
       messageId: input.persisted.id,

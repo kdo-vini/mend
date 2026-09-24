@@ -273,11 +273,22 @@ export function policyDecision(
       allowed: false,
       reason: "Workspace policy does not allow AI responses.",
     };
-  if (triage.confidence < policy.safeAutoMinConfidence) {
+  // Reply-first: moderate confidence still auto-replies (drafts already do).
+  // Only hard-block when confidence is too low to risk a customer send.
+  const hardFloor = Math.min(0.45, policy.safeAutoMinConfidence);
+  if (triage.confidence < hardFloor) {
     return {
       action: "blocked" as const,
       allowed: false,
       reason: `Confidence ${triage.confidence.toFixed(2)} is below the safe-auto threshold.`,
+    };
+  }
+  if (triage.confidence < policy.safeAutoMinConfidence) {
+    return {
+      action: "auto_reply" as const,
+      allowed: true,
+      reason:
+        "Confidence is moderate; send a short clarifying auto-reply instead of escalating.",
     };
   }
   return {
@@ -338,9 +349,16 @@ export function relevantKnowledge(
 ): readonly LiveWorkerKnowledgeArticle[] {
   const query = knowledgeTokens(messageText(message));
   if (!query.size) return [];
+  const scored = articles.filter(
+    (article) => typeof article.retrievalScore === "number",
+  );
+  if (scored.length) {
+    const hits = scored.filter(
+      (article) => (article.retrievalScore ?? 0) > 0,
+    );
+    if (hits.length) return hits;
+  }
   return articles.filter((article) => {
-    if (typeof article.retrievalScore === "number")
-      return article.retrievalScore > 0;
     const articleTerms = knowledgeTokens(
       `${article.title} ${article.category} ${article.body}`,
     );

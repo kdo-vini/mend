@@ -75,7 +75,21 @@ export interface ProcessInboundMessageJobPayload {
   persisted: InboxMessageRecord;
 }
 
-const DEFAULT_INBOUND_DEBOUNCE_MS = 1_500;
+/** Default debounce before triage/draft. Override with MEND_INBOUND_DEBOUNCE_MS. */
+export const DEFAULT_INBOUND_DEBOUNCE_MS = 1_500;
+
+/** Parse inbound debounce from env; invalid/missing → default. Cap 30s. */
+export function resolveInboundDebounceMs(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): number {
+  const raw = env.MEND_INBOUND_DEBOUNCE_MS;
+  if (raw === undefined || raw.trim() === "")
+    return DEFAULT_INBOUND_DEBOUNCE_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0)
+    return DEFAULT_INBOUND_DEBOUNCE_MS;
+  return Math.min(30_000, Math.floor(parsed));
+}
 
 export type ConversationHistoryMessage = {
   id: string;

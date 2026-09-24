@@ -82,16 +82,62 @@ describe("support AI providers", () => {
   });
 
   it("never falls back to a process-wide support credential", async () => {
+    const previousDevMode = process.env.MEND_DEV_MODE;
+    process.env.MEND_DEV_MODE = "0";
     process.env.OPENAI_API_KEY = "global-key-must-not-be-used";
-    expect(() => createSupportAiProvider()).toThrow(
-      SupportAiConfigurationError,
-    );
+    try {
+      expect(() => createSupportAiProvider()).toThrow(
+        SupportAiConfigurationError,
+      );
 
-    await expect(
-      resolveSupportAiProvider("workspace-1", {
-        resolve: async () => ({ apiKey: "workspace-key", config: {} }),
-      }),
-    ).rejects.toMatchObject({ code: "support_ai_model_missing" });
+      await expect(
+        resolveSupportAiProvider("workspace-1", {
+          resolve: async () => ({ apiKey: "workspace-key", config: {} }),
+        }),
+      ).rejects.toMatchObject({ code: "support_ai_model_missing" });
+    } finally {
+      if (previousDevMode === undefined) delete process.env.MEND_DEV_MODE;
+      else process.env.MEND_DEV_MODE = previousDevMode;
+    }
+  });
+
+  it("falls back to OPENAI_API_KEY only when MEND_DEV_MODE is enabled", async () => {
+    const previous = {
+      MEND_DEV_MODE: process.env.MEND_DEV_MODE,
+      NODE_ENV: process.env.NODE_ENV,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      SUPPORT_AI_MODEL: process.env.SUPPORT_AI_MODEL,
+    };
+    process.env.MEND_DEV_MODE = "1";
+    process.env.NODE_ENV = "development";
+    process.env.OPENAI_API_KEY = "local-dev-key";
+    process.env.SUPPORT_AI_MODEL = "gpt-local";
+    try {
+      const calls: Array<Record<string, unknown>> = [];
+      const provider = await resolveSupportAiProvider(
+        "workspace-1",
+        {
+          resolve: async () => {
+            throw new Error("Connection encryption is not configured.");
+          },
+        },
+        () => ({
+          responses: {
+            async create(input) {
+              calls.push(input as Record<string, unknown>);
+              return { output_text: "draft" };
+            },
+          },
+        }),
+      );
+      await provider.draftReply("hello", undefined, "en-US");
+      expect(calls[0]?.model).toBe("gpt-local");
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 
   it("resolves the workspace support key and selected model together", async () => {

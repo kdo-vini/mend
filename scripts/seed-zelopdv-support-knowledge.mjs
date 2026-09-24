@@ -203,6 +203,27 @@ Resposta curta modelo:
 "No ZeloPDV, Mesas é um add-on. Abra o mapa, toque numa mesa livre, lance os itens e feche no pagamento. Quer o passo a passo no app?"`,
   },
   {
+    title: "Como acessar pedidos no ZeloMenu e no ZeloPDV",
+    category: "Como fazer",
+    productKeys: ["zelopdv", "zelomenu"],
+    body: `Pedidos do cardápio digital ficam no *ZeloMenu*. Caixa e vendas internas ficam no *ZeloPDV*.
+
+Para ver pedidos do cardápio (ZeloMenu):
+1. Abra o painel do ZeloMenu.
+2. Entre em *Pedidos* (ou a lista de pedidos da loja).
+3. Abra o pedido para ver itens, status e dados do cliente.
+
+Para vendas no caixa (ZeloPDV):
+1. Abra o *Caixa* ou o histórico de vendas.
+2. Busque pelo horário, valor ou produto.
+3. Abra a venda para conferir o comprovante.
+
+Se a dúvida for só "acessar pedidos", confirme se é pedido do cardápio digital ou venda do caixa.
+
+Resposta curta modelo:
+"Pedidos do cardápio ficam no ZeloMenu em Pedidos. Vendas do caixa ficam no ZeloPDV. Você quer ver pedidos do link/cardápio ou vendas do caixa?"`,
+  },
+  {
     title: "Como controlar estoque e fiado no ZeloPDV",
     category: "Como fazer",
     productKeys: ["zelopdv"],

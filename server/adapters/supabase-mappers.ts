@@ -187,7 +187,7 @@ export function conversation(rowValue: Row): Row {
     status: str(rowValue.status, "open"),
     attentionState: str(rowValue.attention_state, "needs_attention"),
     assignedUserId: nullable(rowValue.assigned_user_id),
-    aiMode: str(rowValue.ai_mode, "draft"),
+    aiMode: str(rowValue.ai_mode, "safe_auto"),
     automationState: str(aiState.automation_state, "ai_active"),
     humanTakeoverAt: nullable(aiState.human_takeover_at),
     humanTakeoverBy: nullable(aiState.human_takeover_by),

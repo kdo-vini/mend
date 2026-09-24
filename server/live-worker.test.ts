@@ -3,6 +3,7 @@ import { InMemoryJobStore, type JobRecord } from "./jobs.js";
 import {
   LiveWorker,
   repositorySafeTools,
+  resolveInboundDebounceMs,
   SupabaseCodexStarter,
   SupabaseLiveWorkerAutomation,
   type LiveChannelBinding,
@@ -18,6 +19,31 @@ import type { InboxContext, InboxMessageRecord } from "./inbox-service.js";
 import type { NormalizedWhatsmiauMessage } from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
 import type { SupportAiProvider } from "./providers.js";
+
+describe("resolveInboundDebounceMs", () => {
+  it("defaults to 1500 when unset or invalid", () => {
+    expect(resolveInboundDebounceMs({})).toBe(1_500);
+    expect(resolveInboundDebounceMs({ MEND_INBOUND_DEBOUNCE_MS: "" })).toBe(
+      1_500,
+    );
+    expect(resolveInboundDebounceMs({ MEND_INBOUND_DEBOUNCE_MS: "nope" })).toBe(
+      1_500,
+    );
+    expect(resolveInboundDebounceMs({ MEND_INBOUND_DEBOUNCE_MS: "-1" })).toBe(
+      1_500,
+    );
+  });
+
+  it("accepts zero and caps at 30s", () => {
+    expect(resolveInboundDebounceMs({ MEND_INBOUND_DEBOUNCE_MS: "0" })).toBe(0);
+    expect(resolveInboundDebounceMs({ MEND_INBOUND_DEBOUNCE_MS: "600" })).toBe(
+      600,
+    );
+    expect(
+      resolveInboundDebounceMs({ MEND_INBOUND_DEBOUNCE_MS: "90000" }),
+    ).toBe(30_000);
+  });
+});
 
 const message: NormalizedWhatsmiauMessage = {
   instanceName: "mend-live",
