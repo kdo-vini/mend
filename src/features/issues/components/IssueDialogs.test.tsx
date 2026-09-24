@@ -104,7 +104,8 @@ describe("CreateIssueDialog", () => {
     });
 
     await act(async () => {
-      const input = container.querySelector<HTMLInputElement>("input[required]");
+      const input =
+        container.querySelector<HTMLInputElement>("input[required]");
       if (!input) throw new Error("missing title input");
       const setter = Object.getOwnPropertyDescriptor(
         HTMLInputElement.prototype,
@@ -117,7 +118,9 @@ describe("CreateIssueDialog", () => {
 
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>('button.button-primary[type="button"]')
+        .querySelector<HTMLButtonElement>(
+          'button.button-primary[type="button"]',
+        )
         ?.click();
     });
 

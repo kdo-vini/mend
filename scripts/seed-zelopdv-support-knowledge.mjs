@@ -47,7 +47,8 @@ async function rest(path, init = {}) {
     headers: { ...headers, ...(init.headers || {}) },
   });
   const text = await response.text();
-  if (!response.ok) throw new Error(`${path} ${response.status} ${text.slice(0, 500)}`);
+  if (!response.ok)
+    throw new Error(`${path} ${response.status} ${text.slice(0, 500)}`);
   return text ? JSON.parse(text) : null;
 }
 
@@ -65,7 +66,8 @@ function splitBounded(value, maximum) {
       candidate.lastIndexOf("; "),
       candidate.lastIndexOf(" "),
     );
-    const length = boundary >= Math.floor(maximum * 0.55) ? boundary + 1 : maximum;
+    const length =
+      boundary >= Math.floor(maximum * 0.55) ? boundary + 1 : maximum;
     pieces.push(remaining.slice(0, length).trim());
     remaining = remaining.slice(length).trim();
   }
@@ -112,7 +114,9 @@ function chunkArticle(article) {
     chunk_index: index,
     heading: section.heading,
     content: section.content,
-    content_hash: digest(`${version}:${index}:${section.heading}:${section.content}`),
+    content_hash: digest(
+      `${version}:${index}:${section.heading}:${section.content}`,
+    ),
   }));
 }
 
@@ -127,7 +131,9 @@ async function embedMany(texts) {
   });
   const payload = await response.json();
   if (!response.ok)
-    throw new Error(`openai embeddings ${response.status} ${JSON.stringify(payload).slice(0, 300)}`);
+    throw new Error(
+      `openai embeddings ${response.status} ${JSON.stringify(payload).slice(0, 300)}`,
+    );
   return payload.data
     .sort((a, b) => a.index - b.index)
     .map((item) => item.embedding);
@@ -570,7 +576,9 @@ RESPOSTA CURTA MODELO
 
 async function main() {
   if (!url || !key || !openaiKey) {
-    throw new Error("Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY or OPENAI_API_KEY");
+    throw new Error(
+      "Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY or OPENAI_API_KEY",
+    );
   }
 
   for (const article of articles) await upsertArticle(article);
@@ -579,7 +587,10 @@ async function main() {
   for (const [productId, list] of Object.entries(aliases)) {
     await rest(`support_products?id=eq.${productId}`, {
       method: "PATCH",
-      body: JSON.stringify({ aliases: list, updated_at: new Date().toISOString() }),
+      body: JSON.stringify({
+        aliases: list,
+        updated_at: new Date().toISOString(),
+      }),
     });
     console.log("aliases updated", productId);
   }
@@ -591,7 +602,9 @@ async function main() {
       updated_at: new Date().toISOString(),
     }),
   });
-  console.log("automation policy updated (billing/incident -> human, rest -> AI)");
+  console.log(
+    "automation policy updated (billing/incident -> human, rest -> AI)",
+  );
 }
 
 main().catch((error) => {
