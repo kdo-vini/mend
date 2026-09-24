@@ -59,6 +59,13 @@ Set these server-side values in the deployment secret manager:
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` for the trusted API/worker process. Keep the service key server-only.
 - `APP_BASE_URL` so channel creation can register the webhook callback.
 - `MEND_API_TOKEN` for protected operator-only provider administration routes.
+- `MEND_OUTBOUND_WHATSAPP_API_KEY` for `POST /internal/whatsapp/send-text`
+  (Outbound/Grok Bot only). Generate a new Mend-owned key; do not reuse
+  `MEND_API_TOKEN` or give Outbound the Chat key.
+- `ZELOCHAT_BASE_URL` and `ZELOCHAT_INTERNAL_API_KEY` so Mend can forward that
+  send to ZeloChat Techne (`POST /internal/whatsapp/send-text` with
+  `x-zelochat-internal-key`). Use the existing Chat internal key. Do not create
+  a second Chat key or rotate the PDV key.
 - `VITE_SUPABASE_URL` and the publishable Supabase key are safe for the browser; all writes still require RLS.
 
 Configure the Whatsmiau webhook to the public `/webhooks/whatsmiau` endpoint and verify the authorization header with a signed test event before connecting a customer number.

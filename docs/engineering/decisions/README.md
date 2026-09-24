@@ -16,6 +16,7 @@ consistentes entre backend, frontend, banco, workers e operação.
 
 | [ADR-009](ADR-009-architecture-hardening.md) | Tenant-safe automation and recoverable effects | accepted |
 | [ADR-010](ADR-010-multirepo-live-knowledge.md) | Product-scoped live knowledge from multiple repositories | accepted |
+| [ADR-011](ADR-011-outbound-whatsapp-zelochat-gateway.md) | Outbound WhatsApp passa por Mend, não por uma segunda chave no ZeloChat | accepted |
 
 Novas decisões devem copiar o [template de ADR](../templates/ADR.md), receber o
 próximo número e ser adicionadas a esta tabela.
