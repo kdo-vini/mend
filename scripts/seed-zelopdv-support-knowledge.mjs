@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /**
  * Seeds customer-facing Zelo support knowledge + Techne automation policy.
  * Run: node scripts/seed-zelopdv-support-knowledge.mjs
