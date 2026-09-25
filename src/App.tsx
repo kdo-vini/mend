@@ -56,6 +56,7 @@ import {
 } from "./api/live-actions";
 import { WorkspaceOnboarding as FeatureWorkspaceOnboarding } from "./app/onboarding/WorkspaceOnboarding";
 import { WorkspaceRoutes } from "./app/routes/WorkspaceRoutes";
+import { useAppShortcuts } from "./app/shortcuts/useAppShortcuts";
 import { notificationDestination } from "./app/shell/notification-destination";
 import { workspaceRefreshTarget } from "./app/live-workspace-sync";
 import {
@@ -258,36 +259,20 @@ function App() {
     window.localStorage.setItem("mend.theme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandOpen(true);
-      }
-      if (event.key === "Escape") {
-        setCommandOpen(false);
-        setCreateIssueOpen(false);
-        setRunDialogIssueId(null);
-        setInspectorIssueId(null);
-      }
-      if (
-        event.key === "/" &&
-        !["INPUT", "TEXTAREA", "SELECT"].includes(
-          (event.target as HTMLElement).tagName,
-        )
-      ) {
-        const search = document.querySelector<HTMLInputElement>(
-          "[data-global-search]",
-        );
-        if (search) {
-          event.preventDefault();
-          search.focus();
-        }
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+  const handleEscapeOverlays = useCallback(() => {
+    setCommandOpen(false);
+    setCreateIssueOpen(false);
+    setRunDialogIssueId(null);
+    setInspectorIssueId(null);
   }, []);
+
+  useAppShortcuts({
+    commandOpen,
+    createIssueOpen,
+    onOpenCommand: () => setCommandOpen(true),
+    onCreateIssue: () => setCreateIssueOpen(true),
+    onEscape: handleEscapeOverlays,
+  });
 
   const notify = useCallback(
     (message: string, tone: ToastTone = "success") =>

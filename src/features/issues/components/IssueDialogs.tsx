@@ -30,6 +30,7 @@ import type {
   Priority,
 } from "../../../types";
 import { listLiveRepositories, type LiveRepository } from "../api";
+import { getShortcutHint } from "../../../app/shortcuts/app-shortcuts";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
@@ -73,37 +74,37 @@ export function CommandPalette({
   const actions = [
     {
       label: t("command.openInbox"),
-      hint: "G then I",
+      hint: getShortcutHint("openInbox"),
       icon: InboxIcon,
       action: () => navigate("/inbox"),
     },
     {
       label: t("command.browseIssues"),
-      hint: "G then X",
+      hint: getShortcutHint("browseIssues"),
       icon: CircleDot,
       action: () => navigate("/issues"),
     },
     {
       label: t("command.createIssue"),
-      hint: "C",
+      hint: getShortcutHint("createIssue"),
       icon: Plus,
       action: onNewIssue,
     },
     {
       label: t("command.viewRuns"),
-      hint: "G then R",
+      hint: getShortcutHint("viewRuns"),
       icon: TerminalSquare,
       action: () => navigate("/agent-runs"),
     },
     {
       label: t("command.openKnowledge"),
-      hint: "G then K",
+      hint: getShortcutHint("openKnowledge"),
       icon: BookOpen,
       action: () => navigate("/knowledge"),
     },
     {
       label: t("command.openSettings"),
-      hint: "",
+      hint: getShortcutHint("openSettings"),
       icon: SettingsIcon,
       action: () => navigate("/settings"),
     },
