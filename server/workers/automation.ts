@@ -8,6 +8,11 @@ import {
   bugAcknowledgmentReplyBody,
   humanHandoffReplyBody,
 } from "../automation/handoff-replies.js";
+import {
+  resolveAiReplyChoices,
+  resolveInboundChoiceLabel,
+  type AiReplyChoice,
+} from "../automation/reply-choices.js";
 import { buildNotificationCopy } from "../notifications/copy.js";
 import {
   aiStateInput,
@@ -188,6 +193,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       return;
     }
     await this.recordWorkflowFact(input, "eligible", "ai-mode-enabled");
+    input = await this.applyInboundChoiceSelection(input);
     let provider: SupportAiProvider;
     try {
       provider = await this.providerFor(input.binding.workspaceId);
@@ -603,6 +609,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
               idempotencyKey: draft.idempotencyKey,
               body: draft.body,
               triage,
+              ...(draft.choices?.length
+                ? { choices: draft.choices }
+                : {}),
               ...(allowHumanHandoffReply
                 ? { pauseAfterSendReason: "manual_pause" }
                 : {}),
@@ -611,6 +620,62 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         : {}),
     };
     return Object.keys(result).length ? result : undefined;
+  }
+
+  /**
+   * When the customer taps a reply button, map interactionId / "1"/"2" back to
+   * the choice label so triage and knowledge retrieval see natural language.
+   */
+  private async applyInboundChoiceSelection(
+    input: LiveWorkerAutomationInput,
+  ): Promise<LiveWorkerAutomationInput> {
+    const interactionId = input.message.interactionId?.trim();
+    const rawText = input.message.text?.trim() ?? "";
+    if (!interactionId && !/^[123]$/.test(rawText)) return input;
+
+    const draftResult = await this.metadataClient
+      .from("ai_drafts")
+      .select("policy_json")
+      .eq("workspace_id", input.binding.workspaceId)
+      .eq("conversation_id", input.persisted.conversationId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    if (draftResult.error)
+      throw new Error(`supabase:ai_drafts:choices:${draftResult.error.message}`);
+
+    const drafts = Array.isArray(draftResult.data) ? draftResult.data : [];
+    for (const draft of drafts) {
+      const policy = (draft as { policy_json?: unknown }).policy_json;
+      if (!policy || typeof policy !== "object" || Array.isArray(policy))
+        continue;
+      const choices = (policy as { reply_choices?: unknown }).reply_choices;
+      if (!Array.isArray(choices) || choices.length < 2) continue;
+      const normalized = choices
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const row = item as Record<string, unknown>;
+          const id = typeof row.id === "string" ? row.id : "";
+          const label = typeof row.label === "string" ? row.label : "";
+          if (!id || !label) return null;
+          return { id, label } satisfies AiReplyChoice;
+        })
+        .filter((item): item is AiReplyChoice => Boolean(item));
+      const label = resolveInboundChoiceLabel(
+        normalized,
+        interactionId,
+        rawText,
+      );
+      if (!label) continue;
+      return {
+        ...input,
+        message: {
+          ...input.message,
+          text: label,
+          interactionId: interactionId ?? input.message.interactionId,
+        },
+      };
+    }
+    return input;
   }
 
   private async processSupportFlow(
@@ -879,34 +944,67 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       return;
     }
     try {
-      await this.whatsapp.sendText(
-        {
-          workspaceId: input.binding.workspaceId,
-          actorType: "ai",
-        },
-        input.conversationId,
-        {
-          text: input.body,
-          aiGenerated: true,
-          onProviderMessageId: async (providerMessageId) => {
-            const updated = await this.metadataClient
-              .from("ai_outbound_messages")
-              .update({
-                provider_message_id: providerMessageId,
-                status: "sent",
-                sent_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", String(row.id))
-              .select("id")
-              .maybeSingle();
-            if (updated.error)
-              throw new Error(
-                `supabase:ai_outbound_messages:${updated.error.message}`,
-              );
+      const choices = input.choices ?? [];
+      if (choices.length >= 2) {
+        await this.whatsapp.sendReplyChoices(
+          {
+            workspaceId: input.binding.workspaceId,
+            actorType: "ai",
           },
-        },
-      );
+          input.conversationId,
+          {
+            text: input.body,
+            choices,
+            aiGenerated: true,
+            onProviderMessageId: async (providerMessageId) => {
+              const updated = await this.metadataClient
+                .from("ai_outbound_messages")
+                .update({
+                  provider_message_id: providerMessageId,
+                  status: "sent",
+                  sent_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", String(row.id))
+                .select("id")
+                .maybeSingle();
+              if (updated.error)
+                throw new Error(
+                  `supabase:ai_outbound_messages:${updated.error.message}`,
+                );
+            },
+          },
+        );
+      } else {
+        await this.whatsapp.sendText(
+          {
+            workspaceId: input.binding.workspaceId,
+            actorType: "ai",
+          },
+          input.conversationId,
+          {
+            text: input.body,
+            aiGenerated: true,
+            onProviderMessageId: async (providerMessageId) => {
+              const updated = await this.metadataClient
+                .from("ai_outbound_messages")
+                .update({
+                  provider_message_id: providerMessageId,
+                  status: "sent",
+                  sent_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", String(row.id))
+                .select("id")
+                .maybeSingle();
+              if (updated.error)
+                throw new Error(
+                  `supabase:ai_outbound_messages:${updated.error.message}`,
+                );
+            },
+          },
+        );
+      }
       await this.markDraftStatus(input, "sent");
       await this.auditDecision(input, input.triage, "ai.auto_reply.sent", {
         sourceMessageId: input.sourceMessageId,
@@ -1914,26 +2012,35 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         );
         if (!fallbackBody)
           throw new Error(`support_reply_not_grounded:${validation.reason}`);
+        const fallbackResolved = resolveAiReplyChoices({ body: fallbackBody });
         return {
           conversationId: input.persisted.conversationId,
           messageId: input.persisted.id,
           idempotencyKey: input.idempotencyKey,
-          body: fallbackBody,
+          body: fallbackResolved.body,
           knowledgeArticleIds: knowledge.map((article) => article.id),
           usedCitationKeys: [],
+          ...(fallbackResolved.choices.length
+            ? { choices: fallbackResolved.choices }
+            : {}),
           triage,
           mcpEvidence: false,
           mcpCalls: contextResult.mcpCalls,
         };
       }
     }
+    const resolved = resolveAiReplyChoices({
+      body,
+      structuredChoices: contextResult.choices,
+    });
     return {
       conversationId: input.persisted.conversationId,
       messageId: input.persisted.id,
       idempotencyKey: input.idempotencyKey,
-      body,
+      body: resolved.body,
       knowledgeArticleIds: knowledge.map((article) => article.id),
       usedCitationKeys: grounded.usedCitationKeys,
+      ...(resolved.choices.length ? { choices: resolved.choices } : {}),
       triage,
       mcpEvidence: contextResult.mcpEvidence,
       mcpCalls: contextResult.mcpCalls,
@@ -2281,7 +2388,12 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         status,
         body: draft.body,
         triage_json: triage,
-        policy_json: policyJson(policy),
+        policy_json: {
+          ...policyJson(policy),
+          ...(draft.choices?.length
+            ? { reply_choices: draft.choices }
+            : {}),
+        },
         safety_reason: decision.allowed ? null : decision.reason,
       })
       .select("id")

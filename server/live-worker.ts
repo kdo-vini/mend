@@ -106,6 +106,8 @@ export interface LiveWorkerSendAiReplyInput {
   idempotencyKey: string;
   body: string;
   triage: TriageResult;
+  /** Optional WhatsApp reply buttons for clarifications (2–3). */
+  choices?: readonly { id: string; label: string }[];
   /** Pause AI only after the outbound message is accepted by the provider. */
   pauseAfterSendReason?: string;
 }
@@ -243,6 +245,7 @@ export interface LiveWorkerDraft {
   body: string;
   knowledgeArticleIds: readonly string[];
   usedCitationKeys?: readonly string[];
+  choices?: readonly { id: string; label: string }[];
   triage: TriageResult;
   mcpEvidence?: boolean;
   mcpCalls?: SupportAiDraftResult["mcpCalls"];

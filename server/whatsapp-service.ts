@@ -26,6 +26,10 @@ import {
   type WhatsmiauGroupInfo,
 } from "./whatsmiau.js";
 import type { SupportFlowNode } from "../src/shared/support-flow.js";
+import {
+  formatChoicesAsTextFallback,
+  type AiReplyChoice,
+} from "./automation/reply-choices.js";
 
 export interface WhatsAppProvider {
   /** Live session state, read back to explain why a send was refused. */
@@ -74,6 +78,15 @@ export interface SendTextRequest {
   text: string;
   aiGenerated?: boolean;
   /** Forward a stable retry key to providers that implement deduplication. */
+  idempotencyKey?: string;
+  onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
+}
+
+export interface SendReplyChoicesRequest {
+  text: string;
+  choices: readonly AiReplyChoice[];
+  title?: string;
+  aiGenerated?: boolean;
   idempotencyKey?: string;
   onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
 }
@@ -282,6 +295,122 @@ export class WhatsAppService {
       providerMessageId: id,
       messageType: "text",
       text,
+      aiGenerated: input.aiGenerated,
+    });
+    return { message, providerMessageId: id };
+  }
+
+  /**
+   * Sends a clarification as WhatsApp reply buttons (≤3) when the provider
+   * supports them; otherwise falls back to numbered plain text.
+   */
+  async sendReplyChoices(
+    context: InboxContext,
+    conversationId: string,
+    input: SendReplyChoicesRequest,
+  ): Promise<OutboundResult> {
+    const text = input.text.trim();
+    if (!text || text.length > 20_000) throw new Error("message_text_invalid");
+    const choices = input.choices.slice(0, 3);
+    if (choices.length < 2)
+      return this.sendText(context, conversationId, {
+        text,
+        aiGenerated: input.aiGenerated,
+        ...(input.idempotencyKey
+          ? { idempotencyKey: input.idempotencyKey }
+          : {}),
+        ...(input.onProviderMessageId
+          ? { onProviderMessageId: input.onProviderMessageId }
+          : {}),
+      });
+
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    const destination = outboundDestination(conversation);
+    const title = (input.title?.trim() || "Escolha uma opção").slice(0, 60);
+    const visibleText = formatChoicesAsTextFallback(text, choices);
+
+    if (this.provider.sendPresence)
+      await this.provider
+        .sendPresence(conversation.providerInstanceName, destination)
+        .catch(() => undefined);
+
+    let response: unknown;
+    try {
+      if (choices.length <= 3 && this.provider.sendButtons) {
+        response = await this.delivering(
+          conversation.providerInstanceName,
+          () =>
+            this.provider.sendButtons!({
+              instanceName: conversation.providerInstanceName,
+              number: destination,
+              title,
+              description: text,
+              buttons: choices.map((choice) => ({
+                type: "reply" as const,
+                displayText: choice.label,
+                id: choice.id,
+              })),
+            }),
+        );
+      } else if (this.provider.sendList) {
+        response = await this.delivering(
+          conversation.providerInstanceName,
+          () =>
+            this.provider.sendList!({
+              instanceName: conversation.providerInstanceName,
+              number: destination,
+              title,
+              description: text,
+              buttonText: "Ver opções",
+              sections: [
+                {
+                  title,
+                  rows: choices.map((choice) => ({
+                    rowId: choice.id,
+                    title: choice.label,
+                  })),
+                },
+              ],
+            }),
+        );
+      } else {
+        return this.sendText(context, conversationId, {
+          text: visibleText,
+          aiGenerated: input.aiGenerated,
+          ...(input.idempotencyKey
+            ? { idempotencyKey: input.idempotencyKey }
+            : {}),
+          ...(input.onProviderMessageId
+            ? { onProviderMessageId: input.onProviderMessageId }
+            : {}),
+        });
+      }
+    } catch (error) {
+      // Provider may reject interactive payloads on some accounts — fall back.
+      if (error instanceof OutboundSendError)
+        return this.sendText(context, conversationId, {
+          text: visibleText,
+          aiGenerated: input.aiGenerated,
+          ...(input.idempotencyKey
+            ? { idempotencyKey: input.idempotencyKey }
+            : {}),
+          ...(input.onProviderMessageId
+            ? { onProviderMessageId: input.onProviderMessageId }
+            : {}),
+        });
+      throw error;
+    }
+
+    const id = providerMessageId(response);
+    await input.onProviderMessageId?.(id);
+    const message = await this.inbox.recordOutbound(context, conversationId, {
+      providerMessageId: id,
+      messageType: "text",
+      text: visibleText,
       aiGenerated: input.aiGenerated,
     });
     return { message, providerMessageId: id };
