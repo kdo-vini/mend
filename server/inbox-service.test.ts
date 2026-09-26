@@ -68,6 +68,11 @@ class FakeInboxPort implements InboxPort {
   }> = [];
   readonly notifications: Array<{ workspaceId: string; dedupeKey?: string }> =
     [];
+  readonly pausedConversations: Array<{
+    workspaceId: string;
+    conversationId: string;
+    reason: string;
+  }> = [];
   private sequence = 0;
 
   async ingestMessage(
@@ -199,6 +204,18 @@ class FakeInboxPort implements InboxPort {
           conversation.id === id,
       ) ?? null
     );
+  }
+
+  async pauseConversationForHuman(input: {
+    workspaceId: string;
+    conversationId: string;
+    reason?: "human_message" | "manual_pause";
+  }) {
+    this.pausedConversations.push({
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      reason: input.reason ?? "human_message",
+    });
   }
 
   async getLatestInbound(workspaceIdInput: string, id: string) {
@@ -387,6 +404,36 @@ function inbound(providerMessageId = "wamid-in-1") {
 }
 
 describe("InboxService and WhatsAppService", () => {
+  it("pauses AI after human WhatsApp outbound and skips pause for AI sends", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, inbound());
+
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, {
+      ...inbound("wamid-human-fromme"),
+      direction: "outbound",
+      text: "Resposta humana no WhatsApp",
+    });
+    expect(port.pausedConversations).toHaveLength(1);
+    expect(port.pausedConversations[0]).toMatchObject({
+      conversationId,
+      reason: "human_message",
+    });
+
+    port.pausedConversations.length = 0;
+    await inbox.persistNormalizedMessage(
+      { workspaceId },
+      channelId,
+      {
+        ...inbound("wamid-ai-outbound"),
+        direction: "outbound",
+        text: "Resposta da IA",
+      },
+      { aiGenerated: true },
+    );
+    expect(port.pausedConversations).toHaveLength(0);
+  });
+
   it("persists a normalized inbound message once and scopes the conversation to its workspace", async () => {
     const port = new FakeInboxPort();
     const inbox = new InboxService(port);
@@ -484,6 +531,13 @@ describe("InboxService and WhatsAppService", () => {
     );
     expect(outbound).toMatchObject({ inserted: true, direction: "outbound" });
     expect(port.messages.size).toBe(2);
+    expect(port.pausedConversations).toEqual([
+      {
+        workspaceId,
+        conversationId: outbound.conversationId,
+        reason: "human_message",
+      },
+    ]);
     const deleted = await inbox.persistNormalizedMessage(
       { workspaceId },
       channelId,

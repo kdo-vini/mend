@@ -171,6 +171,15 @@ export interface InboxPort {
     channelConnectionId: string;
     providerMessageId: string;
   }): Promise<boolean>;
+  /**
+   * Pauses automation after a human outbound reply (Mend UI or WhatsApp fromMe).
+   * AI sends stay excluded when ai_generated is true at ingest time.
+   */
+  pauseConversationForHuman?(input: {
+    workspaceId: string;
+    conversationId: string;
+    reason?: "human_message" | "manual_pause";
+  }): Promise<void>;
   getConversationContext(
     workspaceId: string,
     conversationId: string,
@@ -377,6 +386,20 @@ export class SupabaseInboxPort implements InboxPort {
     )
       throw new Error(`supabase:ai_outbound_messages:${result.error.message}`);
     return Boolean(result.data);
+  }
+
+  async pauseConversationForHuman(input: {
+    workspaceId: string;
+    conversationId: string;
+    reason?: "human_message" | "manual_pause";
+  }): Promise<void> {
+    const result = await this.client.rpc("pause_conversation_ai", {
+      p_workspace_id: input.workspaceId,
+      p_conversation_id: input.conversationId,
+      p_reason: input.reason ?? "human_message",
+    });
+    if (result.error)
+      throw new Error(`supabase:pause_conversation_ai:${result.error.message}`);
   }
 
   private async rpc<T>(
@@ -1120,6 +1143,28 @@ export class InboxService {
         messageId: result.id,
         participantName: participantName.slice(0, 240),
       });
+
+    // Any human outbound (Mend UI or WhatsApp fromMe) takes over the thread.
+    // AI provider echoes keep aiGenerated=true via the outbound ledger lookup.
+    if (
+      result.inserted &&
+      message.direction === "outbound" &&
+      !aiGenerated &&
+      this.port.pauseConversationForHuman
+    ) {
+      try {
+        await this.port.pauseConversationForHuman({
+          workspaceId: context.workspaceId,
+          conversationId: result.conversationId,
+          reason: "human_message",
+        });
+      } catch (error) {
+        console.warn("[mend-inbox] human outbound pause failed", {
+          conversationId: result.conversationId,
+          error: redactJobError(error),
+        });
+      }
+    }
 
     if (result.inserted && hasFetchableMedia)
       await this.port.setMessageMediaStatus?.({
