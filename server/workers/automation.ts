@@ -13,6 +13,12 @@ import {
   resolveInboundChoiceLabel,
   type AiReplyChoice,
 } from "../automation/reply-choices.js";
+import {
+  advanceGuidedHowToState,
+  initialGuidedHowToState,
+  readGuidedHowToState,
+  type GuidedHowToState,
+} from "../automation/guided-how-to.js";
 import { buildNotificationCopy } from "../notifications/copy.js";
 import {
   aiStateInput,
@@ -193,6 +199,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       return;
     }
     await this.recordWorkflowFact(input, "eligible", "ai-mode-enabled");
+    await this.advanceAiGuidedHowToState(input);
     input = await this.applyInboundChoiceSelection(input);
     let provider: SupportAiProvider;
     try {
@@ -236,10 +243,19 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         };
       }
     }
-    const triage = await triageConversation(
+    const providerTriage = await triageConversation(
       provider,
       triageConversationInput(input.message, input.knowledge),
     );
+    const guidedHowTo = await this.readAiGuidedHowToState(input);
+    const triage =
+      guidedHowTo?.status === "in_progress"
+        ? {
+            ...providerTriage,
+            intent: "how_to" as const,
+            summary: `Continuing guided how-to: ${guidedHowTo.topic}`,
+          }
+        : providerTriage;
     const beforeWrite = await this.currentState(input);
     if (
       (beforeWrite?.lastTriagedMessageId ?? null) !==
@@ -676,6 +692,80 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       };
     }
     return input;
+  }
+
+  private async readAiGuidedHowToState(
+    input: LiveWorkerAutomationInput,
+  ): Promise<GuidedHowToState | null> {
+    const result = await this.client
+      .from("conversations")
+      .select("support_flow_state_json")
+      .eq("id", input.persisted.conversationId)
+      .eq("workspace_id", input.binding.workspaceId)
+      .maybeSingle();
+    if (result.error)
+      throw new Error(
+        `supabase:conversations:ai_guided_how_to:${result.error.message}`,
+      );
+    const value = (result.data as { support_flow_state_json?: unknown } | null)
+      ?.support_flow_state_json;
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return null;
+    return readGuidedHowToState(
+      (value as Record<string, unknown>).aiGuidedHowTo,
+    );
+  }
+
+  private async updateAiGuidedHowToState(
+    input: LiveWorkerAutomationInput,
+    next: GuidedHowToState,
+  ): Promise<void> {
+    const result = await this.client
+      .from("conversations")
+      .select("support_flow_state_json")
+      .eq("id", input.persisted.conversationId)
+      .eq("workspace_id", input.binding.workspaceId)
+      .maybeSingle();
+    if (result.error)
+      throw new Error(
+        `supabase:conversations:ai_guided_how_to_read:${result.error.message}`,
+      );
+    const current = (
+      result.data as { support_flow_state_json?: unknown } | null
+    )?.support_flow_state_json;
+    const state =
+      current && typeof current === "object" && !Array.isArray(current)
+        ? current
+        : {};
+    const updated = await this.client
+      .from("conversations")
+      .update({
+        support_flow_state_json: {
+          ...(state as Record<string, unknown>),
+          aiGuidedHowTo: next,
+          updatedAt: new Date().toISOString(),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.persisted.conversationId)
+      .eq("workspace_id", input.binding.workspaceId);
+    if (updated.error)
+      throw new Error(
+        `supabase:conversations:ai_guided_how_to_update:${updated.error.message}`,
+      );
+  }
+
+  private async advanceAiGuidedHowToState(
+    input: LiveWorkerAutomationInput,
+  ): Promise<void> {
+    const current = await this.readAiGuidedHowToState(input);
+    if (!current || current.status === "completed") return;
+    const next = advanceGuidedHowToState(
+      current,
+      input.message.text?.trim() ?? "",
+    );
+    if (next.status !== current.status || next.step !== current.step)
+      await this.updateAiGuidedHowToState(input, next);
   }
 
   private async processSupportFlow(
@@ -1921,6 +2011,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       "</customer_context>",
       conversationReplyInput(history, input.persisted.id),
     ].join("\n");
+    const guidedHowTo = await this.readAiGuidedHowToState(input);
     const provider = await this.providerFor(input.binding.workspaceId);
     const evidence = knowledge.map(
       (article): SupportKnowledgeEvidence => ({
@@ -1962,6 +2053,14 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           knowledgeContext: safeKnowledgeContext(knowledge),
           language: normalizeLocale(workspaceRow.default_language),
           mcpConnections,
+          ...(guidedHowTo?.status === "in_progress"
+            ? {
+                guidedHowTo: {
+                  topic: guidedHowTo.topic,
+                  step: guidedHowTo.step,
+                },
+              }
+            : {}),
           evidenceKeys: requireGrounding ? evidenceBundle.citations : [],
           onMcpApproval: (approval) =>
             this.approveMcpWrite(input, mode, mcpConnections, approval),
@@ -2415,6 +2514,21 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       draftId = String((existing.data as Record<string, unknown>).id ?? "");
     }
     if (!draftId) throw new Error("supabase:ai_drafts:missing_id");
+
+    const startsGuidedHowTo =
+      triage.intent === "how_to" &&
+      (draft.choices ?? []).some((choice) =>
+        /^(?:sim|yes)\b/iu.test(choice.label.trim()),
+      ) &&
+      (draft.choices ?? []).some((choice) =>
+        /^(?:n[aã]o|no)\b/iu.test(choice.label.trim()),
+      );
+    if (startsGuidedHowTo) {
+      await this.updateAiGuidedHowToState(
+        input,
+        initialGuidedHowToState(messageText(input.message)),
+      );
+    }
 
     const used = new Set(draft.usedCitationKeys ?? []);
     for (const [rank, article] of knowledge.entries()) {

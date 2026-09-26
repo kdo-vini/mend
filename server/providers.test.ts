@@ -42,6 +42,32 @@ describe("support AI providers", () => {
     });
   });
 
+  it("instructs the provider to send only the active guided step", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const client: OpenAiResponsesClient = {
+      responses: {
+        async create(input) {
+          calls.push(input as Record<string, unknown>);
+          return { output_text: "Abra o ZeloPDV e entre em Produtos." };
+        },
+      },
+    };
+
+    await new OpenAiSupportProvider(client, {
+      model: "test-model",
+    }).draftReplyWithContext({
+      conversation: "O cliente respondeu sim.",
+      knowledgeContext: "Como cadastrar produtos.",
+      language: "pt-BR",
+      mcpConnections: [],
+      guidedHowTo: { topic: "cadastrar produtos", step: 2 },
+    });
+
+    expect(calls[0]?.input[0].content).toContain(
+      "Send only step 2 now, do not repeat previous steps",
+    );
+  });
+
   it("uses the OpenAI responses contract for drafts and triage", async () => {
     const calls: string[] = [];
     const client: OpenAiResponsesClient = {

@@ -44,6 +44,7 @@ export interface SupportAiDraftInput {
   knowledgeContext?: string;
   language: SupportedLocale;
   mcpConnections: readonly McpRuntimeConnection[];
+  guidedHowTo?: { topic: string; step: number };
   onMcpApproval?: (input: McpApprovalInput) => Promise<boolean>;
   evidenceKeys?: readonly string[];
 }
@@ -82,7 +83,7 @@ const customerFacingReplyInstruction = [
   "Answer the customer's current ask only—do not paste an entire knowledge article.",
   "Never copy document meta sections or labels such as Objetivo, Pré-requisito, Fluxo básico, Recursos úteis, Passo a passo, RESPOSTA CURTA MODELO, Quando encaminhar para humano, or When to escalate.",
   "Prefer a short WhatsApp reply: greeting optional, 2-6 lines or a few numbered steps that match the question, then at most one clarifying question.",
-  "For a multi-step how-to request, first ask whether the customer wants guidance before listing the steps; briefly explain that you can help, ask 'Quer que eu te guie passo a passo agora?' and return exactly two choices such as Sim and Não. Only provide the numbered steps after the customer confirms.",
+  "For a multi-step how-to request, first ask whether the customer wants guidance before listing the steps; start with 'Escolha uma opção', briefly explain that you can help, ask 'Quer que eu te guie passo a passo agora?' and return exactly two choices such as Sim and Não. Only provide the numbered steps after the customer confirms.",
   "When the customer must choose between 2 or 3 concrete options (for example link vs QR, cardápio vs caixa), put the short question in body and return choices as an array of {id, label} with 2-3 items. Labels must be at most 20 characters. Do not write 'reply 1 or 2' / 'responda 1 ou 2' in body—buttons will show the options.",
   "If knowledge includes a short model answer, adapt it to this customer; do not dump every bullet from the source.",
   "For greetings, keep it short and ask what they need. Do not invent a menu of topics, especially billing or renewal options, unless the customer already asked about them.",
@@ -299,6 +300,9 @@ export class OpenAiSupportProvider implements SupportAiProvider {
         : "Draft a concise WhatsApp support reply. If you lack published facts to answer confidently, ask one short clarifying question instead of inventing product behavior, order status, or policy. Never promise a deadline, refund, or policy change. Return only the suggested reply.",
       conversationRoleInstruction,
       customerFacingReplyInstruction,
+      input.guidedHowTo
+        ? `The customer already confirmed guided help for "${input.guidedHowTo.topic}". Send only step ${input.guidedHowTo.step} now, do not repeat previous steps, do not ask for all product data, and end by asking the customer to reply "pronto" when that step is complete.`
+        : "",
       whatsappFormattingInstruction,
       replyLanguageInstruction(input.language),
       input.knowledgeContext
