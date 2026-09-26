@@ -1,4 +1,4 @@
--- Phase 1 reply capacity (local/test first — do not apply to production until validated).
+-- Phase 1 reply capacity for production.
 -- 1) New conversations default to safe_auto so the AI can send when policy allows.
 -- 2) Lower safe_auto_min_confidence floor to 0.65 (reply-first; escalate only when blocked).
 -- 3) Prefer generic_reply when MCP fails instead of forcing review queues.
