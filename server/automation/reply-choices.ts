@@ -24,9 +24,7 @@ function truncateLabel(label: string): string {
 }
 
 /** Normalize model-provided or heuristic choices for WhatsApp reply buttons. */
-export function normalizeAiReplyChoices(
-  value: unknown,
-): AiReplyChoice[] {
+export function normalizeAiReplyChoices(value: unknown): AiReplyChoice[] {
   if (!Array.isArray(value)) return [];
   const choices: AiReplyChoice[] = [];
   const seen = new Set<string>();
@@ -112,6 +110,13 @@ export function parseReplyChoicesFromBody(body: string): {
     numbered.push({ index, label: match[2].trim() });
   }
   if (numbered.length >= 2 && numbered.length <= MAX_CHOICES) {
+    const firstChoiceLine = body.search(/(?:^|\n)\s*1[.)]\s+/);
+    const lead = firstChoiceLine >= 0 ? body.slice(0, firstChoiceLine) : body;
+    const hasExplicitChoiceCue =
+      /\b(?:escolha|opç(?:ão|ões)|qual prefere|como prefere|quer .+\s+ou\s+|prefere .+\s+ou\s+)\b/iu.test(
+        lead,
+      );
+    if (!hasExplicitChoiceCue) return { body, choices: [] };
     const choices = normalizeAiReplyChoices(
       numbered
         .sort((a, b) => a.index - b.index)
@@ -148,9 +153,7 @@ export function formatChoicesAsTextFallback(
   choices: readonly AiReplyChoice[],
 ): string {
   if (!choices.length) return body;
-  const lines = choices.map(
-    (choice, index) => `${index + 1}. ${choice.label}`,
-  );
+  const lines = choices.map((choice, index) => `${index + 1}. ${choice.label}`);
   const lead = body.trim();
   return lead ? `${lead}\n\n${lines.join("\n")}` : lines.join("\n");
 }

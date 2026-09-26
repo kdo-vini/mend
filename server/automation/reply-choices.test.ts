@@ -53,4 +53,26 @@ describe("ai reply choices", () => {
       "Ok.",
     );
   });
+
+  it("keeps instructional numbered steps instead of turning them into choices", () => {
+    const parsed = parseReplyChoicesFromBody(
+      "Posso ajudar a cadastrar produtos no ZeloPDV. Para isso:\n1. Abra sua conta.\n2. Crie ou escolha uma categoria.\n3. Preencha nome, preço e estoque.",
+    );
+
+    expect(parsed.choices).toEqual([]);
+    expect(parsed.body).toContain("1. Abra sua conta.");
+    expect(parsed.body).toContain("3. Preencha nome, preço e estoque.");
+  });
+
+  it("turns an explicitly labeled choice list into buttons", () => {
+    const parsed = parseReplyChoicesFromBody(
+      "Escolha uma opção:\n1. Sim, pode me guiar\n2. Não, vou tentar",
+    );
+
+    expect(parsed.choices).toEqual([
+      { id: "sim_pode_me_guiar", label: "Sim, pode me guiar" },
+      { id: "nao_vou_tentar", label: "Não, vou tentar" },
+    ]);
+    expect(parsed.body).toBe("Escolha uma opção:");
+  });
 });

@@ -68,6 +68,9 @@ describe("support AI providers", () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]).toContain("Checkout closes at 18:00.");
     expect(calls[0]).toContain("Answer the customer's current ask only");
+    expect(calls[0]).toContain(
+      "For a multi-step how-to request, first ask whether the customer wants guidance",
+    );
   });
 
   it("creates the configured OpenAI provider without a registry", () => {
