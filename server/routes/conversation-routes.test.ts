@@ -411,8 +411,11 @@ describe("POST /api/conversations", () => {
       number: "5511999999999",
       text: "_*Lucas está te atendendo*_\n\nHi, this is Téchne support.",
     });
-    expect(client.rpcCalls).toHaveLength(1);
-    expect(client.rpcCalls[0].name).toBe("inbox_ingest_message");
+    // A human-started thread pauses AI right after the outbound is recorded.
+    expect(client.rpcCalls.map((call) => call.name)).toEqual([
+      "inbox_ingest_message",
+      "pause_conversation_ai",
+    ]);
     expect(client.rpcCalls[0].args).toMatchObject({
       p_workspace_id: workspaceId,
       p_channel_connection_id: channelId,

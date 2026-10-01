@@ -353,9 +353,7 @@ export function relevantKnowledge(
     (article) => typeof article.retrievalScore === "number",
   );
   if (scored.length) {
-    const hits = scored.filter(
-      (article) => (article.retrievalScore ?? 0) > 0,
-    );
+    const hits = scored.filter((article) => (article.retrievalScore ?? 0) > 0);
     if (hits.length) return hits;
   }
   return articles.filter((article) => {
