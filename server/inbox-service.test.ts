@@ -716,6 +716,8 @@ describe("InboxService and WhatsAppService", () => {
         outboundAudio("wamid-human-audio"),
       );
       expect(human.transcript).toBe("Oi, já corrigi o pedido");
+      // Support events rely on this to include only human outbound.
+      expect(human.aiGenerated).toBe(false);
       const stored = [...port.messages.values()].find(
         (message) => message.id === human.id,
       );
@@ -729,6 +731,7 @@ describe("InboxService and WhatsAppService", () => {
         { aiGenerated: true },
       );
       expect(ai.transcript).toBeUndefined();
+      expect(ai.aiGenerated).toBe(true);
       expect(transcriber.transcribe).toHaveBeenCalledTimes(1);
     } finally {
       globalThis.fetch = originalFetch;

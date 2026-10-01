@@ -1514,27 +1514,56 @@ describe("Support AI kill-switch (Fase A)", () => {
     expect(job?.attempts).toBe(1);
   });
 
-  it("does not emit support events for outbound echoes", async () => {
-    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
-    const events = new InMemorySupportEventStore();
-    const worker = new LiveWorker({
-      jobStore: store,
-      inboundDebounceMs: 0,
-      channelResolver: new FakeResolver(binding),
-      inbox: new FakeInbox(),
-      supportEvents: events,
-    });
-    await store.enqueue({
-      type: "whatsmiau.message.received",
-      payload: {
-        event: "messages.upsert",
-        message: { ...message, direction: "outbound" },
-      },
-      dedupeKey: "outbound-echo",
-    });
-    await worker.poll();
-    expect(events.rows).toHaveLength(0);
-  });
+  it.each([
+    { aiGenerated: false, recorded: 1 },
+    { aiGenerated: true, recorded: 0 },
+    { aiGenerated: undefined, recorded: 0 },
+  ])(
+    "records outbound echoes only for confirmed human origin (aiGenerated=$aiGenerated)",
+    async ({ aiGenerated, recorded }) => {
+      const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+      const events = new InMemorySupportEventStore();
+      const automation = { process: vi.fn(async () => undefined) };
+      const fake = new FakeInbox();
+      const inbox: LiveWorkerInbox = {
+        async persistNormalizedMessage(context, channel, incoming) {
+          const persisted = await fake.persistNormalizedMessage(
+            context,
+            channel,
+            incoming,
+          );
+          return { ...persisted, aiGenerated };
+        },
+      };
+      const worker = new LiveWorker({
+        supportAiEnabled: true,
+        jobStore: store,
+        inboundDebounceMs: 0,
+        channelResolver: new FakeResolver(binding),
+        inbox,
+        automation,
+        supportEvents: events,
+      });
+      await store.enqueue({
+        type: "whatsmiau.message.received",
+        payload: {
+          event: "messages.upsert",
+          message: { ...message, direction: "outbound" },
+        },
+        dedupeKey: "outbound-echo",
+      });
+      await worker.poll();
+      await worker.poll();
+
+      expect(events.rows).toHaveLength(recorded);
+      if (recorded)
+        expect(events.rows[0]).toMatchObject({
+          messageId: "message-1",
+          direction: "outbound",
+        });
+      expect(automation.process).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps transcribed outbound audio out of inbound automation", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();

@@ -8,6 +8,7 @@ import {
   SUPPORT_EVENTS_KEY_HEADER,
   SUPPORT_EVENTS_PATH,
   SupabaseSupportEventStore,
+  supportEventFor,
   supportReplyAllowed,
   type SupportEventStore,
   type SupportEventsSupabaseClient,
@@ -127,6 +128,7 @@ describe("GET /internal/support/events", () => {
         remoteJid: "5511999999999@s.whatsapp.net",
         phoneNumber: "5511999999999",
         isGroup: false,
+        direction: "inbound",
         text: "Olá 1",
         aiMode: "safe_auto",
         automationState: "ai_active",
@@ -187,6 +189,53 @@ describe("GET /internal/support/events", () => {
       aiMode: "off",
       replyAllowed: false,
       isGroup: true,
+    });
+  });
+
+  it("emits human outbound audio with its transcript and replyAllowed=false", async () => {
+    const store = new InMemorySupportEventStore();
+    await store.record({
+      workspaceId: "w",
+      conversationId: "c",
+      messageId: "founder-audio",
+      direction: "outbound",
+      remoteJid: "5511@s.whatsapp.net",
+    });
+    store.messages.set("founder-audio", {
+      id: "founder-audio",
+      messageType: "audio",
+      text: "Já ajustei o seu pedido",
+      mimeType: "audio/ogg",
+      transcriptionStatus: "ready",
+    });
+    store.conversations.set("c", {
+      aiMode: "safe_auto",
+      automationState: "human_paused",
+    });
+    const page = await store.list({ limit: 10 });
+    expect(page.events[0]).toMatchObject({
+      direction: "outbound",
+      messageType: "audio",
+      text: "Já ajustei o seu pedido",
+      transcription: { status: "ready", text: "Já ajustei o seu pedido" },
+      aiMode: "safe_auto",
+      replyAllowed: false,
+    });
+  });
+
+  it("treats rows recorded without a direction as inbound", async () => {
+    const store = new InMemorySupportEventStore();
+    await store.record({
+      workspaceId: "w",
+      conversationId: "c",
+      messageId: "m",
+      remoteJid: "r",
+    });
+    store.conversations.set("c", { aiMode: "safe_auto" });
+    const page = await store.list({ limit: 10 });
+    expect(page.events[0]).toMatchObject({
+      direction: "inbound",
+      replyAllowed: true,
     });
   });
 
@@ -256,6 +305,68 @@ describe("supportReplyAllowed", () => {
     expect(supportReplyAllowed({ aiMode: "off" })).toBe(false);
     expect(supportReplyAllowed({ aiMode: "draft" })).toBe(true);
     expect(supportReplyAllowed({ aiMode: "safe_auto" })).toBe(true);
+    expect(
+      supportReplyAllowed({ aiMode: "safe_auto", direction: "inbound" }),
+    ).toBe(true);
+  });
+
+  it("never allows a reply to an outbound human message", () => {
+    expect(
+      supportReplyAllowed({ aiMode: "safe_auto", direction: "outbound" }),
+    ).toBe(false);
+    expect(
+      supportReplyAllowed({ aiMode: "draft", direction: "outbound" }),
+    ).toBe(false);
+  });
+});
+
+describe("supportEventFor", () => {
+  const binding = { workspaceId: "w" };
+  const message = {
+    direction: "inbound",
+    messageType: "text",
+    remoteJid: "5511@s.whatsapp.net",
+    phoneNumber: "5511",
+    chatType: "direct",
+  };
+  const persisted = { id: "m", conversationId: "c" };
+
+  it("records inbound customer messages", () => {
+    expect(supportEventFor(binding, message, persisted)).toEqual({
+      workspaceId: "w",
+      conversationId: "c",
+      messageId: "m",
+      direction: "inbound",
+      remoteJid: "5511@s.whatsapp.net",
+      phoneNumber: "5511",
+      chatType: "direct",
+    });
+  });
+
+  it("records human outbound messages", () => {
+    expect(
+      supportEventFor(
+        binding,
+        { ...message, direction: "outbound", messageType: "audio" },
+        { ...persisted, aiGenerated: false },
+      ),
+    ).toMatchObject({ messageId: "m", direction: "outbound" });
+  });
+
+  it("skips AI-generated or unconfirmed outbound and reactions", () => {
+    const outbound = { ...message, direction: "outbound" };
+    expect(
+      supportEventFor(binding, outbound, { ...persisted, aiGenerated: true }),
+    ).toBeNull();
+    // Receipt/delete updates carry no origin; fail closed.
+    expect(supportEventFor(binding, outbound, persisted)).toBeNull();
+    expect(
+      supportEventFor(
+        binding,
+        { ...message, messageType: "reaction" },
+        persisted,
+      ),
+    ).toBeNull();
   });
 });
 
@@ -278,6 +389,7 @@ describe("SupabaseSupportEventStore", () => {
           workspace_id: "w",
           conversation_id: "c",
           message_id: "m",
+          direction: "inbound",
           remote_jid: "r",
           phone_number: "55",
           chat_type: "direct",
@@ -295,10 +407,22 @@ describe("SupabaseSupportEventStore", () => {
           workspace_id: "w",
           conversation_id: "c",
           message_id: "m",
+          direction: "inbound",
           remote_jid: "5511@s.whatsapp.net",
           phone_number: "5511",
           chat_type: "direct",
           created_at: "2026-10-01T10:00:00Z",
+        },
+        {
+          id: 8,
+          workspace_id: "w",
+          conversation_id: "c",
+          message_id: "founder-audio",
+          direction: "outbound",
+          remote_jid: "5511@s.whatsapp.net",
+          phone_number: "5511",
+          chat_type: "direct",
+          created_at: "2026-10-01T10:01:00Z",
         },
       ],
       messages: [
@@ -310,6 +434,13 @@ describe("SupabaseSupportEventStore", () => {
           media_storage_path: "w/c/a.ogg",
           mime_type: "audio/ogg",
           duration_seconds: 4,
+          transcription_status: "ready",
+        },
+        {
+          id: "founder-audio",
+          message_type: "audio",
+          text: "Já ajustei o seu pedido",
+          mime_type: "audio/ogg",
           transcription_status: "ready",
         },
       ],
@@ -334,7 +465,7 @@ describe("SupabaseSupportEventStore", () => {
       args: ["workspace_id", "w"],
     });
     expect(page).toEqual({
-      nextCursor: "7",
+      nextCursor: "8",
       hasMore: false,
       events: [
         {
@@ -346,6 +477,7 @@ describe("SupabaseSupportEventStore", () => {
           remoteJid: "5511@s.whatsapp.net",
           phoneNumber: "5511",
           isGroup: false,
+          direction: "inbound",
           messageType: "audio",
           text: "transcrição do áudio",
           media: {
@@ -359,6 +491,24 @@ describe("SupabaseSupportEventStore", () => {
           automationState: "human_paused",
           replyAllowed: true,
           createdAt: "2026-10-01T10:00:00Z",
+        },
+        {
+          cursor: "8",
+          workspaceId: "w",
+          conversationId: "c",
+          messageId: "founder-audio",
+          remoteJid: "5511@s.whatsapp.net",
+          phoneNumber: "5511",
+          isGroup: false,
+          direction: "outbound",
+          messageType: "audio",
+          text: "Já ajustei o seu pedido",
+          media: { type: "audio", mimeType: "audio/ogg" },
+          transcription: { status: "ready", text: "Já ajustei o seu pedido" },
+          aiMode: "safe_auto",
+          automationState: "human_paused",
+          replyAllowed: false,
+          createdAt: "2026-10-01T10:01:00Z",
         },
       ],
     });

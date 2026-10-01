@@ -24,7 +24,7 @@ import {
 } from "./media-pipeline.js";
 import { SupabaseMediaStorage } from "./media.js";
 import {
-  inboundSupportEvent,
+  supportEventFor,
   SupabaseSupportEventStore,
   type SupportEventStore,
 } from "./support-events.js";
@@ -672,7 +672,7 @@ export class LiveWorker {
       }
     }
 
-    const supportEvent = inboundSupportEvent(binding, message, persisted);
+    const supportEvent = supportEventFor(binding, message, persisted);
     if (supportEvent) await this.options.supportEvents?.record(supportEvent);
     if (
       message.direction !== "inbound" ||

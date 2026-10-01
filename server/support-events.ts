@@ -4,7 +4,10 @@ import type { Logger } from "pino";
 import { z } from "zod";
 import { timingSafeSecretEquals } from "./zelochat-internal-send.js";
 
-/** Machine path the external Support bot polls for inbound customer messages. */
+/**
+ * Machine path the external Support bot polls for customer messages and the
+ * human (founder) outbound messages that Support must read but never answer.
+ */
 export const SUPPORT_EVENTS_PATH = "/internal/support/events";
 export const SUPPORT_EVENTS_KEY_HEADER = "x-mend-support-key";
 export const SUPPORT_EVENTS_API_KEY_ENV = "MEND_SUPPORT_EVENTS_API_KEY";
@@ -12,10 +15,14 @@ export const SUPPORT_EVENTS_API_KEY_ENV = "MEND_SUPPORT_EVENTS_API_KEY";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
 
-export interface SupportInboundEventInput {
+export type SupportEventDirection = "inbound" | "outbound";
+
+export interface SupportEventInput {
   workspaceId: string;
   conversationId: string;
   messageId: string;
+  /** Rows recorded before outbound events existed are inbound. */
+  direction?: SupportEventDirection;
   remoteJid: string;
   phoneNumber?: string;
   chatType?: string;
@@ -44,6 +51,8 @@ export interface SupportEvent {
   remoteJid: string;
   phoneNumber?: string;
   isGroup: boolean;
+  /** outbound = a human (founder/team) message already sent to the customer. */
+  direction: SupportEventDirection;
   messageType: string;
   text?: string;
   media?: SupportEventMedia;
@@ -52,8 +61,9 @@ export interface SupportEvent {
   automationState: string;
   pausedUntil?: string;
   /**
-   * False only when ai_mode=off. human_paused pauses Mend's native AI, not the
-   * external Support bot, so it does not block Support replies.
+   * Always false for outbound: Support reads the human message as context and
+   * must never reply on top of it. For inbound, false only when ai_mode=off;
+   * human_paused pauses Mend's native AI, not the external Support bot.
    */
   replyAllowed: boolean;
   createdAt: string;
@@ -73,7 +83,7 @@ export interface ListSupportEventsInput {
 
 export interface SupportEventStore {
   /** Idempotent by message id: recording the same message twice is a no-op. */
-  record(input: SupportInboundEventInput): Promise<void>;
+  record(input: SupportEventInput): Promise<void>;
   list(input: ListSupportEventsInput): Promise<SupportEventPage>;
 }
 
@@ -98,11 +108,14 @@ export interface SupportEventConversationFlags {
 }
 
 /**
- * Event row for a persisted inbound customer message; null for anything else.
- * Recording is idempotent by message id, so the worker lets a failed write
- * retry the ingest job instead of dropping the event.
+ * Event row for a persisted inbound customer message or human outbound
+ * message; null for anything else. AI-generated outbound (including Support's
+ * own sends echoed back by the provider) is skipped, and outbound fails closed
+ * unless persistence confirmed a human origin. Recording is idempotent by
+ * message id, so the worker lets a failed write retry the ingest job instead
+ * of dropping the event.
  */
-export function inboundSupportEvent(
+export function supportEventFor(
   binding: { workspaceId: string },
   message: {
     direction: string;
@@ -111,23 +124,32 @@ export function inboundSupportEvent(
     phoneNumber?: string;
     chatType?: string;
   },
-  persisted: { id: string; conversationId: string },
-): SupportInboundEventInput | null {
-  if (message.direction !== "inbound" || message.messageType === "reaction")
-    return null;
+  persisted: { id: string; conversationId: string; aiGenerated?: boolean },
+): SupportEventInput | null {
+  if (message.messageType === "reaction") return null;
+  const direction = message.direction;
+  if (direction !== "inbound" && direction !== "outbound") return null;
+  if (direction === "outbound" && persisted.aiGenerated !== false) return null;
   return {
     workspaceId: binding.workspaceId,
     conversationId: persisted.conversationId,
     messageId: persisted.id,
+    direction,
     remoteJid: message.remoteJid,
     ...(message.phoneNumber ? { phoneNumber: message.phoneNumber } : {}),
     ...(message.chatType ? { chatType: message.chatType } : {}),
   };
 }
 
-/** Support may reply unless the conversation's AI mode is off. */
-export function supportReplyAllowed(flags: { aiMode: string }): boolean {
-  return flags.aiMode !== "off";
+/**
+ * Support may reply to inbound unless the conversation's AI mode is off; it
+ * never replies to an outbound human message.
+ */
+export function supportReplyAllowed(flags: {
+  aiMode: string;
+  direction?: SupportEventDirection;
+}): boolean {
+  return flags.direction !== "outbound" && flags.aiMode !== "off";
 }
 
 function present(value: string | null | undefined): string | undefined {
@@ -137,13 +159,14 @@ function present(value: string | null | undefined): string | undefined {
 
 /** Build the public event from the queue row plus live message/conversation state. */
 export function buildSupportEvent(
-  row: SupportInboundEventInput & { id: number | string; createdAt: string },
+  row: SupportEventInput & { id: number | string; createdAt: string },
   message: SupportEventMessageSnapshot | undefined,
   flags: SupportEventConversationFlags | undefined,
 ): SupportEvent {
   // Fail closed: an event whose conversation vanished must never be answered.
   const aiMode = flags ? (flags.aiMode ?? "off") : "off";
   const automationState = flags?.automationState ?? "ai_active";
+  const direction = row.direction ?? "inbound";
   const messageType = message?.messageType ?? "text";
   const isAudio = messageType === "audio";
   const body = present(message?.text);
@@ -169,6 +192,7 @@ export function buildSupportEvent(
       ? { phoneNumber: present(row.phoneNumber) }
       : {}),
     isGroup: row.chatType === "group" || row.remoteJid.endsWith("@g.us"),
+    direction,
     messageType,
     ...(text ? { text } : {}),
     ...(hasMedia && message
@@ -207,7 +231,7 @@ export function buildSupportEvent(
     aiMode,
     automationState,
     ...(flags?.pausedUntil ? { pausedUntil: flags.pausedUntil } : {}),
-    replyAllowed: supportReplyAllowed({ aiMode }),
+    replyAllowed: supportReplyAllowed({ aiMode, direction }),
     createdAt: row.createdAt,
   };
 }
@@ -219,7 +243,7 @@ function parseCursor(cursor: string | undefined): number {
   return Number(cursor);
 }
 
-interface StoredEventRow extends SupportInboundEventInput {
+interface StoredEventRow extends SupportEventInput {
   id: number;
   createdAt: string;
 }
@@ -231,7 +255,7 @@ export class InMemorySupportEventStore implements SupportEventStore {
   readonly conversations = new Map<string, SupportEventConversationFlags>();
   private nextId = 1;
 
-  async record(input: SupportInboundEventInput): Promise<void> {
+  async record(input: SupportEventInput): Promise<void> {
     if (this.rows.some((row) => row.messageId === input.messageId)) return;
     this.rows.push({
       ...input,
@@ -314,12 +338,13 @@ export class SupabaseSupportEventStore implements SupportEventStore {
     return new SupabaseSupportEventStore(client as SupportEventsSupabaseClient);
   }
 
-  async record(input: SupportInboundEventInput): Promise<void> {
+  async record(input: SupportEventInput): Promise<void> {
     const result = await this.client.from("support_inbound_events").upsert(
       {
         workspace_id: input.workspaceId,
         conversation_id: input.conversationId,
         message_id: input.messageId,
+        direction: input.direction ?? "inbound",
         remote_jid: input.remoteJid,
         phone_number: input.phoneNumber ?? null,
         chat_type: input.chatType ?? null,
@@ -337,7 +362,7 @@ export class SupabaseSupportEventStore implements SupportEventStore {
     let query = this.client
       .from("support_inbound_events")
       .select(
-        "id, workspace_id, conversation_id, message_id, remote_jid, phone_number, chat_type, created_at",
+        "id, workspace_id, conversation_id, message_id, direction, remote_jid, phone_number, chat_type, created_at",
       )
       .gt("id", after);
     if (input.workspaceId) query = query.eq("workspace_id", input.workspaceId);
@@ -407,6 +432,7 @@ export class SupabaseSupportEventStore implements SupportEventStore {
           workspaceId: String(row.workspace_id),
           conversationId: String(row.conversation_id),
           messageId: String(row.message_id),
+          direction: row.direction === "outbound" ? "outbound" : "inbound",
           remoteJid: String(row.remote_jid),
           phoneNumber: str(row.phone_number),
           chatType: str(row.chat_type),
