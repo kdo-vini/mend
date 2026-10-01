@@ -60,6 +60,8 @@ export interface InboxMessageRecord {
   providerStatus?: string | null;
   isDeleted?: boolean;
   transcript?: string;
+  /** Set on ingest; absent on provider receipt/delete updates. */
+  aiGenerated?: boolean;
 }
 
 export interface StoredAudioMessage {
@@ -1270,6 +1272,7 @@ export class InboxService {
       ...result,
       direction: message.direction,
       messageType: message.messageType,
+      aiGenerated,
       ...(transcript ? { transcript } : {}),
       ...(options.mediaStoragePath
         ? { mediaStoragePath: options.mediaStoragePath }
