@@ -234,7 +234,7 @@ test("operator can move from inbox to issues and create an issue", async ({
   await expect(page.getByText("Edited E2E issue from Mend")).toHaveCount(0);
 });
 
-test("operator can use the command palette and navigate to runs", async ({
+test("operator can use the command palette without AI surfaces", async ({
   page,
 }, testInfo) => {
   await page.goto("/inbox?demo=1");
@@ -242,10 +242,12 @@ test("operator can use the command palette and navigate to runs", async ({
   await expect(
     page.getByPlaceholder("Search actions or jump to…"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "View Agent runs" }).click();
+  // Fase A hides Agent runs and Knowledge from the palette.
   await expect(
-    page.getByRole("heading", { name: "Engineering runs" }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "View Agent runs" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await expect(page).toHaveURL(/\/settings/);
 });
 
 test("operator can assign and resolve a conversation", async ({
