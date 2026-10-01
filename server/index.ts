@@ -49,6 +49,10 @@ import { SupabaseKnowledgeSyncProcessor } from "./workers/knowledge-sync.js";
 import { createGitHubKnowledgeWebhook } from "./github-knowledge-webhook.js";
 import { SupabaseKnowledgeMetricWriter } from "./knowledge-evals.js";
 import { registerInternalWhatsAppRoutes } from "./internal-whatsapp.js";
+import {
+  registerInternalSupportRoutes,
+  SupabaseSupportEventStore,
+} from "./support-events.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -173,6 +177,10 @@ function secretMatches(
 }
 
 registerInternalWhatsAppRoutes(app, { logger });
+registerInternalSupportRoutes(app, {
+  store: workerSupabase ? SupabaseSupportEventStore.from(workerSupabase) : null,
+  logger,
+});
 
 app.get("/api/health", (_request, response) =>
   response.json({ ok: true, service: "mend-api" }),

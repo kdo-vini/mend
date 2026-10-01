@@ -123,6 +123,7 @@ import {
   INBOX_CASE_CONTEXT_ID,
   InboxCaseContext,
 } from "../components/InboxCaseContext";
+import { SUPPORT_AI_SURFACES_ENABLED } from "../../../shared/support-ai-surfaces";
 import {
   NEW_CHAT_DIALOG_ID,
   NewChatDialog,
@@ -663,13 +664,16 @@ export function InboxPage({
   const draftSignature = selected.aiDraft
     ? aiDraftDismissalSignature(selected.aiDraft)
     : "";
-  const showAiDecision = !isAiCardDismissed(
-    dismissedAiCards,
-    selected.id,
-    "decision",
-    decisionSignature,
-  );
+  const showAiDecision =
+    SUPPORT_AI_SURFACES_ENABLED &&
+    !isAiCardDismissed(
+      dismissedAiCards,
+      selected.id,
+      "decision",
+      decisionSignature,
+    );
   const showAiDraft =
+    SUPPORT_AI_SURFACES_ENABLED &&
     Boolean(selected.aiDraft) &&
     !isAiCardDismissed(dismissedAiCards, selected.id, "draft", draftSignature);
   const dismissSelectedAiCard = (kind: AiCardKind, signature: string) => {
@@ -1758,39 +1762,41 @@ export function InboxPage({
                 </span>
               </label>
               <div className="inbox-bulk-actions">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="button button-ghost inbox-bulk-mode"
-                      type="button"
-                      disabled={!visibleSelectedCount || bulkPending}
-                    >
-                      <Sparkles size={14} />
-                      <span>{t("bulk.aiMode")}</span>
-                      <ChevronDownIcon size={12} aria-hidden="true" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>
-                      {t("bulk.aiModeLabel")}
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem
-                      onSelect={() => void applyBulkAiMode("safe_auto")}
-                    >
-                      <Zap size={14} /> {t("ui.autoReply")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => void applyBulkAiMode("draft")}
-                    >
-                      <Sparkles size={14} /> {t("ui.copilot")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => void applyBulkAiMode("off")}
-                    >
-                      <UserRound size={14} /> {t("ui.manual")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {SUPPORT_AI_SURFACES_ENABLED && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="button button-ghost inbox-bulk-mode"
+                        type="button"
+                        disabled={!visibleSelectedCount || bulkPending}
+                      >
+                        <Sparkles size={14} />
+                        <span>{t("bulk.aiMode")}</span>
+                        <ChevronDownIcon size={12} aria-hidden="true" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>
+                        {t("bulk.aiModeLabel")}
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onSelect={() => void applyBulkAiMode("safe_auto")}
+                      >
+                        <Zap size={14} /> {t("ui.autoReply")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => void applyBulkAiMode("draft")}
+                      >
+                        <Sparkles size={14} /> {t("ui.copilot")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => void applyBulkAiMode("off")}
+                      >
+                        <UserRound size={14} /> {t("ui.manual")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <button
                   className="icon-button subtle inbox-bulk-delete"
                   type="button"
@@ -2682,33 +2688,37 @@ function ConversationHeader({
             onChange={onAssign}
           />
         </label>
-        <span
-          className={`mode-label ${conversation.aiMode} ${conversation.automationState}`}
-        >
-          <Sparkles size={13} aria-hidden="true" />
-          <span>
-            {conversation.automationState === "human_paused"
-              ? t("ui.humanTakeover")
-              : conversation.aiMode === "safe_auto"
-                ? t("ui.autoReply")
-                : conversation.aiMode === "draft"
-                  ? t("ui.copilot")
-                  : t("ui.manual")}
+        {(SUPPORT_AI_SURFACES_ENABLED ||
+          conversation.automationState === "human_paused") && (
+          <span
+            className={`mode-label ${conversation.aiMode} ${conversation.automationState}`}
+          >
+            <Sparkles size={13} aria-hidden="true" />
+            <span>
+              {conversation.automationState === "human_paused"
+                ? t("ui.humanTakeover")
+                : conversation.aiMode === "safe_auto"
+                  ? t("ui.autoReply")
+                  : conversation.aiMode === "draft"
+                    ? t("ui.copilot")
+                    : t("ui.manual")}
+            </span>
           </span>
-        </span>
+        )}
         {conversation.humanTakeoverReason && (
           <span className="ai-reason" title={t("ui.humanTakeoverReason")}>
             {conversation.humanTakeoverReason.replaceAll("_", " ")}
           </span>
         )}
-        {conversation.humanTakeoverReason?.startsWith("support_ai_") && (
-          <Link
-            className="text-button conversation-desktop-control"
-            to="/settings/engineering/agents/support"
-          >
-            {t("ui.configureSupportAi")}
-          </Link>
-        )}
+        {SUPPORT_AI_SURFACES_ENABLED &&
+          conversation.humanTakeoverReason?.startsWith("support_ai_") && (
+            <Link
+              className="text-button conversation-desktop-control"
+              to="/settings/engineering/agents/support"
+            >
+              {t("ui.configureSupportAi")}
+            </Link>
+          )}
         <button
           className="icon-button inbox-context-trigger"
           type="button"
@@ -2752,17 +2762,21 @@ function ConversationHeader({
               >
                 <PenLine size={14} /> {t("ui.editContactName")}
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onToggleAiDetails();
-                  setMenuOpen(false);
-                }}
-              >
-                <Sparkles size={14} />
-                {aiDetailsOpen ? t("ui.hideAiDetails") : t("ui.showAiDetails")}
-              </button>
+              {SUPPORT_AI_SURFACES_ENABLED && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onToggleAiDetails();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <Sparkles size={14} />
+                  {aiDetailsOpen
+                    ? t("ui.hideAiDetails")
+                    : t("ui.showAiDetails")}
+                </button>
+              )}
               <label className="context-menu-select mobile-menu-control">
                 <UserRound size={14} />
                 <span>{t("ui.assignee")}</span>
@@ -2790,46 +2804,51 @@ function ConversationHeader({
                 </button>
               )}
               <hr className="mobile-menu-control" />
-              {conversation.humanTakeoverReason?.startsWith("support_ai_") && (
-                <Link
-                  className="mobile-menu-control"
-                  role="menuitem"
-                  to="/settings/engineering/agents/support"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  <LockKeyhole size={14} /> {t("ui.configureSupportAi")}
-                </Link>
+              {SUPPORT_AI_SURFACES_ENABLED &&
+                conversation.humanTakeoverReason?.startsWith("support_ai_") && (
+                  <Link
+                    className="mobile-menu-control"
+                    role="menuitem"
+                    to="/settings/engineering/agents/support"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <LockKeyhole size={14} /> {t("ui.configureSupportAi")}
+                  </Link>
+                )}
+              {SUPPORT_AI_SURFACES_ENABLED && (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onSetAiMode("draft");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <PenLine size={14} /> {t("ui.copilot")}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onSetAiMode("safe_auto");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Zap size={14} /> {t("ui.autoReply")}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onSetAiMode("off");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <LockKeyhole size={14} /> {t("ui.manual")}
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onSetAiMode("draft");
-                  setMenuOpen(false);
-                }}
-              >
-                <PenLine size={14} /> {t("ui.copilot")}
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onSetAiMode("safe_auto");
-                  setMenuOpen(false);
-                }}
-              >
-                <Zap size={14} /> {t("ui.autoReply")}
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onSetAiMode("off");
-                  setMenuOpen(false);
-                }}
-              >
-                <LockKeyhole size={14} /> {t("ui.manual")}
-              </button>
               <button
                 type="button"
                 role="menuitem"
@@ -3422,21 +3441,23 @@ function MediaComposer({
           {recording ? <Square size={14} /> : <Mic size={15} />}{" "}
           {recording ? t("ui.stop") : t("ui.voice")}
         </button>
-        <button
-          className="composer-tool"
-          type="button"
-          disabled={sending || draftLoading}
-          aria-label={t("ui.insertDraft")}
-          aria-busy={draftLoading}
-          onClick={() => void insertAiDraft()}
-        >
-          {draftLoading ? (
-            <LoaderCircle className="spin" size={15} />
-          ) : (
-            <Sparkles size={15} />
-          )}{" "}
-          {draftLoading ? t("ui.generating") : t("ui.insertAiDraft")}
-        </button>
+        {SUPPORT_AI_SURFACES_ENABLED && (
+          <button
+            className="composer-tool"
+            type="button"
+            disabled={sending || draftLoading}
+            aria-label={t("ui.insertDraft")}
+            aria-busy={draftLoading}
+            onClick={() => void insertAiDraft()}
+          >
+            {draftLoading ? (
+              <LoaderCircle className="spin" size={15} />
+            ) : (
+              <Sparkles size={15} />
+            )}{" "}
+            {draftLoading ? t("ui.generating") : t("ui.insertAiDraft")}
+          </button>
+        )}
         <span className="composer-hint">{t("ui.composerHint")}</span>
       </div>
       {pendingFiles.length > 0 && (
@@ -3515,7 +3536,7 @@ function MediaComposer({
           placeholder={
             automationState === "human_paused"
               ? t("ui.aiPausedPlaceholder")
-              : aiMode === "safe_auto"
+              : SUPPORT_AI_SURFACES_ENABLED && aiMode === "safe_auto"
                 ? t("ui.aiHandlingPlaceholder")
                 : t("ui.writeReplyPlaceholder")
           }
@@ -3532,16 +3553,18 @@ function MediaComposer({
         </button>
       </div>
       <div className="composer-footer">
-        <span className="composer-ai-state">
-          <Sparkles size={12} />{" "}
-          {aiMode === "off"
-            ? t("ui.manual")
-            : automationState === "human_paused"
-              ? t("ui.aiPaused")
-              : aiMode === "safe_auto"
-                ? t("ui.autoReplyActive")
-                : t("ui.copilotReady")}
-        </span>
+        {SUPPORT_AI_SURFACES_ENABLED && (
+          <span className="composer-ai-state">
+            <Sparkles size={12} />{" "}
+            {aiMode === "off"
+              ? t("ui.manual")
+              : automationState === "human_paused"
+                ? t("ui.aiPaused")
+                : aiMode === "safe_auto"
+                  ? t("ui.autoReplyActive")
+                  : t("ui.copilotReady")}
+          </span>
+        )}
       </div>
     </div>
   );

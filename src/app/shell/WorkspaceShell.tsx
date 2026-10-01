@@ -19,7 +19,8 @@ import type {
 import { BrandMark } from "../../components/BrandLockup";
 import { formatActivityTime, identityInitials } from "../../shared/lib/format";
 import { notificationCopyKeys } from "./notification-copy";
-import { navItems } from "./navigation";
+import { visibleNavItems } from "./navigation";
+import { SUPPORT_AI_SURFACES_ENABLED } from "../../shared/support-ai-surfaces";
 
 export function NotificationCenter({
   notifications,
@@ -344,7 +345,7 @@ export function Sidebar({
         aria-label={t("navigation.primaryNavigation")}
       >
         <div className="nav-section-label">{t("navigation.workspace")}</div>
-        {navItems.map(({ id, to, icon: Icon }) => (
+        {visibleNavItems.map(({ id, to, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -480,7 +481,7 @@ export function MobileBottomNav({
   const { search } = useLocation();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
-  const primary = navItems.filter(({ id }) =>
+  const primary = visibleNavItems.filter(({ id }) =>
     ["inbox", "issues", "runs"].includes(id),
   );
   const secondarySearch = new URLSearchParams(search);
@@ -529,9 +530,11 @@ export function MobileBottomNav({
                 navigate("/profile");
               }}
             />
-            <NavLink to="/knowledge" onClick={() => setMoreOpen(false)}>
-              {t("navigation.knowledge")}
-            </NavLink>
+            {SUPPORT_AI_SURFACES_ENABLED && (
+              <NavLink to="/knowledge" onClick={() => setMoreOpen(false)}>
+                {t("navigation.knowledge")}
+              </NavLink>
+            )}
             <NavLink to={myWorkHref} onClick={() => setMoreOpen(false)}>
               {t("navigation.myWork")}
             </NavLink>
