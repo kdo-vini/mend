@@ -53,6 +53,12 @@ import {
   registerInternalSupportRoutes,
   SupabaseSupportEventStore,
 } from "./support-events.js";
+import {
+  registerInternalSupportSendRoute,
+  SupabaseSupportSendPort,
+} from "./support-send.js";
+import { InboxService, SupabaseInboxPort } from "./inbox-service.js";
+import { WhatsAppService } from "./whatsapp-service.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 export const app = express();
@@ -179,6 +185,18 @@ function secretMatches(
 registerInternalWhatsAppRoutes(app, { logger });
 registerInternalSupportRoutes(app, {
   store: workerSupabase ? SupabaseSupportEventStore.from(workerSupabase) : null,
+  logger,
+});
+registerInternalSupportSendRoute(app, {
+  port: workerSupabase
+    ? SupabaseSupportSendPort.from(
+        workerSupabase,
+        new WhatsAppService(
+          new InboxService(new SupabaseInboxPort(workerSupabase)),
+          new WhatsmiauMessagingProvider(),
+        ),
+      )
+    : null,
   logger,
 });
 

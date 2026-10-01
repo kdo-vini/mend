@@ -51,7 +51,10 @@ export interface SupportEvent {
   aiMode: string;
   automationState: string;
   pausedUntil?: string;
-  /** False whenever ai_mode=off or automation_state=human_paused. Support must not reply. */
+  /**
+   * False only when ai_mode=off. human_paused pauses Mend's native AI, not the
+   * external Support bot, so it does not block Support replies.
+   */
   replyAllowed: boolean;
   createdAt: string;
 }
@@ -122,11 +125,9 @@ export function inboundSupportEvent(
   };
 }
 
-export function supportReplyAllowed(flags: {
-  aiMode: string;
-  automationState: string;
-}): boolean {
-  return flags.aiMode !== "off" && flags.automationState !== "human_paused";
+/** Support may reply unless the conversation's AI mode is off. */
+export function supportReplyAllowed(flags: { aiMode: string }): boolean {
+  return flags.aiMode !== "off";
 }
 
 function present(value: string | null | undefined): string | undefined {
@@ -206,7 +207,7 @@ export function buildSupportEvent(
     aiMode,
     automationState,
     ...(flags?.pausedUntil ? { pausedUntil: flags.pausedUntil } : {}),
-    replyAllowed: supportReplyAllowed({ aiMode, automationState }),
+    replyAllowed: supportReplyAllowed({ aiMode }),
     createdAt: row.createdAt,
   };
 }

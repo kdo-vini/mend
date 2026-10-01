@@ -8,6 +8,7 @@ import {
   SUPPORT_EVENTS_KEY_HEADER,
   SUPPORT_EVENTS_PATH,
   SupabaseSupportEventStore,
+  supportReplyAllowed,
   type SupportEventStore,
   type SupportEventsSupabaseClient,
 } from "./support-events.js";
@@ -136,7 +137,7 @@ describe("GET /internal/support/events", () => {
         conversationId: "conversation-paused",
         automationState: "human_paused",
         pausedUntil: "2026-10-01T12:00:00.000Z",
-        replyAllowed: false,
+        replyAllowed: true,
       }),
       expect.objectContaining({
         conversationId: "conversation-off",
@@ -250,6 +251,14 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
   return { client, calls };
 }
 
+describe("supportReplyAllowed", () => {
+  it("blocks only ai_mode=off; human_paused does not block Support", () => {
+    expect(supportReplyAllowed({ aiMode: "off" })).toBe(false);
+    expect(supportReplyAllowed({ aiMode: "draft" })).toBe(true);
+    expect(supportReplyAllowed({ aiMode: "safe_auto" })).toBe(true);
+  });
+});
+
 describe("SupabaseSupportEventStore", () => {
   it("upserts idempotently on message_id", async () => {
     const { client, calls } = fakeClient({});
@@ -348,7 +357,7 @@ describe("SupabaseSupportEventStore", () => {
           transcription: { status: "ready", text: "transcrição do áudio" },
           aiMode: "safe_auto",
           automationState: "human_paused",
-          replyAllowed: false,
+          replyAllowed: true,
           createdAt: "2026-10-01T10:00:00Z",
         },
       ],
