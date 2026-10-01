@@ -16,8 +16,12 @@ test("workspace navigation exposes the product loop without standalone Kanban", 
       : page.locator(".primary-nav");
   await expect(navigation.getByText("Inbox", { exact: true })).toBeVisible();
   await expect(navigation.getByText("Issues", { exact: true })).toBeVisible();
-  await expect(navigation.getByText("Runs", { exact: true })).toBeVisible();
   await expect(navigation.getByText("Kanban", { exact: true })).toHaveCount(0);
+  // Fase A: AI/agent surfaces are hidden while Mend is the WhatsApp bridge.
+  await expect(navigation.getByText("Runs", { exact: true })).toHaveCount(0);
+  await expect(navigation.getByText("Knowledge", { exact: true })).toHaveCount(
+    0,
+  );
 });
 
 test("legacy Kanban destinations preserve demo state", async ({ page }) => {
@@ -61,7 +65,6 @@ test("mobile view tabs and More actions meet the minimum touch target", async ({
   await page.getByRole("button", { name: "More" }).click();
   const controls = [
     ["view tab", viewTab],
-    ["Knowledge", page.getByRole("link", { name: "Knowledge" })],
     ["My work", page.getByRole("link", { name: "My work" })],
     ["Settings", page.getByRole("link", { name: "Settings" })],
     ["Profile", page.getByRole("link", { name: "Profile", exact: true })],
@@ -73,7 +76,6 @@ test("mobile view tabs and More actions meet the minimum touch target", async ({
   }
   expect(heights).toEqual({
     "view tab": 44,
-    Knowledge: 44,
     "My work": 44,
     Settings: 44,
     Profile: 44,

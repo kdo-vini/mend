@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// i18n-exempt: test assertions cover keyboard routing, not rendered copy.
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -15,8 +16,9 @@ import {
 import { GO_PREFIX_TIMEOUT_MS } from "./app-shortcuts";
 import { useAppShortcuts } from "./useAppShortcuts";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 function Harness({
   commandOpen = false,

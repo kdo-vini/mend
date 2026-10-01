@@ -19,6 +19,8 @@ import type { InboxContext, InboxMessageRecord } from "./inbox-service.js";
 import type { NormalizedWhatsmiauMessage } from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
 import type { SupportAiProvider } from "./providers.js";
+import { InMemorySupportEventStore } from "./support-events.js";
+import { isSupportAiEnabled } from "./workers/live-worker-shared.js";
 
 describe("resolveInboundDebounceMs", () => {
   it("defaults to 1500 when unset or invalid", () => {
@@ -447,6 +449,7 @@ describe("live Whatsmiau worker", () => {
     const knowledge = new FakeKnowledge();
     const automation = new IdempotentAutomation();
     const worker = new LiveWorker({
+      supportAiEnabled: true,
       jobStore: store,
       inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
@@ -468,6 +471,7 @@ describe("live Whatsmiau worker", () => {
   it("delays inbound automation jobs for the batching window", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const worker = new LiveWorker({
+      supportAiEnabled: true,
       jobStore: store,
       channelResolver: new FakeResolver(binding),
       inbox: new FakeInbox(),
@@ -633,6 +637,7 @@ describe("live Whatsmiau worker", () => {
     const issues: string[] = [];
     const drafts: string[] = [];
     const worker = new LiveWorker({
+      supportAiEnabled: true,
       jobStore: store,
       inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
@@ -656,6 +661,7 @@ describe("live Whatsmiau worker", () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const automation = new SendStageAutomation();
     const worker = new LiveWorker({
+      supportAiEnabled: true,
       jobStore: store,
       inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
@@ -680,6 +686,7 @@ describe("live Whatsmiau worker", () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     let processed = 0;
     const worker = new LiveWorker({
+      supportAiEnabled: true,
       jobStore: store,
       inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
@@ -1417,5 +1424,237 @@ describe("live Whatsmiau worker", () => {
     );
     expect(draftReply.mock.calls[0]?.[0]).toContain("Vou fazer o teste agora");
     expect(draftReply.mock.calls[0]?.[0]).toContain("Obrigada");
+  });
+});
+
+describe("Support AI kill-switch (Fase A)", () => {
+  it("is off unless MEND_SUPPORT_AI_ENABLED is explicitly true", () => {
+    expect(isSupportAiEnabled({})).toBe(false);
+    expect(isSupportAiEnabled({ MEND_SUPPORT_AI_ENABLED: "" })).toBe(false);
+    expect(isSupportAiEnabled({ MEND_SUPPORT_AI_ENABLED: "false" })).toBe(
+      false,
+    );
+    expect(isSupportAiEnabled({ MEND_SUPPORT_AI_ENABLED: "yes" })).toBe(false);
+    expect(isSupportAiEnabled({ MEND_SUPPORT_AI_ENABLED: "true" })).toBe(true);
+    expect(isSupportAiEnabled({ MEND_SUPPORT_AI_ENABLED: "1" })).toBe(true);
+  });
+
+  it("persists inbound and emits a support event without triage, knowledge or AI send", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const inbox = new FakeInbox();
+    const knowledge = new FakeKnowledge();
+    const automation = new SendStageAutomation();
+    const process = vi.spyOn(automation, "process");
+    const events = new InMemorySupportEventStore();
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox,
+      knowledge,
+      automation,
+      supportEvents: events,
+    });
+    await enqueue(store, "kill-switch");
+
+    expect(await worker.poll()).toBe(true);
+    expect(await worker.poll()).toBe(false);
+    expect(inbox.calls).toHaveLength(1);
+    expect(process).not.toHaveBeenCalled();
+    expect(knowledge.calls).toBe(0);
+    expect(automation.sent).toHaveLength(0);
+    const jobs = await store.list();
+    expect(jobs.map((job) => job.type)).toEqual(["whatsmiau.message.received"]);
+    expect(jobs[0]?.status).toBe("completed");
+    expect(events.rows).toEqual([
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        conversationId: "conversation-1",
+        messageId: "message-1",
+        remoteJid: "5511999999999@s.whatsapp.net",
+        phoneNumber: "5511999999999",
+      }),
+    ]);
+  });
+
+  it("records one event per message across duplicate deliveries", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const events = new InMemorySupportEventStore();
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      supportEvents: events,
+    });
+    await enqueue(store, "dup-1");
+    await enqueue(store, "dup-2");
+    await worker.poll();
+    await worker.poll();
+    expect(events.rows).toHaveLength(1);
+  });
+
+  it("retries the ingest job when the support event write fails", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      supportEvents: {
+        record: vi.fn(async () => {
+          throw new Error("supabase:support_inbound_events:down");
+        }),
+      },
+    });
+    await enqueue(store, "event-write-fails");
+    await worker.poll();
+    const [job] = await store.list();
+    expect(job?.status).toBe("queued");
+    expect(job?.attempts).toBe(1);
+  });
+
+  it("does not emit support events for outbound echoes", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const events = new InMemorySupportEventStore();
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      supportEvents: events,
+    });
+    await store.enqueue({
+      type: "whatsmiau.message.received",
+      payload: {
+        event: "messages.upsert",
+        message: { ...message, direction: "outbound" },
+      },
+      dedupeKey: "outbound-echo",
+    });
+    await worker.poll();
+    expect(events.rows).toHaveLength(0);
+  });
+
+  it("keeps audio transcription in the persist path and exposes it to Support", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const events = new InMemorySupportEventStore();
+    const persistedAudio: string[] = [];
+    // Transcription runs inside InboxService.persistNormalizedMessage (see
+    // inbox-service.test.ts); the kill-switch must keep persisting audio and
+    // the Support feed must carry the resulting transcript.
+    const inbox: LiveWorkerInbox = {
+      async persistNormalizedMessage(context, _channel, incoming) {
+        persistedAudio.push(incoming.providerMessageId);
+        return {
+          id: "audio-message-1",
+          workspaceId: context.workspaceId,
+          conversationId: "conversation-1",
+          contactId: "contact-1",
+          providerMessageId: incoming.providerMessageId,
+          direction: incoming.direction,
+          messageType: incoming.messageType,
+          unreadCount: 1,
+          inserted: true,
+          mediaStoragePath: "workspace-1/conversation-1/voice.ogg",
+          transcript: "Preciso de ajuda com o pedido",
+        };
+      },
+    };
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox,
+      supportEvents: events,
+    });
+    await store.enqueue({
+      type: "whatsmiau.message.received",
+      payload: {
+        event: "messages.upsert",
+        message: {
+          ...message,
+          providerMessageId: "provider-audio-1",
+          messageType: "audio",
+          text: undefined,
+          mimeType: "audio/ogg",
+        },
+      },
+      dedupeKey: "audio",
+    });
+    await worker.poll();
+
+    expect(persistedAudio).toEqual(["provider-audio-1"]);
+    events.messages.set("audio-message-1", {
+      id: "audio-message-1",
+      messageType: "audio",
+      text: "Preciso de ajuda com o pedido",
+      mimeType: "audio/ogg",
+      mediaStoragePath: "workspace-1/conversation-1/voice.ogg",
+      transcriptionStatus: "ready",
+    });
+    events.conversations.set("conversation-1", {
+      aiMode: "safe_auto",
+      automationState: "ai_active",
+    });
+    const page = await events.list({ limit: 10 });
+    expect(page.events[0]).toMatchObject({
+      messageId: "audio-message-1",
+      messageType: "audio",
+      transcription: { status: "ready", text: "Preciso de ajuda com o pedido" },
+      media: { type: "audio", mimeType: "audio/ogg" },
+      replyAllowed: true,
+    });
+    expect(page.events[0]?.text).toBe("Preciso de ajuda com o pedido");
+  });
+
+  it("drains AI stages queued before the switch was turned off without sending", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const automation = new SendStageAutomation();
+    const process = vi.spyOn(automation, "process");
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      automation,
+    });
+    const stageStore = store as unknown as InMemoryJobStore<
+      Record<string, unknown>
+    >;
+    await stageStore.enqueue({
+      workspaceId: "workspace-1",
+      type: "mend.process_inbound_message",
+      payload: {
+        stage: "process_inbound_message",
+        ingestionJobId: "job-0",
+        binding,
+        idempotencyKey: "whatsapp:channel-1:message-0",
+        message,
+        persisted: { id: "message-0", conversationId: "conversation-1" },
+      },
+      dedupeKey: "stale-stage",
+    });
+    await stageStore.enqueue({
+      workspaceId: "workspace-1",
+      type: "mend.send_ai_reply",
+      payload: {
+        stage: "send_ai_reply",
+        binding,
+        conversationId: "conversation-1",
+        sourceMessageId: "message-0",
+        idempotencyKey: "whatsapp:channel-1:message-0",
+        body: "Stale AI reply",
+      },
+      dedupeKey: "stale-send",
+    });
+    await worker.poll();
+    await worker.poll();
+
+    expect(process).not.toHaveBeenCalled();
+    expect(automation.sent).toHaveLength(0);
+    expect(
+      (await store.list()).every((job) => job.status === "completed"),
+    ).toBe(true);
   });
 });

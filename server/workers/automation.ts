@@ -625,9 +625,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
               idempotencyKey: draft.idempotencyKey,
               body: draft.body,
               triage,
-              ...(draft.choices?.length
-                ? { choices: draft.choices }
-                : {}),
+              ...(draft.choices?.length ? { choices: draft.choices } : {}),
               ...(allowHumanHandoffReply
                 ? { pauseAfterSendReason: "manual_pause" }
                 : {}),
@@ -657,7 +655,9 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       .order("created_at", { ascending: false })
       .limit(5);
     if (draftResult.error)
-      throw new Error(`supabase:ai_drafts:choices:${draftResult.error.message}`);
+      throw new Error(
+        `supabase:ai_drafts:choices:${draftResult.error.message}`,
+      );
 
     const drafts = Array.isArray(draftResult.data) ? draftResult.data : [];
     for (const draft of drafts) {
@@ -2489,9 +2489,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         triage_json: triage,
         policy_json: {
           ...policyJson(policy),
-          ...(draft.choices?.length
-            ? { reply_choices: draft.choices }
-            : {}),
+          ...(draft.choices?.length ? { reply_choices: draft.choices } : {}),
         },
         safety_reason: decision.allowed ? null : decision.reason,
       })

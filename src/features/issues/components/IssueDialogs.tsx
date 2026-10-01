@@ -34,6 +34,7 @@ import { getShortcutHint } from "../../../app/shortcuts/app-shortcuts";
 import { normalizeSearch } from "../../../shared/lib/format";
 import { EmptyState } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
+import { SUPPORT_AI_SURFACES_ENABLED } from "../../../shared/support-ai-surfaces";
 import type { AssigneeOption } from "../../../shared/ui/DataDisplay";
 
 function agentProviderLabel(provider: LiveRepository["agentProvider"]): string {
@@ -90,18 +91,22 @@ export function CommandPalette({
       icon: Plus,
       action: onNewIssue,
     },
-    {
-      label: t("command.viewRuns"),
-      hint: getShortcutHint("viewRuns"),
-      icon: TerminalSquare,
-      action: () => navigate("/agent-runs"),
-    },
-    {
-      label: t("command.openKnowledge"),
-      hint: getShortcutHint("openKnowledge"),
-      icon: BookOpen,
-      action: () => navigate("/knowledge"),
-    },
+    ...(SUPPORT_AI_SURFACES_ENABLED
+      ? [
+          {
+            label: t("command.viewRuns"),
+            hint: getShortcutHint("viewRuns"),
+            icon: TerminalSquare,
+            action: () => navigate("/agent-runs"),
+          },
+          {
+            label: t("command.openKnowledge"),
+            hint: getShortcutHint("openKnowledge"),
+            icon: BookOpen,
+            action: () => navigate("/knowledge"),
+          },
+        ]
+      : []),
     {
       label: t("command.openSettings"),
       hint: getShortcutHint("openSettings"),

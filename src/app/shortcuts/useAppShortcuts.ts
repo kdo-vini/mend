@@ -39,10 +39,7 @@ export function useAppShortcuts({
       if (timeoutRef.current != null) {
         window.clearTimeout(timeoutRef.current);
       }
-      timeoutRef.current = window.setTimeout(
-        clearPrefix,
-        GO_PREFIX_TIMEOUT_MS,
-      );
+      timeoutRef.current = window.setTimeout(clearPrefix, GO_PREFIX_TIMEOUT_MS);
     };
 
     const onKeyDown = (event: KeyboardEvent) => {

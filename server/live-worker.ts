@@ -24,6 +24,11 @@ import {
 } from "./media-pipeline.js";
 import { SupabaseMediaStorage } from "./media.js";
 import {
+  inboundSupportEvent,
+  SupabaseSupportEventStore,
+  type SupportEventStore,
+} from "./support-events.js";
+import {
   WorkspaceSupportAudioTranscriber,
   type SupportAiDraftResult,
   type SupportAiProvider,
@@ -50,7 +55,9 @@ import {
   CODING_RUN_CONTINUATION_JOB_TYPE,
   KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE,
   delay,
+  isSupportAiEnabled,
   PROCESS_INBOUND_MESSAGE_JOB_TYPE,
+  skipsSupportAiJob,
   safeOperationalError,
   SEND_AI_REPLY_JOB_TYPE,
   SUPPORT_REPOSITORY_RESEARCH_JOB_TYPE,
@@ -302,6 +309,9 @@ export interface LiveWorkerOptions {
     process(payload: SupportRepositoryResearchJobPayload): Promise<void>;
   };
   knowledge?: LiveWorkerKnowledge;
+  /** Mend's own Support AI (default off); Support bot reads supportEvents. */
+  supportAiEnabled?: boolean;
+  supportEvents?: Pick<SupportEventStore, "record">;
   onDraftReady?: (draft: LiveWorkerDraft) => Promise<void> | void;
   onIssueReady?: (issue: LiveWorkerIssue) => Promise<void> | void;
   onUnmappedMessage?: (input: LiveWorkerUnmappedMessage) => void;
@@ -517,6 +527,7 @@ export class LiveWorker {
   private async processJob(
     job: JobRecord<LiveWorkerJobPayload>,
   ): Promise<void> {
+    if (skipsSupportAiJob(this.options.supportAiEnabled, job.type)) return;
     if (job.type === WHATSAPP_INGEST_JOB_TYPE) {
       const payload = job.payload as WhatsmiauMessageJobPayload;
       if (
@@ -661,7 +672,13 @@ export class LiveWorker {
       }
     }
 
-    if (message.direction !== "inbound" || !this.options.automation) {
+    const supportEvent = inboundSupportEvent(binding, message, persisted);
+    if (supportEvent) await this.options.supportEvents?.record(supportEvent);
+    if (
+      message.direction !== "inbound" ||
+      !this.options.automation ||
+      !this.options.supportAiEnabled
+    ) {
       await this.markWebhookEvent(job.id, "processed", persisted.id);
       return;
     }
@@ -828,6 +845,7 @@ export interface CreateSupabaseLiveWorkerOptions {
   maxIdlePollIntervalMs?: number;
   heartbeatIntervalMs?: number;
   inboundDebounceMs?: number;
+  supportAiEnabled?: boolean;
   workerId?: string;
   logger?: LiveWorkerLogger;
 }
@@ -880,6 +898,8 @@ export function createSupabaseLiveWorker(
     mediaPipeline,
     knowledge,
     automation,
+    supportAiEnabled: options.supportAiEnabled ?? isSupportAiEnabled(),
+    supportEvents: SupabaseSupportEventStore.from(options.client),
     heartbeat: new SupabaseRunnerHeartbeat(options.client),
     ...(options.logger ? { logger: options.logger } : {}),
     ...(options.onDraftReady ? { onDraftReady: options.onDraftReady } : {}),

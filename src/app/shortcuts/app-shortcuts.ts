@@ -88,5 +88,7 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   if (target.isContentEditable) return true;
   const contentEditable = target.getAttribute("contenteditable");
   if (contentEditable === "" || contentEditable === "true") return true;
-  return Boolean(target.closest("[contenteditable='true'], [contenteditable='']"));
+  return Boolean(
+    target.closest("[contenteditable='true'], [contenteditable='']"),
+  );
 }
