@@ -247,8 +247,8 @@ describe("GET /internal/support/events", () => {
       messageId: "m",
       remoteJid: "r",
     };
-    await store.record(input);
-    await store.record(input);
+    expect(await store.record(input)).toMatchObject({ id: 1, messageId: "m" });
+    expect(await store.record(input)).toBeNull();
     expect(store.rows).toHaveLength(1);
   });
 });
@@ -397,6 +397,35 @@ describe("SupabaseSupportEventStore", () => {
         { onConflict: "message_id", ignoreDuplicates: true },
       ],
     });
+  });
+
+  it("returns the inserted row, or null when the upsert was a duplicate", async () => {
+    const input = {
+      workspaceId: "w",
+      conversationId: "c",
+      messageId: "m",
+      remoteJid: "r",
+    };
+    const inserted = fakeClient({
+      support_inbound_events: [{ id: 9, created_at: "2026-10-01T10:00:00Z" }],
+    });
+    expect(
+      await new SupabaseSupportEventStore(inserted.client).record(input),
+    ).toEqual({
+      ...input,
+      direction: "inbound",
+      id: "9",
+      createdAt: "2026-10-01T10:00:00Z",
+    });
+    expect(inserted.calls).toContainEqual({
+      table: "support_inbound_events",
+      op: "select",
+      args: ["id, created_at"],
+    });
+    const duplicate = fakeClient({});
+    expect(
+      await new SupabaseSupportEventStore(duplicate.client).record(input),
+    ).toBeNull();
   });
 
   it("joins live message, transcription and pause state into events", async () => {
