@@ -1536,6 +1536,58 @@ describe("Support AI kill-switch (Fase A)", () => {
     expect(events.rows).toHaveLength(0);
   });
 
+  it("keeps transcribed outbound audio out of inbound automation", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const automation = { process: vi.fn(async () => undefined) };
+    const inbox: LiveWorkerInbox = {
+      async persistNormalizedMessage(context, _channel, incoming) {
+        return {
+          id: "outbound-audio-1",
+          workspaceId: context.workspaceId,
+          conversationId: "conversation-1",
+          contactId: "contact-1",
+          providerMessageId: incoming.providerMessageId,
+          direction: incoming.direction,
+          messageType: incoming.messageType,
+          unreadCount: 0,
+          inserted: true,
+          transcript: "Já ajustei o seu pedido",
+        };
+      },
+    };
+    const worker = new LiveWorker({
+      supportAiEnabled: true,
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox,
+      automation,
+    });
+    await store.enqueue({
+      type: "whatsmiau.message.received",
+      payload: {
+        event: "messages.upsert",
+        message: {
+          ...message,
+          direction: "outbound",
+          messageType: "audio",
+          text: undefined,
+          mimeType: "audio/ogg",
+        },
+      },
+      dedupeKey: "outbound-audio",
+    });
+    await worker.poll();
+    await worker.poll();
+
+    expect(automation.process).not.toHaveBeenCalled();
+    expect(
+      (await store.list()).some(
+        (job) => job.type === "mend.process_inbound_message",
+      ),
+    ).toBe(false);
+  });
+
   it("keeps audio transcription in the persist path and exposes it to Support", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const events = new InMemorySupportEventStore();
