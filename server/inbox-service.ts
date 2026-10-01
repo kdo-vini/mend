@@ -988,7 +988,9 @@ export class InboxService {
       messageId,
     });
     if (!stored) throw new Error("audio_message_not_found");
-    if (stored.direction !== "inbound" || stored.messageType !== "audio")
+    // Outbound voice notes are transcribed too, so Support can read what the
+    // founder said; automation still only reacts to inbound messages.
+    if (stored.messageType !== "audio")
       throw new Error("audio_message_not_transcribable");
     if (stored.text?.trim()) {
       await this.setTranscriptionStatus({
@@ -1096,6 +1098,11 @@ export class InboxService {
         : aiGenerated
           ? "ai"
           : (context.actorType ?? "system");
+    // Inbound and human outbound voice notes get STT; AI-generated audio
+    // already originates from known text.
+    const transcribesAudio =
+      message.messageType === "audio" &&
+      (message.direction === "inbound" || !aiGenerated);
     const result = await this.port.ingestMessage({
       workspaceId: context.workspaceId,
       channelConnectionId: connectionId,
@@ -1222,11 +1229,7 @@ export class InboxService {
           fileName: playbackMedia.fileName,
           sizeBytes: playbackMedia.size,
         });
-        if (
-          message.direction === "inbound" &&
-          message.messageType === "audio" &&
-          this.options.transcriber
-        ) {
+        if (transcribesAudio && this.options.transcriber) {
           try {
             transcript = await this.transcribeAudioMedia(
               context,
@@ -1247,6 +1250,20 @@ export class InboxService {
           status: "failed",
           errorCode: "media_fetch_failed",
         });
+      }
+    }
+    // Mend UI sends upload the audio before recording the message, so the
+    // fetch above is skipped; transcribe from private storage instead.
+    if (
+      result.inserted &&
+      options.mediaStoragePath &&
+      transcribesAudio &&
+      this.options.transcriber
+    ) {
+      try {
+        transcript = await this.retranscribeStoredAudio(context, result.id);
+      } catch {
+        // The sent audio stays playable; the failure status is persisted.
       }
     }
     return {

@@ -683,6 +683,139 @@ describe("InboxService and WhatsAppService", () => {
     expect(stored?.transcriptionStatus).toBe("ready");
   });
 
+  it("transcribes human outbound audio echoes but not AI-generated audio", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: { "content-type": "audio/ogg" },
+        }),
+    );
+    try {
+      const port = new FakeInboxPort();
+      const transcriber = {
+        transcribe: vi.fn(async () => "Oi, já corrigi o pedido"),
+      };
+      const inbox = new InboxService(port, {
+        mediaStorage: new InMemoryMediaStorage(),
+        transcriber,
+      });
+      const outboundAudio = (providerMessageId: string) => ({
+        ...inbound(providerMessageId),
+        direction: "outbound" as const,
+        messageType: "audio" as const,
+        text: undefined,
+        mediaUrl: "https://provider.example/audio.ogg",
+        mimeType: "audio/ogg",
+        fileName: "voice.ogg",
+      });
+
+      const human = await inbox.persistNormalizedMessage(
+        { workspaceId },
+        channelId,
+        outboundAudio("wamid-human-audio"),
+      );
+      expect(human.transcript).toBe("Oi, já corrigi o pedido");
+      const stored = [...port.messages.values()].find(
+        (message) => message.id === human.id,
+      );
+      expect(stored?.text).toBe("Oi, já corrigi o pedido");
+      expect(stored?.transcriptionStatus).toBe("ready");
+
+      const ai = await inbox.persistNormalizedMessage(
+        { workspaceId },
+        channelId,
+        outboundAudio("wamid-ai-audio"),
+        { aiGenerated: true },
+      );
+      expect(ai.transcript).toBeUndefined();
+      expect(transcriber.transcribe).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("transcribes audio sent from Mend after it is stored privately", async () => {
+    const port = new FakeInboxPort();
+    const storage = new InMemoryMediaStorage();
+    const storagePath = `${workspaceId}/${conversationId}/sent-audio.ogg`;
+    await storage.upload(storagePath, {
+      data: new Uint8Array([1, 2, 3]),
+      mimeType: "audio/ogg",
+      fileName: "sent-audio.ogg",
+      size: 3,
+    });
+    const transcriber = {
+      transcribe: vi.fn(async () => "Resposta do founder por áudio"),
+    };
+    const inbox = new InboxService(port, {
+      mediaStorage: storage,
+      transcriber,
+    });
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, inbound());
+
+    const sent = await inbox.recordOutbound(
+      { workspaceId, actorType: "user", actorUserId: "user-1" },
+      conversationId,
+      {
+        providerMessageId: "wamid-mend-audio",
+        messageType: "audio",
+        mediaStoragePath: storagePath,
+        mimeType: "audio/ogg",
+        fileName: "sent-audio.ogg",
+      },
+    );
+
+    expect(sent.transcript).toBe("Resposta do founder por áudio");
+    expect(transcriber.transcribe).toHaveBeenCalledWith(
+      expect.objectContaining({ mimeType: "audio/ogg" }),
+    );
+    const stored = [...port.messages.values()].find(
+      (message) => message.id === sent.id,
+    );
+    expect(stored?.text).toBe("Resposta do founder por áudio");
+    expect(stored?.transcriptionStatus).toBe("ready");
+  });
+
+  it("retranscribes an existing stored outbound audio", async () => {
+    const port = new FakeInboxPort();
+    const storage = new InMemoryMediaStorage();
+    const storagePath = `${workspaceId}/${conversationId}/outbound.ogg`;
+    await storage.upload(storagePath, {
+      data: new Uint8Array([1, 2, 3]),
+      mimeType: "audio/ogg",
+      fileName: "outbound.ogg",
+      size: 3,
+    });
+    const message = await port.ingestMessage({
+      workspaceId,
+      channelConnectionId: channelId,
+      phoneNumber: "5511999999999",
+      providerMessageId: "wamid-existing-outbound-audio",
+      direction: "outbound",
+      senderType: "system",
+      messageType: "audio",
+      mediaStoragePath: storagePath,
+      mimeType: "audio/ogg",
+      fileName: "outbound.ogg",
+      actorType: "system",
+      timelineKey: "whatsapp:existing-outbound-audio",
+      metadata: {},
+    });
+    const inbox = new InboxService(port, {
+      mediaStorage: storage,
+      transcriber: { transcribe: vi.fn(async () => "Áudio do founder") },
+    });
+
+    await expect(
+      inbox.retranscribeStoredAudio({ workspaceId }, message.id),
+    ).resolves.toBe("Áudio do founder");
+    const stored = [...port.messages.values()].find(
+      (candidate) => candidate.id === message.id,
+    );
+    expect(stored?.transcriptionStatus).toBe("ready");
+  });
+
   it("supports read, unread, snooze and resolve transitions with workspace scoping", async () => {
     const port = new FakeInboxPort();
     const inbox = new InboxService(port);
