@@ -1121,8 +1121,7 @@
   .conversation-controls {
     flex: 0 0 auto;
   }
-  .conversation-desktop-control,
-  .conversation-controls .mode-label {
+  .conversation-desktop-control {
     display: none !important;
   }
   .mobile-menu-control {

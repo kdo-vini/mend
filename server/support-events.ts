@@ -62,8 +62,8 @@ export interface SupportEvent {
   pausedUntil?: string;
   /**
    * Always false for outbound: Support reads the human message as context and
-   * must never reply on top of it. For inbound, false only when ai_mode=off;
-   * human_paused pauses Mend's native AI, not the external Support bot.
+   * must never reply on top of it. For inbound, false when ai_mode=off or
+   * automation_state=human_paused, matching the 409s on /internal/support/send.
    */
   replyAllowed: boolean;
   createdAt: string;
@@ -153,14 +153,20 @@ export function supportEventFor(
 }
 
 /**
- * Support may reply to inbound unless the conversation's AI mode is off; it
- * never replies to an outbound human message.
+ * Support may reply to inbound unless the conversation's AI mode is off or a
+ * human has taken over (human_paused); it never replies to an outbound human
+ * message. Mirrors the send gate so the feed never invites a refused reply.
  */
 export function supportReplyAllowed(flags: {
   aiMode: string;
+  automationState?: string;
   direction?: SupportEventDirection;
 }): boolean {
-  return flags.direction !== "outbound" && flags.aiMode !== "off";
+  return (
+    flags.direction !== "outbound" &&
+    flags.aiMode !== "off" &&
+    flags.automationState !== "human_paused"
+  );
 }
 
 function present(value: string | null | undefined): string | undefined {
@@ -242,7 +248,7 @@ export function buildSupportEvent(
     aiMode,
     automationState,
     ...(flags?.pausedUntil ? { pausedUntil: flags.pausedUntil } : {}),
-    replyAllowed: supportReplyAllowed({ aiMode, direction }),
+    replyAllowed: supportReplyAllowed({ aiMode, automationState, direction }),
     createdAt: row.createdAt,
   };
 }

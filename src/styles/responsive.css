@@ -172,9 +172,6 @@
   .conversation-controls {
     flex: 1 1 160px;
   }
-  .conversation-controls .mode-label {
-    display: none;
-  }
   .message-canvas {
     min-height: 370px;
   }

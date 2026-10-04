@@ -65,6 +65,8 @@ const loadOlderLiveConversationMessages = vi.fn(
 const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const sendLiveMessage = vi.fn(async (_input: unknown) => undefined);
+const pauseLiveConversationAi = vi.fn(async (_input: unknown) => undefined);
+const resumeLiveConversationAi = vi.fn(async (_input: unknown) => undefined);
 
 vi.mock("../api", () => ({
   LiveActionError: class LiveActionError extends Error {
@@ -89,10 +91,10 @@ vi.mock("../api", () => ({
   deleteLiveMessage: vi.fn(),
   markLiveConversationRead: vi.fn(),
   reactToLiveMessage: vi.fn(),
-  pauseLiveConversationAi: vi.fn(),
+  pauseLiveConversationAi: (input: unknown) => pauseLiveConversationAi(input),
   requestAiDraft: vi.fn(),
   resolveLiveConversation: vi.fn(),
-  resumeLiveConversationAi: vi.fn(),
+  resumeLiveConversationAi: (input: unknown) => resumeLiveConversationAi(input),
   sendLiveMedia: vi.fn(),
   sendLiveMediaBatch: vi.fn(),
   sendLiveMessage: (input: unknown) => sendLiveMessage(input),
@@ -108,15 +110,15 @@ let root: Root;
 
 function InboxHarness({
   onToast = () => undefined,
+  initialConversations = [seedConversations[0], seedConversations[1]],
 }: {
   onToast?: (message: string, tone?: string) => void;
+  initialConversations?: Conversation[];
 }) {
-  const [conversations, setConversations] = useState<Conversation[]>([
-    seedConversations[0],
-    seedConversations[1],
-  ]);
+  const [conversations, setConversations] =
+    useState<Conversation[]>(initialConversations);
   const [selectedConversationId, setSelectedConversationId] = useState(
-    seedConversations[0].id,
+    initialConversations[0].id,
   );
   return (
     <MemoryRouter initialEntries={["/inbox"]}>
@@ -193,6 +195,8 @@ describe("InboxPage new chat", () => {
     loadOlderLiveConversationMessages.mockClear();
     deleteLiveConversation.mockClear();
     updateLiveConversation.mockClear();
+    pauseLiveConversationAi.mockClear();
+    resumeLiveConversationAi.mockClear();
     sendLiveMessage.mockReset();
     sendLiveMessage.mockResolvedValue(undefined);
   });
@@ -460,5 +464,139 @@ describe("InboxPage new chat", () => {
 
     expect(sendLiveMessage).toHaveBeenCalledTimes(1);
     expect(composer.value).toBe("");
+  });
+
+  describe("IA ativa toggle", () => {
+    // Ids outside the seed keep snapshot hydration from overwriting the axes.
+    const conversationWith = (
+      aiMode: Conversation["aiMode"],
+      automationState: Conversation["automationState"],
+    ): Conversation => ({
+      ...seedConversations[0],
+      id: `conv-${aiMode}-${automationState}`,
+      aiMode,
+      automationState,
+    });
+
+    function aiSwitch() {
+      const element = document.body.querySelector<HTMLButtonElement>(
+        ".conversation-controls [role=switch]",
+      );
+      if (!element) throw new Error("IA ativa switch was not rendered");
+      return element;
+    }
+
+    it("is the only AI control in the conversation header and menu", async () => {
+      await act(async () =>
+        root.render(
+          <InboxHarness
+            initialConversations={[conversationWith("safe_auto", "ai_active")]}
+          />,
+        ),
+      );
+      expect(aiSwitch().textContent).toBe("AI active");
+      expect(aiSwitch().getAttribute("aria-checked")).toBe("true");
+      expect(
+        document.body.querySelector(".conversation-assignee"),
+      ).not.toBeNull();
+
+      await act(async () =>
+        document.body
+          .querySelector<HTMLButtonElement>(
+            "button[aria-label='Conversation actions']",
+          )
+          ?.click(),
+      );
+      const menu = document.body.querySelector(".context-menu")?.textContent;
+      expect(menu).toBeTruthy();
+      for (const label of [
+        "Pause AI",
+        "Resume AI",
+        "Copilot",
+        "Auto-reply",
+        "Manual",
+      ])
+        expect(menu).not.toContain(label);
+      expect(document.body.querySelector(".mode-label")).toBeNull();
+      expect(document.body.querySelector(".composer-ai-state")).toBeNull();
+    });
+
+    it("renders the Portuguese label", async () => {
+      await i18n.changeLanguage("pt-BR");
+      try {
+        await act(async () =>
+          root.render(
+            <InboxHarness
+              initialConversations={[conversationWith("draft", "ai_active")]}
+            />,
+          ),
+        );
+        expect(aiSwitch().textContent).toBe("IA ativa");
+      } finally {
+        await i18n.changeLanguage("en-US");
+      }
+    });
+
+    it("shows off for human_paused even when ai_mode is still safe_auto", async () => {
+      await act(async () =>
+        root.render(
+          <InboxHarness
+            initialConversations={[
+              conversationWith("safe_auto", "human_paused"),
+            ]}
+          />,
+        ),
+      );
+      expect(aiSwitch().getAttribute("aria-checked")).toBe("false");
+    });
+
+    it("turning off writes ai_mode=off only", async () => {
+      const conversation = conversationWith("safe_auto", "ai_active");
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[conversation]} />),
+      );
+      await act(async () => aiSwitch().click());
+
+      expect(updateLiveConversation).toHaveBeenCalledTimes(1);
+      expect(updateLiveConversation).toHaveBeenCalledWith({
+        workspaceId: "workspace-1",
+        conversationId: conversation.id,
+        updates: { ai_mode: "off" },
+      });
+      expect(pauseLiveConversationAi).not.toHaveBeenCalled();
+      expect(resumeLiveConversationAi).not.toHaveBeenCalled();
+      expect(aiSwitch().getAttribute("aria-checked")).toBe("false");
+    });
+
+    it("turning on sets safe_auto and resumes a human_paused conversation", async () => {
+      const conversation = conversationWith("off", "human_paused");
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[conversation]} />),
+      );
+      await act(async () => aiSwitch().click());
+
+      expect(updateLiveConversation).toHaveBeenCalledWith({
+        workspaceId: "workspace-1",
+        conversationId: conversation.id,
+        updates: { ai_mode: "safe_auto" },
+      });
+      expect(resumeLiveConversationAi).toHaveBeenCalledWith({
+        workspaceId: "workspace-1",
+        conversationId: conversation.id,
+      });
+      expect(aiSwitch().getAttribute("aria-checked")).toBe("true");
+    });
+
+    it("turning on a paused safe_auto conversation only resumes it", async () => {
+      const conversation = conversationWith("safe_auto", "human_paused");
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[conversation]} />),
+      );
+      await act(async () => aiSwitch().click());
+
+      expect(updateLiveConversation).not.toHaveBeenCalled();
+      expect(resumeLiveConversationAi).toHaveBeenCalledTimes(1);
+      expect(aiSwitch().getAttribute("aria-checked")).toBe("true");
+    });
   });
 });

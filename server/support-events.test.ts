@@ -139,7 +139,7 @@ describe("GET /internal/support/events", () => {
         conversationId: "conversation-paused",
         automationState: "human_paused",
         pausedUntil: "2026-10-01T12:00:00.000Z",
-        replyAllowed: true,
+        replyAllowed: false,
       }),
       expect.objectContaining({
         conversationId: "conversation-off",
@@ -301,13 +301,33 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
 }
 
 describe("supportReplyAllowed", () => {
-  it("blocks only ai_mode=off; human_paused does not block Support", () => {
+  it("blocks inbound when ai_mode=off or automation_state=human_paused", () => {
     expect(supportReplyAllowed({ aiMode: "off" })).toBe(false);
     expect(supportReplyAllowed({ aiMode: "draft" })).toBe(true);
     expect(supportReplyAllowed({ aiMode: "safe_auto" })).toBe(true);
     expect(
       supportReplyAllowed({ aiMode: "safe_auto", direction: "inbound" }),
     ).toBe(true);
+    expect(
+      supportReplyAllowed({
+        aiMode: "safe_auto",
+        automationState: "ai_active",
+        direction: "inbound",
+      }),
+    ).toBe(true);
+    expect(
+      supportReplyAllowed({
+        aiMode: "safe_auto",
+        automationState: "human_paused",
+        direction: "inbound",
+      }),
+    ).toBe(false);
+    expect(
+      supportReplyAllowed({ aiMode: "draft", automationState: "human_paused" }),
+    ).toBe(false);
+    expect(
+      supportReplyAllowed({ aiMode: "off", automationState: "ai_active" }),
+    ).toBe(false);
   });
 
   it("never allows a reply to an outbound human message", () => {
@@ -518,7 +538,7 @@ describe("SupabaseSupportEventStore", () => {
           transcription: { status: "ready", text: "transcrição do áudio" },
           aiMode: "safe_auto",
           automationState: "human_paused",
-          replyAllowed: true,
+          replyAllowed: false,
           createdAt: "2026-10-01T10:00:00Z",
         },
         {
