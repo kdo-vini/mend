@@ -46,7 +46,7 @@
 }
 
 .app-shell .conversation-assignee,
-.app-shell .mode-label,
+.app-shell .conversation-ai-toggle,
 .app-shell .filter-strip button.selected {
   border-color: var(--line-strong);
 }
