@@ -19,6 +19,18 @@ const MAX_SUPPORT_TEXT_LENGTH = 4_096;
 export interface SupportSendConversation {
   workspaceId: string;
   aiMode: string;
+  /** A human took over; Support must not answer while this holds. */
+  humanPaused?: boolean;
+}
+
+/**
+ * Same rule as Mend's own automation worker: human_paused blocks until a human
+ * resumes the AI, regardless of paused_until.
+ */
+export function supportHumanPaused(
+  state: { automationState?: unknown } | undefined,
+): boolean {
+  return state?.automationState === "human_paused";
 }
 
 export interface SupportSendInput {
@@ -78,10 +90,25 @@ export class SupabaseSupportSendPort implements SupportSendPort {
       | Record<string, unknown>
       | undefined;
     if (!row || typeof row.workspace_id !== "string") return null;
+    const stateResult = await this.client
+      .from("conversation_ai_state")
+      .select("automation_state")
+      .eq("conversation_id", input.conversationId)
+      .limit(1);
+    if (stateResult.error)
+      throw new Error(
+        `supabase:conversation_ai_state:${stateResult.error.message}`,
+      );
+    const state = (
+      Array.isArray(stateResult.data) ? stateResult.data[0] : undefined
+    ) as Record<string, unknown> | undefined;
     return {
       workspaceId: row.workspace_id,
       // Fail closed: a conversation without a mode is treated as off.
       aiMode: typeof row.ai_mode === "string" ? row.ai_mode : "off",
+      humanPaused: supportHumanPaused({
+        automationState: state?.automation_state,
+      }),
     };
   }
 
@@ -132,7 +159,8 @@ export interface SupportSendRouteOptions {
 
 /**
  * Support bot reply path. Shares the B1 feed key, mounted outside /api so it
- * never takes a user JWT, and refuses with 409 when ai_mode=off.
+ * never takes a user JWT, and refuses with 409 when ai_mode=off or a human
+ * has taken over the conversation.
  */
 export function registerInternalSupportSendRoute(
   app: Express,
@@ -169,6 +197,8 @@ export function registerInternalSupportSendRoute(
           return response.status(404).json({ error: "conversation_not_found" });
         if (!supportReplyAllowed({ aiMode: conversation.aiMode }))
           return response.status(409).json({ error: "reply_not_allowed" });
+        if (conversation.humanPaused)
+          return response.status(409).json({ error: "human_paused" });
         const sent = await options.port.sendText({
           workspaceId: conversation.workspaceId,
           conversationId,
