@@ -98,7 +98,7 @@ vi.mock("../api", () => ({
   sendLiveMedia: vi.fn(),
   sendLiveMediaBatch: vi.fn(),
   sendLiveMessage: (input: unknown) => sendLiveMessage(input),
-  sendLivePresence: vi.fn(),
+  sendLivePresence: vi.fn(async () => undefined),
   snoozeLiveConversation: vi.fn(),
   updateLiveContact: vi.fn(),
   updateLiveConversation: (input: unknown) => updateLiveConversation(input),
