@@ -25,7 +25,6 @@
 @import "./shared.css";
 @import "./control-room.css";
 @import "./features/auth.css";
-@import "./features/marketing.css";
 @import "./custom-select.css";
 
 @theme inline {

@@ -6,7 +6,6 @@ import knowledgeEn from "./locales/en-US/knowledge.json";
 import settingsEn from "./locales/en-US/settings.json";
 import notificationsEn from "./locales/en-US/notifications.json";
 import runsEn from "./locales/en-US/runs.json";
-import marketingEn from "./locales/en-US/marketing.json";
 import onboardingEn from "./locales/en-US/onboarding.json";
 import kanbanEn from "./locales/en-US/kanban.json";
 import commonPt from "./locales/pt-BR/common.json";
@@ -17,7 +16,6 @@ import knowledgePt from "./locales/pt-BR/knowledge.json";
 import settingsPt from "./locales/pt-BR/settings.json";
 import notificationsPt from "./locales/pt-BR/notifications.json";
 import runsPt from "./locales/pt-BR/runs.json";
-import marketingPt from "./locales/pt-BR/marketing.json";
 import onboardingPt from "./locales/pt-BR/onboarding.json";
 import kanbanPt from "./locales/pt-BR/kanban.json";
 
@@ -31,7 +29,6 @@ export const resources = {
     settings: settingsEn,
     notifications: notificationsEn,
     runs: runsEn,
-    marketing: marketingEn,
     onboarding: onboardingEn,
     kanban: kanbanEn,
   },
@@ -44,7 +41,6 @@ export const resources = {
     settings: settingsPt,
     notifications: notificationsPt,
     runs: runsPt,
-    marketing: marketingPt,
     onboarding: onboardingPt,
     kanban: kanbanPt,
   },

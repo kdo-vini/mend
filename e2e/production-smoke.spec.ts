@@ -6,13 +6,12 @@ import { expect, test } from "@playwright/test";
 // intentionally evaluated once, at collection time, not inside a test body.
 const productionBaseUrl = process.env.MEND_PRODUCTION_BASE_URL?.trim();
 
-// Confirmed against src/features/marketing/LandingPage.tsx and the marketing
-// locale bundles: the hero <h1> is two <span> children (titleLead +
-// titleAccent) and the accessible name join inserts a single space between
-// them, matching the already-passing assertion in e2e/mvp.spec.ts.
-const heroHeading = {
-  "en-US": "Your support loop, finally off your plate.",
-  "pt-BR": "Seu loop de suporte, finalmente fora da sua cabeça.",
+// Mirrors the auth locale bundles (signInTitle in
+// src/i18n/locales/*/auth.json): AuthGate renders the sign-in form on "/" for
+// every visitor without a session.
+const signInHeading = {
+  "en-US": "Sign in to Mend",
+  "pt-BR": "Entrar no Mend",
 } as const;
 
 test.describe("production smoke", () => {
@@ -32,35 +31,24 @@ test.describe("production smoke", () => {
     expect(ready.ok()).toBe(true);
   });
 
-  // Read-only: the public landing at "/" is served to every visitor
-  // regardless of session state (see AuthGate's publicLanding branch), so
-  // this never touches sign-in, a workspace, or any authenticated route.
-  test("published landing renders the interactive case playback without page overflow", async ({
+  // Read-only: an unauthenticated GET of "/" renders AuthGate's sign-in form
+  // once the session probe finds no session. Nothing is submitted, so this
+  // never signs in, touches a workspace, or reaches an authenticated route.
+  test("published root renders the sign-in form without page overflow", async ({
     page,
   }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem("mend.interface-language", "en-US");
     });
     // Absolute URL: always targets productionBaseUrl, never the config's
-    // local e2eBaseUrl. See the webServer note below for why this matters.
+    // local e2eBaseUrl.
     await page.goto(`${productionBaseUrl}/`);
 
     await expect(
-      page.getByRole("heading", { name: heroHeading["en-US"] }),
+      page.getByRole("heading", { name: signInHeading["en-US"] }),
     ).toBeVisible();
-
-    const playback = page.getByLabel("Interactive Mend case playback");
-    await expect(playback).toBeVisible();
-    await expect(playback).toHaveAttribute("data-scene", "signal");
-
-    // Scene controls only change which part of the static demo specimen is
-    // highlighted client-side; nothing here reaches WhatsApp, an issue, a
-    // run, or any backend mutation.
-    await page.getByRole("button", { name: "Investigate" }).click();
-    await expect(playback).toHaveAttribute("data-scene", "investigate");
-
-    await page.getByRole("button", { name: "Pause playback" }).click();
-    await expect(playback).toHaveAttribute("data-playing", "false");
+    await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible();
+    await expect(page.locator(".marketing-page")).toHaveCount(0);
 
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth,
@@ -72,14 +60,12 @@ test.describe("production smoke", () => {
   // i18n bootstrap (src/i18n/index.ts) for every visitor, authenticated or
   // not, so this is legitimate unauthenticated coverage. Theme is
   // intentionally NOT exercised here: only the authenticated app shell
-  // (src/App.tsx) ever sets document.documentElement.dataset.theme, so the
-  // public landing always renders the single default (dark) palette and a
-  // real light/dark toggle would not be genuine landing-page behavior.
-  test("landing renders each supported locale with real, translated copy", async ({
+  // (src/App.tsx) ever sets document.documentElement.dataset.theme.
+  test("sign-in form renders each supported locale with real, translated copy", async ({
     page,
   }) => {
-    for (const locale of Object.keys(heroHeading) as Array<
-      keyof typeof heroHeading
+    for (const locale of Object.keys(signInHeading) as Array<
+      keyof typeof signInHeading
     >) {
       await page.addInitScript((nextLocale) => {
         window.localStorage.setItem("mend.interface-language", nextLocale);
@@ -87,8 +73,9 @@ test.describe("production smoke", () => {
       await page.goto(`${productionBaseUrl}/`);
 
       await expect(
-        page.getByRole("heading", { name: heroHeading[locale] }),
+        page.getByRole("heading", { name: signInHeading[locale] }),
       ).toBeVisible();
+      await expect(page.locator(".marketing-page")).toHaveCount(0);
 
       const background = await page.evaluate(
         () => getComputedStyle(document.body).backgroundColor,

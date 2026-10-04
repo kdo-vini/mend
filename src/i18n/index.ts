@@ -22,7 +22,6 @@ void i18n.use(initReactI18next).init({
     "runs",
     "settings",
     "notifications",
-    "marketing",
     "onboarding",
     "kanban",
   ],
