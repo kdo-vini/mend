@@ -228,9 +228,6 @@
     "syncingMessage": "This message is still syncing with WhatsApp."
   },
   "confirmations": {
-    "enableAutoReplyTitle": "Turn on AI for this conversation?",
-    "enableAutoReplyDescription": "The AI can reply to this customer again. Only allowlisted, high-confidence messages can be sent.",
-    "enableAutoReplyConfirm": "Turn on AI",
     "deleteConversationTitle": "Delete conversation?",
     "deleteConversationDescription": "This removes the conversation from Mend. The WhatsApp chat will not be deleted.",
     "deleteConversationConfirm": "Delete conversation",

@@ -110,9 +110,11 @@ let root: Root;
 
 function InboxHarness({
   onToast = () => undefined,
+  onConfirm = async () => true,
   initialConversations = [seedConversations[0], seedConversations[1]],
 }: {
   onToast?: (message: string, tone?: string) => void;
+  onConfirm?: () => Promise<boolean>;
   initialConversations?: Conversation[];
 }) {
   const [conversations, setConversations] =
@@ -131,7 +133,7 @@ function InboxHarness({
         issues={[]}
         onOpenIssue={() => undefined}
         onToast={onToast}
-        onConfirm={async () => true}
+        onConfirm={onConfirm}
         liveMode
         senderNames={{}}
         knowledgeArticles={[]}
@@ -597,6 +599,37 @@ describe("InboxPage new chat", () => {
       expect(updateLiveConversation).not.toHaveBeenCalled();
       expect(resumeLiveConversationAi).toHaveBeenCalledTimes(1);
       expect(aiSwitch().getAttribute("aria-checked")).toBe("true");
+    });
+
+    it("writes on one click in both directions without a confirmation", async () => {
+      const onConfirm = vi.fn(async () => false);
+      const conversation = conversationWith("off", "ai_active");
+      await act(async () =>
+        root.render(
+          <InboxHarness
+            onConfirm={onConfirm}
+            initialConversations={[conversation]}
+          />,
+        ),
+      );
+
+      await act(async () => aiSwitch().click());
+      expect(updateLiveConversation).toHaveBeenLastCalledWith({
+        workspaceId: "workspace-1",
+        conversationId: conversation.id,
+        updates: { ai_mode: "safe_auto" },
+      });
+      expect(aiSwitch().getAttribute("aria-checked")).toBe("true");
+
+      await act(async () => aiSwitch().click());
+      expect(updateLiveConversation).toHaveBeenLastCalledWith({
+        workspaceId: "workspace-1",
+        conversationId: conversation.id,
+        updates: { ai_mode: "off" },
+      });
+      expect(aiSwitch().getAttribute("aria-checked")).toBe("false");
+      expect(updateLiveConversation).toHaveBeenCalledTimes(2);
+      expect(onConfirm).not.toHaveBeenCalled();
     });
   });
 });

@@ -228,9 +228,6 @@
     "syncingMessage": "Esta mensagem ainda está sincronizando com o WhatsApp."
   },
   "confirmations": {
-    "enableAutoReplyTitle": "Ativar a IA nesta conversa?",
-    "enableAutoReplyDescription": "A IA poderá voltar a responder este cliente. Somente mensagens permitidas e com alta confiança poderão ser enviadas.",
-    "enableAutoReplyConfirm": "Ativar IA",
     "deleteConversationTitle": "Excluir conversa?",
     "deleteConversationDescription": "Isso remove a conversa do Mend. O chat do WhatsApp não será excluído.",
     "deleteConversationConfirm": "Excluir conversa",

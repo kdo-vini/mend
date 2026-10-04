@@ -1073,15 +1073,6 @@ export function InboxPage({
   const setConversationAiActive = async (active: boolean) => {
     const plan = planConversationAiToggle(selected, active);
     if (!plan) return;
-    if (
-      active &&
-      !(await onConfirm({
-        title: t("confirmations.enableAutoReplyTitle"),
-        description: t("confirmations.enableAutoReplyDescription"),
-        confirmLabel: t("confirmations.enableAutoReplyConfirm"),
-      }))
-    )
-      return;
     const previous = selected;
     setConversations((current) =>
       current.map((item) =>
