@@ -15,7 +15,6 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { BrandMark } from "./BrandLockup";
-import { LandingPage } from "../features/marketing/LandingPage";
 import { resolveInterfaceLanguage } from "../i18n/preferences";
 import {
   consumeAuthAttempt,
@@ -114,10 +113,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
     new URLSearchParams(window.location.search).get("auth") === "1";
   const authCallbackPresent = hasAuthCallback();
   const authRouteRequested = authRequested || authCallbackPresent;
-  const publicLanding =
-    typeof window !== "undefined" &&
-    window.location.pathname === "/" &&
-    !authRouteRequested;
 
   useEffect(() => {
     const client = supabase;
@@ -155,9 +150,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // The public landing has no dependency on session hydration. Render it
-  // immediately so a slow auth check never flashes a loading shell on "/".
-  if (publicLanding) return <LandingPage />;
   if (!isSupabaseConfigured || localOperatorMode || explicitDemoMode)
     return children;
   // The explicit auth route must show the sign-in form even if Supabase's

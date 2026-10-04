@@ -19,90 +19,16 @@ async function chooseOption(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-test("public landing makes the support-to-fix loop visible", async ({
+test("a logged-out visit to the root shows the sign-in form", async ({
   page,
 }) => {
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", {
-      name: "Your support loop, finally off your plate.",
-    }),
+    page.getByRole("heading", { name: "Sign in to Mend" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Interactive Mend case playback")).toBeVisible();
-  await expect(
-    page.locator("#product").getByRole("link", { name: "See Mend at work" }),
-  ).toBeVisible();
-});
-
-test("landing product proof can play and select support-loop scenes", async ({
-  page,
-}) => {
-  await page.goto("/");
-  const playback = page.getByLabel("Interactive Mend case playback");
-  await expect(playback).toHaveAttribute("data-scene", "signal");
-  await page.getByRole("button", { name: "Investigate" }).click();
-  await expect(playback).toHaveAttribute("data-scene", "investigate");
-  await page.getByRole("button", { name: "Pause playback" }).click();
-  await expect(playback).toHaveAttribute("data-playing", "false");
-});
-
-test("reduced motion keeps playback static and manually selectable", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
-  const playback = page.getByLabel("Interactive Mend case playback");
-  await expect(playback).toHaveAttribute("data-playing", "false");
-  await page.waitForTimeout(3400);
-  await expect(playback).toHaveAttribute("data-scene", "signal");
-  await page.getByRole("button", { name: "Verified reply" }).click();
-  await expect(playback).toHaveAttribute("data-scene", "verify");
-});
-
-test("hovering the playback pauses autoplay and resumes on pointer leave", async ({
-  page,
-}) => {
-  await page.goto("/");
-  const playback = page.getByLabel("Interactive Mend case playback");
-  await expect(playback).toHaveAttribute("data-scene", "signal");
-
-  await playback.hover();
-  await page.waitForTimeout(3400);
-  await expect(playback).toHaveAttribute("data-scene", "signal");
-
-  await page.mouse.move(0, 0);
-  await page.waitForTimeout(3400);
-  await expect(playback).toHaveAttribute("data-scene", "context");
-});
-
-test("a manual pause survives a focus change", async ({ page }) => {
-  await page.goto("/");
-  const playback = page.getByLabel("Interactive Mend case playback");
-
-  await page.getByRole("button", { name: "Pause playback" }).click();
-  await expect(playback).toHaveAttribute("data-playing", "false");
-  await expect(playback).toHaveAttribute("data-scene", "signal");
-
-  await page.getByRole("link", { name: "Sign in" }).first().focus();
-  await expect(playback).toHaveAttribute("data-playing", "false");
-
-  await page.waitForTimeout(3400);
-  await expect(playback).toHaveAttribute("data-scene", "signal");
-});
-
-test("toggling reduced motion mid-session stops live playback", async ({
-  page,
-}) => {
-  await page.goto("/");
-  const playback = page.getByLabel("Interactive Mend case playback");
-  await expect(playback).toHaveAttribute("data-playing", "true");
-
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(playback).toHaveAttribute("data-playing", "false");
-
-  await page.waitForTimeout(3400);
-  await expect(playback).toHaveAttribute("data-scene", "signal");
+  await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible();
+  await expect(page.locator(".marketing-page")).toHaveCount(0);
 });
 
 test("explicit auth link renders the sign-in form while the session probe runs", async ({
