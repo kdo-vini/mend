@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Inbox, CircleDot, Settings } from "lucide-react";
 import { PageHeader } from "../../shared/ui/PageHeader";
+import { FinancePage } from "../finance/FinancePage";
 
 export function DashboardPage({
   operator,
@@ -21,6 +22,7 @@ export function DashboardPage({
           email: operator.email,
         })}
       </p>
+      <FinancePage compact />
       <div className="dashboard-links">
         <Link to="/inbox" className="dashboard-link">
           <Inbox size={20} aria-hidden="true" />

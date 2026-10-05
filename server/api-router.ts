@@ -34,6 +34,7 @@ import { registerMcpConnectionRoutes } from "./routes/mcp-connection-routes.js";
 import { registerGitHubConnectionRoutes } from "./routes/github-connection-routes.js";
 import { registerCodingControlPlaneRoutes } from "./routes/coding-control-plane-routes.js";
 import { registerImpactRoutes } from "./routes/impact-routes.js";
+import { registerFinanceRoutes } from "./routes/finance-routes.js";
 import {
   InternalWorkspaceError,
   resolveInternalWorkspace,
@@ -858,6 +859,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerGoogleConnectionRoutes(routeContext);
   registerMcpConnectionRoutes(routeContext);
   registerImpactRoutes(routeContext);
+  registerFinanceRoutes(routeContext);
 
   router.use(
     (

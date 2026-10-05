@@ -84,3 +84,4 @@
     @apply font-sans;
   }
 }
+@import "./features/finance.css";
