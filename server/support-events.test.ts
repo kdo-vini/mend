@@ -21,7 +21,13 @@ function buildApp(
   routeEnv: NodeJS.ProcessEnv = env,
 ) {
   const app = express();
-  registerInternalSupportRoutes(app, { store, env: routeEnv });
+  registerInternalSupportRoutes(app, {
+    store,
+    env: routeEnv,
+    internalWorkspace: {
+      resolve: async () => "11111111-1111-4111-8111-111111111111",
+    },
+  });
   return app;
 }
 
@@ -362,5 +368,44 @@ describe("SupabaseSupportEventStore", () => {
         },
       ],
     });
+  });
+});
+
+describe("internal workspace event scope", () => {
+  const canonical = "11111111-1111-4111-8111-111111111111";
+  it("keeps feed cursors and live reply rules while hiding legacy-space events", async () => {
+    const store = await seededStore();
+    await store.record({
+      workspaceId: "22222222-2222-4222-8222-222222222222",
+      conversationId: "legacy",
+      messageId: "legacy",
+      remoteJid: "legacy",
+    });
+    const response = await request(buildApp(store))
+      .get(`${SUPPORT_EVENTS_PATH}?cursor=1&limit=20`)
+      .set(SUPPORT_EVENTS_KEY_HEADER, KEY);
+    expect(response.status).toBe(200);
+    expect(
+      response.body.events.map(
+        (event: {
+          workspaceId: string;
+          cursor: string;
+          replyAllowed: boolean;
+        }) => [event.workspaceId, event.cursor, event.replyAllowed],
+      ),
+    ).toEqual([
+      [canonical, "2", true],
+      [canonical, "3", false],
+    ]);
+    expect(response.body.nextCursor).toBe("3");
+  });
+  it("rejects a caller-selected workspace before exposing events", async () => {
+    const response = await request(buildApp(await seededStore()))
+      .get(
+        `${SUPPORT_EVENTS_PATH}?workspaceId=22222222-2222-4222-8222-222222222222`,
+      )
+      .set(SUPPORT_EVENTS_KEY_HEADER, KEY);
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ error: "workspace_not_found" });
   });
 });

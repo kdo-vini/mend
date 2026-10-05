@@ -91,6 +91,7 @@ function createFakeDependencies(
   };
 
   return {
+    internalWorkspace: { resolve: async () => workspaceId },
     auth: {
       authenticate: vi.fn(async () =>
         options.user === undefined ? user : options.user,
@@ -1348,5 +1349,84 @@ describe("whatsmiauApiHttpError", () => {
     );
     expect(mapped.status).toBe(423);
     expect(mapped.code).toBe("whatsapp_instance_suspended");
+  });
+});
+
+describe("internal dashboard API", () => {
+  const configured = () => {
+    const dependencies = createFakeDependencies();
+    dependencies.internalWorkspace = {
+      resolve: vi.fn(async () => workspaceId),
+    };
+    return dependencies;
+  };
+  it("returns the internal workspace and the caller role without a workspace header", async () => {
+    const dependencies = configured();
+    const response = await request(makeApp(dependencies)).get(
+      "/api/internal-workspace",
+    );
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      workspaceId,
+      role: "owner",
+      canManageAccess: true,
+    });
+    expect(dependencies.membership.getMembership).toHaveBeenCalledWith(
+      userId,
+      workspaceId,
+    );
+  });
+  it("blocks creating workspaces even when the body is otherwise valid", async () => {
+    const dependencies = configured();
+    const response = await request(makeApp(dependencies))
+      .post("/api/workspaces")
+      .send({ name: "Other", slug: "other" });
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe("workspace_creation_disabled");
+    expect(dependencies.workspaces.create).not.toHaveBeenCalled();
+  });
+  it("rejects a different workspace supplied through the route or header", async () => {
+    const dependencies = configured();
+    const app = makeApp(dependencies);
+    expect(
+      (await request(app).get(`/api/workspaces/${otherWorkspaceId}`)).status,
+    ).toBe(404);
+    expect(
+      (
+        await request(app)
+          .get("/api/internal-workspace")
+          .set("x-mend-workspace-id", otherWorkspaceId)
+      ).status,
+    ).toBe(404);
+    expect(dependencies.workspaces.get).not.toHaveBeenCalled();
+  });
+  it("does not grant membership simply because a user can authenticate", async () => {
+    const dependencies = configured();
+    vi.mocked(dependencies.membership.getMembership).mockResolvedValue(null);
+    const response = await request(makeApp(dependencies)).get(
+      "/api/internal-workspace",
+    );
+    expect(response.status).toBe(404);
+    expect(dependencies.workspaces.get).not.toHaveBeenCalled();
+  });
+  it("reflects revoked membership on the next request", async () => {
+    const dependencies = configured();
+    const app = makeApp(dependencies);
+    expect((await request(app).get("/api/internal-workspace")).status).toBe(
+      200,
+    );
+    vi.mocked(dependencies.membership.getMembership).mockResolvedValue(null);
+    expect((await request(app).get("/api/internal-workspace")).status).toBe(
+      404,
+    );
+  });
+  it("fails closed when internal workspace configuration is absent", async () => {
+    const dependencies = configured();
+    dependencies.internalWorkspace = { resolve: async () => null };
+    const response = await request(makeApp(dependencies)).get(
+      "/api/internal-workspace",
+    );
+    expect(response.status).toBe(503);
+    expect(response.body.error.code).toBe("internal_workspace_unconfigured");
   });
 });

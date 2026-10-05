@@ -228,3 +228,9 @@ compositores e fachadas de compatibilidade, sem criar serviços distribuídos.
 Para uma decisão que afeta arquitetura, segurança, dados ou operação, use o
 [template de ADR](templates/ADR.md) e registre o documento no
 [índice de decisões](decisions/).
+
+## Internal dashboard boundary (2026-10-05)
+
+`resolveInternalWorkspace` and `SupabaseInternalWorkspaceAdapter` in `server/internal-workspace.ts` resolve the singleton UUID without selecting a default. API authorization, Support event/send routes and inbound channel resolution reuse this boundary. Keep membership checks and exact channel binding; the singleton UUID does not grant access. Workspace creation is disabled in the API and migration. See ADR-012 and the current internal product direction.
+
+`validateQueuedBinding` in `server/workers/live-worker-shared.ts` re-resolves the exact instance before queued inbound processing or AI reply sending. Reject stale workspace/channel bindings before invoking automation. Debounce parsing also lives in this existing worker utilities module, with compatibility exports from `server/live-worker.ts`.

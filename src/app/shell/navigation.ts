@@ -2,12 +2,14 @@ import {
   BookOpen,
   CircleDot,
   Inbox as InboxIcon,
+  LayoutDashboard,
   Settings as SettingsIcon,
   TerminalSquare,
 } from "lucide-react";
 import { SUPPORT_AI_SURFACES_ENABLED } from "../../shared/support-ai-surfaces";
 
 export type WorkspaceNavigationId =
+  | "dashboard"
   | "inbox"
   | "issues"
   | "runs"
@@ -15,6 +17,7 @@ export type WorkspaceNavigationId =
   | "settings";
 
 export const navItems = [
+  { id: "dashboard", to: "/dashboard", icon: LayoutDashboard },
   { id: "inbox", to: "/inbox", icon: InboxIcon },
   { id: "issues", to: "/issues", icon: CircleDot },
   { id: "runs", to: "/agent-runs", icon: TerminalSquare },

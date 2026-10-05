@@ -52,6 +52,8 @@ import { SupabaseCodexStarter } from "./workers/codex-starter.js";
 import { SupabaseLiveWorkerKnowledge } from "./workers/knowledge.js";
 import {
   cleanInstanceName,
+  DEFAULT_INBOUND_DEBOUNCE_MS,
+  validateQueuedBinding,
   CODING_RUN_CONTINUATION_JOB_TYPE,
   KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE,
   delay,
@@ -80,22 +82,6 @@ export interface ProcessInboundMessageJobPayload {
   idempotencyKey: string;
   message: NormalizedWhatsmiauMessage;
   persisted: InboxMessageRecord;
-}
-
-/** Default debounce before triage/draft. Override with MEND_INBOUND_DEBOUNCE_MS. */
-export const DEFAULT_INBOUND_DEBOUNCE_MS = 1_500;
-
-/** Parse inbound debounce from env; invalid/missing → default. Cap 30s. */
-export function resolveInboundDebounceMs(
-  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
-): number {
-  const raw = env.MEND_INBOUND_DEBOUNCE_MS;
-  if (raw === undefined || raw.trim() === "")
-    return DEFAULT_INBOUND_DEBOUNCE_MS;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 0)
-    return DEFAULT_INBOUND_DEBOUNCE_MS;
-  return Math.min(30_000, Math.floor(parsed));
 }
 
 export type ConversationHistoryMessage = {
@@ -554,6 +540,11 @@ export class LiveWorker {
       const payload = job.payload as SendAiReplyJobPayload;
       if (payload.stage !== "send_ai_reply" || !payload.binding?.workspaceId)
         throw new Error("invalid_send_ai_reply_job");
+      await validateQueuedBinding(
+        this.options.channelResolver,
+        payload.binding,
+        job.workspaceId,
+      );
       await this.options.automation.sendAiReply(payload);
       return;
     }
@@ -721,6 +712,11 @@ export class LiveWorker {
       throw new Error("invalid_process_inbound_message_job");
     }
     if (!this.options.automation) return;
+    await validateQueuedBinding(
+      this.options.channelResolver,
+      payload.binding,
+      job.workspaceId,
+    );
     const automation = this.options.automation;
     const automationBase = {
       binding: payload.binding,
@@ -944,4 +940,9 @@ export {
   SEND_AI_REPLY_JOB_TYPE,
   SUPPORT_REPOSITORY_RESEARCH_JOB_TYPE,
   WHATSAPP_INGEST_JOB_TYPE,
+} from "./workers/live-worker-shared.js";
+
+export {
+  DEFAULT_INBOUND_DEBOUNCE_MS,
+  resolveInboundDebounceMs,
 } from "./workers/live-worker-shared.js";

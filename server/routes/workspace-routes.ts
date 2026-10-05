@@ -1,8 +1,8 @@
+import { resolveInternalWorkspace } from "../internal-workspace.js";
 import type { ApiRouteModuleContext } from "../api-router.js";
 import { z } from "zod";
 import {
   auditLogListQuerySchema,
-  workspaceCreateSchema,
   workspaceMemberCreateSchema,
   workspaceMemberListQuerySchema,
   workspaceMemberRolePatchSchema,
@@ -24,16 +24,23 @@ export function registerWorkspaceRoutes(context: ApiRouteModuleContext) {
     send,
     noContent,
     requireFound,
-    userFrom,
     ApiHttpError,
     uuid,
   } = context;
   router.get(
     "/api/workspaces",
     asyncRoute(async (_request, response) => {
-      const user = userFrom(response);
+      const workspaceId = await resolveInternalWorkspace(
+        dependencies.internalWorkspace,
+      );
+      const scopedContext = await access(response, workspaceId);
       send(response, 200, {
-        data: await dependencies.workspaces.list(user.id),
+        data: [
+          requireFound(
+            await dependencies.workspaces.get(scopedContext, workspaceId),
+            "workspace",
+          ),
+        ],
       });
     }),
   );
@@ -54,15 +61,11 @@ export function registerWorkspaceRoutes(context: ApiRouteModuleContext) {
   );
   router.post(
     "/api/workspaces",
-    asyncRoute(async (request, response) => {
-      const user = userFrom(response);
-      send(
-        response,
-        201,
-        await dependencies.workspaces.create(
-          user.id,
-          parse(workspaceCreateSchema, request.body),
-        ),
+    asyncRoute(async () => {
+      throw new ApiHttpError(
+        403,
+        "workspace_creation_disabled",
+        "Workspace creation is disabled.",
       );
     }),
   );

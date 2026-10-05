@@ -1,3 +1,7 @@
+import type {
+  LiveChannelBinding,
+  LiveWorkerChannelResolver,
+} from "../live-worker.js";
 import { redactJobError } from "../jobs.js";
 export const WHATSAPP_INGEST_JOB_TYPE = "whatsmiau.message.received";
 export const PROCESS_INBOUND_MESSAGE_JOB_TYPE = "mend.process_inbound_message";
@@ -47,4 +51,37 @@ export function delay(milliseconds: number): Promise<void> {
 export function cleanInstanceName(value: string): string {
   const normalized = value.trim();
   return normalized.length <= 240 ? normalized : "";
+}
+
+export async function validateQueuedBinding(
+  resolver: LiveWorkerChannelResolver,
+  binding: LiveChannelBinding,
+  jobWorkspaceId: string | null | undefined,
+): Promise<void> {
+  const current = await resolver.resolve(binding.instanceName);
+  if (
+    !current ||
+    current.workspaceId !== binding.workspaceId ||
+    current.channelConnectionId !== binding.channelConnectionId ||
+    current.instanceName !== binding.instanceName ||
+    (jobWorkspaceId && jobWorkspaceId !== current.workspaceId)
+  ) {
+    throw new Error("job_workspace_channel_mismatch");
+  }
+}
+
+/** Default debounce before triage/draft. Override with MEND_INBOUND_DEBOUNCE_MS. */
+export const DEFAULT_INBOUND_DEBOUNCE_MS = 1_500;
+
+/** Parse inbound debounce from env; invalid/missing → default. Cap 30s. */
+export function resolveInboundDebounceMs(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): number {
+  const raw = env.MEND_INBOUND_DEBOUNCE_MS;
+  if (raw === undefined || raw.trim() === "")
+    return DEFAULT_INBOUND_DEBOUNCE_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0)
+    return DEFAULT_INBOUND_DEBOUNCE_MS;
+  return Math.min(30_000, Math.floor(parsed));
 }

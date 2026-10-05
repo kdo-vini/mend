@@ -2,7 +2,7 @@
   "brand": {
     "name": "Mend",
     "agent": "Mend Agent",
-    "descriptor": "AI support for SaaS builders",
+    "descriptor": "Diagium internal dashboard",
     "tagline": "Keep shipping. Mend the support loop.",
     "workspaceEyebrow": "Mend workspace"
   },
@@ -71,7 +71,7 @@
     "profile": "Profile",
     "myWork": "My work",
     "more": "More",
-    "workspace": "Workspace",
+    "workspace": "Diagium",
     "searchEverything": "Search everything",
     "notifications": "Notifications",
     "unread": "{{count}} unread",
@@ -99,7 +99,8 @@
     "notificationsLabel_other": "Notifications{{count}}",
     "unread_one": "{{count}} unread",
     "unread_other": "{{count}} unread",
-    "shortcutCommand": "⌘ K"
+    "shortcutCommand": "⌘ K",
+    "dashboard": "Dashboard"
   },
   "app": {
     "currentOperator": "Current operator",
@@ -175,5 +176,20 @@
     "deleteIssueTitle": "Delete issue?",
     "deleteIssueDescription": "Delete {{identifier}}? This cannot be undone.",
     "deleteIssueConfirm": "Delete issue"
+  },
+  "dashboard": {
+    "title": "Diagium dashboard",
+    "description": "Diagium internal operations in a single workspace.",
+    "signedIn": "{{name}} · {{email}}",
+    "whatsapp": "WhatsApp",
+    "whatsappDescription": "Conversations and support connected to the bots.",
+    "issues": "Issues",
+    "issuesDescription": "Context and follow-up for operational issues.",
+    "settings": "Settings and access",
+    "settingsDescription": "Manage connections and access according to your permissions.",
+    "accessRequired": "Internal access required",
+    "accessDescription": "Your account needs an invitation to the Diagium workspace. Request access from its administrator and try again.",
+    "unconfigured": "The internal workspace has not been configured yet.",
+    "loading": "Loading Diagium workspace…"
   }
 }

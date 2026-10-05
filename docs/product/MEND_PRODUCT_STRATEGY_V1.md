@@ -1,3 +1,5 @@
+> Current product direction (2026-10-05): **Mend is the Diagium internal dashboard**, single workspace with individual invited accounts, preserving the WhatsApp bot bridge. Vinicius explicitly superseded the previous commercial strategy. Follow [MEND_INTERNAL_PRODUCT_DIRECTION.md](MEND_INTERNAL_PRODUCT_DIRECTION.md) for current work. The document below is retained as historical context, not the active product specification.
+
 # Mend — Product Strategy v1.0
 
 **Status:** Decisão de produto antes da próxima grande fase de desenvolvimento  

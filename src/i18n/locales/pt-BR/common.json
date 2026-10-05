@@ -2,7 +2,7 @@
   "brand": {
     "name": "Mend",
     "agent": "Mend Agent",
-    "descriptor": "Suporte com IA para quem constrói SaaS",
+    "descriptor": "Dashboard interno Diagium",
     "tagline": "Continue entregando. Feche o ciclo do suporte.",
     "workspaceEyebrow": "Espaço de trabalho Mend"
   },
@@ -71,7 +71,7 @@
     "profile": "Perfil",
     "myWork": "Meu trabalho",
     "more": "Mais",
-    "workspace": "Espaço de trabalho",
+    "workspace": "Diagium",
     "searchEverything": "Pesquisar em tudo",
     "notifications": "Notificações",
     "unread": "{{count}} não lida(s)",
@@ -99,7 +99,8 @@
     "notificationsLabel_other": "Notificações{{count}}",
     "unread_one": "{{count}} não lida(s)",
     "unread_other": "{{count}} não lidas",
-    "shortcutCommand": "⌘ K"
+    "shortcutCommand": "⌘ K",
+    "dashboard": "Dashboard"
   },
   "app": {
     "currentOperator": "Operador atual",
@@ -175,5 +176,20 @@
     "deleteIssueTitle": "Excluir chamado?",
     "deleteIssueDescription": "Excluir {{identifier}}? Essa ação não pode ser desfeita.",
     "deleteIssueConfirm": "Excluir chamado"
+  },
+  "dashboard": {
+    "title": "Dashboard Diagium",
+    "description": "Operação interna da Diagium em um único espaço.",
+    "signedIn": "{{name}} · {{email}}",
+    "whatsapp": "WhatsApp",
+    "whatsappDescription": "Conversas e atendimento conectados aos bots.",
+    "issues": "Chamados",
+    "issuesDescription": "Contexto e acompanhamento dos problemas da operação.",
+    "settings": "Configurações e acessos",
+    "settingsDescription": "Gerencie as conexões e os acessos conforme sua permissão.",
+    "accessRequired": "Acesso interno necessário",
+    "accessDescription": "Sua conta precisa de um convite para o espaço Diagium. Solicite acesso ao responsável e tente novamente.",
+    "unconfigured": "O espaço interno ainda não foi configurado.",
+    "loading": "Carregando espaço Diagium…"
   }
 }

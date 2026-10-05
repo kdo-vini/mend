@@ -57,6 +57,7 @@ import {
   registerInternalSupportSendRoute,
   SupabaseSupportSendPort,
 } from "./support-send.js";
+import { SupabaseInternalWorkspaceAdapter } from "./internal-workspace.js";
 import { InboxService, SupabaseInboxPort } from "./inbox-service.js";
 import { WhatsAppService } from "./whatsapp-service.js";
 
@@ -184,10 +185,22 @@ function secretMatches(
 
 registerInternalWhatsAppRoutes(app, { logger });
 registerInternalSupportRoutes(app, {
+  internalWorkspace: {
+    resolve: () =>
+      workerSupabase
+        ? new SupabaseInternalWorkspaceAdapter(workerSupabase).resolve()
+        : Promise.resolve(null),
+  },
   store: workerSupabase ? SupabaseSupportEventStore.from(workerSupabase) : null,
   logger,
 });
 registerInternalSupportSendRoute(app, {
+  internalWorkspace: {
+    resolve: () =>
+      workerSupabase
+        ? new SupabaseInternalWorkspaceAdapter(workerSupabase).resolve()
+        : Promise.resolve(null),
+  },
   port: workerSupabase
     ? SupabaseSupportSendPort.from(
         workerSupabase,

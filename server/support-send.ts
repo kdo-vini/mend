@@ -1,3 +1,7 @@
+import {
+  InternalWorkspaceError,
+  resolveInternalWorkspace,
+} from "./internal-workspace.js";
 import type { Express, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
 import type { Logger } from "pino";
@@ -125,6 +129,7 @@ const outboundFailureStatus: Record<OutboundSendError["reason"], number> = {
 };
 
 export interface SupportSendRouteOptions {
+  internalWorkspace: import("./internal-workspace.js").InternalWorkspacePort;
   port: SupportSendPort | null;
   env?: NodeJS.ProcessEnv;
   logger?: Pick<Logger, "error">;
@@ -157,15 +162,22 @@ export function registerInternalSupportSendRoute(
           .status(503)
           .json({ error: "support_send_not_configured" });
 
-      const { conversationId, text, workspaceId } = parsed.data;
+      const { conversationId, text } = parsed.data;
       const idempotencyKey =
         request.get("idempotency-key")?.trim().slice(0, 200) || undefined;
       try {
+        const workspaceId = await resolveInternalWorkspace(
+          options.internalWorkspace,
+          parsed.data.workspaceId,
+        );
         const conversation = await options.port.findConversation({
           conversationId,
           workspaceId,
         });
-        if (!conversation)
+        if (
+          !conversation ||
+          (workspaceId && conversation.workspaceId !== workspaceId)
+        )
           return response.status(404).json({ error: "conversation_not_found" });
         if (!supportReplyAllowed({ aiMode: conversation.aiMode }))
           return response.status(409).json({ error: "reply_not_allowed" });
@@ -181,6 +193,10 @@ export function registerInternalSupportSendRoute(
           ...sent,
         });
       } catch (error) {
+        if (error instanceof InternalWorkspaceError)
+          return response
+            .status(error.code === "workspace_not_found" ? 404 : 503)
+            .json({ error: error.code });
         if (error instanceof OutboundSendError)
           return response
             .status(outboundFailureStatus[error.reason])

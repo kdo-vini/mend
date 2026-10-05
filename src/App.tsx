@@ -21,7 +21,6 @@ import type {
 import { mergeConversationSnapshot } from "./features/inbox/conversation-snapshot";
 import { supabase } from "./lib/supabase";
 import { normalizeLocale, type SupportedLocale } from "./i18n/resources";
-import { currentInterfaceLanguage } from "./i18n/preferences";
 import {
   enableNativePush,
   dismissWorkspaceNotification,
@@ -54,7 +53,7 @@ import {
   setLiveWorkspaceAvailability,
   type WhatsAppInstance,
 } from "./api/live-actions";
-import { WorkspaceOnboarding as FeatureWorkspaceOnboarding } from "./app/onboarding/WorkspaceOnboarding";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { WorkspaceRoutes } from "./app/routes/WorkspaceRoutes";
 import { useAppShortcuts } from "./app/shortcuts/useAppShortcuts";
 import { notificationDestination } from "./app/shell/notification-destination";
@@ -161,9 +160,6 @@ function App() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [operationalLanguage, setOperationalLanguage] =
     useState<SupportedLocale>("en-US");
-  const [workspaceOptions, setWorkspaceOptions] = useState<
-    Array<{ id: string; name: string; defaultLanguage?: SupportedLocale }>
-  >(demoMode ? [{ id: "demo", name: "Techne" }] : []);
   const [, setChannel] = useState<WhatsAppInstance | null>(null);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(
@@ -414,19 +410,19 @@ function App() {
         if (showLoading) setWorkspaceLoading(true);
         setLiveDataError(null);
         const availableWorkspaces = await listWorkspaces(client);
-        const workspace =
-          availableWorkspaces.find((item) => item.id === workspaceId) ??
-          availableWorkspaces[0];
-        if (active)
-          setWorkspaceOptions(
-            availableWorkspaces.map((item) => ({
-              id: item.id,
-              name: item.name,
-              defaultLanguage: normalizeLocale(item.default_language),
-            })),
-          );
+        const workspace = availableWorkspaces[0];
         if (!workspace) {
-          if (active) setWorkspaceLoading(false);
+          if (active) {
+            setWorkspaceId(null);
+            setConversations([]);
+            setIssues([]);
+            setRuns([]);
+            setKnowledgeArticles([]);
+            setNotifications([]);
+            setWorkspaceLoading(false);
+            unsubscribe();
+            workspaceSubscribed = false;
+          }
           return;
         }
         if (!active) return;
@@ -520,12 +516,25 @@ function App() {
         }
       } catch (error) {
         if (active) {
+          unsubscribe();
+          workspaceSubscribed = false;
+          realtimeHealthy = false;
           const message =
             error instanceof Error
               ? error.message
               : "The live workspace data could not be loaded.";
-          setLiveDataError(message);
-          notify(t("toasts.liveDataUnavailable", { message }));
+          setWorkspaceId(null);
+          setConversations([]);
+          setIssues([]);
+          setRuns([]);
+          setKnowledgeArticles([]);
+          setNotifications([]);
+          setLiveDataError(
+            message === "internal_workspace_unconfigured"
+              ? t("dashboard.unconfigured")
+              : message,
+          );
+          notify(t("toasts.liveDataUnavailable", { message }), "error");
         }
       } finally {
         if (active && showLoading) setWorkspaceLoading(false);
@@ -1098,20 +1107,14 @@ function App() {
           !localOperatorMode &&
           !workspaceLoading &&
           !workspaceId ? (
-            <FeatureWorkspaceOnboarding
-              initialLanguage={currentInterfaceLanguage()}
-              onCreated={(workspace) => {
-                setWorkspaceId(workspace.id);
-                setOperationalLanguage("en-US");
-                setWorkspaceOptions((current) => [
-                  ...current.filter((item) => item.id !== workspace.id),
-                  { id: workspace.id, name: workspace.name },
-                ]);
-                setLiveDataRetry((current) => current + 1);
-              }}
+            <ErrorState
+              title={t("dashboard.accessRequired")}
+              description={t("dashboard.accessDescription")}
+              onRetry={() => setLiveDataRetry((current) => current + 1)}
             />
           ) : (
             <WorkspaceRoutes
+              dashboard={<DashboardPage operator={operatorIdentity} />}
               inbox={
                 <FeatureBoundary label={t("states.loadingInbox")}>
                   <FeatureInboxPage
@@ -1323,7 +1326,7 @@ function App() {
         <FeatureCommandPalette
           conversations={conversations}
           issues={issues}
-          workspaces={workspaceOptions}
+          workspaces={[]}
           currentWorkspaceId={workspaceId ?? (demoMode ? "demo" : "")}
           onClose={() => setCommandOpen(false)}
           onNewIssue={() => {
@@ -1344,16 +1347,7 @@ function App() {
             window.dispatchEvent(new PopStateEvent("popstate"));
           }}
           onStartRun={openRunDialog}
-          onSwitchWorkspace={(nextWorkspaceId) => {
-            const workspace = workspaceOptions.find(
-              (item) => item.id === nextWorkspaceId,
-            );
-            if (!workspace || nextWorkspaceId === "demo") return;
-            setWorkspaceId(workspace.id);
-            setOperationalLanguage(workspace.defaultLanguage ?? "en-US");
-            setSelectedConversationId("");
-            notify(t("toasts.workspaceSwitched", { name: workspace.name }));
-          }}
+          onSwitchWorkspace={() => undefined}
         />
       )}
       {createIssueOpen && (

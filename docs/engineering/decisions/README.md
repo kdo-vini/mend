@@ -20,3 +20,5 @@ consistentes entre backend, frontend, banco, workers e operação.
 
 Novas decisões devem copiar o [template de ADR](../templates/ADR.md), receber o
 próximo número e ser adicionadas a esta tabela.
+
+| [ADR-012](ADR-012-internal-single-workspace.md) | Internal Diagium dashboard with a canonical workspace and individual identities | accepted |

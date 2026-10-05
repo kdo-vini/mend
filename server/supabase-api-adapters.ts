@@ -2,6 +2,10 @@ import {
   SupabaseMembershipAdapter,
   SupabaseWorkspaceAdapter,
 } from "./adapters/supabase/access.js";
+import {
+  SupabaseInternalWorkspaceAdapter,
+  type InternalWorkspacePort,
+} from "./internal-workspace.js";
 import { SupabaseCodingControlPlaneAdapter } from "./adapters/supabase/coding-control-plane.js";
 import {
   SupabaseCodexRunStore,
@@ -97,6 +101,7 @@ export interface SupabaseApiAdapterOptions {
 }
 
 export type SupabaseApiPortDependencies = {
+  internalWorkspace: InternalWorkspacePort;
   membership: MembershipAdapter;
   workspaces: WorkspacePort;
   channels: ChannelPort;
@@ -206,6 +211,7 @@ export function createSupabaseApiAdapters(
     privilegedClient,
   );
   return {
+    internalWorkspace: new SupabaseInternalWorkspaceAdapter(client),
     membership,
     workspaces,
     channels,
