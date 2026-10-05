@@ -25,128 +25,6 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("register submits the confirmation redirect and shows the next step", async ({
-  page,
-  baseURL,
-}) => {
-  let signUpPayload: Record<string, unknown> | undefined;
-  let signUpRedirect: string | null = null;
-  await page.route("**/auth/v1/signup**", async (route) => {
-    signUpRedirect = new URL(route.request().url()).searchParams.get(
-      "redirect_to",
-    );
-    signUpPayload = route.request().postDataJSON() as Record<string, unknown>;
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ user: testUser, session: null }),
-    });
-  });
-
-  await page.goto("/?auth=1");
-  await page.getByRole("tab", { name: "Create account" }).click();
-  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
-  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
-  await page.locator(".auth-submit").click();
-
-  await expect(page.getByRole("status")).toContainText(
-    "We sent a confirmation email. Check your inbox, then come back to sign in.",
-  );
-  expect(signUpPayload).toMatchObject({
-    email: testUser.email,
-    password: "password-123",
-  });
-  expect(baseURL).toBeDefined();
-  expect(signUpRedirect).toBe(new URL("/?auth=1", baseURL!).toString());
-});
-
-test("register rejects disposable email addresses before calling Auth", async ({
-  page,
-}) => {
-  let signUpCalled = false;
-  await page.route("**/auth/v1/signup**", async (route) => {
-    signUpCalled = true;
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ user: testUser, session: null }),
-    });
-  });
-
-  await page.goto("/?auth=1");
-  await page.getByRole("tab", { name: "Create account" }).click();
-  await page
-    .getByRole("textbox", { name: "Email" })
-    .fill("founder@mailinator.com");
-  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
-  await page.locator(".auth-submit").click();
-
-  await expect(page.getByRole("alert")).toContainText(
-    "Use a permanent email address to create your account.",
-  );
-  await expect(page.locator(".auth-input-invalid")).toHaveCount(1);
-  expect(signUpCalled).toBe(false);
-});
-
-test("register explains Supabase's weak password response", async ({
-  page,
-}) => {
-  await page.route("**/auth/v1/signup**", async (route) => {
-    await route.fulfill({
-      status: 422,
-      contentType: "application/json",
-      body: JSON.stringify({
-        code: "weak_password",
-        msg: "Password should be at least 8 characters.",
-        weak_password: {
-          reasons: ["length"],
-          message: "Password should be at least 8 characters.",
-        },
-      }),
-    });
-  });
-
-  await page.goto("/?auth=1");
-  await page.getByRole("tab", { name: "Create account" }).click();
-  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
-  await page.getByRole("textbox", { name: "Password" }).fill("123");
-  await page.locator(".auth-submit").click();
-
-  await expect(page.getByRole("alert")).toContainText(
-    "Use at least 8 characters for your password.",
-  );
-  await expect(page.locator(".auth-input-invalid")).toHaveCount(1);
-});
-
-test("signup does not show a confirmation success when Auth rejects email delivery", async ({
-  page,
-}) => {
-  await page.route("**/auth/v1/signup**", async (route) => {
-    await route.fulfill({
-      status: 500,
-      contentType: "application/json",
-      body: JSON.stringify({
-        error: "unexpected_failure",
-        msg: "Error sending confirmation email",
-      }),
-    });
-  });
-
-  await page.goto("/?auth=1");
-  await page.getByRole("tab", { name: "Create account" }).click();
-  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
-  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
-  await page.locator(".auth-submit").click();
-
-  await expect(page.getByRole("alert")).toContainText(
-    "We couldn't confirm the email was sent. Try again later.",
-  );
-  await expect(page.getByRole("status")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Open Gmail", exact: true }),
-  ).toHaveCount(0);
-});
-
 test("password auth shows a clear message for malformed email", async ({
   page,
 }) => {
@@ -166,29 +44,6 @@ test("password auth shows a clear message for malformed email", async ({
   );
   await expect(page.locator(".auth-input-invalid")).toHaveCount(1);
   expect(tokenCalled).toBe(false);
-});
-
-test("Gmail signup offers a direct inbox shortcut", async ({ page }) => {
-  await page.route("**/auth/v1/signup**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ user: testUser, session: null }),
-    });
-  });
-
-  await page.goto("/?auth=1");
-  await page.getByRole("tab", { name: "Create account" }).click();
-  await page.getByRole("textbox", { name: "Email" }).fill("founder@gmail.com");
-  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
-  await page.locator(".auth-submit").click();
-
-  await expect(page.getByRole("status")).toContainText(
-    "We sent a confirmation email. Check your inbox, then come back to sign in.",
-  );
-  await expect(
-    page.getByRole("button", { name: "Open Gmail", exact: true }),
-  ).toBeVisible();
 });
 
 test("password auth stops repeated attempts before the provider call", async ({
@@ -222,7 +77,7 @@ test("password auth stops repeated attempts before the provider call", async ({
   expect(tokenCalls).toBe(5);
 });
 
-test("mobile auth uses a full-screen card for both account modes", async ({
+test("mobile login keeps the full-screen geometry without public registration", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -238,14 +93,16 @@ test("mobile auth uses a full-screen card for both account modes", async ({
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
 
-  await page.getByRole("tab", { name: "Create account" }).click();
-  const signUpRect = await card.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return { width: rect.width, height: rect.height };
-  });
+  await expect(page.getByRole("tab", { name: "Create account" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByText(
+      "Internal access by invitation. Use your authorized account.",
+    ),
+  ).toBeVisible();
 
   expect(signInRect).toEqual({ width: 390, height: 844 });
-  expect(signUpRect).toEqual(signInRect);
   expect(signInOverflow).toBe(false);
 });
 
@@ -276,14 +133,9 @@ test("auth errors stay soft and inside the mobile frame", async ({ page }) => {
     "Incorrect email or password.",
   );
   await expect(page.locator(".auth-input-invalid")).toHaveCount(2);
-  await expect(page.locator(".auth-feedback-slot .auth-error")).toContainText(
-    "Don't have an account?",
-  );
   await expect(
-    page
-      .locator(".auth-feedback-slot")
-      .getByRole("button", { name: "Create your account", exact: true }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Create your account", exact: true }),
+  ).toHaveCount(0);
   const after = await card.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     return { width: rect.width, height: rect.height };
@@ -349,8 +201,33 @@ test("login creates a session and leaves the auth route for the workspace", asyn
   await page.getByRole("textbox", { name: "Password" }).fill("password-123");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(
+    page.getByText("The internal workspace has not been configured yet."),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Sign in to Mend" }),
   ).toHaveCount(0);
+});
+
+test("root is the internal login, with no marketing or public signup", async ({
+  page,
+}) => {
+  let signupCalls = 0;
+  await page.route("**/auth/v1/signup**", async (route) => {
+    signupCalls += 1;
+    await route.abort();
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Mend" }),
+  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Create account" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByText(
+      "Internal access by invitation. Use your authorized account.",
+    ),
+  ).toBeVisible();
+  expect(signupCalls).toBe(0);
 });

@@ -1,3 +1,4 @@
+import { listMyWorkspaces } from "./auth";
 import type {
   RealtimeChannel,
   RealtimePostgresChangesPayload,
@@ -113,12 +114,7 @@ function belongsToWorkspace(
 export async function listWorkspaces(
   client: MendSupabaseClient,
 ): Promise<Workspace[]> {
-  const { data, error } = await client
-    .from("workspaces")
-    .select("*")
-    .order("name", { ascending: true });
-  if (error) throw new Error(error.message);
-  return data;
+  return listMyWorkspaces(client);
 }
 
 export function subscribeToWorkspace(

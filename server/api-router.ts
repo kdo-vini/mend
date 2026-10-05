@@ -34,6 +34,11 @@ import { registerMcpConnectionRoutes } from "./routes/mcp-connection-routes.js";
 import { registerGitHubConnectionRoutes } from "./routes/github-connection-routes.js";
 import { registerCodingControlPlaneRoutes } from "./routes/coding-control-plane-routes.js";
 import { registerImpactRoutes } from "./routes/impact-routes.js";
+import {
+  InternalWorkspaceError,
+  resolveInternalWorkspace,
+  internalWorkspaceSession,
+} from "./internal-workspace.js";
 import { SupportAiConfigurationError } from "./providers.js";
 import { McpConnectionError } from "./mcp.js";
 import {
@@ -726,6 +731,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
     workspaceId: string,
     minimumRole: WorkspaceRole = "viewer",
   ): Promise<RequestContext> => {
+    await resolveInternalWorkspace(dependencies.internalWorkspace, workspaceId);
     const user = userFrom(response);
     const membership = await dependencies.membership.getMembership(
       user.id,
@@ -757,8 +763,15 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
     request: Request,
     response: Response,
     minimumRole: WorkspaceRole = "viewer",
-  ): Promise<RequestContext> =>
-    access(response, workspaceIdFromRequest(request), minimumRole);
+  ): Promise<RequestContext> => {
+    const workspaceId = await resolveInternalWorkspace(
+      dependencies.internalWorkspace,
+      request.get("x-mend-workspace-id") === undefined
+        ? undefined
+        : workspaceIdFromRequest(request),
+    );
+    return access(response, workspaceId, minimumRole);
+  };
   const pathId = (request: Request) => parse(uuid, request.params.id);
   const pathIssue = (request: Request) =>
     parse(issueParamSchema, request.params).identifier;
@@ -819,6 +832,17 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
       send(response, 200, { user });
     }),
   );
+  router.get(
+    "/api/internal-workspace",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response);
+      const workspace = requireFound(
+        await dependencies.workspaces.get(context, context.workspaceId),
+        "workspace",
+      );
+      send(response, 200, { ...internalWorkspaceSession(context), workspace });
+    }),
+  );
   registerWorkspaceRoutes(routeContext);
   registerMediaRoutes(routeContext);
   registerChannelRoutes(routeContext);
@@ -843,6 +867,14 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
       _next: NextFunction,
     ) => {
       if (response.headersSent) return;
+      if (error instanceof InternalWorkspaceError)
+        return send(
+          response,
+          error.code === "workspace_not_found" ? 404 : 503,
+          {
+            error: { code: error.code, message: error.code },
+          },
+        );
       if (error instanceof ApiHttpError)
         return send(response, error.status, {
           error: {

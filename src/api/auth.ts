@@ -96,7 +96,10 @@ export function sendMagicLink(
 ) {
   return clientOrDefault(client).auth.signInWithOtp({
     email: email.trim(),
-    ...(redirectTo ? { options: { emailRedirectTo: redirectTo } } : {}),
+    options: {
+      shouldCreateUser: false,
+      ...(redirectTo ? { emailRedirectTo: redirectTo } : {}),
+    },
   });
 }
 
@@ -159,25 +162,37 @@ export async function listMyWorkspaces(
   client?: MendSupabaseClient,
 ): Promise<WorkspaceWithRole[]> {
   const supabase = clientOrDefault(client);
-  const [workspacesResult, membershipsResult] = await Promise.all([
-    supabase.from("workspaces").select("*").order("name", { ascending: true }),
-    supabase.from("workspace_members").select("workspace_id, role"),
+  const singleton = await supabase
+    .from("internal_workspace")
+    .select("workspace_id")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (singleton.error || !singleton.data)
+    throw new Error("internal_workspace_unconfigured");
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error("unauthenticated");
+  const [workspaceResult, membershipResult] = await Promise.all([
+    supabase
+      .from("workspaces")
+      .select("*")
+      .eq("id", singleton.data.workspace_id)
+      .maybeSingle(),
+    supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", singleton.data.workspace_id)
+      .eq("user_id", userData.user.id)
+      .maybeSingle(),
   ]);
-  if (workspacesResult.error) throw new Error(workspacesResult.error.message);
-  if (membershipsResult.error) throw new Error(membershipsResult.error.message);
-  const roles = new Map(
-    membershipsResult.data.map((member) => [
-      member.workspace_id,
-      roleOf(member.role),
-    ]),
-  );
-  return workspacesResult.data.flatMap((workspace) => {
-    const role = roles.get(workspace.id);
-    return role ? [{ ...workspace, role }] : [];
-  });
+  if (workspaceResult.error) throw new Error(workspaceResult.error.message);
+  if (membershipResult.error) throw new Error(membershipResult.error.message);
+  if (!workspaceResult.data || !membershipResult.data) return [];
+  return [
+    { ...workspaceResult.data, role: roleOf(membershipResult.data.role) },
+  ];
 }
 
-/** /me/workspace client helper. The default is the first workspace visible to RLS. */
+/** Resolve only the configured internal workspace and the authenticated membership. */
 export async function getMyWorkspace(
   workspaceId?: string,
   client?: MendSupabaseClient,
@@ -195,21 +210,9 @@ export function createWorkspace(
   input: WorkspaceCreateInput,
   client?: MendSupabaseClient,
 ): Promise<WorkspaceWithRole> {
-  const supabase = clientOrDefault(client);
-  const values = {
-    name: input.name.trim(),
-    slug: input.slug.trim().toLowerCase(),
-    issuePrefix: input.issuePrefix?.trim().toUpperCase() ?? "MEND",
-    timezone: input.timezone?.trim() || "America/Sao_Paulo",
-    defaultLanguage: input.defaultLanguage?.trim() || "pt-BR",
-  };
-  return callRpc<Workspace>(supabase, "create_workspace", {
-    p_name: values.name,
-    p_slug: values.slug,
-    p_issue_prefix: values.issuePrefix,
-    p_timezone: values.timezone,
-    p_default_language: normalizeLocale(values.defaultLanguage),
-  }).then((workspace) => ({ ...workspace, role: "owner" }));
+  void input;
+  void client;
+  return Promise.reject(new Error("workspace_creation_disabled"));
 }
 
 export function updateWorkspace(

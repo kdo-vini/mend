@@ -1,3 +1,7 @@
+import {
+  SupabaseInternalWorkspaceAdapter,
+  resolveInternalWorkspace,
+} from "../internal-workspace.js";
 import type {
   LiveChannelBinding,
   LiveWorkerChannelResolver,
@@ -12,9 +16,13 @@ export class SupabaseLiveWorkerChannelResolver
   async resolve(instanceName: string): Promise<LiveChannelBinding | null> {
     const normalized = cleanInstanceName(instanceName);
     if (!normalized) return null;
+    const workspaceId = await resolveInternalWorkspace(
+      new SupabaseInternalWorkspaceAdapter(this.client),
+    );
     const result = await this.client
       .from("channel_connections")
       .select("id, workspace_id, provider_instance_name")
+      .eq("workspace_id", workspaceId)
       .eq("provider", "whatsmiau")
       .eq("provider_instance_name", normalized);
     if (result.error)

@@ -10,13 +10,12 @@ test.beforeEach(async ({ page }) => {
 
 test("Issues owns list and board views", async ({ page }, testInfo) => {
   await page.goto("/issues?demo=1&status=open&view=board");
-  await expect(page.getByRole("link", { name: "Board" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    page.getByRole("link", { name: "Board", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await page.getByRole("link", { name: "List" }).click();
   await expect(page).toHaveURL(/\/issues\?demo=1&status=open$/);
-  await page.getByRole("link", { name: "Board" }).click();
+  await page.getByRole("link", { name: "Board", exact: true }).click();
   await expect(page).toHaveURL(/\/issues\?demo=1&status=open&view=board$/);
   const statusHeading =
     testInfo.project.name === "mobile"
@@ -66,7 +65,7 @@ test("mobile issues use compact rows and a grouped board", async ({ page }) => {
     page.locator(".issues-mobile-list").getByText("No matching issues"),
   ).toBeVisible();
   await page.getByLabel("Search issues").fill("");
-  await page.getByRole("link", { name: "Board" }).click();
+  await page.getByRole("link", { name: "Board", exact: true }).click();
   const mobileBoard = page.locator(".kanban-mobile-status-list");
   await expect(mobileBoard).toBeVisible();
   const triage = mobileBoard.locator("section").filter({
@@ -110,7 +109,7 @@ test("shown canceled mobile issue keeps Canceled as a valid status option", asyn
   await page.getByRole("option", { name: "Canceled", exact: true }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
 
-  await page.getByRole("link", { name: "Board" }).click();
+  await page.getByRole("link", { name: "Board", exact: true }).click();
   await page.getByRole("button", { name: "Canceled", exact: true }).click();
   const canceledGroup = page
     .locator(".kanban-mobile-status-list section")
@@ -146,7 +145,7 @@ test("mobile critical issue controls meet the touch target", async ({
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }
 
-  await page.getByRole("link", { name: "Board" }).click();
+  await page.getByRole("link", { name: "Board", exact: true }).click();
   const boardPrimary = page.locator(".kanban-primary-action");
   const boardBox = await boardPrimary.boundingBox();
   expect(boardBox?.height).toBeGreaterThanOrEqual(44);

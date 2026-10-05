@@ -197,6 +197,7 @@ function createHarness(
       undefined,
     );
     createApiRouter({
+      internalWorkspace: { resolve: async () => workspaceId },
       auth: { authenticate: async () => user },
       membership: {
         getMembership: async (_userId: string, requested: string) =>

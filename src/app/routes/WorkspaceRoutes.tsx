@@ -8,6 +8,7 @@ import {
 // i18n-exempt: route composition only; all rendered elements own their copy.
 
 export interface WorkspaceRouteElements {
+  dashboard?: ReactNode;
   inbox: ReactNode;
   issuesList: ReactNode;
   issuesBoard: ReactNode;
@@ -39,7 +40,11 @@ function LegacyKanbanRedirect() {
 export function WorkspaceRoutes(elements: WorkspaceRouteElements) {
   return (
     <Routes>
-      <Route path="/" element={<Navigate replace to="/inbox" />} />
+      <Route path="/" element={<Navigate replace to="/dashboard" />} />
+      <Route
+        path="/dashboard"
+        element={elements.dashboard ?? elements.fallback}
+      />
       <Route path="/inbox" element={elements.inbox} />
       <Route
         path="/issues"

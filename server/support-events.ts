@@ -1,3 +1,7 @@
+import {
+  InternalWorkspaceError,
+  resolveInternalWorkspace,
+} from "./internal-workspace.js";
 import type { Express, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
 import type { Logger } from "pino";
@@ -516,6 +520,7 @@ const supportEventsLimiter = rateLimit({
 });
 
 export interface SupportEventRouteOptions {
+  internalWorkspace: import("./internal-workspace.js").InternalWorkspacePort;
   store: SupportEventStore | null;
   env?: NodeJS.ProcessEnv;
   logger?: Pick<Logger, "error">;
@@ -548,13 +553,21 @@ export function registerInternalSupportRoutes(
           .status(503)
           .json({ error: "support_events_store_not_configured" });
       try {
+        const workspaceId = await resolveInternalWorkspace(
+          options.internalWorkspace,
+          parsed.data.workspaceId,
+        );
         const page = await options.store.list({
           cursor: parsed.data.cursor,
           limit: parsed.data.limit ?? DEFAULT_PAGE_SIZE,
-          workspaceId: parsed.data.workspaceId,
+          workspaceId,
         });
         return response.json(page);
       } catch (error) {
+        if (error instanceof InternalWorkspaceError)
+          return response
+            .status(error.code === "workspace_not_found" ? 404 : 503)
+            .json({ error: error.code });
         options.logger?.error({ err: error }, "Support events read failed");
         return response
           .status(500)

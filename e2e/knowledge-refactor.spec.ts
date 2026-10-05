@@ -83,7 +83,7 @@ async function installLiveKnowledgeHarness(
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ user: testUser }),
+      body: JSON.stringify(testUser),
     });
   });
   await page.route("**/rest/v1/**", async (route) => {
@@ -93,6 +93,12 @@ async function installLiveKnowledgeHarness(
     const method = request.method();
     let response: unknown = [];
 
+    if (table === "internal_workspace")
+      response = [{ singleton: true, workspace_id: liveWorkspace.id }];
+    if (table === "workspace_members")
+      response = [
+        { workspace_id: liveWorkspace.id, user_id: testUser.id, role: "owner" },
+      ];
     if (table === "workspaces") response = [liveWorkspace];
     if (table === "knowledge_articles" && method === "GET") response = articles;
 
@@ -310,6 +316,9 @@ test("live Knowledge preserves filtered CRUD selection through real API calls", 
     liveArticle("live-draft", "Draft live notes", "draft"),
   ]);
   await openLiveKnowledge(page);
+  await expect(
+    page.getByRole("button", { name: /Unrelated internal note/ }),
+  ).toBeVisible();
 
   const search = page.getByLabel("Search knowledge");
   await search.fill("does not exist");

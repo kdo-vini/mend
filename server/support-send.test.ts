@@ -37,7 +37,11 @@ function buildApp(
 ) {
   const app = express();
   app.use(express.json());
-  registerInternalSupportSendRoute(app, { port, env: routeEnv });
+  registerInternalSupportSendRoute(app, {
+    port,
+    env: routeEnv,
+    internalWorkspace: { resolve: async () => WORKSPACE },
+  });
   return app;
 }
 
@@ -286,5 +290,74 @@ describe("SupabaseSupportSendPort", () => {
       CONVERSATION,
       { text: "Oi", aiGenerated: true, idempotencyKey: "k" },
     );
+  });
+});
+
+describe("single workspace support bridge", () => {
+  const scopedApp = (
+    port: SupportSendPort,
+    canonical: string | null = WORKSPACE,
+  ) => {
+    const app = express();
+    app.use(express.json());
+    registerInternalSupportSendRoute(app, {
+      port,
+      env,
+      internalWorkspace: { resolve: async () => canonical },
+    });
+    return app;
+  };
+  it("scopes an omitted workspace without changing reply or idempotency contracts", async () => {
+    const port = fakePort({ workspaceId: WORKSPACE, aiMode: "draft" });
+    const response = await post(scopedApp(port), {
+      conversationId: CONVERSATION,
+      text: "Oi",
+    }).set("idempotency-key", "existing-key");
+    expect(response.status).toBe(201);
+    expect(port.findConversation).toHaveBeenCalledWith({
+      conversationId: CONVERSATION,
+      workspaceId: WORKSPACE,
+    });
+    expect(port.sendText).toHaveBeenCalledWith({
+      conversationId: CONVERSATION,
+      workspaceId: WORKSPACE,
+      text: "Oi",
+      idempotencyKey: "existing-key",
+    });
+  });
+  it("rejects another workspace before querying the conversation", async () => {
+    const port = fakePort({ workspaceId: WORKSPACE, aiMode: "safe_auto" });
+    const response = await post(scopedApp(port), {
+      conversationId: CONVERSATION,
+      workspaceId: CONVERSATION,
+      text: "Oi",
+    });
+    expect(response.status).toBe(404);
+    expect(port.findConversation).not.toHaveBeenCalled();
+    expect(port.sendText).not.toHaveBeenCalled();
+  });
+  it("blocks a foreign conversation even if a port returns it", async () => {
+    const port = fakePort({ workspaceId: CONVERSATION, aiMode: "safe_auto" });
+    expect(
+      (
+        await post(scopedApp(port), {
+          conversationId: CONVERSATION,
+          text: "Oi",
+        })
+      ).status,
+    ).toBe(404);
+    expect(port.sendText).not.toHaveBeenCalled();
+  });
+  it("never sends when the canonical workspace has not been configured", async () => {
+    const port = fakePort({ workspaceId: WORKSPACE, aiMode: "safe_auto" });
+    expect(
+      (
+        await post(scopedApp(port, null), {
+          conversationId: CONVERSATION,
+          text: "Oi",
+        })
+      ).status,
+    ).toBe(503);
+    expect(port.findConversation).not.toHaveBeenCalled();
   });
 });

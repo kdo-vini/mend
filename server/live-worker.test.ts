@@ -1800,3 +1800,54 @@ describe("Support AI kill-switch (Fase A)", () => {
     ).toBe(true);
   });
 });
+
+describe("queued internal workspace bindings", () => {
+  it.each([
+    { ...binding, workspaceId: "legacy-workspace" },
+    { ...binding, channelConnectionId: "legacy-channel" },
+  ])(
+    "rejects inbound and send jobs with stale bindings %j",
+    async (staleBinding) => {
+      const store = new InMemoryJobStore<Record<string, unknown>>();
+      const automation = new SendStageAutomation();
+      const process = vi.spyOn(automation, "process");
+      const worker = new LiveWorker({
+        jobStore:
+          store as unknown as InMemoryJobStore<WhatsmiauMessageJobPayload>,
+        channelResolver: new FakeResolver(binding),
+        inbox: new FakeInbox(),
+        automation,
+        supportAiEnabled: true,
+      });
+      for (const stage of ["process_inbound_message", "send_ai_reply"]) {
+        await store.enqueue({
+          workspaceId: staleBinding.workspaceId,
+          type: `mend.${stage}`,
+          payload: {
+            stage,
+            binding: staleBinding,
+            ingestionJobId: "ingest-legacy",
+            message,
+            persisted: {
+              id: "message-legacy",
+              conversationId: "conversation-legacy",
+            },
+            conversationId: "conversation-legacy",
+            sourceMessageId: "message-legacy",
+            body: "Must not send",
+            idempotencyKey: stage,
+          },
+          dedupeKey: stage,
+        });
+        await worker.poll();
+      }
+      expect(process).not.toHaveBeenCalled();
+      expect(automation.sent).toHaveLength(0);
+      expect(
+        (await store.list()).every(
+          (job) => job.lastError === "job_workspace_channel_mismatch",
+        ),
+      ).toBe(true);
+    },
+  );
+});

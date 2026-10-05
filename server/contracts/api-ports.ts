@@ -594,6 +594,7 @@ export interface ImpactPort {
 }
 
 export interface ApiRouterDependencies {
+  internalWorkspace: import("../internal-workspace.js").InternalWorkspacePort;
   auth: AuthAdapter;
   membership: MembershipAdapter;
   workspaces: WorkspacePort;

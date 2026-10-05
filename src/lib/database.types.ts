@@ -39,6 +39,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      internal_workspace: {
+        Row: { singleton: boolean; workspace_id: string; configured_at: string }
+        Insert: { singleton?: boolean; workspace_id: string; configured_at?: string }
+        Update: { singleton?: boolean; workspace_id?: string; configured_at?: string }
+        Relationships: [{ foreignKeyName: "internal_workspace_workspace_id_fkey"; columns: ["workspace_id"]; isOneToOne: true; referencedRelation: "workspaces"; referencedColumns: ["id"] }]
+      }
       agent_connection_auth_jobs: {
         Row: {
           auth_method: string

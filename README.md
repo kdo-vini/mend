@@ -9,7 +9,7 @@ OpenAI is the first provider. The support-AI boundary is provider-shaped so anot
 - Node.js 20+
 - npm 10+
 - Supabase CLI (authenticated and linked for remote operations)
-- Docker Desktop only when running the local Supabase stack/reset
+- Access to the hosted Supabase project; Docker is not required to run Mend
 - A Whatsmiau account and WhatsApp Business number for live messaging
 
 ## Local setup
@@ -33,7 +33,7 @@ npm run dev
 
 Open `http://localhost:5173/inbox`. Check the API with `Invoke-WebRequest http://localhost:8787/api/health`.
 
-Live mode requires Supabase Auth. Sign up, create the first workspace, then use Settings. No customer, conversation, issue or article is created automatically. The removable seed in `src/data.ts` is available only with `VITE_MEND_DEMO_MODE=1` or `?demo=1` and is labeled as demo data.
+Live mode requires Supabase Auth and an invited account in the configured Diagium workspace. Public signup and workspace creation are disabled. No customer, conversation, issue or article is created automatically. The removable seed in `src/data.ts` is available only with `VITE_MEND_DEMO_MODE=1` or `?demo=1` and is labeled as demo data.
 
 ## Environment
 
@@ -88,23 +88,24 @@ On Windows, approved npm commands run through the fixed command allowlist using 
 
 Migrations live in `supabase/migrations/` and create workspaces/memberships, channels, contacts, conversations/messages, issue tracking, knowledge, jobs, audit, private media storage, Codex repositories/runs/events, transactional issue identifiers and RLS.
 
-With Docker running, prove a clean local rebuild:
+Mend runs directly with Node.js and the hosted Supabase project. Docker Desktop and a local Supabase stack are optional tools for isolated database testing, not app requirements or mandatory release gates.
 
-```powershell
-supabase start
-supabase db reset
-supabase db lint --local
-```
-
-For the linked remote project:
+Inspect the linked remote project without Docker:
 
 ```powershell
 supabase migration list
-supabase db push
 supabase db lint --linked
 ```
 
-The current machine does not have Docker Desktop available, so a local `db reset` is a required release check rather than a completed claim. The linked migration history and remote lint can still be verified through the authenticated CLI.
+Apply reviewed migrations only to the intended project. Production schema changes require explicit rollout authorization; pointing a local app at production does not authorize applying pending migrations:
+
+```powershell
+supabase db push
+```
+
+For QA against hosted Supabase, verify the project and deployed schema first. Use identified test accounts only when account creation is authorized. Restrict writes to authorized test records; do not reset the remote database, change operational memberships or singleton configuration, or send live WhatsApp messages as part of a smoke test. Automated tests that mock Auth do not prove real login, invitation acceptance, session revocation, or RLS through HTTP; record those checks and any untested behavior separately.
+
+An optional isolated rebuild using `supabase start` / `supabase db reset` requires Docker. Never run a remote reset to replace that check.
 
 ## Quality gate
 
@@ -150,6 +151,6 @@ Deploy the Vite build to a static host and the API/worker to a trusted Node host
 - Media fails: local files are limited to 8 MB in the browser and an allowlisted MIME type; remote media must use a public HTTPS URL.
 - AI draft is empty: publish at least one relevant article and confirm `OPENAI_API_KEY`/`SUPPORT_AI_MODEL` on the server.
 - Codex will not start: configure a repository inside `CODEX_WORKSPACE_ROOT`; only install/lint/test/build are allowed.
-- Local Supabase reset fails: start Docker Desktop, then rerun `supabase start` and `supabase db reset`.
+- Docker is unavailable: use hosted Supabase and run the app with `npm run server` / `npm run dev`; a local Supabase reset is optional and requires a separate isolated stack.
 
 See `PRODUCT.md`, `DESIGN.md`, `docs/OPERATIONS_RUNBOOK.md` and `.env.example` for product, visual and operational decisions.

@@ -97,7 +97,7 @@ async function installLiveAlertsHarness(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ user: testUser }),
+      body: JSON.stringify(testUser),
     });
   });
   await page.route("**/rest/v1/**", async (route) => {
@@ -105,6 +105,12 @@ async function installLiveAlertsHarness(page: Page) {
     const table = url.pathname.split("/").at(-1);
     let response: unknown = [];
 
+    if (table === "internal_workspace")
+      response = [{ singleton: true, workspace_id: liveWorkspace.id }];
+    if (table === "workspace_members")
+      response = [
+        { workspace_id: liveWorkspace.id, user_id: testUser.id, role: "owner" },
+      ];
     if (table === "workspaces") response = [liveWorkspace];
     if (table === "issues") response = [liveIssue];
     if (table === "notifications" && route.request().method() === "GET")
