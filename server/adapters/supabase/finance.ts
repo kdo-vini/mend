@@ -48,6 +48,15 @@ export class SupabaseFinanceAdapter implements FinancePort {
       await this.client.rpc("finance_summary", { p_period: period }),
     );
   }
+  async get(entity: FinanceEntity, id: string) {
+    return this.checked(
+      await this.client
+        .from(`finance_${entity}`)
+        .select("*")
+        .eq("id", id)
+        .maybeSingle(),
+    );
+  }
   async list(entity: FinanceEntity, period?: string, offset = 0) {
     let query = this.client
       .from(`finance_${entity}`)

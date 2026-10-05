@@ -154,6 +154,64 @@ await assert.rejects(
   (e) => e.code === "23514",
 );
 count++;
+const cancelEntry = {
+  id: uuid(),
+  ...base,
+  kind: "expense",
+  period: "2026-11-01",
+  amount_cents: 4500,
+};
+await save("entries", cancelEntry);
+const cancelPayment = {
+  id: uuid(),
+  entry_id: cancelEntry.id,
+  paid_on: "2026-11-05",
+  amount_cents: 4500,
+  source: "Bank",
+  cancelled: false,
+  reason: "",
+};
+await save("settlements", cancelPayment);
+await assert.rejects(
+  () => save("entries", { ...cancelEntry, cancelled: true }, 1),
+  (e) => e.code === "23514",
+);
+assert.equal((await summary("2026-11-01")).expenses, 4500);
+count++;
+await save(
+  "settlements",
+  { ...cancelPayment, cancelled: true, reason: "Duplicate settlement" },
+  1,
+);
+assert.equal((await summary("2026-11-01")).paid, 0);
+assert.equal((await summary("2026-11-01")).expenses, 4500);
+count++;
+await save("settlements", { ...cancelPayment, id: uuid() });
+await save(
+  "entries",
+  { ...cancelEntry, cancelled: true, reason: "Duplicate accrual" },
+  1,
+);
+assert.equal((await summary("2026-11-01")).expenses, 0);
+assert.equal((await summary("2026-11-01")).paid, 0);
+assert.equal(
+  (
+    await db.query(
+      "select count(*)::int as n from finance_entries where id=$1",
+      [cancelEntry.id],
+    )
+  ).rows[0].n,
+  1,
+);
+const cancellationAudit = (
+  await db.query(
+    "select after_record from finance_events where record_id=$1 order by id desc limit 1",
+    [cancelEntry.id],
+  )
+).rows[0].after_record;
+assert.equal(cancellationAudit.cancelled, true);
+assert.equal(cancellationAudit.reason, "Duplicate accrual");
+count++;
 await db.exec(`select set_config('request.jwt.claim.sub','${owner}',false);`);
 assert.equal((await db.query("select * from finance_entries")).rows.length, 0);
 await assert.rejects(

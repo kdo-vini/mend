@@ -119,10 +119,15 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
   const [notice, setNotice] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  const [latestChanges, setLatestChanges] = useState<
+    Record<string, string | boolean | number | null>
+  >({});
   const [draft, setDraft] = useState<{
     entity: FinanceEntity;
     record: Record<string, string | boolean | number | null>;
     version: number | null;
+    baseline: Record<string, string | boolean | number | null>;
   } | null>(null);
   const [amountText, setAmountText] = useState("");
   const [history, setHistory] = useState<
@@ -185,10 +190,20 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
   ) {
     const record = row
       ? Object.fromEntries(
-          ["id", ...editable[kind]].map((field) => [field, row[field] ?? ""]),
+          ["id", ...editable[kind]].map((field) => [
+            field,
+            row[field] === undefined ? "" : row[field],
+          ]),
         )
       : initial(kind, period, entryId, settlementId);
-    setDraft({ entity: kind, record, version: row?.version ?? null });
+    setDraft({
+      entity: kind,
+      record,
+      baseline: { ...record },
+      version: row?.version ?? null,
+    });
+    setConflict(false);
+    setLatestChanges({});
     setAmountText(
       record.amount_cents ? (Number(record.amount_cents) / 100).toFixed(2) : "",
     );
@@ -217,6 +232,49 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
       setDraft(null);
       setNotice(t("finance.saved"));
       setRefresh((v) => v + 1);
+    } catch (err) {
+      fail(err);
+      setConflict(
+        err instanceof LiveActionError &&
+          err.code === "finance_conflict" &&
+          draft.version !== null,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function reloadDraft() {
+    if (!draft || busy) return;
+    setBusy(true);
+    try {
+      const latest = await financeApi.get(
+        draft.entity,
+        String(draft.record.id),
+      );
+      const record = { ...draft.record };
+      const changes: typeof record = {};
+      for (const field of editable[draft.entity]) {
+        const local =
+          field === "amount_cents"
+            ? parseFinanceAmount(amountText)
+            : record[field];
+        const baseline = draft.baseline[field];
+        if (latest[field] !== baseline) changes[field] = latest[field];
+        if (local === baseline) {
+          record[field] = latest[field];
+          if (field === "amount_cents")
+            setAmountText(
+              latest[field] === null
+                ? ""
+                : (Number(latest[field]) / 100).toFixed(2),
+            );
+        }
+      }
+      setDraft({ ...draft, record, baseline: latest, version: latest.version });
+      setLatestChanges(changes);
+      setConflict(false);
+      setError("");
+      setNotice(t("finance.draftReloaded"));
     } catch (err) {
       fail(err);
     } finally {
@@ -256,8 +314,14 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
       {error && (
         <p role="alert" className="finance-error">
           {error}{" "}
-          <button type="button" onClick={() => setRefresh((v) => v + 1)}>
-            {t("finance.retry")}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              conflict ? void reloadDraft() : setRefresh((v) => v + 1)
+            }
+          >
+            {t(conflict ? "finance.reloadDraft" : "finance.retry")}
           </button>
         </p>
       )}
@@ -374,6 +438,29 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
                     })}
                   </h2>
                   <form onSubmit={submit}>
+                    {Object.keys(latestChanges).length > 0 && (
+                      <aside>
+                        <p>{t("finance.latestChanges")}</p>
+                        <dl>
+                          {Object.entries(latestChanges).map(
+                            ([field, value]) => (
+                              <div key={field}>
+                                <dt>{t(`finance.fields.${field}`)}</dt>
+                                <dd>
+                                  {field === "amount_cents"
+                                    ? value === null
+                                      ? t("finance.unknown")
+                                      : money(Number(value))
+                                    : typeof value === "boolean"
+                                      ? t(value ? "finance.yes" : "finance.no")
+                                      : String(value ?? "")}
+                                </dd>
+                              </div>
+                            ),
+                          )}
+                        </dl>
+                      </aside>
+                    )}
                     <div className="finance-fields">
                       {editable[draft.entity].map((field) => (
                         <label key={field}>
@@ -381,6 +468,7 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
                           {booleanFields.has(field) ? (
                             <input
                               type="checkbox"
+                              disabled={busy}
                               checked={Boolean(draft.record[field])}
                               onChange={(e) =>
                                 setDraft({
@@ -394,6 +482,7 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
                             />
                           ) : field === "kind" ? (
                             <select
+                              disabled={busy}
                               value={String(draft.record.kind)}
                               onChange={(e) =>
                                 setDraft({
@@ -413,6 +502,7 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
                             </select>
                           ) : (
                             <input
+                              disabled={busy}
                               type={
                                 monthFields.has(field)
                                   ? "month"
@@ -491,7 +581,7 @@ export function FinancePage({ compact = false }: { compact?: boolean }) {
                     </datalist>
                     <p>{t("finance.formHelp")}</p>
                     <div className="finance-toolbar">
-                      <button type="submit" disabled={busy}>
+                      <button type="submit" disabled={busy || conflict}>
                         {t("finance.save")}
                       </button>
                       <button

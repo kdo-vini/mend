@@ -23,6 +23,8 @@ export interface FinanceSummary {
 }
 export const financeApi = {
   access: () => apiRequest<{ allowed: boolean }>("/api/finance/access"),
+  get: (entity: FinanceEntity, id: string) =>
+    apiRequest<FinanceRecord>(`/api/finance/${entity}/${id}`),
   summary: (period: string) =>
     apiRequest<FinanceSummary>(`/api/finance/summary?period=${period}`),
   list: (entity: FinanceEntity, period: string, offset: number) =>

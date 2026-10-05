@@ -91,6 +91,7 @@ export const financeRecords = {
 export type FinanceEntity = keyof typeof financeRecords;
 export interface FinancePort {
   allowed(workspaceId: string): Promise<boolean>;
+  get(entity: FinanceEntity, id: string): Promise<unknown | null>;
   summary(period: string): Promise<unknown>;
   list(
     entity: FinanceEntity,

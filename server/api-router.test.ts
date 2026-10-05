@@ -1434,6 +1434,7 @@ describe("internal dashboard API", () => {
 describe("financial authorization boundary", () => {
   const finance = (): FinancePort => ({
     allowed: vi.fn(async () => true),
+    get: vi.fn(async () => null),
     summary: vi.fn(async () => ({ income: 10000 })),
     list: vi.fn(async () => []),
     save: vi.fn(async () => ({})),
@@ -1464,6 +1465,7 @@ describe("financial authorization boundary", () => {
     for (const path of [
       "/api/finance/summary?period=2026-10-01",
       `/api/finance/history/${issueId}`,
+      `/api/finance/entries/${issueId}`,
       "/api/finance/entries?period=2026-10-01",
     ]) {
       expect((await request(app).get(path)).status).toBe(403);
@@ -1473,6 +1475,7 @@ describe("financial authorization boundary", () => {
     expect(port.summary).not.toHaveBeenCalled();
     expect(port.save).not.toHaveBeenCalled();
     expect(port.history).not.toHaveBeenCalled();
+    expect(port.get).not.toHaveBeenCalled();
   });
   it("rechecks financial access with an active session", async () => {
     const dependencies = createFakeDependencies();

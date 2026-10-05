@@ -75,6 +75,23 @@ export function registerFinanceRoutes(ctx: ApiRouteModuleContext) {
     "reviews",
   ]);
   router.get(
+    "/api/finance/:entity/:id",
+    asyncRoute(async (req, res) => {
+      const entity = parse(entitySchema, req.params.entity);
+      const record = await port!.get(
+        entity,
+        parse(z.string().uuid(), req.params.id),
+      );
+      if (!record)
+        throw new ApiHttpError(
+          404,
+          "finance_not_found",
+          "Financial record not found.",
+        );
+      send(res, 200, record);
+    }),
+  );
+  router.get(
     "/api/finance/:entity",
     asyncRoute(async (req, res) => {
       const entity = parse(entitySchema, req.params.entity) as FinanceEntity;

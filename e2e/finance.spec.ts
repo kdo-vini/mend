@@ -12,13 +12,21 @@ async function mockFinance(page: Page, allowed = true) {
     const url = new URL(route.request().url());
     const endpoint = url.pathname.split("/").pop();
     let body: unknown;
-    if (endpoint === "access") body = { allowed };
+    if (
+      url.pathname.split("/").length === 5 &&
+      route.request().method() === "GET"
+    ) {
+      const entity = url.pathname.split("/")[3];
+      body = tables[entity].find((row) => row.id === endpoint);
+    } else if (endpoint === "access") body = { allowed };
     else if (endpoint === "summary") {
       const rows = tables.entries;
       const expenses = rows
         .filter(
           (r) =>
-            r.period === url.searchParams.get("period") && r.kind === "expense",
+            r.period === url.searchParams.get("period") &&
+            r.kind === "expense" &&
+            !r.cancelled,
         )
         .reduce((sum, r) => sum + Number(r.amount_cents), 0);
       body = {
@@ -39,8 +47,23 @@ async function mockFinance(page: Page, allowed = true) {
       };
     } else if (route.request().method() === "POST") {
       const input = route.request().postDataJSON();
-      body = { ...input.record, version: 1 };
-      tables[endpoint!].push(body as Record<string, unknown>);
+      const index = tables[endpoint!].findIndex(
+        (row) => row.id === input.record.id,
+      );
+      const existing = tables[endpoint!][index];
+      if (existing && existing.version !== input.version) {
+        await route.fulfill({
+          status: 409,
+          json: { error: { code: "finance_conflict", message: "Conflict" } },
+        });
+        return;
+      }
+      body = {
+        ...input.record,
+        version: existing ? Number(existing.version) + 1 : 1,
+      };
+      if (index < 0) tables[endpoint!].push(body as Record<string, unknown>);
+      else tables[endpoint!][index] = body as Record<string, unknown>;
     } else
       body = {
         data: tables[endpoint!].filter(
@@ -50,6 +73,7 @@ async function mockFinance(page: Page, allowed = true) {
       };
     await route.fulfill({ json: body });
   });
+  return tables;
 }
 test("finance keeps accruals and cash distinct, persists entry and respects month on desktop/mobile", async ({
   page,
@@ -225,4 +249,116 @@ test("payment and reconciliation forms remain usable in English dark mode", asyn
       () => document.documentElement.scrollWidth > innerWidth,
     ),
   ).toBe(false);
+});
+test("conflict recovery retains edited amounts, refreshes untouched fields and saves the latest version", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("mend.interface-language", "en-US"),
+  );
+  const tables = await mockFinance(page);
+  tables.entries.push({
+    id: "11111111-1111-4111-8111-111111111111",
+    version: 1,
+    description: "Hostinger Diagium",
+    kind: "expense",
+    period: "2026-10-01",
+    amount_cents: 1990,
+    category: "Infra",
+    source: "Hostinger",
+    estimated: false,
+    project: "",
+    allocation: "",
+    cancelled: false,
+    reason: "",
+  });
+  await page.goto("/financeiro?demo=1");
+  await page.getByLabel("Reporting month").fill("2026-10");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .getByLabel("Amount (BRL), empty if unknown", { exact: true })
+    .fill("25.99");
+  tables.entries[0] = {
+    ...tables.entries[0],
+    version: 2,
+    description: "Hostinger updated",
+    amount_cents: 3000,
+  };
+  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save record", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", {
+      name: "Review latest version and keep draft",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByLabel("Amount (BRL), empty if unknown", { exact: true }),
+  ).toHaveValue("25.99");
+  await expect(page.getByLabel("Description", { exact: true })).toHaveValue(
+    "Hostinger updated",
+  );
+  await expect(page.locator(".finance-editor aside")).toContainText("30.00");
+  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await expect(page.locator(".finance-editor")).toHaveCount(0);
+  expect(tables.entries[0]).toMatchObject({
+    version: 3,
+    amount_cents: 2599,
+    description: "Hostinger updated",
+  });
+});
+test("cancelling an expense requires a reason, preserves the record and removes its total", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("mend.interface-language", "en-US"),
+  );
+  const tables = await mockFinance(page);
+  tables.entries.push({
+    id: "11111111-1111-4111-8111-111111111111",
+    version: 1,
+    description: "Hostinger Diagium",
+    kind: "expense",
+    period: "2026-10-01",
+    amount_cents: 1990,
+    category: "Infra",
+    source: "Hostinger",
+    estimated: false,
+    project: "",
+    allocation: "",
+    cancelled: false,
+    reason: "",
+  });
+  await page.goto("/financeiro?demo=1");
+  await page.getByLabel("Reporting month").fill("2026-10");
+  await expect(
+    page
+      .locator(".finance-metrics>div")
+      .filter({ hasText: "Accrued expenses" }),
+  ).toContainText("19.90");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .getByLabel("Cancel record (reason required)", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await expect(page.locator(".finance-editor")).toBeVisible();
+  expect(tables.entries[0].version).toBe(1);
+  await page
+    .getByLabel("Cancellation reason", { exact: true })
+    .fill("Duplicate accrual");
+  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await expect(page.locator(".finance-records")).toContainText("Cancelled");
+  await expect(
+    page
+      .locator(".finance-metrics>div")
+      .filter({ hasText: "Accrued expenses" }),
+  ).toContainText("0.00");
+  expect(tables.entries).toHaveLength(1);
+  expect(tables.entries[0]).toMatchObject({
+    cancelled: true,
+    reason: "Duplicate accrual",
+    version: 2,
+  });
 });

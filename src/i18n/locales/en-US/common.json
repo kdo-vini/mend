@@ -271,6 +271,9 @@
     "generated_other": "{{count}} expenses generated; repeating neither duplicates nor records payment.",
     "chooseEntry": "Choose an entry to record a payment or reconcile",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "reloadDraft": "Review latest version and keep draft",
+    "draftReloaded": "Latest version loaded. Your edits were kept; compare the values below before saving.",
+    "latestChanges": "Changes saved by another person (compare with your draft):"
   }
 }

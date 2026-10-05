@@ -271,6 +271,9 @@
     "generated_other": "{{count}} despesas geradas; repetir não duplica nem registra pagamento.",
     "chooseEntry": "Escolher lan?amento para pagamento ou concilia??o",
     "yes": "Sim",
-    "no": "N?o"
+    "no": "N?o",
+    "reloadDraft": "Revisar vers?o atual sem perder rascunho",
+    "draftReloaded": "Vers?o atual carregada. Suas altera??es foram mantidas; revise os valores abaixo antes de salvar.",
+    "latestChanges": "Altera??es salvas por outra pessoa (compare com seu rascunho):"
   }
 }
