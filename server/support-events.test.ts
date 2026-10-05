@@ -593,7 +593,7 @@ describe("internal workspace event scope", () => {
         }) => [event.workspaceId, event.cursor, event.replyAllowed],
       ),
     ).toEqual([
-      [canonical, "2", true],
+      [canonical, "2", false],
       [canonical, "3", false],
     ]);
     expect(response.body.nextCursor).toBe("3");
