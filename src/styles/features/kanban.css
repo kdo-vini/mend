@@ -1088,6 +1088,7 @@
   .app-shell .mobile-detail-open .conversation-header {
     position: relative;
     z-index: var(--z-sticky);
+    flex-wrap: nowrap;
     min-height: calc(58px + env(safe-area-inset-top));
     padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) 0
       max(6px, env(safe-area-inset-left));
@@ -1120,9 +1121,9 @@
   }
   .conversation-controls {
     flex: 0 0 auto;
+    flex-wrap: nowrap;
   }
-  .conversation-desktop-control,
-  .conversation-controls .mode-label {
+  .conversation-desktop-control {
     display: none !important;
   }
   .mobile-menu-control {

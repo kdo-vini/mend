@@ -28,7 +28,8 @@ let query = client
   .from("messages")
   .select("id, workspace_id")
   .eq("message_type", "audio")
-  .eq("direction", "inbound")
+  // Inbound plus human outbound voice notes; AI audio comes from known text.
+  .eq("ai_generated", false)
   .is("text", null)
   .not("media_storage_path", "is", null)
   .order("created_at", { ascending: true })

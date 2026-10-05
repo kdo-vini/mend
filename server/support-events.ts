@@ -8,7 +8,10 @@ import type { Logger } from "pino";
 import { z } from "zod";
 import { timingSafeSecretEquals } from "./zelochat-internal-send.js";
 
-/** Machine path the external Support bot polls for inbound customer messages. */
+/**
+ * Machine path the external Support bot polls for customer messages and the
+ * human (founder) outbound messages that Support must read but never answer.
+ */
 export const SUPPORT_EVENTS_PATH = "/internal/support/events";
 export const SUPPORT_EVENTS_KEY_HEADER = "x-mend-support-key";
 export const SUPPORT_EVENTS_API_KEY_ENV = "MEND_SUPPORT_EVENTS_API_KEY";
@@ -16,10 +19,14 @@ export const SUPPORT_EVENTS_API_KEY_ENV = "MEND_SUPPORT_EVENTS_API_KEY";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
 
-export interface SupportInboundEventInput {
+export type SupportEventDirection = "inbound" | "outbound";
+
+export interface SupportEventInput {
   workspaceId: string;
   conversationId: string;
   messageId: string;
+  /** Rows recorded before outbound events existed are inbound. */
+  direction?: SupportEventDirection;
   remoteJid: string;
   phoneNumber?: string;
   chatType?: string;
@@ -48,6 +55,8 @@ export interface SupportEvent {
   remoteJid: string;
   phoneNumber?: string;
   isGroup: boolean;
+  /** outbound = a human (founder/team) message already sent to the customer. */
+  direction: SupportEventDirection;
   messageType: string;
   text?: string;
   media?: SupportEventMedia;
@@ -56,8 +65,9 @@ export interface SupportEvent {
   automationState: string;
   pausedUntil?: string;
   /**
-   * False only when ai_mode=off. human_paused pauses Mend's native AI, not the
-   * external Support bot, so it does not block Support replies.
+   * Always false for outbound: Support reads the human message as context and
+   * must never reply on top of it. For inbound, false when ai_mode=off or
+   * automation_state=human_paused, matching the 409s on /internal/support/send.
    */
   replyAllowed: boolean;
   createdAt: string;
@@ -75,10 +85,21 @@ export interface ListSupportEventsInput {
   workspaceId?: string;
 }
 
+/** Queue row as stored: the input plus its cursor id and insert time. */
+export interface StoredSupportEvent extends SupportEventInput {
+  id: number | string;
+  createdAt: string;
+}
+
 export interface SupportEventStore {
-  /** Idempotent by message id: recording the same message twice is a no-op. */
-  record(input: SupportInboundEventInput): Promise<void>;
+  /**
+   * Idempotent by message id: returns the new row, or null when the message
+   * was already recorded (so callers push the B2 webhook at most once).
+   */
+  record(input: SupportEventInput): Promise<StoredSupportEvent | null>;
   list(input: ListSupportEventsInput): Promise<SupportEventPage>;
+  /** Join live message/conversation state into public events, as list does. */
+  hydrate(rows: StoredSupportEvent[]): Promise<SupportEvent[]>;
 }
 
 export interface SupportEventMessageSnapshot {
@@ -102,11 +123,14 @@ export interface SupportEventConversationFlags {
 }
 
 /**
- * Event row for a persisted inbound customer message; null for anything else.
- * Recording is idempotent by message id, so the worker lets a failed write
- * retry the ingest job instead of dropping the event.
+ * Event row for a persisted inbound customer message or human outbound
+ * message; null for anything else. AI-generated outbound (including Support's
+ * own sends echoed back by the provider) is skipped, and outbound fails closed
+ * unless persistence confirmed a human origin. Recording is idempotent by
+ * message id, so the worker lets a failed write retry the ingest job instead
+ * of dropping the event.
  */
-export function inboundSupportEvent(
+export function supportEventFor(
   binding: { workspaceId: string },
   message: {
     direction: string;
@@ -115,23 +139,38 @@ export function inboundSupportEvent(
     phoneNumber?: string;
     chatType?: string;
   },
-  persisted: { id: string; conversationId: string },
-): SupportInboundEventInput | null {
-  if (message.direction !== "inbound" || message.messageType === "reaction")
-    return null;
+  persisted: { id: string; conversationId: string; aiGenerated?: boolean },
+): SupportEventInput | null {
+  if (message.messageType === "reaction") return null;
+  const direction = message.direction;
+  if (direction !== "inbound" && direction !== "outbound") return null;
+  if (direction === "outbound" && persisted.aiGenerated !== false) return null;
   return {
     workspaceId: binding.workspaceId,
     conversationId: persisted.conversationId,
     messageId: persisted.id,
+    direction,
     remoteJid: message.remoteJid,
     ...(message.phoneNumber ? { phoneNumber: message.phoneNumber } : {}),
     ...(message.chatType ? { chatType: message.chatType } : {}),
   };
 }
 
-/** Support may reply unless the conversation's AI mode is off. */
-export function supportReplyAllowed(flags: { aiMode: string }): boolean {
-  return flags.aiMode !== "off";
+/**
+ * Support may reply to inbound unless the conversation's AI mode is off or a
+ * human has taken over (human_paused); it never replies to an outbound human
+ * message. Mirrors the send gate so the feed never invites a refused reply.
+ */
+export function supportReplyAllowed(flags: {
+  aiMode: string;
+  automationState?: string;
+  direction?: SupportEventDirection;
+}): boolean {
+  return (
+    flags.direction !== "outbound" &&
+    flags.aiMode !== "off" &&
+    flags.automationState !== "human_paused"
+  );
 }
 
 function present(value: string | null | undefined): string | undefined {
@@ -141,13 +180,14 @@ function present(value: string | null | undefined): string | undefined {
 
 /** Build the public event from the queue row plus live message/conversation state. */
 export function buildSupportEvent(
-  row: SupportInboundEventInput & { id: number | string; createdAt: string },
+  row: StoredSupportEvent,
   message: SupportEventMessageSnapshot | undefined,
   flags: SupportEventConversationFlags | undefined,
 ): SupportEvent {
   // Fail closed: an event whose conversation vanished must never be answered.
   const aiMode = flags ? (flags.aiMode ?? "off") : "off";
   const automationState = flags?.automationState ?? "ai_active";
+  const direction = row.direction ?? "inbound";
   const messageType = message?.messageType ?? "text";
   const isAudio = messageType === "audio";
   const body = present(message?.text);
@@ -173,6 +213,7 @@ export function buildSupportEvent(
       ? { phoneNumber: present(row.phoneNumber) }
       : {}),
     isGroup: row.chatType === "group" || row.remoteJid.endsWith("@g.us"),
+    direction,
     messageType,
     ...(text ? { text } : {}),
     ...(hasMedia && message
@@ -211,7 +252,7 @@ export function buildSupportEvent(
     aiMode,
     automationState,
     ...(flags?.pausedUntil ? { pausedUntil: flags.pausedUntil } : {}),
-    replyAllowed: supportReplyAllowed({ aiMode }),
+    replyAllowed: supportReplyAllowed({ aiMode, automationState, direction }),
     createdAt: row.createdAt,
   };
 }
@@ -223,9 +264,8 @@ function parseCursor(cursor: string | undefined): number {
   return Number(cursor);
 }
 
-interface StoredEventRow extends SupportInboundEventInput {
+interface StoredEventRow extends StoredSupportEvent {
   id: number;
-  createdAt: string;
 }
 
 /** Test/local adapter with the same idempotency and cursor semantics. */
@@ -235,13 +275,15 @@ export class InMemorySupportEventStore implements SupportEventStore {
   readonly conversations = new Map<string, SupportEventConversationFlags>();
   private nextId = 1;
 
-  async record(input: SupportInboundEventInput): Promise<void> {
-    if (this.rows.some((row) => row.messageId === input.messageId)) return;
-    this.rows.push({
+  async record(input: SupportEventInput): Promise<StoredSupportEvent | null> {
+    if (this.rows.some((row) => row.messageId === input.messageId)) return null;
+    const row = {
       ...input,
       id: this.nextId++,
       createdAt: new Date().toISOString(),
-    });
+    };
+    this.rows.push(row);
+    return { ...row };
   }
 
   async list(input: ListSupportEventsInput): Promise<SupportEventPage> {
@@ -252,18 +294,22 @@ export class InMemorySupportEventStore implements SupportEventStore {
         (!input.workspaceId || row.workspaceId === input.workspaceId),
     );
     const page = matching.slice(0, input.limit);
-    const events = page.map((row) =>
+    const events = await this.hydrate(page);
+    return {
+      events,
+      nextCursor: events.at(-1)?.cursor ?? input.cursor ?? null,
+      hasMore: matching.length > page.length,
+    };
+  }
+
+  async hydrate(rows: StoredSupportEvent[]): Promise<SupportEvent[]> {
+    return rows.map((row) =>
       buildSupportEvent(
         row,
         this.messages.get(row.messageId),
         this.conversations.get(row.conversationId),
       ),
     );
-    return {
-      events,
-      nextCursor: events.at(-1)?.cursor ?? input.cursor ?? null,
-      hasMore: matching.length > page.length,
-    };
   }
 }
 
@@ -318,22 +364,31 @@ export class SupabaseSupportEventStore implements SupportEventStore {
     return new SupabaseSupportEventStore(client as SupportEventsSupabaseClient);
   }
 
-  async record(input: SupportInboundEventInput): Promise<void> {
-    const result = await this.client.from("support_inbound_events").upsert(
+  async record(input: SupportEventInput): Promise<StoredSupportEvent | null> {
+    const query = this.client.from("support_inbound_events").upsert(
       {
         workspace_id: input.workspaceId,
         conversation_id: input.conversationId,
         message_id: input.messageId,
+        direction: input.direction ?? "inbound",
         remote_jid: input.remoteJid,
         phone_number: input.phoneNumber ?? null,
         chat_type: input.chatType ?? null,
       },
       { onConflict: "message_id", ignoreDuplicates: true },
     );
-    if (result.error)
-      throw new Error(
-        `supabase:support_inbound_events:${result.error.message}`,
-      );
+    // ignoreDuplicates returns only inserted rows: empty means a duplicate.
+    const [inserted] = rows(
+      await query.select("id, created_at"),
+      "support_inbound_events",
+    );
+    if (!inserted) return null;
+    return {
+      ...input,
+      direction: input.direction ?? "inbound",
+      id: String(inserted.id),
+      createdAt: String(inserted.created_at),
+    };
   }
 
   async list(input: ListSupportEventsInput): Promise<SupportEventPage> {
@@ -341,7 +396,7 @@ export class SupabaseSupportEventStore implements SupportEventStore {
     let query = this.client
       .from("support_inbound_events")
       .select(
-        "id, workspace_id, conversation_id, message_id, remote_jid, phone_number, chat_type, created_at",
+        "id, workspace_id, conversation_id, message_id, direction, remote_jid, phone_number, chat_type, created_at",
       )
       .gt("id", after);
     if (input.workspaceId) query = query.eq("workspace_id", input.workspaceId);
@@ -351,13 +406,30 @@ export class SupabaseSupportEventStore implements SupportEventStore {
       "support_inbound_events",
     );
     const page = eventRows.slice(0, input.limit);
-    if (!page.length)
-      return { events: [], nextCursor: input.cursor ?? null, hasMore: false };
+    const events = await this.hydrate(
+      page.map((row) => ({
+        id: String(row.id),
+        workspaceId: String(row.workspace_id),
+        conversationId: String(row.conversation_id),
+        messageId: String(row.message_id),
+        direction: row.direction === "outbound" ? "outbound" : "inbound",
+        remoteJid: String(row.remote_jid),
+        phoneNumber: str(row.phone_number),
+        chatType: str(row.chat_type),
+        createdAt: String(row.created_at),
+      })),
+    );
+    return {
+      events,
+      nextCursor: events.at(-1)?.cursor ?? input.cursor ?? null,
+      hasMore: eventRows.length > page.length,
+    };
+  }
 
-    const messageIds = page.map((row) => String(row.message_id));
-    const conversationIds = [
-      ...new Set(page.map((row) => String(row.conversation_id))),
-    ];
+  async hydrate(page: StoredSupportEvent[]): Promise<SupportEvent[]> {
+    if (!page.length) return [];
+    const messageIds = page.map((row) => row.messageId);
+    const conversationIds = [...new Set(page.map((row) => row.conversationId))];
     const [messageResult, conversationResult, stateResult] = await Promise.all([
       this.client
         .from("messages")
@@ -404,27 +476,13 @@ export class SupabaseSupportEventStore implements SupportEventStore {
       });
     }
 
-    const events = page.map((row) =>
+    return page.map((row) =>
       buildSupportEvent(
-        {
-          id: String(row.id),
-          workspaceId: String(row.workspace_id),
-          conversationId: String(row.conversation_id),
-          messageId: String(row.message_id),
-          remoteJid: String(row.remote_jid),
-          phoneNumber: str(row.phone_number),
-          chatType: str(row.chat_type),
-          createdAt: String(row.created_at),
-        },
-        messages.get(String(row.message_id)),
-        flags.get(String(row.conversation_id)),
+        row,
+        messages.get(row.messageId),
+        flags.get(row.conversationId),
       ),
     );
-    return {
-      events,
-      nextCursor: events.at(-1)?.cursor ?? input.cursor ?? null,
-      hasMore: eventRows.length > page.length,
-    };
   }
 }
 

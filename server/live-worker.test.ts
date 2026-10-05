@@ -20,6 +20,7 @@ import type { NormalizedWhatsmiauMessage } from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
 import type { SupportAiProvider } from "./providers.js";
 import { InMemorySupportEventStore } from "./support-events.js";
+import { withSupportWebhook } from "./support-webhook.js";
 import { isSupportAiEnabled } from "./workers/live-worker-shared.js";
 
 describe("resolveInboundDebounceMs", () => {
@@ -1494,6 +1495,61 @@ describe("Support AI kill-switch (Fase A)", () => {
     expect(events.rows).toHaveLength(1);
   });
 
+  it("pushes the Support webhook once per newly recorded event", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const events = new InMemorySupportEventStore();
+    const fetch = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        new Response(null, { status: 200 }),
+    );
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      supportEvents: withSupportWebhook(events, {
+        env: { MEND_SUPPORT_WEBHOOK_URL: "https://hooks.example.test/s" },
+        fetch,
+      }),
+    });
+    await enqueue(store, "push-1");
+    await enqueue(store, "push-dup");
+    await worker.poll();
+    await worker.poll();
+
+    expect(events.rows).toHaveLength(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
+      cursor: "1",
+      messageId: "message-1",
+      direction: "inbound",
+    });
+  });
+
+  it("completes ingest when the Support webhook fails", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const events = new InMemorySupportEventStore();
+    const warn = vi.fn();
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      supportEvents: withSupportWebhook(events, {
+        env: { MEND_SUPPORT_WEBHOOK_URL: "https://hooks.example.test/s" },
+        fetch: vi.fn(async () => new Response(null, { status: 500 })),
+        logger: { warn },
+      }),
+    });
+    await enqueue(store, "push-fails");
+    await worker.poll();
+
+    const [job] = await store.list();
+    expect(job?.status).toBe("completed");
+    expect(events.rows).toHaveLength(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
   it("retries the ingest job when the support event write fails", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const worker = new LiveWorker({
@@ -1514,26 +1570,112 @@ describe("Support AI kill-switch (Fase A)", () => {
     expect(job?.attempts).toBe(1);
   });
 
-  it("does not emit support events for outbound echoes", async () => {
+  it.each([
+    { aiGenerated: false, recorded: 1 },
+    { aiGenerated: true, recorded: 0 },
+    { aiGenerated: undefined, recorded: 0 },
+  ])(
+    "records outbound echoes only for confirmed human origin (aiGenerated=$aiGenerated)",
+    async ({ aiGenerated, recorded }) => {
+      const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+      const events = new InMemorySupportEventStore();
+      const automation = { process: vi.fn(async () => undefined) };
+      const fake = new FakeInbox();
+      const inbox: LiveWorkerInbox = {
+        async persistNormalizedMessage(context, channel, incoming) {
+          const persisted = await fake.persistNormalizedMessage(
+            context,
+            channel,
+            incoming,
+          );
+          return { ...persisted, aiGenerated };
+        },
+      };
+      const fetch = vi.fn(async () => new Response(null, { status: 200 }));
+      const worker = new LiveWorker({
+        supportAiEnabled: true,
+        jobStore: store,
+        inboundDebounceMs: 0,
+        channelResolver: new FakeResolver(binding),
+        inbox,
+        automation,
+        supportEvents: withSupportWebhook(events, {
+          env: { MEND_SUPPORT_WEBHOOK_URL: "https://hooks.example.test/s" },
+          fetch,
+        }),
+      });
+      await store.enqueue({
+        type: "whatsmiau.message.received",
+        payload: {
+          event: "messages.upsert",
+          message: { ...message, direction: "outbound" },
+        },
+        dedupeKey: "outbound-echo",
+      });
+      await worker.poll();
+      await worker.poll();
+
+      expect(events.rows).toHaveLength(recorded);
+      expect(fetch).toHaveBeenCalledTimes(recorded);
+      if (recorded)
+        expect(events.rows[0]).toMatchObject({
+          messageId: "message-1",
+          direction: "outbound",
+        });
+      expect(automation.process).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps transcribed outbound audio out of inbound automation", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
-    const events = new InMemorySupportEventStore();
+    const automation = { process: vi.fn(async () => undefined) };
+    const inbox: LiveWorkerInbox = {
+      async persistNormalizedMessage(context, _channel, incoming) {
+        return {
+          id: "outbound-audio-1",
+          workspaceId: context.workspaceId,
+          conversationId: "conversation-1",
+          contactId: "contact-1",
+          providerMessageId: incoming.providerMessageId,
+          direction: incoming.direction,
+          messageType: incoming.messageType,
+          unreadCount: 0,
+          inserted: true,
+          transcript: "Já ajustei o seu pedido",
+        };
+      },
+    };
     const worker = new LiveWorker({
+      supportAiEnabled: true,
       jobStore: store,
       inboundDebounceMs: 0,
       channelResolver: new FakeResolver(binding),
-      inbox: new FakeInbox(),
-      supportEvents: events,
+      inbox,
+      automation,
     });
     await store.enqueue({
       type: "whatsmiau.message.received",
       payload: {
         event: "messages.upsert",
-        message: { ...message, direction: "outbound" },
+        message: {
+          ...message,
+          direction: "outbound",
+          messageType: "audio",
+          text: undefined,
+          mimeType: "audio/ogg",
+        },
       },
-      dedupeKey: "outbound-echo",
+      dedupeKey: "outbound-audio",
     });
     await worker.poll();
-    expect(events.rows).toHaveLength(0);
+    await worker.poll();
+
+    expect(automation.process).not.toHaveBeenCalled();
+    expect(
+      (await store.list()).some(
+        (job) => job.type === "mend.process_inbound_message",
+      ),
+    ).toBe(false);
   });
 
   it("keeps audio transcription in the persist path and exposes it to Support", async () => {

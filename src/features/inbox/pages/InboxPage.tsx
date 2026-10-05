@@ -43,7 +43,6 @@ import { useTranslation } from "react-i18next";
 import type {
   AiMode,
   AiDraft,
-  AutomationState,
   Conversation,
   Issue,
   KnowledgeArticle,
@@ -58,7 +57,6 @@ import {
   loadOlderLiveConversationMessages,
   markLiveConversationRead,
   reactToLiveMessage,
-  pauseLiveConversationAi,
   requestAiDraft,
   resolveLiveConversation,
   resumeLiveConversationAi,
@@ -123,6 +121,10 @@ import {
   INBOX_CASE_CONTEXT_ID,
   InboxCaseContext,
 } from "../components/InboxCaseContext";
+import {
+  isConversationAiActive,
+  planConversationAiToggle,
+} from "../conversation-ai-toggle";
 import { SUPPORT_AI_SURFACES_ENABLED } from "../../../shared/support-ai-surfaces";
 import {
   NEW_CHAT_DIALOG_ID,
@@ -1068,27 +1070,18 @@ export function InboxPage({
     }
   };
 
-  const setAiMode = async (mode: AiMode) => {
-    if (
-      mode === "safe_auto" &&
-      !(await onConfirm({
-        title: t("confirmations.enableAutoReplyTitle"),
-        description: t("confirmations.enableAutoReplyDescription"),
-        confirmLabel: t("confirmations.enableAutoReplyConfirm"),
-      }))
-    )
-      return;
-    const previousAutomation = selected.automationState;
-    const shouldResume =
-      mode !== "off" && selected.automationState === "human_paused";
+  const setConversationAiActive = async (active: boolean) => {
+    const plan = planConversationAiToggle(selected, active);
+    if (!plan) return;
+    const previous = selected;
     setConversations((current) =>
       current.map((item) =>
         item.id === selected.id
           ? {
               ...item,
-              aiMode: mode,
-              attention: mode === "safe_auto" ? "ai_handling" : item.attention,
-              ...(shouldResume
+              ...(plan.aiMode ? { aiMode: plan.aiMode } : {}),
+              ...(active ? { attention: "ai_handling" as const } : {}),
+              ...(plan.resume
                 ? {
                     automationState: "ai_active" as const,
                     humanTakeoverReason: undefined,
@@ -1100,77 +1093,36 @@ export function InboxPage({
     );
     try {
       if (liveMode && workspaceId) {
-        await updateLiveConversation({
-          workspaceId,
-          conversationId: selected.id,
-          updates: { ai_mode: mode },
-        });
-        // Selecting Copilot/Auto-reply must clear human_paused; otherwise the
-        // worker keeps short-circuiting and the mode never "stays" active.
-        if (shouldResume)
+        if (plan.aiMode)
+          await updateLiveConversation({
+            workspaceId,
+            conversationId: selected.id,
+            updates: { ai_mode: plan.aiMode },
+          });
+        // Turning AI on must clear human_paused; otherwise the worker keeps
+        // short-circuiting and Support keeps getting replyAllowed=false.
+        if (plan.resume)
           await resumeLiveConversationAi({
             workspaceId,
             conversationId: selected.id,
           });
       }
-      onToast(`AI mode: ${mode === "safe_auto" ? "safe auto" : mode}`);
+      onToast(active ? t("toasts.aiTurnedOn") : t("toasts.aiTurnedOff"));
     } catch (error) {
       setConversations((current) =>
         current.map((item) =>
           item.id === selected.id
             ? {
                 ...item,
-                aiMode: selected.aiMode,
-                automationState: previousAutomation,
-                attention: selected.attention,
-                humanTakeoverReason: selected.humanTakeoverReason,
+                aiMode: previous.aiMode,
+                automationState: previous.automationState,
+                attention: previous.attention,
+                humanTakeoverReason: previous.humanTakeoverReason,
               }
             : item,
         ),
       );
-      onToast(localizedError(error, t("errors.saveAiMode")), "error");
-    }
-  };
-
-  const setAiPause = async (paused: boolean) => {
-    const previous = selected.automationState;
-    setConversations((current) =>
-      current.map((item) =>
-        item.id === selected.id
-          ? {
-              ...item,
-              automationState: paused ? "human_paused" : "ai_active",
-              attention: paused ? "needs_attention" : item.attention,
-              ...(paused
-                ? { humanTakeoverReason: "manual_pause" as const }
-                : {}),
-            }
-          : item,
-      ),
-    );
-    try {
-      if (liveMode && workspaceId) {
-        if (paused)
-          await pauseLiveConversationAi({
-            workspaceId,
-            conversationId: selected.id,
-          });
-        else
-          await resumeLiveConversationAi({
-            workspaceId,
-            conversationId: selected.id,
-          });
-      }
-      onToast(paused ? t("toasts.aiPaused") : t("toasts.aiResumed"));
-    } catch (error) {
-      setConversations((current) =>
-        current.map((item) =>
-          item.id === selected.id
-            ? { ...item, automationState: previous }
-            : item,
-        ),
-      );
-      onToast(localizedError(error, t("errors.saveAiState")));
+      onToast(localizedError(error, t("errors.saveAiState")), "error");
     }
   };
 
@@ -1887,8 +1839,7 @@ export function InboxPage({
             onOpenLinkedIssue={
               activeIssue ? () => onOpenIssue(activeIssue.id) : undefined
             }
-            onSetAiMode={setAiMode}
-            onSetAiPause={(paused) => void setAiPause(paused)}
+            onSetAiActive={(active) => void setConversationAiActive(active)}
             onSnooze={() => void setConversationState("snoozed")}
             onResolve={() => void setConversationState("resolved")}
             onDelete={() => void deleteConversation()}
@@ -2036,8 +1987,6 @@ export function InboxPage({
             onSend={sendMessage}
             onTyping={notifyTyping}
             onSendMediaBatch={sendMediaBatch}
-            aiMode={selected.aiMode}
-            automationState={selected.automationState}
             liveMode={liveMode}
             prefillDraft={
               draftInsertRequest?.conversationId === selected.id
@@ -2559,8 +2508,7 @@ function ConversationHeader({
   conversation,
   onMobileBack,
   onOpenLinkedIssue,
-  onSetAiMode,
-  onSetAiPause,
+  onSetAiActive,
   onSnooze,
   onResolve,
   onDelete,
@@ -2576,8 +2524,7 @@ function ConversationHeader({
   conversation: Conversation;
   onMobileBack: () => void;
   onOpenLinkedIssue?: () => void;
-  onSetAiMode: (mode: AiMode) => void;
-  onSetAiPause: (paused: boolean) => void;
+  onSetAiActive: (active: boolean) => void;
   onSnooze: () => void;
   onResolve: () => void;
   onDelete: () => void;
@@ -2596,6 +2543,7 @@ function ConversationHeader({
       ? { ...option, disabled: false }
       : option,
   );
+  const aiActive = isConversationAiActive(conversation);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(conversation.name);
@@ -2688,23 +2636,18 @@ function ConversationHeader({
             onChange={onAssign}
           />
         </label>
-        {(SUPPORT_AI_SURFACES_ENABLED ||
-          conversation.automationState === "human_paused") && (
-          <span
-            className={`mode-label ${conversation.aiMode} ${conversation.automationState}`}
-          >
-            <Sparkles size={13} aria-hidden="true" />
-            <span>
-              {conversation.automationState === "human_paused"
-                ? t("ui.humanTakeover")
-                : conversation.aiMode === "safe_auto"
-                  ? t("ui.autoReply")
-                  : conversation.aiMode === "draft"
-                    ? t("ui.copilot")
-                    : t("ui.manual")}
-            </span>
+        <button
+          className={`conversation-ai-toggle ${aiActive ? "checked" : ""}`}
+          type="button"
+          role="switch"
+          aria-checked={aiActive}
+          onClick={() => onSetAiActive(!aiActive)}
+        >
+          <span className="conversation-ai-toggle-track" aria-hidden="true">
+            <span />
           </span>
-        )}
+          <span>{t("ui.aiActive")}</span>
+        </button>
         {conversation.humanTakeoverReason && (
           <span className="ai-reason" title={t("ui.humanTakeoverReason")}>
             {conversation.humanTakeoverReason.replaceAll("_", " ")}
@@ -2815,58 +2758,6 @@ function ConversationHeader({
                     <LockKeyhole size={14} /> {t("ui.configureSupportAi")}
                   </Link>
                 )}
-              {SUPPORT_AI_SURFACES_ENABLED && (
-                <>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      onSetAiMode("draft");
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <PenLine size={14} /> {t("ui.copilot")}
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      onSetAiMode("safe_auto");
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Zap size={14} /> {t("ui.autoReply")}
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      onSetAiMode("off");
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <LockKeyhole size={14} /> {t("ui.manual")}
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onSetAiPause(conversation.automationState !== "human_paused");
-                  setMenuOpen(false);
-                }}
-              >
-                {conversation.automationState === "human_paused" ? (
-                  <>
-                    <Zap size={14} /> {t("ui.resumeAi")}
-                  </>
-                ) : (
-                  <>
-                    <LockKeyhole size={14} /> {t("ui.pauseAi")}
-                  </>
-                )}
-              </button>
               <hr />
               <button
                 type="button"
@@ -3153,9 +3044,7 @@ function MediaComposer({
   onSendMediaBatch,
   onUseDraft,
   prefillDraft,
-  aiMode,
   liveMode,
-  automationState,
 }: {
   onSend: (message: string) => boolean | Promise<boolean>;
   onTyping?: () => void;
@@ -3168,9 +3057,7 @@ function MediaComposer({
     requestId: number;
     mediaInput?: ComposerMediaInput;
   };
-  aiMode: AiMode;
   liveMode: boolean;
-  automationState: AutomationState;
 }) {
   const { t } = useTranslation("inbox");
   type PendingFile = {
@@ -3533,13 +3420,7 @@ function MediaComposer({
               void submitText();
             }
           }}
-          placeholder={
-            automationState === "human_paused"
-              ? t("ui.aiPausedPlaceholder")
-              : SUPPORT_AI_SURFACES_ENABLED && aiMode === "safe_auto"
-                ? t("ui.aiHandlingPlaceholder")
-                : t("ui.writeReplyPlaceholder")
-          }
+          placeholder={t("ui.writeReplyPlaceholder")}
           rows={1}
         />
         <button
@@ -3551,20 +3432,6 @@ function MediaComposer({
         >
           <Send size={16} />
         </button>
-      </div>
-      <div className="composer-footer">
-        {SUPPORT_AI_SURFACES_ENABLED && (
-          <span className="composer-ai-state">
-            <Sparkles size={12} />{" "}
-            {aiMode === "off"
-              ? t("ui.manual")
-              : automationState === "human_paused"
-                ? t("ui.aiPaused")
-                : aiMode === "safe_auto"
-                  ? t("ui.autoReplyActive")
-                  : t("ui.copilotReady")}
-          </span>
-        )}
       </div>
     </div>
   );

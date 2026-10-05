@@ -10,6 +10,7 @@ import {
   registerInternalSupportSendRoute,
   SUPPORT_SEND_PATH,
   SupabaseSupportSendPort,
+  supportHumanPaused,
   type SupportSendConversation,
   type SupportSendPort,
 } from "./support-send.js";
@@ -128,6 +129,21 @@ describe("POST /internal/support/send", () => {
     expect(port.sendText).not.toHaveBeenCalled();
   });
 
+  it("refuses with 409 while a human has taken over", async () => {
+    const port = fakePort({
+      workspaceId: WORKSPACE,
+      aiMode: "safe_auto",
+      humanPaused: true,
+    });
+    const response = await post(buildApp(port), {
+      conversationId: CONVERSATION,
+      text: "Oi",
+    });
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ error: "human_paused" });
+    expect(port.sendText).not.toHaveBeenCalled();
+  });
+
   it("sends through the conversation's workspace with the retry key", async () => {
     const port = fakePort({ workspaceId: WORKSPACE, aiMode: "safe_auto" });
     const response = await post(buildApp(port), {
@@ -174,8 +190,16 @@ describe("POST /internal/support/send", () => {
   });
 });
 
+describe("supportHumanPaused", () => {
+  it("blocks only a human takeover, even with an expired paused_until", () => {
+    expect(supportHumanPaused({ automationState: "human_paused" })).toBe(true);
+    expect(supportHumanPaused({ automationState: "ai_active" })).toBe(false);
+    expect(supportHumanPaused(undefined)).toBe(false);
+  });
+});
+
 describe("SupabaseSupportSendPort", () => {
-  function client(data: unknown[]) {
+  function client(data: unknown[], state: unknown[] = []) {
     const calls: Array<{ op: string; args: unknown[] }> = [];
     const query: Record<string, unknown> = {};
     for (const op of ["select", "eq", "limit"])
@@ -183,12 +207,19 @@ describe("SupabaseSupportSendPort", () => {
         calls.push({ op, args });
         return query;
       };
+    let table = "";
     query.then = (resolve: (value: unknown) => void) =>
-      resolve({ data, error: null });
+      resolve({
+        data: table === "conversation_ai_state" ? state : data,
+        error: null,
+      });
     return {
       calls,
       client: {
-        from: () => query,
+        from: (name: string) => {
+          table = name;
+          return query;
+        },
       } as unknown as SupportEventsSupabaseClient,
     };
   }
@@ -203,10 +234,35 @@ describe("SupabaseSupportSendPort", () => {
         conversationId: CONVERSATION,
         workspaceId: WORKSPACE,
       }),
-    ).resolves.toEqual({ workspaceId: WORKSPACE, aiMode: "off" });
+    ).resolves.toEqual({
+      workspaceId: WORKSPACE,
+      aiMode: "off",
+      humanPaused: false,
+    });
     expect(fake.calls).toContainEqual({
       op: "eq",
       args: ["workspace_id", WORKSPACE],
+    });
+  });
+
+  it("reports a human takeover from conversation_ai_state", async () => {
+    const fake = client(
+      [{ id: CONVERSATION, workspace_id: WORKSPACE, ai_mode: "safe_auto" }],
+      [{ automation_state: "human_paused", paused_until: null }],
+    );
+    const port = new SupabaseSupportSendPort(fake.client, {
+      sendText: vi.fn(),
+    });
+    await expect(
+      port.findConversation({ conversationId: CONVERSATION }),
+    ).resolves.toEqual({
+      workspaceId: WORKSPACE,
+      aiMode: "safe_auto",
+      humanPaused: true,
+    });
+    expect(fake.calls).toContainEqual({
+      op: "eq",
+      args: ["conversation_id", CONVERSATION],
     });
   });
 

@@ -23,11 +23,8 @@ import {
   type MediaProcessJobPayload,
 } from "./media-pipeline.js";
 import { SupabaseMediaStorage } from "./media.js";
-import {
-  inboundSupportEvent,
-  SupabaseSupportEventStore,
-  type SupportEventStore,
-} from "./support-events.js";
+import { supportEventFor, type SupportEventStore } from "./support-events.js";
+import { supabaseSupportEventsWithWebhook } from "./support-webhook.js";
 import {
   WorkspaceSupportAudioTranscriber,
   type SupportAiDraftResult,
@@ -663,7 +660,7 @@ export class LiveWorker {
       }
     }
 
-    const supportEvent = inboundSupportEvent(binding, message, persisted);
+    const supportEvent = supportEventFor(binding, message, persisted);
     if (supportEvent) await this.options.supportEvents?.record(supportEvent);
     if (
       message.direction !== "inbound" ||
@@ -895,7 +892,10 @@ export function createSupabaseLiveWorker(
     knowledge,
     automation,
     supportAiEnabled: options.supportAiEnabled ?? isSupportAiEnabled(),
-    supportEvents: SupabaseSupportEventStore.from(options.client),
+    supportEvents: supabaseSupportEventsWithWebhook(
+      options.client,
+      options.logger,
+    ),
     heartbeat: new SupabaseRunnerHeartbeat(options.client),
     ...(options.logger ? { logger: options.logger } : {}),
     ...(options.onDraftReady ? { onDraftReady: options.onDraftReady } : {}),

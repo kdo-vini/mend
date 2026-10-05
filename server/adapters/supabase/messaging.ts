@@ -25,6 +25,7 @@ import {
   resolveSupportAiProvider,
   SupportAiConfigurationError,
   type SupportAiProvider,
+  WorkspaceSupportAudioTranscriber,
 } from "../../providers.js";
 import type { AnySupabaseClient, WhatsmiauProviderPort } from "./types.js";
 import { formatHumanWhatsAppText } from "../../whatsapp-agent-intro.js";
@@ -539,10 +540,15 @@ export class SupabaseConversationAdapter implements ConversationPort {
     private readonly agentCredentials?: AgentCredentialPort,
     private readonly metricsClient?: AnySupabaseClient,
   ) {
-    this.inbox = new InboxService(
-      new SupabaseInboxPort(client),
-      mediaStorage ? { mediaStorage } : {},
-    );
+    // Founder voice notes sent from Mend get STT like inbound audio.
+    this.inbox = new InboxService(new SupabaseInboxPort(client), {
+      ...(mediaStorage ? { mediaStorage } : {}),
+      ...(agentCredentials
+        ? {
+            transcriber: new WorkspaceSupportAudioTranscriber(agentCredentials),
+          }
+        : {}),
+    });
     this.whatsapp = new WhatsAppService(this.inbox, provider, mediaStorage);
   }
 
