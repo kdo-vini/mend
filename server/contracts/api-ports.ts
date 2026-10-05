@@ -594,6 +594,7 @@ export interface ImpactPort {
 }
 
 export interface ApiRouterDependencies {
+  finance?: import("../finance-service.js").FinancePort;
   internalWorkspace: import("../internal-workspace.js").InternalWorkspacePort;
   auth: AuthAdapter;
   membership: MembershipAdapter;

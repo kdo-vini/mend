@@ -54,6 +54,7 @@ import {
   type WhatsAppInstance,
 } from "./api/live-actions";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { FinancePage } from "./features/finance/FinancePage";
 import { WorkspaceRoutes } from "./app/routes/WorkspaceRoutes";
 import { useAppShortcuts } from "./app/shortcuts/useAppShortcuts";
 import { notificationDestination } from "./app/shell/notification-destination";
@@ -1115,6 +1116,7 @@ function App() {
           ) : (
             <WorkspaceRoutes
               dashboard={<DashboardPage operator={operatorIdentity} />}
+              finance={<FinancePage />}
               inbox={
                 <FeatureBoundary label={t("states.loadingInbox")}>
                   <FeatureInboxPage

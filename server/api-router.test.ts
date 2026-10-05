@@ -11,6 +11,7 @@ import type { IssuePort } from "./issue-service.js";
 import type { KnowledgePort } from "./knowledge-service.js";
 import { CodexServiceError } from "./codex-service.js";
 import { SupportAiConfigurationError } from "./providers.js";
+import type { FinancePort } from "./finance-service.js";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const workspaceId = "22222222-2222-4222-8222-222222222222";
@@ -1428,5 +1429,108 @@ describe("internal dashboard API", () => {
     );
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe("internal_workspace_unconfigured");
+  });
+});
+describe("financial authorization boundary", () => {
+  const finance = (): FinancePort => ({
+    allowed: vi.fn(async () => true),
+    get: vi.fn(async () => null),
+    summary: vi.fn(async () => ({ income: 10000 })),
+    list: vi.fn(async () => []),
+    save: vi.fn(async () => ({})),
+    generate: vi.fn(async () => 0),
+    history: vi.fn(async () => []),
+  });
+  it("requires authenticated membership before financial authorization", async () => {
+    const dependencies = createFakeDependencies({ user: null });
+    dependencies.finance = finance();
+    expect(
+      (
+        await request(makeApp(dependencies)).get(
+          "/api/finance/summary?period=2026-10-01",
+        )
+      ).status,
+    ).toBe(401);
+    expect(dependencies.finance.allowed).not.toHaveBeenCalled();
+  });
+  it("support owner cannot access totals, audit, writes or recurrence without financial permission", async () => {
+    const dependencies = createFakeDependencies();
+    const port = finance();
+    port.allowed = vi.fn(async () => false);
+    dependencies.finance = port;
+    const app = makeApp(dependencies);
+    expect((await request(app).get("/api/finance/access")).body).toMatchObject({
+      allowed: false,
+    });
+    for (const path of [
+      "/api/finance/summary?period=2026-10-01",
+      `/api/finance/history/${issueId}`,
+      `/api/finance/entries/${issueId}`,
+      "/api/finance/entries?period=2026-10-01",
+    ]) {
+      expect((await request(app).get(path)).status).toBe(403);
+    }
+    for (const path of ["/api/finance/entries", "/api/finance/generate"])
+      expect((await request(app).post(path).send({})).status).toBe(403);
+    expect(port.summary).not.toHaveBeenCalled();
+    expect(port.save).not.toHaveBeenCalled();
+    expect(port.history).not.toHaveBeenCalled();
+    expect(port.get).not.toHaveBeenCalled();
+  });
+  it("rechecks financial access with an active session", async () => {
+    const dependencies = createFakeDependencies();
+    const port = finance();
+    let allowed = true;
+    port.allowed = vi.fn(async () => allowed);
+    dependencies.finance = port;
+    const app = makeApp(dependencies);
+    expect(
+      (await request(app).get("/api/finance/summary?period=2026-10-01")).status,
+    ).toBe(200);
+    allowed = false;
+    expect(
+      (await request(app).get("/api/finance/summary?period=2026-10-01")).status,
+    ).toBe(403);
+    expect(port.summary).toHaveBeenCalledTimes(1);
+  });
+  it("rejects legacy workspace selection before financial reads", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.finance = finance();
+    expect(
+      (
+        await request(makeApp(dependencies))
+          .get("/api/finance/summary?period=2026-10-01")
+          .set("x-mend-workspace-id", otherWorkspaceId)
+      ).status,
+    ).toBe(404);
+    expect(dependencies.finance.summary).not.toHaveBeenCalled();
+  });
+  it("validates month and cannot save caller actor or workspace", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.finance = finance();
+    const app = makeApp(dependencies);
+    expect(
+      (await request(app).get("/api/finance/summary?period=2026-10-15")).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .post("/api/finance/reviews")
+          .send({
+            version: null,
+            record: {
+              id: issueId,
+              period: "2026-10-01",
+              sources_complete: true,
+              expenses_complete: true,
+              taxes_complete: true,
+              note: "",
+              actor_id: userId,
+              workspace_id: workspaceId,
+            },
+          })
+      ).status,
+    ).toBe(400);
+    expect(dependencies.finance.save).not.toHaveBeenCalled();
   });
 });
