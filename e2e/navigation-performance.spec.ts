@@ -75,13 +75,19 @@ test("switching finance views preserves totals and does not reload the summary",
   );
   let summaries = 0;
   let cashLoads = 0;
+  let holdRevalidation = false;
+  let releaseRevalidation!: () => void;
+  const revalidation = new Promise<void>((resolve) => {
+    releaseRevalidation = resolve;
+  });
   await page.route("**/api/finance/**", async (route) => {
     const endpoint = new URL(route.request().url()).pathname.split("/").pop();
     if (endpoint === "access")
       return route.fulfill({ json: { allowed: true } });
     if (endpoint === "summary") {
       summaries++;
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      if (holdRevalidation) await revalidation;
+      else await new Promise((resolve) => setTimeout(resolve, 700));
       return route.fulfill({
         json: {
           income: 123456,
@@ -104,7 +110,7 @@ test("switching finance views preserves totals and does not reload the summary",
   await expect(total).toBeVisible();
   const initialSummaries = summaries;
   await page.getByRole("tab", { name: "Cash movements", exact: true }).click();
-  await expect(total).toBeVisible({ timeout: 300 });
+  await expect(total).toBeVisible();
   await expect.poll(() => cashLoads).toBeGreaterThan(0);
   expect(summaries).toBe(initialSummaries);
 
@@ -116,6 +122,14 @@ test("switching finance views preserves totals and does not reload the summary",
   ).toBeVisible();
   if (!(await page.locator('a[href^="/financeiro"]:visible').count()))
     await page.getByRole("button", { name: "More", exact: true }).click();
-  await page.locator('a[href^="/financeiro"]:visible').first().click();
-  await expect(total).toBeVisible({ timeout: 300 });
+  holdRevalidation = true;
+  try {
+    await page.locator('a[href^="/financeiro"]:visible').first().click();
+    await expect.poll(() => summaries).toBeGreaterThan(initialSummaries);
+    // The fresh summary cannot finish until released: only cached figures
+    // can satisfy this assertion, regardless of CPU or scheduler latency.
+    await expect(total).toBeVisible();
+  } finally {
+    releaseRevalidation();
+  }
 });

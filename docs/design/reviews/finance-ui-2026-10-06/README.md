@@ -34,8 +34,20 @@ saving draft; coverage review could open while the selected month's summary was
 still stale. Actions now disable during those transitions. Conflict recovery,
 cancellation and access revocation remain covered.
 
-These screenshots use isolated synthetic financial data. Hosted Auth/PostgREST
-and authenticated navigation latency still need independent verification.
+These screenshots use isolated synthetic financial data. Authenticated HTTP
+measurement against the previous production SHA used one temporary QA account,
+without ledger writes: five samples per endpoint gave access 1091-1423 ms,
+summary 1315-1479 ms, entries 1210-1484 ms and workspace 982-1020 ms.
+Small direct PostgREST queries gave 39-103 ms. These paths differ in work and
+network route; the samples do not isolate the server/database cause. Grant
+revocation returned 403 with the existing JWT. QA sessions, account, membership
+and grant were removed; production remained at four members, one channel and
+two finance grants. The refactor's visual behavior in production remains pending.
+
+The cache regression now holds the fresh summary response until after cached
+figures are visible, rather than relying on a 300 ms wall-clock deadline. Eight
+repetitions passed with six workers after independent QA exposed that deadline
+as flaky under CPU contention. App behavior is unchanged by this test correction.
 Zelo Stripe/AbacatePay integration is a separate pending connection: its current
 Admin reads PIX from Supabase but Stripe invoices from the Stripe API.
 
