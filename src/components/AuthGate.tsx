@@ -1,4 +1,10 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { isAuthWeakPasswordError, type Session } from "@supabase/supabase-js";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -158,7 +164,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return invitePath ? (
       <InviteAcceptance invitationId={invitationId} />
     ) : (
-      children
+      <Fragment key={session.user.id}>{children}</Fragment>
     );
 
   if (invitePath)
