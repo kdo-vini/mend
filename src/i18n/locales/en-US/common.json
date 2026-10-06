@@ -540,6 +540,22 @@
         "refresh": "The latest Zelo figures could not be loaded. Showing the figures checked {{time}}."
       },
       "pagination": "Page {{page}} of {{total}}"
+    },
+    "attention": {
+      "title": "Your attention, here",
+      "source": "Checks on Diagium records · {{month}}",
+      "checks_one": "{{count}} check to review",
+      "checks_other": "{{count}} checks to review",
+      "entries": "View entries",
+      "payments": "View payments",
+      "complete": "Checks up to date",
+      "completeHint": "This month meets the recorded coverage criteria.",
+      "hints": {
+        "review": "Confirm the month's sources, expenses and taxes before completing.",
+        "estimated": "Compare estimates with confirmed amounts from your sources.",
+        "unknown": "Add missing amounts so they are included in the monthly result.",
+        "references": "Review payments and add the reference supporting each one."
+      }
     }
   }
 }

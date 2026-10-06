@@ -540,6 +540,22 @@
         "refresh": "Não foi possível carregar os números mais recentes do Zelo. Exibindo os números consultados em {{time}}."
       },
       "pagination": "Página {{page}} de {{total}}"
+    },
+    "attention": {
+      "title": "Sua atenção, aqui",
+      "source": "Conferências dos registros Diagium · {{month}}",
+      "checks_one": "{{count}} ponto para conferir",
+      "checks_other": "{{count}} pontos para conferir",
+      "entries": "Ver lançamentos",
+      "payments": "Ver pagamentos",
+      "complete": "Conferências em dia",
+      "completeHint": "Os critérios de cobertura deste mês foram atendidos.",
+      "hints": {
+        "review": "Confirme as fontes, despesas e impostos do mês antes de concluir.",
+        "estimated": "Compare as estimativas com os valores confirmados nas fontes.",
+        "unknown": "Preencha os valores para que entrem no resultado do mês.",
+        "references": "Confira os pagamentos e adicione a referência que comprova cada um."
+      }
     }
   }
 }

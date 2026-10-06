@@ -59,6 +59,12 @@
   --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.2, 1.45, 0.35, 1);
+  --duration-spring: 280ms;
+  --glass-surface: color-mix(in oklch, var(--surface) 88%, transparent);
+  --glass-highlight: color-mix(in oklch, var(--ink) 14%, transparent);
+  --glass-blur: 18px;
+  --finance-panel-width: 380px;
   --dropdown-surface: var(--surface-3);
   --dropdown-ink: var(--ink);
   --dropdown-hover: var(--surface-2);

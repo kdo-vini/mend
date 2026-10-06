@@ -1,6 +1,6 @@
 import { useEffect, useRef, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { associationFields, type FinanceContext } from "../model";
 import type { FinanceEditor } from "../useFinanceEditor";
 import { useFinanceFormat } from "../format";
@@ -24,18 +24,40 @@ export function FinanceEditorFrame({
   const { t } = useTranslation("common");
   const display = useFinanceValue();
   const ref = useRef<HTMLElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const { draft, busy, error, conflict, latestChanges, reloaded } = editor;
   const draftId = draft?.record.id;
 
   useEffect(() => {
     if (!draftId) return;
     const frame = ref.current;
-    frame?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (!returnFocus.current && document.activeElement instanceof HTMLElement)
+      returnFocus.current = document.activeElement;
+    const previousFocus = returnFocus.current;
+    frame?.scrollIntoView({
+      block: "nearest",
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
     frame
       ?.querySelector<HTMLElement>(
         "input:not([type=hidden]):not(:disabled),select,textarea",
       )
       ?.focus({ preventScroll: true });
+    return () => {
+      queueMicrotask(() => {
+        // StrictMode rehearses effect cleanup while the same form is mounted.
+        if (frame?.isConnected) return;
+        const target =
+          previousFocus instanceof HTMLElement &&
+          previousFocus.isConnected &&
+          !previousFocus.matches(":disabled")
+            ? previousFocus
+            : document.getElementById("finance-attention-title");
+        target?.focus({ preventScroll: true });
+      });
+    };
   }, [draftId]);
 
   if (!draft) return null;
@@ -121,6 +143,13 @@ export function FinanceEditorFrame({
             disabled={busy || conflict}
             aria-busy={busy || undefined}
           >
+            {busy && (
+              <LoaderCircle
+                size={14}
+                className="finance-spinner"
+                aria-hidden="true"
+              />
+            )}
             {busy ? t("finance.saving") : submitLabel}
           </button>
           <button

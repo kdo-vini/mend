@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDownLeft, ArrowUpRight, Lock, Search } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CheckCircle2,
+  LoaderCircle,
+  Lock,
+  Search,
+} from "lucide-react";
 import { PageHeader } from "../../shared/ui/PageHeader";
 import { EmptyState, ErrorState } from "../../shared/ui/ResourceState";
 import { financeApi, type FinanceRecord } from "./api";
@@ -31,6 +38,7 @@ import { FinanceForm } from "./components/FinanceForm";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { LedgerTable, type LedgerAction } from "./components/LedgerTable";
 import { ZeloFinancePanel } from "./components/ZeloFinancePanel";
+import { FinanceAttention } from "./components/FinanceAttention";
 
 type Business = "diagium" | "zelo";
 
@@ -251,7 +259,21 @@ export function FinancePage() {
         <div className="finance-diagium" hidden={isZelo}>
           <div className="finance-period-bar">
             <MonthNavigator month={month} onChange={changeMonth} />
-            <p className="finance-sync" role="status" aria-live="polite">
+            <p
+              className="finance-sync"
+              data-success={Boolean(notice) || undefined}
+              role="status"
+              aria-live="polite"
+            >
+              {notice ? (
+                <CheckCircle2 size={15} aria-hidden="true" />
+              ) : (data.pending.summary || data.pending.list) && summary ? (
+                <LoaderCircle
+                  className="finance-spinner"
+                  size={15}
+                  aria-hidden="true"
+                />
+              ) : null}
               {notice ||
                 ((data.pending.summary || data.pending.list) && summary
                   ? t("finance.refreshing")
@@ -264,13 +286,27 @@ export function FinancePage() {
               summary={summary.data}
               period={summary.period}
               refreshing={summary.period !== period || data.pending.summary}
-              reviewDisabled={busy || summary.period !== period}
-              onReview={() =>
-                openDraft(reviewDraft(period, summary.data.review))
-              }
+              showCoverage={false}
             />
           ) : (
             <FinanceSummarySkeleton />
+          )}
+
+          {summary && (
+            <FinanceAttention
+              summary={summary.data}
+              period={summary.period}
+              disabled={
+                busy || summary.period !== period || data.pending.summary
+              }
+              onReview={() =>
+                openDraft(reviewDraft(period, summary.data.review))
+              }
+              onView={(next) => {
+                changeView(next);
+                document.getElementById(`finance-tab-${next}`)?.focus();
+              }}
+            />
           )}
 
           {actionError && (
@@ -279,157 +315,165 @@ export function FinancePage() {
             </p>
           )}
 
-          {editor.draft && <FinanceForm editor={editor as DraftEditor} />}
-          {history && !editor.draft && (
-            <HistoryPanel
-              recordId={history.id}
-              title={String(
-                history.description ?? t("finance.context.untitled"),
-              )}
-              onClose={closeHistory}
-              onForbidden={revoke}
-            />
-          )}
+          <div
+            className="finance-workspace"
+            data-editing={Boolean(editor.draft || history) || undefined}
+          >
+            {editor.draft && <FinanceForm editor={editor as DraftEditor} />}
+            {history && !editor.draft && (
+              <HistoryPanel
+                recordId={history.id}
+                title={String(
+                  history.description ?? t("finance.context.untitled"),
+                )}
+                onClose={closeHistory}
+                onForbidden={revoke}
+              />
+            )}
 
-          <section className="finance-ledger" aria-label={t("finance.ledger")}>
-            <div
-              className="finance-tabs"
-              role="tablist"
-              aria-label={t("finance.viewsLabel")}
+            <section
+              className="finance-ledger"
+              aria-label={t("finance.ledger")}
             >
-              {ledgerViews.map((tab) => (
-                <button
-                  key={tab}
-                  id={`finance-tab-${tab}`}
-                  data-view={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={view === tab}
-                  aria-controls="finance-tabpanel"
-                  tabIndex={view === tab ? 0 : -1}
-                  onKeyDown={onTabKey}
-                  onClick={() => changeView(tab)}
-                >
-                  {t(`finance.views.${tab}`)}
-                </button>
-              ))}
-            </div>
+              <div
+                className="finance-tabs"
+                role="tablist"
+                aria-label={t("finance.viewsLabel")}
+              >
+                {ledgerViews.map((tab) => (
+                  <button
+                    key={tab}
+                    id={`finance-tab-${tab}`}
+                    data-view={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={view === tab}
+                    aria-controls="finance-tabpanel"
+                    tabIndex={view === tab ? 0 : -1}
+                    onKeyDown={onTabKey}
+                    onClick={() => changeView(tab)}
+                  >
+                    {t(`finance.views.${tab}`)}
+                  </button>
+                ))}
+              </div>
 
-            <div
-              id="finance-tabpanel"
-              role="tabpanel"
-              aria-labelledby={`finance-tab-${view}`}
-              aria-busy={listStale || undefined}
-              className="finance-tabpanel"
-            >
-              <div className="finance-toolbar">
-                <label className="finance-search">
-                  <Search size={14} aria-hidden="true" />
-                  <span className="sr-only">{t("finance.filter.label")}</span>
-                  <input
-                    type="search"
-                    value={filter}
-                    placeholder={t("finance.filter.placeholder")}
-                    onChange={(event) => setFilter(event.target.value)}
+              <div
+                id="finance-tabpanel"
+                role="tabpanel"
+                aria-labelledby={`finance-tab-${view}`}
+                aria-busy={listStale || undefined}
+                className="finance-tabpanel"
+              >
+                <div className="finance-toolbar">
+                  <label className="finance-search">
+                    <Search size={14} aria-hidden="true" />
+                    <span className="sr-only">{t("finance.filter.label")}</span>
+                    <input
+                      type="search"
+                      value={filter}
+                      placeholder={t("finance.filter.placeholder")}
+                      onChange={(event) => setFilter(event.target.value)}
+                    />
+                  </label>
+                  {view === "templates" && (
+                    <div className="finance-toolbar-actions">
+                      <button
+                        type="button"
+                        className="button button-ghost"
+                        disabled={busy}
+                        onClick={() => openDraft(newTemplateDraft(period))}
+                      >
+                        {t("finance.newTemplate")}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-ghost"
+                        disabled={busy}
+                        aria-busy={generating || undefined}
+                        onClick={() => void generate()}
+                      >
+                        {generating
+                          ? t("finance.generating")
+                          : t("finance.generate", {
+                              month: format.shortMonth(period),
+                            })}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="finance-view-hint">
+                  {t(`finance.viewHints.${view}`)}
+                </p>
+
+                {!listForView ? (
+                  <div className="finance-table-skeleton" role="status">
+                    <span className="sr-only">{t("finance.loading")}</span>
+                    {Array.from({ length: 4 }, (_, index) => (
+                      <span key={index} className="skeleton" />
+                    ))}
+                  </div>
+                ) : listForView.data.length === 0 ? (
+                  <EmptyState
+                    title={t(`finance.empty.${view}.title`)}
+                    description={t(`finance.empty.${view}.description`)}
                   />
-                </label>
-                {view === "templates" && (
-                  <div className="finance-toolbar-actions">
-                    <button
-                      type="button"
-                      className="button button-ghost"
-                      disabled={busy}
-                      onClick={() => openDraft(newTemplateDraft(period))}
-                    >
-                      {t("finance.newTemplate")}
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-ghost"
-                      disabled={busy}
-                      aria-busy={generating || undefined}
-                      onClick={() => void generate()}
-                    >
-                      {generating
-                        ? t("finance.generating")
-                        : t("finance.generate", {
-                            month: format.shortMonth(period),
-                          })}
-                    </button>
+                ) : rows && rows.length === 0 ? (
+                  <EmptyState
+                    search
+                    title={t("finance.filter.noMatchTitle")}
+                    description={t("finance.filter.noMatch")}
+                  />
+                ) : (
+                  <div
+                    className="finance-table-region"
+                    data-refreshing={listStale || undefined}
+                  >
+                    <LedgerTable
+                      view={view}
+                      rows={rows ?? []}
+                      busy={busy}
+                      onAction={onRowAction}
+                    />
                   </div>
                 )}
+
+                {(offset > 0 || listForView?.nextOffset != null) && (
+                  <nav
+                    className="finance-pagination"
+                    aria-label={t("finance.pagination.label")}
+                  >
+                    <button
+                      type="button"
+                      className="button button-ghost"
+                      disabled={offset === 0}
+                      onClick={() =>
+                        setOffset(Math.max(0, offset - FINANCE_PAGE_SIZE))
+                      }
+                    >
+                      {t("finance.previous")}
+                    </button>
+                    <span>
+                      {t("finance.pagination.page", {
+                        page: offset / FINANCE_PAGE_SIZE + 1,
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      className="button button-ghost"
+                      disabled={listForView?.nextOffset == null}
+                      onClick={() =>
+                        listForView?.nextOffset != null &&
+                        setOffset(listForView.nextOffset)
+                      }
+                    >
+                      {t("finance.next")}
+                    </button>
+                  </nav>
+                )}
               </div>
-              <p className="finance-view-hint">
-                {t(`finance.viewHints.${view}`)}
-              </p>
-
-              {!listForView ? (
-                <div className="finance-table-skeleton" role="status">
-                  <span className="sr-only">{t("finance.loading")}</span>
-                  {Array.from({ length: 4 }, (_, index) => (
-                    <span key={index} className="skeleton" />
-                  ))}
-                </div>
-              ) : listForView.data.length === 0 ? (
-                <EmptyState
-                  title={t(`finance.empty.${view}.title`)}
-                  description={t(`finance.empty.${view}.description`)}
-                />
-              ) : rows && rows.length === 0 ? (
-                <EmptyState
-                  search
-                  title={t("finance.filter.noMatchTitle")}
-                  description={t("finance.filter.noMatch")}
-                />
-              ) : (
-                <div
-                  className="finance-table-region"
-                  data-refreshing={listStale || undefined}
-                >
-                  <LedgerTable
-                    view={view}
-                    rows={rows ?? []}
-                    busy={busy}
-                    onAction={onRowAction}
-                  />
-                </div>
-              )}
-
-              {(offset > 0 || listForView?.nextOffset != null) && (
-                <nav
-                  className="finance-pagination"
-                  aria-label={t("finance.pagination.label")}
-                >
-                  <button
-                    type="button"
-                    className="button button-ghost"
-                    disabled={offset === 0}
-                    onClick={() =>
-                      setOffset(Math.max(0, offset - FINANCE_PAGE_SIZE))
-                    }
-                  >
-                    {t("finance.previous")}
-                  </button>
-                  <span>
-                    {t("finance.pagination.page", {
-                      page: offset / FINANCE_PAGE_SIZE + 1,
-                    })}
-                  </span>
-                  <button
-                    type="button"
-                    className="button button-ghost"
-                    disabled={listForView?.nextOffset == null}
-                    onClick={() =>
-                      listForView?.nextOffset != null &&
-                      setOffset(listForView.nextOffset)
-                    }
-                  >
-                    {t("finance.next")}
-                  </button>
-                </nav>
-              )}
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       )}
     </section>

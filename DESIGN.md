@@ -1,5 +1,17 @@
 # Mend design direction
 
+## Finance interaction update (2026-10-06)
+
+Vinicius approved a Liquid Glass inspired finish for the finance workflow.
+This scoped direction supersedes the no-glass guidance below for finance
+controls: translucent month navigation and editor headers, opaque numerical
+surfaces, subtle spring press feedback and state-driven loading/completion.
+Keep the existing identity, page frame and separate Diagium/Zelo data.
+Use the shared glass/motion tokens; provide opaque and reduced-motion fallbacks.
+The attention queue reports deterministic coverage gaps from the API; it must
+not imply AI analysis, bank reconciliation or completeness beyond those checks.
+Review opens alongside the ledger on wide screens and inline on smaller ones.
+
 Mend is a quiet control room for founders who still own the customer
 relationship. The interface should make the next safe product decision obvious:
 message, context, evidence, verified fix.

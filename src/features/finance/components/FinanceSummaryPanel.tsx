@@ -30,14 +30,12 @@ export function FinanceSummaryPanel({
   summary,
   period,
   refreshing,
-  reviewDisabled = false,
-  onReview,
+  showCoverage = true,
 }: {
   summary: FinanceSummary;
   period: string;
   refreshing: boolean;
-  reviewDisabled?: boolean;
-  onReview?: () => void;
+  showCoverage?: boolean;
 }) {
   const { t } = useTranslation("common");
   const format = useFinanceFormat();
@@ -78,52 +76,52 @@ export function FinanceSummaryPanel({
           </dl>
         </section>
       </div>
-      <div
-        className="finance-coverage"
-        data-state={gaps.length ? "partial" : "complete"}
-      >
-        <div className="finance-coverage-status">
-          {gaps.length ? (
-            <AlertTriangle size={16} aria-hidden="true" />
-          ) : (
-            <CheckCircle2 size={16} aria-hidden="true" />
-          )}
-          <div>
-            <strong>
-              {t(gaps.length ? "finance.partial" : "finance.complete")}
-            </strong>
-            {gaps.length > 0 && (
-              <ul>
-                {gaps.map((gap) => (
-                  <li key={gap}>
-                    {t(`finance.gaps.${gap}`, {
-                      count:
-                        gap === "estimated"
-                          ? summary.estimated_count
-                          : gap === "unknown"
-                            ? summary.unknown_count
-                            : gap === "references"
-                              ? summary.reference_pending
-                              : 0,
-                    })}
-                  </li>
-                ))}
-              </ul>
+      {!showCoverage && (
+        <p
+          className="finance-summary-validity"
+          data-state={gaps.length ? "partial" : "complete"}
+        >
+          {t(gaps.length ? "finance.partial" : "finance.complete")}
+        </p>
+      )}
+      {showCoverage && (
+        <div
+          className="finance-coverage"
+          data-state={gaps.length ? "partial" : "complete"}
+        >
+          <div className="finance-coverage-status">
+            {gaps.length ? (
+              <AlertTriangle size={16} aria-hidden="true" />
+            ) : (
+              <CheckCircle2 size={16} aria-hidden="true" />
             )}
-            <p>{t("finance.notBalance")}</p>
+            <div>
+              <strong>
+                {t(gaps.length ? "finance.partial" : "finance.complete")}
+              </strong>
+              {gaps.length > 0 && (
+                <ul>
+                  {gaps.map((gap) => (
+                    <li key={gap}>
+                      {t(`finance.gaps.${gap}`, {
+                        count:
+                          gap === "estimated"
+                            ? summary.estimated_count
+                            : gap === "unknown"
+                              ? summary.unknown_count
+                              : gap === "references"
+                                ? summary.reference_pending
+                                : 0,
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p>{t("finance.notBalance")}</p>
+            </div>
           </div>
         </div>
-        {onReview && (
-          <button
-            type="button"
-            className="button button-ghost"
-            disabled={reviewDisabled}
-            onClick={onReview}
-          >
-            {t("finance.review")}
-          </button>
-        )}
-      </div>
+      )}
     </section>
   );
 }

@@ -1,0 +1,258 @@
+/* Glass belongs to controls above the data, never to the figures themselves. */
+.finance-page .finance-period-bar {
+  position: sticky;
+  top: var(--space-2);
+  z-index: var(--z-sticky);
+  padding: var(--space-3);
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+  box-shadow: inset 0 1px var(--glass-highlight);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .finance-page .finance-period-bar,
+  .finance-page .finance-editor-header {
+    background: var(--glass-surface);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
+  }
+}
+.finance-page :is(.button, .icon-button, [role="tab"]) {
+  transition:
+    transform var(--duration-spring) var(--ease-spring),
+    background-color var(--duration-normal) var(--ease),
+    color var(--duration-normal) var(--ease);
+}
+.finance-page :is(.button, .icon-button, [role="tab"]):active:not(:disabled) {
+  transform: scale(0.96);
+  transition-duration: 80ms;
+}
+.finance-page .finance-sync {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-soft);
+}
+.finance-sync[data-success] svg {
+  color: var(--success);
+}
+.finance-sync[data-success] {
+  animation: finance-settle 280ms var(--ease-out-expo);
+}
+.finance-spinner {
+  animation: finance-spin 900ms linear infinite;
+  flex-shrink: 0;
+}
+.finance-attention {
+  margin-top: var(--space-6);
+  color: var(--ink-soft);
+}
+.finance-attention header,
+.finance-attention li,
+.finance-attention-complete {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.finance-attention header {
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.finance-attention h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.finance-attention p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.finance-attention header p {
+  margin-top: var(--space-1);
+}
+.finance-attention-count {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.finance-attention ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.finance-attention li {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+.finance-attention li > div,
+.finance-attention-complete > div {
+  flex: 1;
+  min-width: 0;
+}
+.finance-attention strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+.finance-attention-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex-shrink: 0;
+}
+.finance-attention-footnote {
+  margin-top: var(--space-2);
+}
+.finance-summary-validity {
+  padding: var(--space-2) var(--space-5);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.finance-summary-validity[data-state="partial"] {
+  color: var(--warning);
+}
+.finance-attention-complete {
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  animation: finance-settle 240ms var(--ease-out-expo);
+}
+.finance-attention-complete > svg {
+  color: var(--success);
+  flex-shrink: 0;
+}
+.finance-workspace {
+  min-width: 0;
+}
+.finance-workspace > * {
+  min-width: 0;
+}
+.finance-workspace .finance-editor {
+  animation: finance-settle var(--duration-spring) var(--ease-spring);
+}
+.finance-workspace .finance-editor-header {
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-5)) var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  box-shadow: inset 0 1px var(--glass-highlight);
+}
+.finance-page .finance-tabs {
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.finance-page .finance-tabs [role="tab"] {
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+}
+.finance-page .finance-tabs [aria-selected="true"] {
+  background: var(--surface-3);
+  box-shadow: inset 0 1px var(--glass-highlight);
+}
+.finance-page .skeleton {
+  animation: finance-breathe 1400ms ease-in-out infinite alternate;
+}
+@keyframes finance-breathe {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+@keyframes finance-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes finance-settle {
+  from {
+    transform: translateY(6px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (min-width: 1200px) {
+  .finance-workspace[data-editing] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--finance-panel-width);
+    align-items: start;
+    gap: var(--space-5);
+    margin-top: var(--space-6);
+  }
+  .finance-workspace[data-editing] > .finance-editor {
+    position: sticky;
+    top: calc(var(--control-height) + var(--space-6) * 2);
+    max-height: calc(100dvh - var(--control-height) - var(--space-6) * 3);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    grid-column: 2;
+    grid-row: 1;
+    margin-top: 0;
+  }
+  .finance-workspace[data-editing] > .finance-ledger {
+    grid-column: 1;
+    grid-row: 1;
+    margin-top: 0;
+  }
+  .finance-workspace[data-editing] .finance-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 650px) {
+  .finance-page .finance-period-bar {
+    position: static;
+  }
+  .finance-attention li {
+    display: grid;
+    grid-template-columns: 6px minmax(0, 1fr);
+    align-items: start;
+  }
+  .finance-attention-dot {
+    margin-top: var(--space-2);
+  }
+  .finance-attention header {
+    flex-wrap: wrap;
+  }
+  .finance-attention li > .button {
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0;
+  }
+  .finance-attention-complete {
+    flex-wrap: wrap;
+  }
+  .finance-attention-complete .button {
+    width: 100%;
+  }
+  .finance-workspace .finance-editor-header {
+    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) var(--space-3);
+    padding: var(--space-3);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .finance-page .finance-period-bar,
+  .finance-page .finance-editor-header {
+    background: var(--surface-2);
+    backdrop-filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .finance-page *,
+  .finance-page *::before,
+  .finance-page *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .finance-page :is(.button, .icon-button, [role="tab"]):active:not(:disabled) {
+    transform: none;
+  }
+}

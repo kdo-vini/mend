@@ -1,5 +1,61 @@
 import { test, expect, type Page } from "@playwright/test";
 
+test("attention review preserves context, restores focus and respects reduced motion", async ({
+  page,
+}, info) => {
+  await page.setViewportSize(
+    info.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1440, height: 900 },
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openFinance(page, "en-US", "dark");
+  await mockFinance(page);
+  await page.goto("/financeiro?demo=1", { waitUntil: "domcontentloaded" });
+  const review = page.getByRole("button", {
+    name: "Review coverage",
+    exact: true,
+  });
+  await review.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByLabel("Sources reviewed", { exact: true }),
+  ).toBeFocused();
+  await expect(page.locator(".finance-ledger")).toBeVisible();
+  expect(
+    await page
+      .locator(".finance-editor")
+      .evaluate((el) => getComputedStyle(el).animationName),
+  ).toBe("none");
+  await page.keyboard.press("Escape");
+  await expect(review).toBeFocused();
+  await review.focus();
+  await page.keyboard.press("Enter");
+  await page.screenshot({
+    path: info.outputPath("finance-review.png"),
+    fullPage: true,
+  });
+  for (const label of [
+    "Sources reviewed",
+    "Expenses reviewed",
+    "Taxes reviewed",
+  ])
+    await page.getByLabel(label, { exact: true }).check();
+  await page.getByRole("button", { name: "Save review", exact: true }).click();
+  await expect(
+    page.getByText("Checks up to date", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Coverage review saved.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".finance-editor")).toHaveCount(0);
+  expect(await noOverflow(page)).toBe(false);
+  await page.screenshot({
+    path: info.outputPath("finance-complete.png"),
+    fullPage: true,
+  });
+});
+
 type Row = Record<string, unknown>;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const currentMonth = () =>
