@@ -2,7 +2,13 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Inbox, CircleDot, Settings } from "lucide-react";
 import { PageHeader } from "../../shared/ui/PageHeader";
-import { FinancePage } from "../finance/FinancePage";
+import { FinanceOverview } from "../finance/FinanceOverview";
+
+const shortcuts = [
+  { to: "/inbox", key: "whatsapp", icon: Inbox },
+  { to: "/issues", key: "issues", icon: CircleDot },
+  { to: "/settings", key: "settings", icon: Settings },
+] as const;
 
 export function DashboardPage({
   operator,
@@ -17,38 +23,26 @@ export function DashboardPage({
         description={t("dashboard.description")}
       />
       <p className="dashboard-identity">
-        {t("dashboard.signedIn", {
-          name: operator.name,
-          email: operator.email,
-        })}
+        {operator.email
+          ? t("dashboard.signedIn", {
+              name: operator.name,
+              email: operator.email,
+            })
+          : operator.name}
       </p>
-      <FinancePage compact />
-      <div className="dashboard-links">
-        <Link to="/inbox" className="dashboard-link">
-          <Inbox size={20} aria-hidden="true" />
-          <div>
-            <h2>{t("dashboard.whatsapp")}</h2>
-            <p>{t("dashboard.whatsappDescription")}</p>
-          </div>
-          <ArrowRight size={18} aria-hidden="true" />
-        </Link>
-        <Link to="/issues" className="dashboard-link">
-          <CircleDot size={20} aria-hidden="true" />
-          <div>
-            <h2>{t("dashboard.issues")}</h2>
-            <p>{t("dashboard.issuesDescription")}</p>
-          </div>
-          <ArrowRight size={18} aria-hidden="true" />
-        </Link>
-        <Link to="/settings" className="dashboard-link">
-          <Settings size={20} aria-hidden="true" />
-          <div>
-            <h2>{t("dashboard.settings")}</h2>
-            <p>{t("dashboard.settingsDescription")}</p>
-          </div>
-          <ArrowRight size={18} aria-hidden="true" />
-        </Link>
-      </div>
+      <FinanceOverview />
+      <nav className="dashboard-links" aria-label={t("dashboard.shortcuts")}>
+        {shortcuts.map(({ to, key, icon: Icon }) => (
+          <Link key={key} to={to} className="dashboard-link">
+            <Icon size={18} aria-hidden="true" />
+            <div>
+              <h2>{t(`dashboard.${key}`)}</h2>
+              <p>{t(`dashboard.${key}Description`)}</p>
+            </div>
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }

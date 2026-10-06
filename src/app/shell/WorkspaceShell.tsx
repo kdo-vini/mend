@@ -482,7 +482,7 @@ export function MobileBottomNav({
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const primary = visibleNavItems.filter(({ id }) =>
-    ["dashboard", "inbox", "issues"].includes(id),
+    ["dashboard", "finance", "inbox", "issues"].includes(id),
   );
   const secondarySearch = new URLSearchParams(search);
   secondarySearch.delete("mode");

@@ -54,7 +54,6 @@ import {
   type WhatsAppInstance,
 } from "./api/live-actions";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
-import { FinancePage } from "./features/finance/FinancePage";
 import { WorkspaceRoutes } from "./app/routes/WorkspaceRoutes";
 import { useAppShortcuts } from "./app/shortcuts/useAppShortcuts";
 import { notificationDestination } from "./app/shell/notification-destination";
@@ -81,6 +80,11 @@ import {
 const FeatureInboxPage = lazy(() =>
   import("./features/inbox/pages/InboxPage").then(({ InboxPage }) => ({
     default: InboxPage,
+  })),
+);
+const FeatureFinancePage = lazy(() =>
+  import("./features/finance/FinancePage").then(({ FinancePage }) => ({
+    default: FinancePage,
   })),
 );
 const FeatureIssuesPage = lazy(() =>
@@ -566,10 +570,16 @@ function App() {
       if (runStatusTimer) clearInterval(runStatusTimer);
       if (workspaceRefreshTimer) clearTimeout(workspaceRefreshTimer);
     };
-  }, [demoMode, liveDataRetry, notify, t, workspaceId]);
+  }, [demoMode, liveDataRetry, notify, t]);
 
   useEffect(() => {
-    if (demoMode || !supabase || !workspaceId || !selectedConversationId)
+    if (
+      !inboxRoute ||
+      demoMode ||
+      !supabase ||
+      !workspaceId ||
+      !selectedConversationId
+    )
       return;
     let active = true;
     void loadLiveConversationSnapshot(
@@ -594,7 +604,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [demoMode, selectedConversationId, t, workspaceId]);
+  }, [demoMode, inboxRoute, selectedConversationId, t, workspaceId]);
 
   useEffect(() => {
     if (demoMode || !mendApiBaseUrl || !workspaceId) return;
@@ -1116,7 +1126,11 @@ function App() {
           ) : (
             <WorkspaceRoutes
               dashboard={<DashboardPage operator={operatorIdentity} />}
-              finance={<FinancePage />}
+              finance={
+                <FeatureBoundary label={t("finance.loading")}>
+                  <FeatureFinancePage />
+                </FeatureBoundary>
+              }
               inbox={
                 <FeatureBoundary label={t("states.loadingInbox")}>
                   <FeatureInboxPage

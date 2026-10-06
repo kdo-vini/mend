@@ -13,6 +13,8 @@ export default defineConfig({
         manualChunks(id) {
           const moduleId = id.replaceAll("\\", "/");
           if (!moduleId.includes("/node_modules/")) return undefined;
+          if (moduleId.includes("/node_modules/tus-js-client/"))
+            return "vendor-upload";
           if (
             /\/node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)\//.test(
               moduleId,

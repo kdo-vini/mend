@@ -1,5 +1,4 @@
 import type { User } from "@supabase/supabase-js";
-import { Upload } from "tus-js-client";
 import type { Database } from "../lib/database.types";
 import { supabase, type MendSupabaseClient } from "../lib/supabase";
 import type {
@@ -1012,6 +1011,7 @@ export async function uploadLiveMediaAsset(input: LiveMediaUploadInput) {
   if (!endpoint)
     throw new LiveActionError("Media resumable upload is not configured.");
   try {
+    const { Upload } = await import("tus-js-client");
     await new Promise<void>((resolve, reject) => {
       const upload = new Upload(input.file, {
         endpoint,
