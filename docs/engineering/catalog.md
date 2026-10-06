@@ -262,6 +262,13 @@ Para uma decisão que afeta arquitetura, segurança, dados ou operação, use o
 
 ## Internal dashboard boundary (2026-10-05)
 
+`FinancePort.list` supports optional `attention=unknown|estimated` for entries.
+`SupabaseFinanceAdapter` applies the predicate and excludes cancelled rows and internal transfers in
+the database query before pagination. The route rejects other entities/values;
+existing membership, financial access and RLS checks still apply. Frontend list
+cache keys include the attention filter; never filter just the first 50 records
+to claim a month-wide pending list.
+
 `resolveInternalWorkspace` and `SupabaseInternalWorkspaceAdapter` in `server/internal-workspace.ts` resolve the singleton UUID without selecting a default. API authorization, Support event/send routes and inbound channel resolution reuse this boundary. Keep membership checks and exact channel binding; the singleton UUID does not grant access. Workspace creation is disabled in the API and migration. See ADR-012 and the current internal product direction.
 
 `validateQueuedBinding` in `server/workers/live-worker-shared.ts` re-resolves the exact instance before queued inbound processing or AI reply sending. Reject stale workspace/channel bindings before invoking automation. Debounce parsing also lives in this existing worker utilities module, with compatibility exports from `server/live-worker.ts`.

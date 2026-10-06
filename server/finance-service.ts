@@ -89,6 +89,7 @@ export const financeRecords = {
     .strict(),
 };
 export type FinanceEntity = keyof typeof financeRecords;
+export type FinanceAttentionFilter = "unknown" | "estimated";
 export interface FinancePort {
   allowed(workspaceId: string): Promise<boolean>;
   get(entity: FinanceEntity, id: string): Promise<unknown | null>;
@@ -97,6 +98,7 @@ export interface FinancePort {
     entity: FinanceEntity,
     period?: string,
     offset?: number,
+    attention?: FinanceAttentionFilter,
   ): Promise<unknown[]>;
   save(
     entity: FinanceEntity,

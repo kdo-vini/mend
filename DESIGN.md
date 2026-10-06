@@ -11,6 +11,9 @@ Use the shared glass/motion tokens; provide opaque and reduced-motion fallbacks.
 The attention queue reports deterministic coverage gaps from the API; it must
 not imply AI analysis, bank reconciliation or completeness beyond those checks.
 Review opens alongside the ledger on wide screens and inline on smaller ones.
+Unknown/estimated checks open a month-wide, server-filtered entry list with a
+visible filter context and a clear return to all entries. The existing editor
+handles amounts, evidence and optimistic versions; saving refreshes the queue.
 
 Mend is a quiet control room for founders who still own the customer
 relationship. The interface should make the next safe product decision obvious:

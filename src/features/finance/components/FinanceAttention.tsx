@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ArrowRight, CheckCircle2, ListChecks } from "lucide-react";
-import type { FinanceSummary } from "../api";
+import type { FinanceAttentionFilter, FinanceSummary } from "../api";
 import { coverageGaps, type LedgerView } from "../model";
 import { useFinanceFormat } from "../format";
 
@@ -11,12 +11,14 @@ export function FinanceAttention({
   disabled,
   onReview,
   onView,
+  onResolve,
 }: {
   summary: FinanceSummary;
   period: string;
   disabled: boolean;
   onReview: () => void;
   onView: (view: LedgerView) => void;
+  onResolve: (filter: FinanceAttentionFilter) => void;
 }) {
   const { t } = useTranslation("common");
   const format = useFinanceFormat();
@@ -77,7 +79,9 @@ export function FinanceAttention({
                 onClick={() =>
                   gap === "review"
                     ? onReview()
-                    : onView(gap === "references" ? "settlements" : "entries")
+                    : gap === "references"
+                      ? onView("settlements")
+                      : onResolve(gap)
                 }
               >
                 {t(
@@ -85,7 +89,9 @@ export function FinanceAttention({
                     ? "finance.review"
                     : gap === "references"
                       ? "finance.attention.payments"
-                      : "finance.attention.entries",
+                      : gap === "unknown"
+                        ? "finance.pending.resolveUnknown"
+                        : "finance.pending.resolveEstimated",
                 )}
                 <ArrowRight size={14} aria-hidden="true" />
               </button>

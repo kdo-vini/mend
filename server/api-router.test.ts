@@ -1444,6 +1444,31 @@ describe("financial authorization boundary", () => {
     generate: vi.fn(async () => 0),
     history: vi.fn(async () => []),
   });
+  it("validates attention filters and authorizes every filtered read", async () => {
+    const dependencies = createFakeDependencies();
+    const port = finance();
+    dependencies.finance = port;
+    const app = makeApp(dependencies);
+    const endpoint =
+      "/api/finance/entries?period=2026-10-01&attention=unknown&offset=50";
+    expect((await request(app).get(endpoint)).status).toBe(200);
+    expect(port.list).toHaveBeenCalledWith(
+      "entries",
+      "2026-10-01",
+      50,
+      "unknown",
+    );
+    for (const invalid of [
+      endpoint.replace("unknown", "all"),
+      endpoint.replace("entries", "settlements"),
+      endpoint.replace("2026-10-01", "2026-10-12"),
+    ]) {
+      expect((await request(app).get(invalid)).status).toBe(400);
+    }
+    port.allowed = vi.fn(async () => false);
+    expect((await request(app).get(endpoint)).status).toBe(403);
+    expect(port.list).toHaveBeenCalledTimes(1);
+  });
   it("protects the Zelo feed before its cache and rechecks revocation", async () => {
     const dependencies = createFakeDependencies();
     let allowed = true;

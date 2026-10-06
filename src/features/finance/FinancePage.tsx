@@ -10,7 +10,11 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../shared/ui/PageHeader";
 import { EmptyState, ErrorState } from "../../shared/ui/ResourceState";
-import { financeApi, type FinanceRecord } from "./api";
+import {
+  financeApi,
+  type FinanceAttentionFilter,
+  type FinanceRecord,
+} from "./api";
 import {
   currentMonth,
   editDraft,
@@ -58,6 +62,7 @@ export function FinancePage() {
   const [view, setView] = useState<LedgerView>("entries");
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState("");
+  const [attention, setAttention] = useState<FinanceAttentionFilter>();
   const [history, setHistory] = useState<FinanceRecord | null>(null);
   const [notice, setNotice] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -68,6 +73,7 @@ export function FinancePage() {
     entity: view,
     offset,
     enabled: business === "diagium",
+    attention,
   });
   const { revoke, invalidate } = data;
 
@@ -109,6 +115,7 @@ export function FinancePage() {
   };
 
   const changeView = (next: LedgerView) => {
+    setAttention(undefined);
     setView(next);
     setOffset(0);
     setFilter("");
@@ -167,7 +174,11 @@ export function FinancePage() {
   const allowed = data.allowed;
   const summary = data.summary;
   const listForView =
-    data.list && data.list.key.split("|")[0] === view ? data.list : null;
+    data.list &&
+    data.list.key.split("|")[0] === view &&
+    data.list.key.split("|")[3] === attention
+      ? data.list
+      : null;
   const listStale =
     data.pending.list || listForView?.key !== data.requestedListKey;
   const rows = listForView?.data.filter((row) => matchesFilter(row, filter));
@@ -306,6 +317,11 @@ export function FinancePage() {
                 changeView(next);
                 document.getElementById(`finance-tab-${next}`)?.focus();
               }}
+              onResolve={(next) => {
+                changeView("entries");
+                setAttention(next);
+                document.getElementById("finance-tab-entries")?.focus();
+              }}
             />
           )}
 
@@ -365,6 +381,21 @@ export function FinancePage() {
                 aria-busy={listStale || undefined}
                 className="finance-tabpanel"
               >
+                {attention && (
+                  <div className="finance-pending-context" role="status">
+                    <div>
+                      <strong>{t(`finance.pending.${attention}`)}</strong>
+                      <p>{t("finance.pending.hint")}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="button button-ghost"
+                      onClick={() => changeView("entries")}
+                    >
+                      {t("finance.pending.clear")}
+                    </button>
+                  </div>
+                )}
                 <div className="finance-toolbar">
                   <label className="finance-search">
                     <Search size={14} aria-hidden="true" />
@@ -415,8 +446,16 @@ export function FinancePage() {
                   </div>
                 ) : listForView.data.length === 0 ? (
                   <EmptyState
-                    title={t(`finance.empty.${view}.title`)}
-                    description={t(`finance.empty.${view}.description`)}
+                    title={t(
+                      attention
+                        ? "finance.pending.emptyTitle"
+                        : `finance.empty.${view}.title`,
+                    )}
+                    description={t(
+                      attention
+                        ? "finance.pending.emptyHint"
+                        : `finance.empty.${view}.description`,
+                    )}
                   />
                 ) : rows && rows.length === 0 ? (
                   <EmptyState
@@ -432,7 +471,7 @@ export function FinancePage() {
                     <LedgerTable
                       view={view}
                       rows={rows ?? []}
-                      busy={busy}
+                      busy={busy || listStale || Boolean(loadError)}
                       onAction={onRowAction}
                     />
                   </div>

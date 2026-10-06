@@ -541,6 +541,16 @@
       },
       "pagination": "Page {{page}} of {{total}}"
     },
+    "pending": {
+      "resolveUnknown": "Review missing amounts",
+      "resolveEstimated": "Review estimates",
+      "unknown": "Entries with missing amounts",
+      "estimated": "Entries with estimated amounts",
+      "hint": "Only active entries matching this check, across the selected month. Edit a record to review its amount and source.",
+      "clear": "Show all entries",
+      "emptyTitle": "No pending entries on this page",
+      "emptyHint": "After saving, resolved entries leave this list. Use Previous if available, or show all entries to continue."
+    },
     "attention": {
       "title": "Your attention, here",
       "source": "Checks on Diagium records · {{month}}",

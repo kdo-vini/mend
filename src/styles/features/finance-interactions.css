@@ -127,6 +127,23 @@
 .finance-workspace {
   min-width: 0;
 }
+.finance-pending-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-card);
+  background: var(--accent-wash);
+  color: var(--ink);
+  font-size: 12px;
+}
+.finance-pending-context p {
+  margin-top: var(--space-1);
+  color: var(--ink-soft);
+}
 .finance-workspace > * {
   min-width: 0;
 }
