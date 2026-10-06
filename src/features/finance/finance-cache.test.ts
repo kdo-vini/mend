@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { FinanceSummary } from "./api";
+import type { FinanceSummary, ZeloFinanceFeed } from "./api";
 import {
   claimFinanceCache,
   clearFinanceCache,
@@ -19,6 +19,34 @@ const summary: FinanceSummary = {
 
 describe("finance session cache", () => {
   beforeEach(clearFinanceCache);
+  it("Zelo snapshots require a claimed owner and cannot survive revocation or account change", () => {
+    const feed: ZeloFinanceFeed = {
+      period: "2026-10-01",
+      checkedAt: "2026-10-06T12:00:00Z",
+      providers: { stripe: "ok", abacatepay: "ok" },
+      rows: [],
+      totals: [],
+    };
+    financeCache.setZelo(feed.period, feed, financeCache.scope());
+    expect(financeCache.zelo(feed.period)).toBeUndefined();
+    claimFinanceCache("user-a");
+    const oldScope = financeCache.scope();
+    financeCache.setZelo(feed.period, feed, oldScope);
+    expect(financeCache.zelo(feed.period)).toEqual(feed);
+    financeCache.invalidate();
+    financeCache.setZelo(feed.period, feed, oldScope);
+    expect(financeCache.zelo(feed.period)).toBeUndefined();
+    financeCache.setZelo(feed.period, feed, financeCache.scope());
+    claimFinanceCache("user-b");
+    expect(financeCache.zelo(feed.period)).toBeUndefined();
+    financeCache.setZelo(feed.period, feed, oldScope);
+    expect(financeCache.zelo(feed.period)).toBeUndefined();
+    const revokedScope = financeCache.scope();
+    clearFinanceCache();
+    claimFinanceCache("user-b");
+    financeCache.setZelo(feed.period, feed, revokedScope);
+    expect(financeCache.zelo(feed.period)).toBeUndefined();
+  });
 
   it("stores nothing before an access check claims it", () => {
     financeCache.setSummary("2026-10-01", summary, financeCache.scope());

@@ -594,6 +594,7 @@ export interface ImpactPort {
 }
 
 export interface ApiRouterDependencies {
+  zeloFinance?: Pick<import("../zelo-finance.js").ZeloFinanceService, "month">;
   finance?: import("../finance-service.js").FinancePort;
   internalWorkspace: import("../internal-workspace.js").InternalWorkspacePort;
   auth: AuthAdapter;

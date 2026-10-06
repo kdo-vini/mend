@@ -41,7 +41,7 @@ async function mockFinance(page: Page, allowed = true) {
   };
   const events: Array<Row & { record_id: string }> = [];
   const calls: Record<string, number> = {};
-  const state = { allowed };
+  const state = { allowed, summaryGate: null as Promise<void> | null };
   const inMonth = (date: unknown, period: string) =>
     String(date).slice(0, 7) === period.slice(0, 7);
   const entry = (id: unknown) => tables.entries.find((row) => row.id === id);
@@ -66,6 +66,7 @@ async function mockFinance(page: Page, allowed = true) {
     }
     let body: unknown;
     if (parts[0] === "summary") {
+      if (state.summaryGate) await state.summaryGate;
       const live = tables.entries.filter(
         (r) => r.period === period && !r.cancelled,
       );
@@ -422,7 +423,7 @@ test("returning to finance paints cached figures while revalidating", async ({
   page,
 }) => {
   await openFinance(page, "en-US");
-  const { tables, calls } = await mockFinance(page);
+  const { tables, calls, state } = await mockFinance(page);
   tables.entries.push({ ...hostinger, period: `${currentMonth()}-01` });
   await page.goto("/financeiro?demo=1");
   await expect(metric(page, "Accrued expenses")).toContainText("19.90");
@@ -433,15 +434,25 @@ test("returning to finance paints cached figures while revalidating", async ({
   ).toBeVisible();
   await expect(metric(page, "Accrued expenses")).toContainText("19.90");
   const accessChecks = calls["GET access"];
-  await page.goBack();
-  await expect(
-    page.getByRole("heading", { name: "Diagium finance", exact: true }),
-  ).toBeVisible();
-  await expect(metric(page, "Accrued expenses")).toContainText("19.90", {
-    timeout: 1000,
+  const summaryChecks = calls["GET summary"];
+  let release!: () => void;
+  state.summaryGate = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  // Each mount still re-checks access with the server.
-  await expect.poll(() => calls["GET access"]).toBeGreaterThan(accessChecks);
+  await page.goBack();
+  try {
+    await expect(
+      page.getByRole("heading", { name: "Diagium finance", exact: true }),
+    ).toBeVisible();
+    // Every mount rechecks access; prove cached values before the fresh summary can return.
+    await expect.poll(() => calls["GET access"]).toBeGreaterThan(accessChecks);
+    await expect
+      .poll(() => calls["GET summary"])
+      .toBeGreaterThan(summaryChecks);
+    await expect(metric(page, "Accrued expenses")).toContainText("19.90");
+  } finally {
+    release();
+  }
 });
 
 test("switching ledger tabs keeps figures and does not repeat access or summary calls", async ({

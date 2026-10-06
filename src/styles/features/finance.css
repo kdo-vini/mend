@@ -735,6 +735,148 @@
   gap: var(--space-2);
 }
 
+/* Business switch and the read-only Zelo view */
+.finance-business,
+.finance-zelo-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.finance-business select,
+.finance-zelo-filter select {
+  min-width: 128px;
+}
+.finance-page select:hover {
+  border-color: var(--line-strong);
+}
+.finance-page select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.finance-zelo-sync {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.finance-zelo-sync .button svg {
+  flex: 0 0 auto;
+}
+.finance-zelo-note {
+  max-width: 75ch;
+  margin: 0 0 var(--space-4);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.finance-zelo > .finance-form-error {
+  margin: 0 0 var(--space-4);
+}
+.finance-zelo-sources {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+.finance-zelo-sources h2 {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.finance-zelo-sources ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.finance-zelo-sources li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--ink-soft);
+}
+.finance-zelo-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+}
+.finance-zelo-state svg {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+}
+.finance-zelo-sources li[data-state="ok"] .finance-zelo-state svg {
+  color: var(--signal);
+}
+.finance-zelo-sources li[data-state="partial"] .finance-zelo-state svg {
+  color: var(--warning);
+}
+.finance-zelo-sources li[data-state="unavailable"] .finance-zelo-state svg {
+  color: var(--danger);
+}
+.finance-zelo-totals {
+  grid-template-columns: minmax(0, 1fr);
+}
+.finance-zelo-totals .finance-metric-group + .finance-metric-group {
+  border-top: 1px solid var(--line);
+  border-left: 0;
+}
+.finance-metric dd.finance-zelo-hint {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.finance-zelo-none {
+  padding: var(--space-4) var(--space-5);
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.finance-zelo-charges-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: 12px;
+}
+.finance-zelo-charges-header h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.finance-table[data-view="zelo"] [data-column="billed"],
+.finance-table[data-view="zelo"] [data-column="received"] {
+  text-align: right;
+  white-space: nowrap;
+}
+.finance-table[data-view="zelo"] td[data-column="created"],
+.finance-table[data-view="zelo"] td[data-column="paid"] {
+  white-space: nowrap;
+}
+.finance-badge[data-tone="paid"] {
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+.finance-badge[data-tone="pending"] {
+  border-color: oklch(0.78 0.15 86 / 0.45);
+  color: var(--warning);
+}
+.finance-badge[data-tone="failed"],
+.finance-badge[data-tone="uncollectible"] {
+  border-color: oklch(0.69 0.18 25 / 0.4);
+  color: var(--danger);
+}
+
 @media (max-width: 1100px) {
   .finance-metrics {
     grid-template-columns: 1fr;
@@ -910,6 +1052,52 @@
   }
   .finance-pagination {
     justify-content: space-between;
+  }
+}
+
+/* Zelo on phones: after the shared stacked-row rules so these overrides win. */
+@media (max-width: 650px) {
+  .finance-page .page-actions {
+    flex-wrap: wrap;
+  }
+  .finance-business,
+  .finance-zelo-filter {
+    flex: 1 1 100%;
+  }
+  .finance-business select,
+  .finance-zelo-filter select {
+    flex: 1;
+    min-height: var(--mobile-touch-target);
+    font-size: 16px;
+  }
+  .finance-zelo-sync {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .finance-zelo-sources,
+  .finance-zelo-none {
+    padding: var(--space-3);
+  }
+  .finance-zelo-sources ul {
+    flex-direction: column;
+  }
+  .finance-page .finance-zelo .finance-table[data-view="zelo"] td {
+    text-align: left;
+    white-space: normal;
+  }
+  .finance-page
+    .finance-zelo
+    .finance-table[data-view="zelo"]
+    td[data-column="status"] {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+  }
+  .finance-page
+    .finance-zelo
+    .finance-table[data-view="zelo"]
+    td[data-column="status"]::before {
+    content: none;
   }
 }
 

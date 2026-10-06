@@ -39,10 +39,12 @@ export function useFinanceData({
   period,
   entity,
   offset,
+  enabled = true,
 }: {
   period: string;
   entity: FinanceEntity | null;
   offset: number;
+  enabled?: boolean;
 }) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [summary, setSummary] = useState<{
@@ -87,7 +89,7 @@ export function useFinanceData({
   }, [accessAttempt, handleError, revoke]);
 
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed || !enabled) return;
     let active = true;
     const scope = financeCache.scope();
     const cached = financeCache.summary(period);
@@ -111,10 +113,10 @@ export function useFinanceData({
     return () => {
       active = false;
     };
-  }, [allowed, period, revision, handleError]);
+  }, [allowed, enabled, period, revision, handleError]);
 
   useEffect(() => {
-    if (!allowed || !entity) return;
+    if (!allowed || !entity || !enabled) return;
     let active = true;
     const scope = financeCache.scope();
     const key = listKey(entity, period, offset);
@@ -139,7 +141,7 @@ export function useFinanceData({
     return () => {
       active = false;
     };
-  }, [allowed, entity, period, offset, revision, handleError]);
+  }, [allowed, enabled, entity, period, offset, revision, handleError]);
 
   /** Drops cached pages after a mutation and refetches what is on screen. */
   const invalidate = useCallback(() => {

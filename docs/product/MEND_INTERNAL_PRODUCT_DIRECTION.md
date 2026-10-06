@@ -12,6 +12,11 @@ Mend é o dashboard interno da Diagium: um único workspace operacional, várias
 
 ## Limites
 
+Em 06/10/2026, Vinicius autorizou a visão de transações reais do Zelo no Mend,
+separada dos totais e lançamentos Diagium. A conexão é somente leitura de PIX
+AbacatePay e faturas Stripe; não inclui mudanças de cobrança ou importação no
+ledger. Ver [contrato e ativação](../engineering/ZELO_FINANCE_CONNECTION.md).
+
 - Identidade individual, autorização, RLS e auditoria continuam obrigatórias. Single workspace não significa acesso livre ou senha compartilhada.
 - O UUID operacional é preservado nas referências de canais, conversas, mensagens, eventos e credenciais. Colunas legadas não precisam ser removidas para abandonar multi-tenancy.
 - Selecionar o UUID canônico exige verificação dos bindings existentes; ausência de configuração falha fechada.

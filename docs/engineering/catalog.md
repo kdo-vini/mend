@@ -28,6 +28,13 @@ recorrência e totais no banco; não calcular indicadores a partir de páginas d
 Auditoria financeira permanece em `finance_events`, fora do histórico geral de suporte.
 Consulte [a ficha financeira](../product/FICHA_FINANCE_DIAGIUM.md) para ativação e QA.
 
+`server/zelo-finance.ts` lê pagamentos Zelo em uma visão separada, autorizada pelo
+mesmo grant financeiro antes de cada consulta/cache. PIX vem do Supabase Zelo;
+faturas Stripe live são restritas aos customers das subscriptions Zelo. Não
+importa dados no ledger Diagium nem altera cobranças. Valores por moeda, datas de
+criação/pagamento, cobertura parcial e credenciais server-only estão documentados
+em [Zelo finance connection](ZELO_FINANCE_CONNECTION.md).
+
 No frontend, `features/finance/model.ts` mantém drafts compatíveis com os schemas,
 e `useFinanceEditor` preserva edição local durante conflitos de versão.
 `useFinanceData` separa resumo mensal das listas: mudar a aba não refaz o resumo.
