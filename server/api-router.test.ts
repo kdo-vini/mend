@@ -1376,6 +1376,7 @@ describe("internal dashboard API", () => {
       userId,
       workspaceId,
     );
+    expect(dependencies.internalWorkspace.resolve).toHaveBeenCalledTimes(1);
   });
   it("blocks creating workspaces even when the body is otherwise valid", async () => {
     const dependencies = configured();
@@ -1420,6 +1421,8 @@ describe("internal dashboard API", () => {
     expect((await request(app).get("/api/internal-workspace")).status).toBe(
       404,
     );
+    expect(dependencies.internalWorkspace.resolve).toHaveBeenCalledTimes(2);
+    expect(dependencies.membership.getMembership).toHaveBeenCalledTimes(2);
   });
   it("fails closed when internal workspace configuration is absent", async () => {
     const dependencies = configured();

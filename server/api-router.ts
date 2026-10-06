@@ -729,10 +729,13 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
 
   const access = async (
     response: Response,
-    workspaceId: string,
+    requestedWorkspaceId: string | undefined,
     minimumRole: WorkspaceRole = "viewer",
   ): Promise<RequestContext> => {
-    await resolveInternalWorkspace(dependencies.internalWorkspace, workspaceId);
+    const workspaceId = await resolveInternalWorkspace(
+      dependencies.internalWorkspace,
+      requestedWorkspaceId,
+    );
     const user = userFrom(response);
     const membership = await dependencies.membership.getMembership(
       user.id,
@@ -765,13 +768,13 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
     response: Response,
     minimumRole: WorkspaceRole = "viewer",
   ): Promise<RequestContext> => {
-    const workspaceId = await resolveInternalWorkspace(
-      dependencies.internalWorkspace,
+    return access(
+      response,
       request.get("x-mend-workspace-id") === undefined
         ? undefined
         : workspaceIdFromRequest(request),
+      minimumRole,
     );
-    return access(response, workspaceId, minimumRole);
   };
   const pathId = (request: Request) => parse(uuid, request.params.id);
   const pathIssue = (request: Request) =>
