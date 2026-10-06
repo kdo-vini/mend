@@ -30,15 +30,22 @@ import {
 import { FinanceForm } from "./components/FinanceForm";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { LedgerTable, type LedgerAction } from "./components/LedgerTable";
+import { ZeloFinancePanel } from "./components/ZeloFinancePanel";
+
+type Business = "diagium" | "zelo";
 
 /**
  * Diagium finance: month navigation, grouped accrual/cash figures, the ledger
  * views and one contextual panel (form or history). Domain forms, the table
  * and data loading live in their own modules; this page only orchestrates.
+ *
+ * The Business switch shows the read-only Zelo payments instead. The Diagium
+ * body is only hidden meanwhile, so an open draft survives the round trip.
  */
 export function FinancePage() {
   const { t } = useTranslation("common");
   const format = useFinanceFormat();
+  const [business, setBusiness] = useState<Business>("diagium");
   const [month, setMonth] = useState(currentMonth);
   const [view, setView] = useState<LedgerView>("entries");
   const [offset, setOffset] = useState(0);
@@ -48,7 +55,12 @@ export function FinancePage() {
   const [generating, setGenerating] = useState(false);
   const [actionError, setActionError] = useState("");
   const period = monthPeriod(month);
-  const data = useFinanceData({ period, entity: view, offset });
+  const data = useFinanceData({
+    period,
+    entity: view,
+    offset,
+    enabled: business === "diagium",
+  });
   const { revoke, invalidate } = data;
 
   const onSaved = useCallback(
@@ -67,6 +79,7 @@ export function FinancePage() {
     if (data.allowed !== false) return;
     closeEditor();
     setHistory(null);
+    setBusiness("diagium");
   }, [data.allowed, closeEditor]);
 
   useEffect(() => {
@@ -152,39 +165,61 @@ export function FinancePage() {
   const rows = listForView?.data.filter((row) => matchesFilter(row, filter));
   const busy = editor.busy || generating;
   const loadError = data.error;
+  const isZelo = allowed === true && business === "zelo";
 
   return (
     <section className="page finance-page">
       <PageHeader
-        title={t("finance.title")}
-        description={t("finance.description")}
+        title={isZelo ? t("finance.zelo.title") : t("finance.title")}
+        description={
+          isZelo ? t("finance.zelo.description") : t("finance.description")
+        }
         actions={
           allowed ? (
             <>
-              <button
-                type="button"
-                className="button button-ghost finance-new"
-                disabled={busy}
-                onClick={() => openDraft(newEntryDraft("income", period))}
-              >
-                <ArrowDownLeft size={14} aria-hidden="true" />
-                {t("finance.newIncome")}
-              </button>
-              <button
-                type="button"
-                className="button button-primary finance-new"
-                disabled={busy}
-                onClick={() => openDraft(newEntryDraft("expense", period))}
-              >
-                <ArrowUpRight size={14} aria-hidden="true" />
-                {t("finance.newExpense")}
-              </button>
+              <label className="finance-business">
+                <span>{t("finance.business.label")}</span>
+                <select
+                  value={business}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setBusiness(event.target.value as Business)
+                  }
+                >
+                  <option value="diagium">
+                    {t("finance.business.diagium")}
+                  </option>
+                  <option value="zelo">{t("finance.business.zelo")}</option>
+                </select>
+              </label>
+              {!isZelo && (
+                <>
+                  <button
+                    type="button"
+                    className="button button-ghost finance-new"
+                    disabled={busy}
+                    onClick={() => openDraft(newEntryDraft("income", period))}
+                  >
+                    <ArrowDownLeft size={14} aria-hidden="true" />
+                    {t("finance.newIncome")}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-primary finance-new"
+                    disabled={busy}
+                    onClick={() => openDraft(newEntryDraft("expense", period))}
+                  >
+                    <ArrowUpRight size={14} aria-hidden="true" />
+                    {t("finance.newExpense")}
+                  </button>
+                </>
+              )}
             </>
           ) : undefined
         }
       />
 
-      {loadError && allowed !== false ? (
+      {loadError && allowed !== false && !isZelo ? (
         <ErrorState
           title={t("finance.errors.loadTitle")}
           description={t("finance.errors.load")}
@@ -204,8 +239,16 @@ export function FinancePage() {
 
       {allowed === null && !loadError && <FinanceSummarySkeleton />}
 
+      {isZelo && (
+        <ZeloFinancePanel
+          month={month}
+          onMonthChange={changeMonth}
+          onForbidden={revoke}
+        />
+      )}
+
       {allowed && (
-        <>
+        <div className="finance-diagium" hidden={isZelo}>
           <div className="finance-period-bar">
             <MonthNavigator month={month} onChange={changeMonth} />
             <p className="finance-sync" role="status" aria-live="polite">
@@ -387,7 +430,7 @@ export function FinancePage() {
               )}
             </div>
           </section>
-        </>
+        </div>
       )}
     </section>
   );

@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-import type { FinanceRecord, FinanceSummary } from "./api";
+import type { FinanceRecord, FinanceSummary, ZeloFinanceFeed } from "./api";
 
 export interface FinanceList {
   key: string;
@@ -24,6 +24,8 @@ const cache = {
   generation: 0,
   summaries: new Map<string, FinanceSummary>(),
   lists: new Map<string, FinanceList>(),
+  /** Read-only Zelo provider feeds, keyed by requested period. */
+  zelo: new Map<string, ZeloFinanceFeed>(),
 };
 
 export function clearFinanceCache() {
@@ -31,6 +33,7 @@ export function clearFinanceCache() {
   cache.owner = null;
   cache.summaries.clear();
   cache.lists.clear();
+  cache.zelo.clear();
 }
 
 export interface FinanceCacheScope {
@@ -79,10 +82,14 @@ export const financeCache = {
   list: (key: string) => cache.lists.get(key),
   setList: (value: FinanceList, scope: FinanceCacheScope) =>
     isCurrent(scope) && cache.lists.set(value.key, value),
+  zelo: (period: string) => cache.zelo.get(period),
+  setZelo: (period: string, value: ZeloFinanceFeed, scope: FinanceCacheScope) =>
+    isCurrent(scope) && cache.zelo.set(period, value),
   /** Drops every cached response after a mutation, keeping the owner. */
   invalidate: () => {
     cache.generation++;
     cache.summaries.clear();
     cache.lists.clear();
+    cache.zelo.clear();
   },
 };

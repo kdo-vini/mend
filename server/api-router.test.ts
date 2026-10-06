@@ -1444,6 +1444,52 @@ describe("financial authorization boundary", () => {
     generate: vi.fn(async () => 0),
     history: vi.fn(async () => []),
   });
+  it("protects the Zelo feed before its cache and rechecks revocation", async () => {
+    const dependencies = createFakeDependencies();
+    let allowed = true;
+    dependencies.finance = finance();
+    dependencies.finance.allowed = vi.fn(async () => allowed);
+    dependencies.zeloFinance = {
+      month: vi.fn(async () => ({
+        period: "2026-10-01",
+        checkedAt: "2026-10-06T12:00:00Z",
+        providers: { abacatepay: "ok", stripe: "ok" },
+        rows: [],
+        totals: [],
+      })),
+    };
+    const app = makeApp(dependencies);
+    const endpoint = "/api/finance/zelo?period=2026-10-01";
+    const response = await request(app).get(endpoint);
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    allowed = false;
+    expect((await request(app).get(endpoint)).status).toBe(403);
+    expect(dependencies.zeloFinance.month).toHaveBeenCalledTimes(1);
+    allowed = true;
+    expect(
+      (
+        await request(app)
+          .get(endpoint)
+          .set("x-mend-workspace-id", otherWorkspaceId)
+      ).status,
+    ).toBe(404);
+    expect(
+      (await request(app).get("/api/finance/zelo?period=2026-10-15")).status,
+    ).toBe(400);
+    expect(
+      (await request(app).get(`${endpoint}&url=https://attacker.test`)).status,
+    ).toBe(400);
+    expect((await request(app).post("/api/finance/zelo").send({})).status).toBe(
+      400,
+    );
+    expect(dependencies.zeloFinance.month).toHaveBeenCalledTimes(1);
+    const anonymous = createFakeDependencies({ user: null });
+    anonymous.finance = finance();
+    anonymous.zeloFinance = dependencies.zeloFinance;
+    expect((await request(makeApp(anonymous)).get(endpoint)).status).toBe(401);
+    expect(dependencies.zeloFinance.month).toHaveBeenCalledTimes(1);
+  });
   it("requires authenticated membership before financial authorization", async () => {
     const dependencies = createFakeDependencies({ user: null });
     dependencies.finance = finance();

@@ -443,6 +443,103 @@
     "draftReloaded": "Latest version loaded. Your edits were kept; compare the values below before saving.",
     "latestChanges": "Changes saved by another person (compare with your draft):",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "business": {
+      "label": "Business",
+      "diagium": "Diagium",
+      "zelo": "Zelo"
+    },
+    "zelo": {
+      "title": "Zelo finance",
+      "description": "Read-only Zelo charges and receipts from AbacatePay and Stripe.",
+      "loading": "Loading Zelo figures…",
+      "updating": "Updating…",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
+      "checkedAt": "Checked {{time}}",
+      "showingOther": "Showing {{shown}} while {{month}} loads",
+      "staleFailed": "Showing {{shown}}; {{month}} could not be loaded",
+      "note": "Zelo figures are kept separate from Diagium and never added to its totals. Received amounts are gross: provider fees and refunds are not deducted. Sources may be partial.",
+      "summaryLabel": "Zelo figures for {{month}}",
+      "sources": {
+        "label": "Sources"
+      },
+      "providers": {
+        "abacatepay": "AbacatePay (PIX)",
+        "stripe": "Stripe (invoices)"
+      },
+      "states": {
+        "ok": "Answered",
+        "partial": "Partial — incomplete data or read limit",
+        "unavailable": "Unavailable",
+        "not_configured": "Not configured"
+      },
+      "totals": {
+        "currency": "Totals in {{currency}}",
+        "received": "Received (gross)",
+        "receivedHint": "Paid in {{month}}, including earlier charges",
+        "billed": "Billed",
+        "billedHint": "Charges created in {{month}}",
+        "pending": "Pending",
+        "pendingHint": "Open charges created in {{month}}",
+        "none": "No Zelo charges or receipts in {{month}}.",
+        "noneIncomplete": "No figures to show. Some sources did not answer completely, so this is not a confirmed zero.",
+        "timezone": "Months follow São Paulo time. Different currencies are never added together."
+      },
+      "coverage": {
+        "complete": "Both sources answered for {{month}}.",
+        "incomplete": "Some sources did not answer completely. {{month}} may be missing charges.",
+        "retry": "Check sources again"
+      },
+      "charges": {
+        "title": "Zelo charges — {{month}}",
+        "hint": "Charges created this month plus earlier charges paid this month. Read-only: change them in AbacatePay or Stripe.",
+        "count": "{{count}} charges",
+        "count_one": "{{count}} charge",
+        "count_other": "{{count}} charges"
+      },
+      "filter": {
+        "provider": "Source",
+        "all": "All sources"
+      },
+      "table": {
+        "columns": {
+          "charge": "Charge ID",
+          "source": "Source",
+          "status": "Status",
+          "created": "Created",
+          "paid": "Paid",
+          "billed": "Billed",
+          "received": "Received (gross)"
+        },
+        "notPaid": "Not paid",
+        "unknown": "Unknown",
+        "earlier": "From an earlier month"
+      },
+      "status": {
+        "paid": "Paid",
+        "pending": "Pending",
+        "failed": "Failed",
+        "expired": "Expired",
+        "cancelled": "Cancelled",
+        "uncollectible": "Uncollectible"
+      },
+      "empty": {
+        "title": "No Zelo charges in {{month}}",
+        "description": "Both sources answered and returned no charges or receipts for this month.",
+        "incompleteTitle": "No charges to show",
+        "incompleteDescription": "Some sources did not answer completely, so this list is not confirmed as empty."
+      },
+      "filterEmpty": {
+        "title": "No charges from this source",
+        "description": "Choose All sources to see every charge for this month."
+      },
+      "errors": {
+        "title": "Zelo figures could not be loaded",
+        "description": "The payment providers could not be reached through Mend. Nothing was changed; try again.",
+        "refresh": "The latest Zelo figures could not be loaded. Showing the figures checked {{time}}."
+      },
+      "pagination": "Page {{page}} of {{total}}"
+    }
   }
 }

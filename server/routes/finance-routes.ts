@@ -40,6 +40,25 @@ export function registerFinanceRoutes(ctx: ApiRouteModuleContext) {
     }),
   );
   router.get(
+    "/api/finance/zelo",
+    asyncRoute(async (req, res) => {
+      const { period } = parse(
+        z
+          .object({ period: z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])-01$/) })
+          .strict(),
+        req.query,
+      );
+      if (!dependencies.zeloFinance)
+        throw new ApiHttpError(
+          503,
+          "zelo_finance_unavailable",
+          "Zelo finance is unavailable.",
+        );
+      res.setHeader("Cache-Control", "no-store");
+      send(res, 200, await dependencies.zeloFinance.month(period));
+    }),
+  );
+  router.get(
     "/api/finance/summary",
     asyncRoute(async (req, res) =>
       send(

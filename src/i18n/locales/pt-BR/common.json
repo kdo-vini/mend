@@ -443,6 +443,103 @@
     "draftReloaded": "Versão atual carregada. Suas alterações foram mantidas; revise os valores abaixo antes de salvar.",
     "latestChanges": "Alterações salvas por outra pessoa (compare com seu rascunho):",
     "yes": "Sim",
-    "no": "Não"
+    "no": "Não",
+    "business": {
+      "label": "Negócio",
+      "diagium": "Diagium",
+      "zelo": "Zelo"
+    },
+    "zelo": {
+      "title": "Financeiro Zelo",
+      "description": "Cobranças e recebimentos do Zelo no AbacatePay e na Stripe, somente leitura.",
+      "loading": "Carregando números do Zelo…",
+      "updating": "Atualizando…",
+      "refresh": "Atualizar",
+      "refreshing": "Atualizando…",
+      "checkedAt": "Consultado em {{time}}",
+      "showingOther": "Exibindo {{shown}} enquanto {{month}} carrega",
+      "staleFailed": "Exibindo {{shown}}; não foi possível carregar {{month}}",
+      "note": "Os números do Zelo ficam separados da Diagium e nunca entram nos totais dela. Valores recebidos são brutos: taxas dos provedores e reembolsos não são descontados. As fontes podem estar parciais.",
+      "summaryLabel": "Números do Zelo em {{month}}",
+      "sources": {
+        "label": "Fontes"
+      },
+      "providers": {
+        "abacatepay": "AbacatePay (PIX)",
+        "stripe": "Stripe (faturas)"
+      },
+      "states": {
+        "ok": "Respondeu",
+        "partial": "Parcial — dados incompletos ou limite de consulta",
+        "unavailable": "Indisponível",
+        "not_configured": "Não configurado"
+      },
+      "totals": {
+        "currency": "Totais em {{currency}}",
+        "received": "Recebido (bruto)",
+        "receivedHint": "Pago em {{month}}, inclusive cobranças anteriores",
+        "billed": "Cobrado",
+        "billedHint": "Cobranças criadas em {{month}}",
+        "pending": "Pendente",
+        "pendingHint": "Cobranças em aberto criadas em {{month}}",
+        "none": "Nenhuma cobrança ou recebimento do Zelo em {{month}}.",
+        "noneIncomplete": "Nenhum número para exibir. Algumas fontes não responderam por completo, então isto não é um zero confirmado.",
+        "timezone": "Os meses seguem o horário de São Paulo. Moedas diferentes nunca são somadas."
+      },
+      "coverage": {
+        "complete": "As duas fontes responderam para {{month}}.",
+        "incomplete": "Algumas fontes não responderam por completo. Podem faltar cobranças de {{month}}.",
+        "retry": "Consultar fontes de novo"
+      },
+      "charges": {
+        "title": "Cobranças do Zelo — {{month}}",
+        "hint": "Cobranças criadas neste mês e cobranças anteriores pagas neste mês. Somente leitura: altere no AbacatePay ou na Stripe.",
+        "count": "{{count}} cobranças",
+        "count_one": "{{count}} cobrança",
+        "count_other": "{{count}} cobranças"
+      },
+      "filter": {
+        "provider": "Fonte",
+        "all": "Todas as fontes"
+      },
+      "table": {
+        "columns": {
+          "charge": "ID da cobrança",
+          "source": "Fonte",
+          "status": "Situação",
+          "created": "Criada em",
+          "paid": "Paga em",
+          "billed": "Cobrado",
+          "received": "Recebido (bruto)"
+        },
+        "notPaid": "Não paga",
+        "unknown": "Desconhecido",
+        "earlier": "De um mês anterior"
+      },
+      "status": {
+        "paid": "Paga",
+        "pending": "Pendente",
+        "failed": "Falhou",
+        "expired": "Expirada",
+        "cancelled": "Cancelada",
+        "uncollectible": "Incobrável"
+      },
+      "empty": {
+        "title": "Nenhuma cobrança do Zelo em {{month}}",
+        "description": "As duas fontes responderam e não retornaram cobranças nem recebimentos neste mês.",
+        "incompleteTitle": "Nenhuma cobrança para exibir",
+        "incompleteDescription": "Algumas fontes não responderam por completo, então esta lista não está confirmada como vazia."
+      },
+      "filterEmpty": {
+        "title": "Nenhuma cobrança desta fonte",
+        "description": "Escolha Todas as fontes para ver todas as cobranças do mês."
+      },
+      "errors": {
+        "title": "Não foi possível carregar os números do Zelo",
+        "description": "O Mend não conseguiu consultar os provedores de pagamento. Nada foi alterado; tente novamente.",
+        "refresh": "Não foi possível carregar os números mais recentes do Zelo. Exibindo os números consultados em {{time}}."
+      },
+      "pagination": "Página {{page}} de {{total}}"
+    }
   }
 }

@@ -21,7 +21,43 @@ export interface FinanceSummary {
   reference_pending: number;
   review: FinanceRecord | null;
 }
+export type ZeloProviderState =
+  | "ok"
+  | "not_configured"
+  | "unavailable"
+  | "partial";
+export interface ZeloPayment {
+  id: string;
+  externalId: string;
+  provider: "abacatepay" | "stripe";
+  currency: string;
+  status:
+    | "paid"
+    | "pending"
+    | "failed"
+    | "expired"
+    | "cancelled"
+    | "uncollectible";
+  createdAt: string;
+  paidAt: string | null;
+  billedCents: number;
+  receivedCents: number | null;
+}
+export interface ZeloFinanceFeed {
+  period: string;
+  checkedAt: string;
+  providers: { abacatepay: ZeloProviderState; stripe: ZeloProviderState };
+  rows: ZeloPayment[];
+  totals: Array<{
+    currency: string;
+    billedCents: number;
+    receivedCents: number;
+    pendingCents: number;
+  }>;
+}
 export const financeApi = {
+  zelo: (period: string) =>
+    apiRequest<ZeloFinanceFeed>(`/api/finance/zelo?period=${period}`),
   access: () => apiRequest<{ allowed: boolean }>("/api/finance/access"),
   get: (entity: FinanceEntity, id: string) =>
     apiRequest<FinanceRecord>(`/api/finance/${entity}/${id}`),
