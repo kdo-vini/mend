@@ -14,6 +14,7 @@ void i18n.use(initReactI18next).init({
   supportedLngs: ["pt-BR", "en-US"],
   defaultNS: "common",
   ns: [
+    "projects",
     "common",
     "auth",
     "inbox",

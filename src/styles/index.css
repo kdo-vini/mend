@@ -88,3 +88,7 @@
 
 @import "./features/finance-interactions.css";
 @import "./workspace-design.css";
+@import "./prototype-finance-dashboard.css";
+@import "./audio-wave-player.css";
+@import "./prototype-inbox-shell.css";
+@import "./features/projects.css";

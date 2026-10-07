@@ -84,6 +84,30 @@ test("switching finance views preserves totals and does not reload the summary",
     const endpoint = new URL(route.request().url()).pathname.split("/").pop();
     if (endpoint === "access")
       return route.fulfill({ json: { allowed: true } });
+    if (endpoint === "provider-balances") {
+      const provider = {
+        status: "not_configured",
+        scope: "provider_account",
+        balances: null,
+        payouts: [],
+      };
+      return route.fulfill({
+        json: {
+          checkedAt: new Date().toISOString(),
+          providers: { stripe: provider, abacatepay: provider },
+        },
+      });
+    }
+    if (endpoint === "zelo")
+      return route.fulfill({
+        json: {
+          period: new URL(route.request().url()).searchParams.get("period"),
+          checkedAt: new Date().toISOString(),
+          providers: { stripe: "not_configured", abacatepay: "not_configured" },
+          rows: [],
+          totals: [],
+        },
+      });
     if (endpoint === "summary") {
       summaries++;
       if (holdRevalidation) await revalidation;

@@ -93,12 +93,13 @@ export type FinanceAttentionFilter = "unknown" | "estimated";
 export interface FinancePort {
   allowed(workspaceId: string): Promise<boolean>;
   get(entity: FinanceEntity, id: string): Promise<unknown | null>;
-  summary(period: string): Promise<unknown>;
+  summary(period: string, project?: string): Promise<unknown>;
   list(
     entity: FinanceEntity,
     period?: string,
     offset?: number,
     attention?: FinanceAttentionFilter,
+    project?: string,
   ): Promise<unknown[]>;
   save(
     entity: FinanceEntity,

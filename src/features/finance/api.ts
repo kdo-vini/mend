@@ -6,6 +6,31 @@ export type FinanceEntity =
   | "templates"
   | "references"
   | "reviews";
+export interface ProviderBalances {
+  checkedAt: string;
+  providers: Record<
+    "stripe" | "abacatepay",
+    {
+      status: ZeloProviderState;
+      scope: "provider_account";
+      balances: Array<{
+        currency: string;
+        availableMinor: number;
+        pendingMinor: number;
+      }> | null;
+      payouts: Array<{
+        id: string;
+        status: "pending" | "in_transit";
+        currency: string;
+        amountMinor: number;
+        feeMinor: number | null;
+        netMinor: number | null;
+        arrivalAt: string | null;
+        createdAt: string | null;
+      }>;
+    }
+  >;
+}
 export type FinanceAttentionFilter = "unknown" | "estimated";
 export interface FinanceRecord {
   id: string;
@@ -43,6 +68,9 @@ export interface ZeloPayment {
   paidAt: string | null;
   billedCents: number;
   receivedCents: number | null;
+  feeCents?: number | null;
+  netCents?: number | null;
+  availableAt?: string | null;
 }
 export interface ZeloFinanceFeed {
   period: string;
@@ -54,24 +82,31 @@ export interface ZeloFinanceFeed {
     billedCents: number;
     receivedCents: number;
     pendingCents: number;
+    netKnownCents?: number;
+    unknownNetCount?: number;
   }>;
 }
 export const financeApi = {
+  providerBalances: () =>
+    apiRequest<ProviderBalances>("/api/finance/provider-balances"),
   zelo: (period: string) =>
     apiRequest<ZeloFinanceFeed>(`/api/finance/zelo?period=${period}`),
   access: () => apiRequest<{ allowed: boolean }>("/api/finance/access"),
   get: (entity: FinanceEntity, id: string) =>
     apiRequest<FinanceRecord>(`/api/finance/${entity}/${id}`),
-  summary: (period: string) =>
-    apiRequest<FinanceSummary>(`/api/finance/summary?period=${period}`),
+  summary: (period: string, project?: string) =>
+    apiRequest<FinanceSummary>(
+      `/api/finance/summary?period=${period}${project !== undefined ? `&project=${encodeURIComponent(project)}` : ""}`,
+    ),
   list: (
     entity: FinanceEntity,
     period: string,
     offset: number,
     attention?: FinanceAttentionFilter,
+    project?: string,
   ) =>
     apiRequest<{ data: FinanceRecord[]; nextOffset: number | null }>(
-      `/api/finance/${entity}?period=${period}&offset=${offset}${attention ? `&attention=${attention}` : ""}`,
+      `/api/finance/${entity}?period=${period}&offset=${offset}${attention ? `&attention=${attention}` : ""}${project !== undefined ? `&project=${encodeURIComponent(project)}` : ""}`,
     ),
   save: (
     entity: FinanceEntity,

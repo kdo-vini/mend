@@ -25,6 +25,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run test:finance-db
+      - run: npm run test:projects-db
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

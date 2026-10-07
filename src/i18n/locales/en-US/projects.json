@@ -1,0 +1,64 @@
+{
+  "eyebrow": "Diagium workspace",
+  "title": "Projects",
+  "description": "Organize Diagium products and track each one's finances.",
+  "loading": "Loading projects…",
+  "active": {
+    "title": "In operation",
+    "description": "Active projects and their financial records.",
+    "empty": "There are no active projects right now."
+  },
+  "archived": {
+    "title": "Archived",
+    "description": "Projects out of operation, kept for reference."
+  },
+  "status": {
+    "active": "Active",
+    "archived": "Archived"
+  },
+  "card": {
+    "noDescription": "No description provided."
+  },
+  "fields": {
+    "name": "Project name",
+    "description": "Description",
+    "key": "Finance identifier: {{key}} (immutable)"
+  },
+  "editor": {
+    "createTitle": "New project",
+    "createDescription": "Add a project to track its revenue and expenses separately.",
+    "editTitle": "Edit project",
+    "editDescription": "Update the project details. The finance identifier cannot be changed."
+  },
+  "empty": {
+    "title": "No projects yet",
+    "description": "Create the first project to organize operations and separate its finances."
+  },
+  "archive": {
+    "title": "Archive {{name}}?",
+    "description": "The project will leave the active list. Its financial records will remain available.",
+    "confirm": "Archive project"
+  },
+  "actions": {
+    "create": "New project",
+    "createFirst": "Create first project",
+    "editProject": "Edit {{name}}",
+    "archiveProject": "Archive {{name}}",
+    "openFinance": "Open finance",
+    "restore": "Restore",
+    "retry": "Try again",
+    "reload": "Reload data",
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save project",
+    "saving": "Saving…"
+  },
+  "errors": {
+    "load": "Projects could not be loaded.",
+    "save": "The project could not be saved.",
+    "archive": "The project could not be archived.",
+    "forbidden": "Your account is not allowed to change projects.",
+    "conflict": "This project changed in another session. Reload the data; your draft was preserved.",
+    "conflictReload": "The project changed in another session. The latest data was loaded."
+  }
+}

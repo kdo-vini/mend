@@ -1,0 +1,64 @@
+{
+  "eyebrow": "Workspace Diagium",
+  "title": "Projetos",
+  "description": "Organize os produtos da Diagium e acompanhe o financeiro de cada um.",
+  "loading": "Carregando projetos…",
+  "active": {
+    "title": "Em operação",
+    "description": "Projetos ativos e seus dados financeiros.",
+    "empty": "Nenhum projeto ativo no momento."
+  },
+  "archived": {
+    "title": "Arquivados",
+    "description": "Projetos fora de operação, preservados para consulta."
+  },
+  "status": {
+    "active": "Ativo",
+    "archived": "Arquivado"
+  },
+  "card": {
+    "noDescription": "Sem descrição cadastrada."
+  },
+  "fields": {
+    "name": "Nome do projeto",
+    "description": "Descrição",
+    "key": "Identificador financeiro: {{key}} (imutável)"
+  },
+  "editor": {
+    "createTitle": "Novo projeto",
+    "createDescription": "Cadastre um projeto para acompanhar suas receitas e despesas separadamente.",
+    "editTitle": "Editar projeto",
+    "editDescription": "Atualize os dados de identificação do projeto. O identificador financeiro não muda."
+  },
+  "empty": {
+    "title": "Nenhum projeto cadastrado",
+    "description": "Crie o primeiro projeto para organizar a operação e separar seu financeiro."
+  },
+  "archive": {
+    "title": "Arquivar {{name}}?",
+    "description": "O projeto deixa de aparecer entre os ativos. Seus dados financeiros permanecem disponíveis.",
+    "confirm": "Arquivar projeto"
+  },
+  "actions": {
+    "create": "Novo projeto",
+    "createFirst": "Criar primeiro projeto",
+    "editProject": "Editar {{name}}",
+    "archiveProject": "Arquivar {{name}}",
+    "openFinance": "Abrir financeiro",
+    "restore": "Restaurar",
+    "retry": "Tentar novamente",
+    "reload": "Recarregar dados",
+    "close": "Fechar",
+    "cancel": "Cancelar",
+    "save": "Salvar projeto",
+    "saving": "Salvando…"
+  },
+  "errors": {
+    "load": "Não foi possível carregar os projetos.",
+    "save": "Não foi possível salvar o projeto.",
+    "archive": "Não foi possível arquivar o projeto.",
+    "forbidden": "Sua conta não tem permissão para alterar projetos.",
+    "conflict": "Este projeto foi alterado em outra sessão. Recarregue os dados; seu rascunho foi preservado.",
+    "conflictReload": "O projeto mudou em outra sessão. Os dados mais recentes foram carregados."
+  }
+}

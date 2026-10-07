@@ -13,6 +13,7 @@ import {
   vi,
 } from "vitest";
 import i18n from "../../i18n";
+import { MemoryRouter } from "react-router-dom";
 import type { FinanceRecord } from "./api";
 import {
   editDraft,
@@ -64,7 +65,13 @@ const labels = () =>
     label.textContent?.trim(),
   );
 const render = async (editor: DraftEditor) =>
-  act(async () => root.render(<FinanceForm editor={editor} />));
+  act(async () =>
+    root.render(
+      <MemoryRouter>
+        <FinanceForm editor={editor} />
+      </MemoryRouter>,
+    ),
+  );
 
 describe("finance forms", () => {
   beforeAll(async () => {

@@ -1,4 +1,6 @@
 import commonEn from "./locales/en-US/common.json";
+import projectsEn from "./locales/en-US/projects.json";
+import projectsPt from "./locales/pt-BR/projects.json";
 import authEn from "./locales/en-US/auth.json";
 import inboxEn from "./locales/en-US/inbox.json";
 import issuesEn from "./locales/en-US/issues.json";
@@ -23,6 +25,7 @@ import kanbanPt from "./locales/pt-BR/kanban.json";
 
 export const resources = {
   "en-US": {
+    projects: projectsEn,
     common: commonEn,
     auth: authEn,
     inbox: inboxEn,
@@ -36,6 +39,7 @@ export const resources = {
     kanban: kanbanEn,
   },
   "pt-BR": {
+    projects: projectsPt,
     common: commonPt,
     auth: authPt,
     inbox: inboxPt,

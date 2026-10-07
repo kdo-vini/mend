@@ -1457,6 +1457,7 @@ describe("financial authorization boundary", () => {
       "2026-10-01",
       50,
       "unknown",
+      undefined,
     );
     for (const invalid of [
       endpoint.replace("unknown", "all"),
@@ -1606,5 +1607,109 @@ describe("financial authorization boundary", () => {
       ).status,
     ).toBe(400);
     expect(dependencies.finance.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("projects and provider balance boundaries", () => {
+  const project = {
+    id: issueId,
+    key: "Zelo",
+    name: "Zelo",
+    description: "",
+    status: "active",
+  };
+  it("requires membership for project reads and a write grant for changes", async () => {
+    const d = createFakeDependencies();
+    d.projects = {
+      list: vi.fn(async () => []),
+      save: vi.fn(async () => project),
+    };
+    d.membership.getMembership = vi.fn(async () => ({
+      workspaceId,
+      role: "agent" as const,
+    }));
+    const app = makeApp(d);
+    expect((await request(app).get("/api/projects")).status).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post("/api/projects")
+          .send({ record: project, version: null })
+      ).status,
+    ).toBe(403);
+    expect(d.projects.save).not.toHaveBeenCalled();
+    d.membership.getMembership = vi.fn(async () => ({
+      workspaceId,
+      role: "admin" as const,
+    }));
+    expect(
+      (
+        await request(app)
+          .post("/api/projects")
+          .send({ record: project, version: null })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post("/api/projects")
+          .send({
+            record: { ...project, workspace_id: otherWorkspaceId },
+            version: null,
+          })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .post("/api/projects")
+          .send({ record: { ...project, version: 1 }, version: 1 })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .get("/api/projects")
+          .set("x-mend-workspace-id", otherWorkspaceId)
+      ).status,
+    ).toBe(404);
+    expect(d.projects.save).toHaveBeenCalledTimes(1);
+    d.auth.authenticate = vi.fn(async () => null);
+    expect((await request(app).get("/api/projects")).status).toBe(401);
+    expect(d.projects.list).toHaveBeenCalledTimes(1);
+  });
+  it("authorizes balances before any provider request, including revocation", async () => {
+    const d = createFakeDependencies();
+    let allowed = true;
+    d.finance = {
+      allowed: vi.fn(async () => allowed),
+    } as unknown as FinancePort;
+    d.providerBalances = {
+      load: vi.fn(
+        async () =>
+          ({ checkedAt: "2026-10-06T12:00:00Z", providers: {} }) as never,
+      ),
+    };
+    const app = makeApp(d);
+    const response = await request(app).get("/api/finance/provider-balances");
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    allowed = false;
+    expect(
+      (await request(app).get("/api/finance/provider-balances")).status,
+    ).toBe(403);
+    allowed = true;
+    expect(
+      (
+        await request(app)
+          .get("/api/finance/provider-balances")
+          .set("x-mend-workspace-id", otherWorkspaceId)
+      ).status,
+    ).toBe(404);
+    d.auth.authenticate = vi.fn(async () => null);
+    expect(
+      (await request(app).get("/api/finance/provider-balances")).status,
+    ).toBe(401);
+    expect(d.providerBalances.load).toHaveBeenCalledTimes(1);
   });
 });

@@ -12,8 +12,9 @@ density of Inbox, Issues, Settings and Finance. The approved prototype is a visu
 reference, not a replacement data model. Never ship its synthetic records,
 demonstration controls, fake agent suggestions or invented financial charts.
 
-Finance belongs exclusively in Finance. Dashboard provides operational navigation.
-Diagium and Zelo retain separate data and totals. Existing authorization, bridge,
+Finance belongs exclusively in Finance. Dashboard resumes real operational work.
+Diagium is the company; Zelo is one of its projects. Projects have their own
+sidebar page and link to filtered Finance views. Existing authorization, bridge,
 mutations, error states, drafts and audit contracts remain intact.
 
 ## Typography
@@ -77,5 +78,17 @@ overflow at 390px. Respect persisted theme and language settings.
    rendered screenshots. For this delivery Vinicius waived the independent QA
    gate and requested Luna implementation assistance with final review by Tibo.
 
-No schema migrations, new services, production data changes or speculative
-financial aggregation belong to this visual implementation.
+The subsequent user-approved scope adds the project catalog migration, explicit
+financial deletion controls (audited cancellation), and read-only provider fees,
+balances and payouts. See the project/finance contract in the engineering docs.
+Never infer missing fees or bank arrival dates. Provider balances are not revenue.
+
+## Project and media extensions
+
+Projects use the same page header and opaque cards, with proportional headings,
+an inline editor, native confirmation dialog for archiving and direct Finance
+links. Archived projects retain historical financial references.
+
+Voice notes use a compact wave timeline, circular play/pause button, elapsed
+time and an accessible seek range. Wave bars are decorative; their progress
+follows the actual audio clock. Preserve message transcripts and error states.

@@ -1,4 +1,6 @@
-import { useId, useState } from "react";
+import { useContext, useId, useState } from "react";
+import { Link } from "react-router-dom";
+import { ProjectCatalogContext } from "../../../projects/ProjectCatalogContext";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { needsProject, textValue as text } from "../../model";
@@ -13,6 +15,7 @@ export function CostDetails({ editor }: { editor: DraftEditor }) {
   const { t } = useTranslation("common");
   const id = useId();
   const { record } = editor.draft;
+  const projects = useContext(ProjectCatalogContext);
   const required = needsProject(record);
   const hasData = Boolean(text(record.project) || text(record.allocation));
   const [open, setOpen] = useState(hasData);
@@ -33,17 +36,36 @@ export function CostDetails({ editor }: { editor: DraftEditor }) {
       </button>
       {expanded && (
         <div id={id} className="finance-form-grid">
-          <TextField
-            label={t("finance.fields.project")}
-            value={text(record.project)}
-            required={required}
-            hint={
-              required
-                ? t("finance.form.projectRequired")
-                : t("finance.form.projectHint")
-            }
-            onChange={(value) => editor.update("project", value)}
-          />
+          <div className="finance-field">
+            <label htmlFor={`${id}-project`}>
+              {t("finance.fields.project")}
+            </label>
+            <select
+              id={`${id}-project`}
+              value={text(record.project)}
+              required={required}
+              onChange={(event) => editor.update("project", event.target.value)}
+            >
+              <option value="">{t("finance.generalCosts")}</option>
+              {projects
+                .filter(
+                  (item) =>
+                    item.status === "active" || item.key === record.project,
+                )
+                .map((item) => (
+                  <option key={item.id} value={item.key}>
+                    {item.name}
+                  </option>
+                ))}
+              {record.project &&
+                !projects.some((item) => item.key === record.project) && (
+                  <option value={text(record.project)}>
+                    {text(record.project)}
+                  </option>
+                )}
+            </select>
+            <Link to="/projects">{t("finance.manageProjects")}</Link>
+          </div>
           <TextField
             label={t("finance.fields.allocation")}
             value={text(record.allocation)}

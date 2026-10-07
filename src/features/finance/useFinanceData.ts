@@ -30,7 +30,9 @@ const listKey = (
   period: string,
   offset: number,
   attention?: FinanceAttentionFilter,
-) => `${entity}|${period}|${offset}${attention ? `|${attention}` : ""}`;
+  project?: string,
+) =>
+  `${entity}|${period}|${offset}${attention || project !== undefined ? `|${attention ?? ""}` : ""}${project !== undefined ? `|${encodeURIComponent(project)}` : ""}`;
 
 /**
  * Loads finance data for a mounted page or dashboard block.
@@ -50,16 +52,19 @@ export function useFinanceData({
   offset,
   enabled = true,
   attention,
+  project,
 }: {
   period: string;
   entity: FinanceEntity | null;
   offset: number;
   enabled?: boolean;
   attention?: FinanceAttentionFilter;
+  project?: string;
 }) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [summary, setSummary] = useState<{
     period: string;
+    project?: string;
     data: FinanceSummary;
   } | null>(null);
   const [list, setList] = useState<FinanceList | null>(null);
@@ -103,15 +108,19 @@ export function useFinanceData({
     if (!allowed || !enabled) return;
     let active = true;
     const scope = financeCache.scope();
-    const cached = financeCache.summary(period);
-    if (cached) setSummary({ period, data: cached });
+    const summaryKey =
+      project === undefined
+        ? period
+        : `${period}|${encodeURIComponent(project)}`;
+    const cached = financeCache.summary(summaryKey);
+    if (cached) setSummary({ period, project, data: cached });
     setPending((current) => ({ ...current, summary: true }));
     financeApi
-      .summary(period)
+      .summary(period, project)
       .then((data) => {
         if (!active || !financeCache.isCurrent(scope)) return;
-        financeCache.setSummary(period, data, scope);
-        setSummary({ period, data });
+        financeCache.setSummary(summaryKey, data, scope);
+        setSummary({ period, project, data });
         setError(null);
       })
       .catch(
@@ -124,18 +133,18 @@ export function useFinanceData({
     return () => {
       active = false;
     };
-  }, [allowed, enabled, period, revision, handleError]);
+  }, [allowed, enabled, period, project, revision, handleError]);
 
   useEffect(() => {
     if (!allowed || !entity || !enabled) return;
     let active = true;
     const scope = financeCache.scope();
-    const key = listKey(entity, period, offset, attention);
+    const key = listKey(entity, period, offset, attention, project);
     const cached = financeCache.list(key);
     if (cached) setList(cached);
     setPending((current) => ({ ...current, list: true }));
     financeApi
-      .list(entity, period, offset, attention)
+      .list(entity, period, offset, attention, project)
       .then((response) => {
         if (!active || !financeCache.isCurrent(scope)) return;
         const next = { key, ...response };
@@ -159,6 +168,7 @@ export function useFinanceData({
     period,
     offset,
     attention,
+    project,
     revision,
     handleError,
   ]);
@@ -177,10 +187,14 @@ export function useFinanceData({
 
   return {
     allowed,
-    summary,
-    list,
+    summary: summary?.project === project ? summary : null,
+    list:
+      list?.key.split("|")[4] ===
+      (project === undefined ? undefined : encodeURIComponent(project))
+        ? list
+        : null,
     requestedListKey: entity
-      ? listKey(entity, period, offset, attention)
+      ? listKey(entity, period, offset, attention, project)
       : null,
     pending,
     error,

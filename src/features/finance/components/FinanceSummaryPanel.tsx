@@ -1,5 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ArrowDownLeft,
+  ArrowUpRight,
+} from "lucide-react";
 import type { FinanceSummary } from "../api";
 import { coverageGaps } from "../model";
 import { useFinanceFormat } from "../format";
@@ -44,45 +49,99 @@ export function FinanceSummaryPanel({
   const month = format.month(period);
   return (
     <section
-      className="finance-summary"
+      className={`finance-summary${!showCoverage ? " finance-summary-hero" : ""}`}
       aria-label={t("finance.summaryLabel", { month })}
       aria-busy={refreshing || undefined}
       data-refreshing={refreshing || undefined}
     >
-      <div className="finance-metrics">
-        <section className="finance-metric-group">
-          <header>
-            <h2>{t("finance.accrual.title")}</h2>
-            <p>{t("finance.accrual.hint", { month })}</p>
-          </header>
-          <dl>
-            <Metric label={t("finance.income")} cents={summary.income} />
-            <Metric label={t("finance.expenses")} cents={summary.expenses} />
-            <Metric
-              label={t("finance.result")}
-              cents={result}
-              tone={result < 0 ? "negative" : undefined}
-            />
-          </dl>
-        </section>
-        <section className="finance-metric-group">
-          <header>
+      {!showCoverage ? (
+        <>
+          <div className="finance-hero-content">
+            <header className="finance-hero-header">
+              <h2>{t("finance.result")}</h2>
+              <span
+                className="finance-hero-status"
+                data-state={gaps.length ? "partial" : "complete"}
+              >
+                {gaps.length ? (
+                  <AlertTriangle size={13} aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 size={13} aria-hidden="true" />
+                )}
+                {t(gaps.length ? "finance.partial" : "finance.complete")}
+              </span>
+            </header>
+            <dl className="finance-hero-result">
+              <Metric
+                label={t("finance.result")}
+                cents={result}
+                tone={result < 0 ? "negative" : undefined}
+              />
+            </dl>
+            <p className="finance-hero-description">
+              {t("finance.accrual.hint", { month })}
+            </p>
+            <dl className="finance-hero-split">
+              <div>
+                <span className="finance-hero-icon">
+                  <ArrowDownLeft size={19} aria-hidden="true" />
+                </span>
+                <Metric label={t("finance.income")} cents={summary.income} />
+              </div>
+              <div>
+                <span className="finance-hero-icon outgoing">
+                  <ArrowUpRight size={19} aria-hidden="true" />
+                </span>
+                <Metric
+                  label={t("finance.expenses")}
+                  cents={summary.expenses}
+                />
+              </div>
+            </dl>
+          </div>
+          <section
+            className="finance-hero-cash"
+            aria-label={t("finance.cash.hint", { month })}
+          >
             <h2>{t("finance.cash.title")}</h2>
-            <p>{t("finance.cash.hint", { month })}</p>
-          </header>
-          <dl>
-            <Metric label={t("finance.received")} cents={summary.received} />
-            <Metric label={t("finance.paid")} cents={summary.paid} />
-          </dl>
-        </section>
-      </div>
-      {!showCoverage && (
-        <p
-          className="finance-summary-validity"
-          data-state={gaps.length ? "partial" : "complete"}
-        >
-          {t(gaps.length ? "finance.partial" : "finance.complete")}
-        </p>
+            <dl>
+              <Metric label={t("finance.received")} cents={summary.received} />
+              <Metric label={t("finance.paid")} cents={summary.paid} />
+              <Metric
+                label={t("finance.netMovement")}
+                cents={summary.received - summary.paid}
+              />
+            </dl>
+          </section>
+        </>
+      ) : (
+        <div className="finance-metrics">
+          <section className="finance-metric-group">
+            <header>
+              <h2>{t("finance.accrual.title")}</h2>
+              <p>{t("finance.accrual.hint", { month })}</p>
+            </header>
+            <dl>
+              <Metric label={t("finance.income")} cents={summary.income} />
+              <Metric label={t("finance.expenses")} cents={summary.expenses} />
+              <Metric
+                label={t("finance.result")}
+                cents={result}
+                tone={result < 0 ? "negative" : undefined}
+              />
+            </dl>
+          </section>
+          <section className="finance-metric-group">
+            <header>
+              <h2>{t("finance.cash.title")}</h2>
+              <p>{t("finance.cash.hint", { month })}</p>
+            </header>
+            <dl>
+              <Metric label={t("finance.received")} cents={summary.received} />
+              <Metric label={t("finance.paid")} cents={summary.paid} />
+            </dl>
+          </section>
+        </div>
       )}
       {showCoverage && (
         <div

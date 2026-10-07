@@ -101,7 +101,8 @@
     "unread_other": "{{count}} não lidas",
     "shortcutCommand": "⌘ K",
     "dashboard": "Dashboard",
-    "finance": "Financeiro"
+    "finance": "Financeiro",
+    "projects": "Projetos"
   },
   "app": {
     "currentOperator": "Operador atual",
@@ -179,6 +180,16 @@
     "deleteIssueConfirm": "Excluir chamado"
   },
   "dashboard": {
+    "startHere": "Seu ponto de partida para a operação.",
+    "welcome": "Bem-vindo ao Mend",
+    "greeting": "Bom trabalho, {{name}}.",
+    "operationDescription": "Conversas, chamados e conexões em um só lugar. Retome o atendimento ou acompanhe o que está em andamento.",
+    "resume": "Retome de onde parou",
+    "resumeDescription": "Chamados ativos, a partir dos atualizados mais recentemente.",
+    "viewIssues": "Ver chamados",
+    "open": "Abrir",
+    "openIssue": "Abrir chamado: {{title}}",
+    "noActiveIssues": "Nenhum chamado ativo para retomar.",
     "title": "Dashboard Diagium",
     "description": "Operação interna da Diagium em um único espaço.",
     "signedIn": "{{name}} · {{email}}",
@@ -195,6 +206,31 @@
     "shortcuts": "Atalhos"
   },
   "finance": {
+    "projectFilter": "Projeto",
+    "allProjects": "Todos os projetos · Diagium",
+    "generalCosts": "Geral · sem projeto",
+    "manageProjects": "Gerenciar projetos",
+    "manualEntries": "Lançamentos manuais",
+    "automaticIncome": "Receitas automáticas · Zelo",
+    "providerBalances": {
+      "netUnconfirmed": "Valor solicitado; líquido do repasse não confirmado.",
+      "title": "Saldos e próximos repasses",
+      "scope": "Saldo atual da conta inteira de cada provedor. Não é faturamento do mês e não é somado aos recebimentos.",
+      "available": "Disponível",
+      "pending": "A liberar",
+      "payouts": "Repasses em andamento",
+      "arrival": "Previsão na conta: {{date}}",
+      "noDate": "Data de chegada não informada pelo provedor",
+      "noPayouts": "Nenhum repasse em andamento informado.",
+      "unknown": "Informação não disponível",
+      "fee": "Taxa informada: {{amount}}",
+      "failed": "Não foi possível consultar os saldos. Tente atualizar."
+    },
+    "remove": "Excluir",
+    "removeTitle": "Excluir lançamento",
+    "removeConfirm": "Confirmar exclusão",
+    "removeHint": "O registro será cancelado e deixará de compor os totais. Seu histórico será preservado. Pagamentos vinculados devem ser excluídos separadamente em Movimentações de caixa.",
+    "netMovement": "Movimento líquido",
     "title": "Financeiro Diagium",
     "overview": "Resumo financeiro",
     "description": "Competência e caixa da operação Diagium, em reais.",
@@ -450,6 +486,11 @@
       "zelo": "Zelo"
     },
     "zelo": {
+      "net": {
+        "label": "Recebimento líquido confirmado",
+        "hint_one": "Após taxas de pagamento informadas. {{count}} pagamento sem líquido confirmado. Taxas de repasse, estornos e disputas podem exigir conciliação.",
+        "hint_other": "Após taxas de pagamento informadas. {{count}} pagamentos sem líquido confirmado. Taxas de repasse, estornos e disputas podem exigir conciliação."
+      },
       "title": "Financeiro Zelo",
       "description": "Cobranças e recebimentos do Zelo no AbacatePay e na Stripe, somente leitura.",
       "loading": "Carregando números do Zelo…",
@@ -459,7 +500,7 @@
       "checkedAt": "Consultado em {{time}}",
       "showingOther": "Exibindo {{shown}} enquanto {{month}} carrega",
       "staleFailed": "Exibindo {{shown}}; não foi possível carregar {{month}}",
-      "note": "Os números do Zelo ficam separados da Diagium e nunca entram nos totais dela. Valores recebidos são brutos: taxas dos provedores e reembolsos não são descontados. As fontes podem estar parciais.",
+      "note": "Receitas do projeto Zelo, produto da Diagium. Valores automáticos são identificados por provedor e não criam lançamentos manuais duplicados. Líquido desconhecido não é substituído pelo bruto.",
       "summaryLabel": "Números do Zelo em {{month}}",
       "sources": {
         "label": "Fontes"
@@ -505,6 +546,9 @@
       "table": {
         "columns": {
           "charge": "ID da cobrança",
+          "fee": "Taxa",
+          "net": "Líquido",
+          "available": "Disponível no provedor",
           "source": "Fonte",
           "status": "Situação",
           "created": "Criada em",
@@ -539,7 +583,12 @@
         "description": "O Mend não conseguiu consultar os provedores de pagamento. Nada foi alterado; tente novamente.",
         "refresh": "Não foi possível carregar os números mais recentes do Zelo. Exibindo os números consultados em {{time}}."
       },
-      "pagination": "Página {{page}} de {{total}}"
+      "pagination": "Página {{page}} de {{total}}",
+      "rollup": {
+        "title": "Recebimentos apurados · projetos selecionados",
+        "detail": "{{manual}} registrados manualmente + {{automatic}} líquidos do Zelo",
+        "hint": "Em reais, após as taxas de pagamento conhecidas. Valores sem líquido confirmado ficam fora; cobertura parcial, estornos e taxas de repasse exigem conciliação. Saldos e repasses não são somados novamente."
+      }
     },
     "pending": {
       "resolveUnknown": "Revisar valores ausentes",
@@ -566,6 +615,7 @@
         "unknown": "Preencha os valores para que entrem no resultado do mês.",
         "references": "Confira os pagamentos e adicione a referência que comprova cada um."
       }
-    }
+    },
+    "projectsUnavailable": "Não foi possível carregar o cadastro de projetos."
   }
 }

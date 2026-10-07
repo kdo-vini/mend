@@ -1,0 +1,237 @@
+/* Inbox composition from mend-financeiro-conceito.html, mapped to live app UI. */
+.app-shell .inbox-page {
+  padding: 25px 27px 27px;
+}
+
+.app-shell .inbox-toolbar {
+  gap: 15px;
+  margin-bottom: 23px;
+}
+
+.app-shell .inbox-toolbar h1 {
+  font-size: 27px;
+  letter-spacing: -0.03em;
+}
+
+.app-shell .inbox-toolbar .toolbar-actions {
+  gap: 8px;
+}
+
+.app-shell .inbox-layout {
+  grid-template-columns: var(--inbox-rail-width, 250px) minmax(0, 1fr) 235px;
+  height: calc(100dvh - 139px);
+  min-height: 550px;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.app-shell .conversation-rail {
+  min-width: 0;
+  padding: 16px 12px;
+}
+
+.app-shell .rail-heading {
+  min-height: 20px;
+  margin-bottom: 16px;
+  padding: 0 3px;
+}
+
+.app-shell .search-field {
+  height: 34px;
+  margin: 0 0 11px;
+  border-radius: 9px;
+}
+
+.app-shell .conversation-list {
+  margin-inline: -12px;
+  border-top: 1px solid var(--line);
+}
+
+.app-shell .conversation-row {
+  width: calc(100% - 16px);
+  margin: 4px 8px;
+  border: 0;
+  border-radius: 12px;
+}
+
+.app-shell .conversation-row-hit {
+  gap: 10px;
+  padding: 14px 6px 14px 10px;
+}
+
+.app-shell .conversation-row-actions {
+  padding: 12px 8px 0 0;
+}
+
+.app-shell .conversation-row.selected {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.app-shell .conversation-panel {
+  background: color-mix(in oklch, var(--surface) 70%, var(--bg));
+}
+
+.app-shell .conversation-header {
+  min-height: 72px;
+  padding: 13px 18px;
+  gap: 12px;
+}
+
+.app-shell .conversation-identity {
+  flex-basis: 170px;
+}
+
+.app-shell .conversation-controls {
+  flex-basis: 220px;
+  gap: 7px;
+}
+
+.app-shell .conversation-controls > .menu-wrap {
+  min-width: 0;
+}
+
+.app-shell .conversation-assignee {
+  min-height: 34px;
+  border-radius: 10px;
+}
+
+.app-shell .conversation-ai-toggle {
+  min-height: 34px;
+  border-radius: 10px;
+}
+
+.app-shell .message-canvas {
+  padding: 22px;
+}
+
+.app-shell .message-row {
+  max-width: min(88%, 620px);
+  margin-bottom: 16px;
+}
+
+.app-shell .day-divider {
+  margin-bottom: 20px;
+}
+
+.app-shell .issue-event {
+  width: 100%;
+  margin-top: 29px;
+  margin-bottom: 2px;
+  padding: 12px;
+  border-radius: 15px;
+}
+
+.app-shell .issue-event > span:nth-child(2) {
+  width: 0;
+}
+
+.app-shell .composer {
+  margin: 0 15px 15px;
+  padding: 14px 18px;
+  border-radius: 12px;
+}
+
+.app-shell .composer-toolbar {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.app-shell .composer textarea {
+  min-height: 60px;
+}
+
+.app-shell .inbox-case-context {
+  border-left-color: var(--line);
+  background: var(--surface);
+}
+
+.app-shell .inbox-case-context-header {
+  min-height: 71px;
+  padding: 16px;
+}
+
+.app-shell .inbox-case-context-header h2 {
+  margin-top: 8px;
+  font-size: 15px;
+}
+
+.app-shell .inbox-case-next-action {
+  margin: 16px;
+  padding: 12px;
+  border-radius: 15px;
+}
+
+.app-shell .inbox-linked-case {
+  gap: 8px;
+  margin: 0 16px 16px;
+  padding: 15px;
+  border-radius: 15px;
+}
+
+.app-shell .inbox-linked-case > strong {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1279px) {
+  .app-shell .inbox-layout {
+    grid-template-columns: var(--inbox-rail-width, 260px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .app-shell .inbox-page {
+    padding: 16px 13px;
+  }
+
+  .app-shell .inbox-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-bottom: 18px;
+  }
+
+  .app-shell .inbox-toolbar .toolbar-actions {
+    width: 100%;
+  }
+
+  .app-shell .inbox-layout {
+    height: calc(100dvh - 210px);
+    min-height: 500px;
+  }
+
+  .app-shell .conversation-rail {
+    padding: 16px 12px;
+  }
+
+  .app-shell .conversation-header {
+    padding: 13px;
+  }
+
+  .app-shell .message-canvas {
+    padding: 15px;
+  }
+
+  .app-shell .composer {
+    margin: 0 8px 8px;
+    padding: 12px 14px;
+  }
+
+  .app-shell .composer textarea {
+    min-height: 44px;
+  }
+
+  .app-shell .composer-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 650px) {
+  .app-shell .inbox-layout,
+  .app-shell .inbox-layout.mobile-conversation-open {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+}

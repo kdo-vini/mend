@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Link, useSearchParams } from "react-router-dom";
+import { projectsApi, type Project } from "../projects/api";
+import { ProjectCatalogContext } from "../projects/ProjectCatalogContext";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -43,27 +46,30 @@ import { HistoryPanel } from "./components/HistoryPanel";
 import { LedgerTable, type LedgerAction } from "./components/LedgerTable";
 import { ZeloFinancePanel } from "./components/ZeloFinancePanel";
 import { FinanceAttention } from "./components/FinanceAttention";
-
-type Business = "diagium" | "zelo";
+import { ProviderBalancesPanel } from "./components/ProviderBalancesPanel";
 
 /**
  * Diagium finance: month navigation, grouped accrual/cash figures, the ledger
  * views and one contextual panel (form or history). Domain forms, the table
  * and data loading live in their own modules; this page only orchestrates.
  *
- * The Business switch shows the read-only Zelo payments instead. The Diagium
- * body is only hidden meanwhile, so an open draft survives the round trip.
+ * Diagium owns the projects. Provider receipts belong to Zelo and remain
+ * read-only alongside manual project records, without importing duplicates.
  */
 export function FinancePage() {
   const { t } = useTranslation("common");
   const format = useFinanceFormat();
-  const [business, setBusiness] = useState<Business>("diagium");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const project = searchParams.get("project") ?? undefined;
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsFailed, setProjectsFailed] = useState(false);
   const [month, setMonth] = useState(currentMonth);
   const [view, setView] = useState<LedgerView>("entries");
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState("");
   const [attention, setAttention] = useState<FinanceAttentionFilter>();
   const [history, setHistory] = useState<FinanceRecord | null>(null);
+  const [removing, setRemoving] = useState(false);
   const [notice, setNotice] = useState("");
   const [generating, setGenerating] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -72,7 +78,7 @@ export function FinancePage() {
     period,
     entity: view,
     offset,
-    enabled: business === "diagium",
+    project,
     attention,
   });
   const { revoke, invalidate } = data;
@@ -93,8 +99,26 @@ export function FinancePage() {
     if (data.allowed !== false) return;
     closeEditor();
     setHistory(null);
-    setBusiness("diagium");
   }, [data.allowed, closeEditor]);
+  useEffect(() => {
+    if (!data.allowed) return;
+    let active = true;
+    setProjectsFailed(false);
+    projectsApi
+      .list()
+      .then(({ data }) => {
+        if (active) setProjects(data);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setProjects([]);
+        if (isForbidden(error)) revoke();
+        else setProjectsFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [data.allowed, revoke]);
 
   useEffect(() => {
     if (!notice) return;
@@ -105,6 +129,7 @@ export function FinancePage() {
   const openDraft = (draft: FinanceDraft) => {
     setHistory(null);
     setNotice("");
+    setRemoving(false);
     editor.open(draft);
   };
 
@@ -122,7 +147,14 @@ export function FinancePage() {
   };
 
   const onRowAction = (action: LedgerAction, row: FinanceRecord) => {
-    if (action === "history") {
+    if (action === "remove" && (view === "entries" || view === "settlements")) {
+      const draft = editDraft(view, row);
+      openDraft({
+        ...draft,
+        record: { ...draft.record, cancelled: true, reason: "" },
+      });
+      setRemoving(true);
+    } else if (action === "history") {
       editor.close();
       setHistory(row);
     } else if (action === "edit") openDraft(editDraft(view, row));
@@ -176,7 +208,7 @@ export function FinancePage() {
   const listForView =
     data.list &&
     data.list.key.split("|")[0] === view &&
-    data.list.key.split("|")[3] === attention
+    (data.list.key.split("|")[3] || undefined) === attention
       ? data.list
       : null;
   const listStale =
@@ -184,40 +216,64 @@ export function FinancePage() {
   const rows = listForView?.data.filter((row) => matchesFilter(row, filter));
   const busy = editor.busy || generating;
   const loadError = data.error;
-  const isZelo = allowed === true && business === "zelo";
+  const showProviderIncome =
+    allowed === true && (project === undefined || project === "Zelo");
 
   return (
     <section className="page finance-page">
       <PageHeader
-        title={isZelo ? t("finance.zelo.title") : t("finance.title")}
-        description={
-          isZelo ? t("finance.zelo.description") : t("finance.description")
-        }
+        title={t("finance.title")}
+        description={t("finance.description")}
         actions={
           allowed ? (
             <>
               <label className="finance-business">
-                <span>{t("finance.business.label")}</span>
+                <span>{t("finance.projectFilter")}</span>
                 <select
-                  value={business}
+                  value={project ?? "__all"}
                   disabled={busy}
-                  onChange={(event) =>
-                    setBusiness(event.target.value as Business)
-                  }
+                  onChange={(event) => {
+                    const next = new URLSearchParams(searchParams);
+                    if (event.target.value === "__all") next.delete("project");
+                    else next.set("project", event.target.value);
+                    setSearchParams(next);
+                    setOffset(0);
+                    setHistory(null);
+                  }}
                 >
-                  <option value="diagium">
-                    {t("finance.business.diagium")}
-                  </option>
-                  <option value="zelo">{t("finance.business.zelo")}</option>
+                  <option value="__all">{t("finance.allProjects")}</option>
+                  <option value="">{t("finance.generalCosts")}</option>
+                  {!projects.some((item) => item.key === "Zelo") && (
+                    <option value="Zelo">{t("finance.business.zelo")}</option>
+                  )}
+                  {projects.map((item) => (
+                    <option key={item.id} value={item.key}>
+                      {item.name}
+                    </option>
+                  ))}
+                  {project &&
+                    project !== "Zelo" &&
+                    !projects.some((item) => item.key === project) && (
+                      <option value={project}>{project}</option>
+                    )}
                 </select>
               </label>
-              {!isZelo && (
+              <Link to="/projects" className="button button-ghost">
+                {t("finance.manageProjects")}
+              </Link>
+              {
                 <>
                   <button
                     type="button"
                     className="button button-ghost finance-new"
                     disabled={busy}
-                    onClick={() => openDraft(newEntryDraft("income", period))}
+                    onClick={() => {
+                      const draft = newEntryDraft("income", period);
+                      openDraft({
+                        ...draft,
+                        record: { ...draft.record, project: project ?? "" },
+                      });
+                    }}
                   >
                     <ArrowDownLeft size={14} aria-hidden="true" />
                     {t("finance.newIncome")}
@@ -226,19 +282,25 @@ export function FinancePage() {
                     type="button"
                     className="button button-primary finance-new"
                     disabled={busy}
-                    onClick={() => openDraft(newEntryDraft("expense", period))}
+                    onClick={() => {
+                      const draft = newEntryDraft("expense", period);
+                      openDraft({
+                        ...draft,
+                        record: { ...draft.record, project: project ?? "" },
+                      });
+                    }}
                   >
                     <ArrowUpRight size={14} aria-hidden="true" />
                     {t("finance.newExpense")}
                   </button>
                 </>
-              )}
+              }
             </>
           ) : undefined
         }
       />
 
-      {loadError && allowed !== false && !isZelo ? (
+      {loadError && allowed !== false ? (
         <ErrorState
           title={t("finance.errors.loadTitle")}
           description={t("finance.errors.load")}
@@ -258,16 +320,14 @@ export function FinancePage() {
 
       {allowed === null && !loadError && <FinanceSummarySkeleton />}
 
-      {isZelo && (
-        <ZeloFinancePanel
-          month={month}
-          onMonthChange={changeMonth}
-          onForbidden={revoke}
-        />
-      )}
-
       {allowed && (
-        <div className="finance-diagium" hidden={isZelo}>
+        <div className="finance-diagium">
+          {projectsFailed && (
+            <p role="alert">
+              {t("finance.projectsUnavailable")}{" "}
+              <Link to="/projects">{t("finance.manageProjects")}</Link>
+            </p>
+          )}
           <div className="finance-period-bar">
             <MonthNavigator month={month} onChange={changeMonth} />
             <p
@@ -292,6 +352,9 @@ export function FinancePage() {
             </p>
           </div>
 
+          <h2 className="finance-section-title">
+            {t("finance.manualEntries")}
+          </h2>
           <div className="finance-overview-grid">
             {summary ? (
               <FinanceSummaryPanel
@@ -327,6 +390,26 @@ export function FinancePage() {
             )}
           </div>
 
+          {showProviderIncome && (
+            <section className="finance-automatic">
+              <h2>{t("finance.automaticIncome")}</h2>
+              <ProviderBalancesPanel onForbidden={revoke} />
+              <ZeloFinancePanel
+                manualReceived={
+                  summary?.period === period &&
+                  !data.pending.summary &&
+                  !loadError
+                    ? summary.data.received
+                    : undefined
+                }
+                month={month}
+                onMonthChange={changeMonth}
+                onForbidden={revoke}
+                embedded
+              />
+            </section>
+          )}
+
           {actionError && (
             <p role="alert" className="finance-form-error">
               {actionError}
@@ -337,7 +420,14 @@ export function FinancePage() {
             className="finance-workspace"
             data-editing={Boolean(editor.draft || history) || undefined}
           >
-            {editor.draft && <FinanceForm editor={editor as DraftEditor} />}
+            {editor.draft && (
+              <ProjectCatalogContext.Provider value={projects}>
+                <FinanceForm
+                  editor={editor as DraftEditor}
+                  removing={removing}
+                />
+              </ProjectCatalogContext.Provider>
+            )}
             {history && !editor.draft && (
               <HistoryPanel
                 recordId={history.id}

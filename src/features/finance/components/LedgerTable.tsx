@@ -6,7 +6,12 @@ import type { FinanceRecord } from "../api";
 import { textValue as text, type LedgerView } from "../model";
 import { useFinanceFormat } from "../format";
 
-export type LedgerAction = "edit" | "settle" | "evidence" | "history";
+export type LedgerAction =
+  | "edit"
+  | "settle"
+  | "evidence"
+  | "history"
+  | "remove";
 
 const columns: Record<LedgerView, string[]> = {
   entries: ["description", "kind", "category", "source", "amount", "actions"],
@@ -243,6 +248,17 @@ function RowActions({
       >
         {t("finance.edit")}
       </button>
+      {canEvidence && !row.cancelled && (
+        <button
+          type="button"
+          className="button button-ghost finance-remove-action"
+          disabled={busy}
+          aria-label={`${t("finance.remove")}: ${name}`}
+          onClick={() => onAction("remove", row)}
+        >
+          {t("finance.remove")}
+        </button>
+      )}
       <ActionMenu label={name}>
         {canEvidence && (
           <button
