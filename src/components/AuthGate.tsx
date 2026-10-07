@@ -592,11 +592,20 @@ function AuthShell({
   return (
     <main className={`auth-shell${shellClassName ? ` ${shellClassName}` : ""}`}>
       <div className="auth-context">
-        <span className="landing-signal">
-          <span /> {t("contextSignal")}
-        </span>
-        <h2>{t("contextTitle")}</h2>
-        <p>{t("contextDescription")}</p>
+        <div className="brand-row auth-context-brand">
+          <BrandMark />
+          <div>
+            <div className="brand-name">{t("brandName")}</div>
+            <div className="brand-subtitle">{t("supportDescriptor")}</div>
+          </div>
+        </div>
+        <div className="auth-context-copy">
+          <span className="landing-signal">
+            <span aria-hidden="true" /> {t("contextSignal")}
+          </span>
+          <h2>{t("contextTitle")}</h2>
+          <p>{t("contextDescription")}</p>
+        </div>
       </div>
       <div className={`auth-card${className ? ` ${className}` : ""}`}>
         <div className="brand-row auth-brand">

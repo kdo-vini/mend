@@ -115,7 +115,6 @@ function ProductWindow() {
       <p id="marketing-playback-description" className="sr-only">
         {t("playback.description")}
       </p>
-      <span className="marketing-playback-cursor" aria-hidden="true" />
       <div className="marketing-browser-bar">
         <span className="marketing-browser-dots" aria-hidden="true">
           <i />
@@ -499,27 +498,28 @@ export function LandingPage() {
       </header>
 
       <section className="marketing-hero" id="product">
-        <div className="marketing-hero-glow" aria-hidden="true" />
-        <div className="marketing-container marketing-hero-inner">
-          <a className="marketing-announcement" href="#design-partners">
-            <span>{t("hero.badge")}</span>
-            {t("hero.announcement")}
-            <ArrowRight size={14} />
-          </a>
-          <h1>
-            <span>{t("hero.titleLead")}</span>
-            <span className="marketing-hero-accent">
-              {t("hero.titleAccent")}
-            </span>
-          </h1>
-          <p>{t("hero.description")}</p>
-          <div className="marketing-hero-actions">
-            <a className="button button-primary" href="/?auth=1">
-              {t("hero.primaryCta")} <ArrowRight size={15} />
+        <div className="marketing-container">
+          <div className="marketing-hero-card">
+            <a className="marketing-announcement" href="#design-partners">
+              <span>{t("hero.badge")}</span>
+              {t("hero.announcement")}
+              <ArrowRight size={14} />
             </a>
-            <a className="button button-secondary" href="#loop">
-              {t("hero.secondaryCta")}
-            </a>
+            <h1>
+              <span>{t("hero.titleLead")}</span>
+              <span className="marketing-hero-accent">
+                {t("hero.titleAccent")}
+              </span>
+            </h1>
+            <p>{t("hero.description")}</p>
+            <div className="marketing-hero-actions">
+              <a className="button button-primary" href="/?auth=1">
+                {t("hero.primaryCta")} <ArrowRight size={15} />
+              </a>
+              <a className="button button-ghost" href="#loop">
+                {t("hero.secondaryCta")}
+              </a>
+            </div>
           </div>
           <ProductWindow />
         </div>
@@ -530,8 +530,8 @@ export function LandingPage() {
         aria-label={t("proof.ariaLabel")}
       >
         <div className="marketing-proof-track">
-          {[...proofItems, ...proofItems].map((item, index) => (
-            <span key={`${item}-${index}`}>
+          {proofItems.map((item) => (
+            <span key={item}>
               <CheckCircle2 size={15} />
               {t(`proof.items.${item}`)}
             </span>
@@ -544,7 +544,7 @@ export function LandingPage() {
           <div className="marketing-section-heading is-centered">
             <h2>{t("capabilities.title")}</h2>
             <p>{t("capabilities.description")}</p>
-            <a className="button button-secondary" href="#loop">
+            <a className="button button-ghost" href="#loop">
               {t("capabilities.cta")} <ArrowRight size={14} />
             </a>
           </div>

@@ -133,10 +133,9 @@ the result card; Zelo totals and provider balances are opaque cards.
 
 ## Pending migration
 
-The public landing (`src/features/marketing`, `marketing.css`) and
-authentication (`auth.css`) still use the retired Solaris stage. They move to
-Céu e Profundo next: a Profundo hero on Céu with a real product screen as proof,
-opaque section cards, and a Profundo closing CTA.
+None for brand: the public landing (`src/features/marketing`, `marketing.css`)
+and authentication (`auth.css`) now follow Céu e Profundo. The Solaris stage and
+its `--marketing-*` palette are removed.
 
 ## Review
 
