@@ -292,38 +292,40 @@ export function FinancePage() {
             </p>
           </div>
 
-          {summary ? (
-            <FinanceSummaryPanel
-              summary={summary.data}
-              period={summary.period}
-              refreshing={summary.period !== period || data.pending.summary}
-              showCoverage={false}
-            />
-          ) : (
-            <FinanceSummarySkeleton />
-          )}
+          <div className="finance-overview-grid">
+            {summary ? (
+              <FinanceSummaryPanel
+                summary={summary.data}
+                period={summary.period}
+                refreshing={summary.period !== period || data.pending.summary}
+                showCoverage={false}
+              />
+            ) : (
+              <FinanceSummarySkeleton />
+            )}
 
-          {summary && (
-            <FinanceAttention
-              summary={summary.data}
-              period={summary.period}
-              disabled={
-                busy || summary.period !== period || data.pending.summary
-              }
-              onReview={() =>
-                openDraft(reviewDraft(period, summary.data.review))
-              }
-              onView={(next) => {
-                changeView(next);
-                document.getElementById(`finance-tab-${next}`)?.focus();
-              }}
-              onResolve={(next) => {
-                changeView("entries");
-                setAttention(next);
-                document.getElementById("finance-tab-entries")?.focus();
-              }}
-            />
-          )}
+            {summary && (
+              <FinanceAttention
+                summary={summary.data}
+                period={summary.period}
+                disabled={
+                  busy || summary.period !== period || data.pending.summary
+                }
+                onReview={() =>
+                  openDraft(reviewDraft(period, summary.data.review))
+                }
+                onView={(next) => {
+                  changeView(next);
+                  document.getElementById(`finance-tab-${next}`)?.focus();
+                }}
+                onResolve={(next) => {
+                  changeView("entries");
+                  setAttention(next);
+                  document.getElementById("finance-tab-entries")?.focus();
+                }}
+              />
+            )}
+          </div>
 
           {actionError && (
             <p role="alert" className="finance-form-error">

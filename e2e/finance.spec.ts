@@ -563,17 +563,17 @@ test("finance keeps accruals and cash distinct, persists entry and respects mont
   ).toBeVisible();
 });
 
-test("home contains monthly financial metrics rather than only navigation", async ({
+test("home keeps finance exclusive to its own route", async ({
   page,
 }, info) => {
   await openFinance(page, "en-US");
   const { calls } = await mockFinance(page);
   await page.goto("/dashboard?demo=1");
-  await expect(page.locator(".finance-panel .finance-metrics")).toBeVisible();
-  await expect(page.locator(".finance-panel input[type=month]")).toBeVisible();
-  await expect(metric(page, "Accrued revenue")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open finance" })).toBeVisible();
-  // The home block reads the summary only; it never lists ledger rows.
+  await expect(page.locator(".dashboard-links")).toBeVisible();
+  await expect(page.locator(".finance-panel")).toHaveCount(0);
+  await expect(page.locator(".finance-metrics")).toHaveCount(0);
+  // Dashboard must not request financial data or require financial permission.
+  expect(calls["GET summary"] ?? 0).toBe(0);
   expect(calls["GET entries"] ?? 0).toBe(0);
   expect(await noOverflow(page)).toBe(false);
   await page.screenshot({
@@ -620,11 +620,13 @@ test("revoked access mid-session removes displayed figures immediately", async (
   await expect(page.getByText(/Finance access is restricted\./)).toBeVisible();
   await expect(page.locator(".finance-metrics")).toHaveCount(0);
   await expect(page.getByText("Hostinger Diagium")).toHaveCount(0);
-  // Cached figures are not reused after revocation on another route either.
+  // Dashboard has no financial surface; returning to Finance stays revoked.
   await page.locator('a[href="/dashboard"]:visible').first().click();
   await expect(
     page.getByRole("heading", { name: "Diagium dashboard", exact: true }),
   ).toBeVisible();
+  await expect(page.locator(".finance-metrics")).toHaveCount(0);
+  await page.goBack();
   await expect(page.getByText(/Finance access is restricted\./)).toBeVisible();
   await expect(page.locator(".finance-metrics")).toHaveCount(0);
 });
@@ -642,7 +644,7 @@ test("returning to finance paints cached figures while revalidating", async ({
   await expect(
     page.getByRole("heading", { name: "Diagium dashboard", exact: true }),
   ).toBeVisible();
-  await expect(metric(page, "Accrued expenses")).toContainText("19.90");
+  await expect(page.locator(".finance-metrics")).toHaveCount(0);
   const accessChecks = calls["GET access"];
   const summaryChecks = calls["GET summary"];
   let release!: () => void;

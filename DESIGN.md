@@ -1,5 +1,15 @@
 # Mend design direction
 
+## Approved workspace redesign (October 2026)
+
+The [Mend design system](docs/design/MEND_DESIGN_SYSTEM.md) is now canonical for
+authenticated workspace color, material, typography and geometry. Vinicius
+approved the interactive prototype across Dashboard, Inbox, Finance, Issues and
+Settings, with proportional Inter typography replacing mono settings labels.
+This explicitly supersedes the older quiet/dark-only and finance-only glass
+restrictions below. Preserve controls, accessibility and real data contracts.
+Financial information appears only in Finance, not the general Dashboard.
+
 ## Finance interaction update (2026-10-06)
 
 Vinicius approved a Liquid Glass inspired finish for the finance workflow.
