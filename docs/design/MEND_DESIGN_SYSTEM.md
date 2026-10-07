@@ -37,7 +37,7 @@ headings are 17px. Monospace belongs only to actual technical identifiers.
 ## Color and material
 
 Light canvas #edf2f7, ink #182d44, muted #52677e, opaque surface #ffffff.
-Dark canvas #101b2a, ink #e1eaf7, muted #a5b6cc, surface #1b2b40.
+Dark canvas #101b2a, ink #e1eaf7, muted #b2c3d9, surface #1b2b40.
 Blue is the action and selection color. Green is verified/success; amber is
 provisional/attention; red is negative/error. Color never replaces labels.
 
@@ -74,7 +74,8 @@ overflow at 390px. Respect persisted theme and language settings.
 4. Verify Inbox controls, Issues list/board, Settings forms and Finance in both
    themes and mobile. Keep all permission/error/pending behavior.
 5. Run typecheck, build, lint, i18n, format, relevant tests and full E2E; inspect
-   rendered screenshots. Independent QA reviews the finished SHA before merge.
+   rendered screenshots. For this delivery Vinicius waived the independent QA
+   gate and requested Luna implementation assistance with final review by Tibo.
 
 No schema migrations, new services, production data changes or speculative
 financial aggregation belong to this visual implementation.

@@ -32,7 +32,12 @@ Focused final E2E: 38 passed, including contrast in both themes, Settings
 typography, financial permission revocation, cached returns and all major screens.
 Full E2E: 194 passed, 10 skipped. After the final Inbox viewport correction,
 18 focused Inbox/workspace scenarios passed, including row bounds on mobile.
-Independent QA is pending and will be recorded in the PR.
+Vinicius waived the independent QA gate for this delivery, requesting Luna
+assistance and final review by Tibo. Luna identified a narrow-desktop linked-card
+overflow and residual small Settings form typography; both are corrected.
+Final follow-up validation: 46 Inbox/Settings/workspace E2E scenarios passed,
+plus four dedicated linked-card/message width regressions. Tibo reviewed the
+Luna changes and rendered evidence; no backend or authorization code changed.
 
 ## Visual evidence
 

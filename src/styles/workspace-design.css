@@ -470,3 +470,36 @@
     background: var(--surface);
   }
 }
+
+/* Settings typography: keep labels and controls readable across all routes. */
+.app-shell .settings-v2-nav-item,
+.app-shell .settings-v2-form-grid label,
+.app-shell .settings-v2-inline-field,
+.app-shell .settings-v2-policy-grid label,
+.app-shell .settings-v2-check-grid legend,
+.app-shell .settings-v2-section-header p,
+.app-shell .settings-v2-row-main span,
+.app-shell .settings-v2-row-main small,
+.app-shell .settings-overview-row-main span,
+.app-shell .settings-v2-audit-row span,
+.app-shell .settings-v2-audit-row time {
+  font-family: var(--font-product);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.app-shell .settings-v2-form-grid input,
+.app-shell .settings-v2-form-grid textarea,
+.app-shell .settings-v2-form-grid select,
+.app-shell .settings-v2-inline-field input {
+  font-family: var(--font-product);
+  font-size: 13px;
+}
+@media (max-width: 650px) {
+  .app-shell .settings-v2-form-grid input,
+  .app-shell .settings-v2-form-grid textarea,
+  .app-shell .settings-v2-form-grid select,
+  .app-shell .settings-v2-inline-field input {
+    font-size: 16px;
+  }
+}
