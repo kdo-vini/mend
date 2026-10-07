@@ -7,6 +7,12 @@ catálogo não substitui os ADRs.
 
 ## Regra principal
 
+O [design system do workspace](../design/MEND_DESIGN_SYSTEM.md) define a direção
+visual aprovada. `src/styles/workspace-design.css` aplica os materiais, fontes e
+hierarquia sobre a geometria existente; os componentes mantêm seus contratos de
+interação. Reutilize os tokens e os controles existentes em novas telas. O
+Dashboard não monta o financeiro nem consulta seus totais.
+
 Antes de escrever código novo:
 
 1. Procure um helper existente com `rg` pelo comportamento, não apenas pelo
