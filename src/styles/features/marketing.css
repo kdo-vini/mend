@@ -20,8 +20,11 @@
   box-sizing: border-box;
 }
 
-.marketing-page a {
+.marketing-page a:not(.button) {
   color: inherit;
+}
+
+.marketing-page a {
   text-decoration: none;
 }
 
