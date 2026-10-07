@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { LiveActionError } from "../../api/transport";
-import { financeApi, type FinanceEntity, type FinanceSummary } from "./api";
+import {
+  financeApi,
+  type FinanceAttentionFilter,
+  type FinanceEntity,
+  type FinanceSummary,
+} from "./api";
 import {
   claimFinanceCache,
   clearFinanceCache,
@@ -20,8 +25,12 @@ export function isForbidden(error: unknown) {
   );
 }
 
-const listKey = (entity: FinanceEntity, period: string, offset: number) =>
-  `${entity}|${period}|${offset}`;
+const listKey = (
+  entity: FinanceEntity,
+  period: string,
+  offset: number,
+  attention?: FinanceAttentionFilter,
+) => `${entity}|${period}|${offset}${attention ? `|${attention}` : ""}`;
 
 /**
  * Loads finance data for a mounted page or dashboard block.
@@ -40,11 +49,13 @@ export function useFinanceData({
   entity,
   offset,
   enabled = true,
+  attention,
 }: {
   period: string;
   entity: FinanceEntity | null;
   offset: number;
   enabled?: boolean;
+  attention?: FinanceAttentionFilter;
 }) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [summary, setSummary] = useState<{
@@ -119,12 +130,12 @@ export function useFinanceData({
     if (!allowed || !entity || !enabled) return;
     let active = true;
     const scope = financeCache.scope();
-    const key = listKey(entity, period, offset);
+    const key = listKey(entity, period, offset, attention);
     const cached = financeCache.list(key);
     if (cached) setList(cached);
     setPending((current) => ({ ...current, list: true }));
     financeApi
-      .list(entity, period, offset)
+      .list(entity, period, offset, attention)
       .then((response) => {
         if (!active || !financeCache.isCurrent(scope)) return;
         const next = { key, ...response };
@@ -141,7 +152,16 @@ export function useFinanceData({
     return () => {
       active = false;
     };
-  }, [allowed, enabled, entity, period, offset, revision, handleError]);
+  }, [
+    allowed,
+    enabled,
+    entity,
+    period,
+    offset,
+    attention,
+    revision,
+    handleError,
+  ]);
 
   /** Drops cached pages after a mutation and refetches what is on screen. */
   const invalidate = useCallback(() => {
@@ -159,7 +179,9 @@ export function useFinanceData({
     allowed,
     summary,
     list,
-    requestedListKey: entity ? listKey(entity, period, offset) : null,
+    requestedListKey: entity
+      ? listKey(entity, period, offset, attention)
+      : null,
     pending,
     error,
     invalidate,

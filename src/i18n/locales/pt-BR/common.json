@@ -540,6 +540,32 @@
         "refresh": "Não foi possível carregar os números mais recentes do Zelo. Exibindo os números consultados em {{time}}."
       },
       "pagination": "Página {{page}} de {{total}}"
+    },
+    "pending": {
+      "resolveUnknown": "Revisar valores ausentes",
+      "resolveEstimated": "Revisar estimativas",
+      "unknown": "Lançamentos com valor ausente",
+      "estimated": "Lançamentos com valor estimado",
+      "hint": "Somente lançamentos ativos com esta pendência, em todo o mês selecionado. Edite um registro para conferir o valor e a fonte.",
+      "clear": "Mostrar todos os lançamentos",
+      "emptyTitle": "Nenhuma pendência nesta página",
+      "emptyHint": "Após salvar, os registros resolvidos saem desta lista. Use Anterior, se disponível, ou mostre todos os lançamentos para continuar."
+    },
+    "attention": {
+      "title": "Sua atenção, aqui",
+      "source": "Conferências dos registros Diagium · {{month}}",
+      "checks_one": "{{count}} ponto para conferir",
+      "checks_other": "{{count}} pontos para conferir",
+      "entries": "Ver lançamentos",
+      "payments": "Ver pagamentos",
+      "complete": "Conferências em dia",
+      "completeHint": "Os critérios de cobertura deste mês foram atendidos.",
+      "hints": {
+        "review": "Confirme as fontes, despesas e impostos do mês antes de concluir.",
+        "estimated": "Compare as estimativas com os valores confirmados nas fontes.",
+        "unknown": "Preencha os valores para que entrem no resultado do mês.",
+        "references": "Confira os pagamentos e adicione a referência que comprova cada um."
+      }
     }
   }
 }

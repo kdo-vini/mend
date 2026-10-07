@@ -6,6 +6,7 @@ export type FinanceEntity =
   | "templates"
   | "references"
   | "reviews";
+export type FinanceAttentionFilter = "unknown" | "estimated";
 export interface FinanceRecord {
   id: string;
   version: number;
@@ -63,9 +64,14 @@ export const financeApi = {
     apiRequest<FinanceRecord>(`/api/finance/${entity}/${id}`),
   summary: (period: string) =>
     apiRequest<FinanceSummary>(`/api/finance/summary?period=${period}`),
-  list: (entity: FinanceEntity, period: string, offset: number) =>
+  list: (
+    entity: FinanceEntity,
+    period: string,
+    offset: number,
+    attention?: FinanceAttentionFilter,
+  ) =>
     apiRequest<{ data: FinanceRecord[]; nextOffset: number | null }>(
-      `/api/finance/${entity}?period=${period}&offset=${offset}`,
+      `/api/finance/${entity}?period=${period}&offset=${offset}${attention ? `&attention=${attention}` : ""}`,
     ),
   save: (
     entity: FinanceEntity,

@@ -1,5 +1,61 @@
 import { test, expect, type Page } from "@playwright/test";
 
+test("attention review preserves context, restores focus and respects reduced motion", async ({
+  page,
+}, info) => {
+  await page.setViewportSize(
+    info.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1440, height: 900 },
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openFinance(page, "en-US", "dark");
+  await mockFinance(page);
+  await page.goto("/financeiro?demo=1", { waitUntil: "domcontentloaded" });
+  const review = page.getByRole("button", {
+    name: "Review coverage",
+    exact: true,
+  });
+  await review.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByLabel("Sources reviewed", { exact: true }),
+  ).toBeFocused();
+  await expect(page.locator(".finance-ledger")).toBeVisible();
+  expect(
+    await page
+      .locator(".finance-editor")
+      .evaluate((el) => getComputedStyle(el).animationName),
+  ).toBe("none");
+  await page.keyboard.press("Escape");
+  await expect(review).toBeFocused();
+  await review.focus();
+  await page.keyboard.press("Enter");
+  await page.screenshot({
+    path: info.outputPath("finance-review.png"),
+    fullPage: true,
+  });
+  for (const label of [
+    "Sources reviewed",
+    "Expenses reviewed",
+    "Taxes reviewed",
+  ])
+    await page.getByLabel(label, { exact: true }).check();
+  await page.getByRole("button", { name: "Save review", exact: true }).click();
+  await expect(
+    page.getByText("Checks up to date", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Coverage review saved.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".finance-editor")).toHaveCount(0);
+  expect(await noOverflow(page)).toBe(false);
+  await page.screenshot({
+    path: info.outputPath("finance-complete.png"),
+    fullPage: true,
+  });
+});
+
 type Row = Record<string, unknown>;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const currentMonth = () =>
@@ -86,8 +142,12 @@ async function mockFinance(page: Page, allowed = true) {
         expenses: total("expense"),
         received: moved("income"),
         paid: moved("expense"),
-        estimated_count: live.filter((r) => r.estimated).length,
-        unknown_count: live.filter((r) => r.amount_cents === null).length,
+        estimated_count: live.filter(
+          (r) => r.kind !== "transfer" && r.estimated,
+        ).length,
+        unknown_count: live.filter(
+          (r) => r.kind !== "transfer" && r.amount_cents === null,
+        ).length,
         reference_pending: cash.filter(
           (r) => !tables.references.some((ref) => ref.settlement_id === r.id),
         ).length,
@@ -160,13 +220,24 @@ async function mockFinance(page: Page, allowed = true) {
                   (r) => entry(r.entry_id)?.period === period,
                 )
               : tables[entity];
+      const attention = url.searchParams.get("attention");
+      const matching = attention
+        ? rows.filter(
+            (r) =>
+              !r.cancelled &&
+              r.kind !== "transfer" &&
+              (attention === "unknown" ? r.amount_cents === null : r.estimated),
+          )
+        : rows;
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const pageRows = matching.slice(offset, offset + 50);
       body = {
-        data: rows.map((r) =>
+        data: pageRows.map((r) =>
           entity === "settlements" || entity === "references"
             ? { ...r, description: entry(r.entry_id)?.description }
             : r,
         ),
-        nextOffset: null,
+        nextOffset: offset + 50 < matching.length ? offset + 50 : null,
       };
     }
     await route.fulfill({ json: body });
@@ -237,6 +308,145 @@ test("pending saves cannot be displaced by a different financial action", async 
     release();
   }
   await expect(page.getByText("Entry saved.", { exact: true })).toBeVisible();
+});
+
+test("attention resolves records beyond the first page and refreshes after saving", async ({
+  page,
+}, info) => {
+  await page.setViewportSize(
+    info.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1440, height: 900 },
+  );
+  await openFinance(page, "en-US");
+  const { tables } = await mockFinance(page);
+  const period = `${currentMonth()}-01`;
+  tables.entries.push(
+    ...Array.from({ length: 51 }, (_, index) => ({
+      ...hostinger,
+      id: `11111111-1111-4111-8111-${String(index).padStart(12, "0")}`,
+      period,
+      description: `Confirmed ${index}`,
+    })),
+  );
+  tables.entries.push({
+    ...hostinger,
+    id: "22222222-2222-4222-8222-222222222222",
+    period,
+    description: "Missing invoice",
+    amount_cents: null,
+  });
+  tables.entries.push({
+    ...hostinger,
+    id: "33333333-3333-4333-8333-333333333333",
+    period,
+    description: "Cancelled invoice",
+    amount_cents: null,
+    cancelled: true,
+  });
+  tables.entries.push({
+    ...hostinger,
+    id: "44444444-4444-4444-8444-444444444444",
+    period,
+    description: "Estimated hosting",
+    estimated: true,
+  });
+  tables.entries.push({
+    ...hostinger,
+    id: "55555555-5555-4555-8555-555555555555",
+    period,
+    description: "Internal transfer",
+    kind: "transfer",
+    amount_cents: null,
+    estimated: true,
+  });
+  await page.goto("/financeiro?demo=1");
+  await expect(
+    page.getByRole("button", { name: "Edit: Missing invoice", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Review missing amounts", exact: true })
+    .click();
+  await expect(page.locator(".finance-pending-context")).toContainText(
+    "Entries with missing amounts",
+  );
+  await expect(page.locator(".finance-table")).not.toContainText("Confirmed 0");
+  await expect(page.locator(".finance-table")).not.toContainText(
+    "Cancelled invoice",
+  );
+  await expect(page.locator(".finance-table")).not.toContainText(
+    "Internal transfer",
+  );
+  await page
+    .getByRole("button", { name: "Edit: Missing invoice", exact: true })
+    .click();
+  expect(await noOverflow(page)).toBe(false);
+  await page.screenshot({
+    path: info.outputPath("guided-review.png"),
+    fullPage: true,
+  });
+  await page.getByLabel("Amount (BRL)", { exact: true }).fill("25.00");
+  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await expect(
+    page.getByText("No pending entries on this page", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Review missing amounts", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Review estimates", exact: true })
+    .click();
+  await expect(page.locator(".finance-table")).toContainText(
+    "Estimated hosting",
+  );
+  await expect(page.locator(".finance-table")).not.toContainText(
+    "Missing invoice",
+  );
+  await page
+    .getByRole("button", { name: "Show all entries", exact: true })
+    .click();
+  await expect(page.locator(".finance-table")).toContainText("Confirmed 0");
+});
+
+test("leaving attention ignores its late response and preserves the general ledger", async ({
+  page,
+}) => {
+  await openFinance(page, "en-US");
+  const { tables } = await mockFinance(page);
+  tables.entries.push({
+    ...hostinger,
+    period: `${currentMonth()}-01`,
+    amount_cents: null,
+  });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/finance/entries?**", async (route) => {
+    if (new URL(route.request().url()).searchParams.has("attention"))
+      await gate;
+    await route.fallback();
+  });
+  await page.goto("/financeiro?demo=1");
+  await page
+    .getByRole("button", { name: "Review missing amounts", exact: true })
+    .click();
+  await expect(page.locator(".finance-table")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Show all entries", exact: true })
+    .click();
+  await expect(page.locator(".finance-table")).toContainText(
+    "Hostinger Diagium",
+  );
+  const response = page.waitForResponse((r) =>
+    r.url().includes("attention=unknown"),
+  );
+  release();
+  await response;
+  await expect(page.locator(".finance-pending-context")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Edit: Hostinger Diagium", exact: true }),
+  ).toBeEnabled();
 });
 
 test("coverage review waits for the selected month's summary", async ({

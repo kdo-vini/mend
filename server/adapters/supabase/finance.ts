@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { FinanceEntity, FinancePort } from "../../finance-service.js";
+import type {
+  FinanceAttentionFilter,
+  FinanceEntity,
+  FinancePort,
+} from "../../finance-service.js";
 import { ApiHttpError } from "../../api-router.js";
 
 export class SupabaseFinanceAdapter implements FinancePort {
@@ -57,7 +61,18 @@ export class SupabaseFinanceAdapter implements FinancePort {
         .maybeSingle(),
     );
   }
-  async list(entity: FinanceEntity, period?: string, offset = 0) {
+  async list(
+    entity: FinanceEntity,
+    period?: string,
+    offset = 0,
+    attention?: FinanceAttentionFilter,
+  ) {
+    if (attention && entity !== "entries")
+      throw new ApiHttpError(
+        400,
+        "invalid_input",
+        "Attention filters require entries.",
+      );
     let query = this.client
       .from(`finance_${entity}`)
       .select(
@@ -67,6 +82,14 @@ export class SupabaseFinanceAdapter implements FinancePort {
       )
       .order("id")
       .range(offset, offset + 49);
+    if (attention) {
+      // Match finance_summary: internal transfers never affect coverage.
+      query = query.eq("cancelled", false).neq("kind", "transfer");
+      query =
+        attention === "unknown"
+          ? query.is("amount_cents", null)
+          : query.eq("estimated", true);
+    }
     if (period && (entity === "entries" || entity === "reviews"))
       query = query.eq("period", period);
     if (period && entity === "references")

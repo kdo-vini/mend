@@ -114,18 +114,25 @@ export function registerFinanceRoutes(ctx: ApiRouteModuleContext) {
     "/api/finance/:entity",
     asyncRoute(async (req, res) => {
       const entity = parse(entitySchema, req.params.entity) as FinanceEntity;
-      const { period, offset } = parse(
+      const { period, offset, attention } = parse(
         z
           .object({
             period: financePeriod.optional(),
             offset: z.coerce.number().int().min(0).max(100000).default(0),
+            attention: z.enum(["unknown", "estimated"]).optional(),
           })
           .strict(),
         req.query,
       );
       if ((entity === "entries" || entity === "settlements") && !period)
         throw new ApiHttpError(400, "invalid_input", "Period is required.");
-      const data = await port!.list(entity, period, offset);
+      if (attention && entity !== "entries")
+        throw new ApiHttpError(
+          400,
+          "invalid_input",
+          "Attention filters require entries.",
+        );
+      const data = await port!.list(entity, period, offset, attention);
       send(res, 200, {
         data,
         nextOffset: data.length === 50 ? offset + 50 : null,
