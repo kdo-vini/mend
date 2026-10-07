@@ -588,7 +588,8 @@
         "title": "Known receipts · selected projects",
         "detail": "{{manual}} manually recorded + {{automatic}} Zelo net",
         "hint": "BRL, after known payment fees. Unconfirmed net amounts are excluded; partial coverage, refunds and payout fees need reconciliation. Balances and payouts are not counted again."
-      }
+      },
+      "receiptsTitle": "Receipts this month"
     },
     "pending": {
       "resolveUnknown": "Review missing amounts",

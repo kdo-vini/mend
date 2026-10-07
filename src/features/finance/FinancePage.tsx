@@ -227,74 +227,36 @@ export function FinancePage() {
         actions={
           allowed ? (
             <>
-              <label className="finance-business">
-                <span>{t("finance.projectFilter")}</span>
-                <select
-                  value={project ?? "__all"}
-                  disabled={busy}
-                  onChange={(event) => {
-                    const next = new URLSearchParams(searchParams);
-                    if (event.target.value === "__all") next.delete("project");
-                    else next.set("project", event.target.value);
-                    setSearchParams(next);
-                    setOffset(0);
-                    setHistory(null);
-                  }}
-                >
-                  <option value="__all">{t("finance.allProjects")}</option>
-                  <option value="">{t("finance.generalCosts")}</option>
-                  {!projects.some((item) => item.key === "Zelo") && (
-                    <option value="Zelo">{t("finance.business.zelo")}</option>
-                  )}
-                  {projects.map((item) => (
-                    <option key={item.id} value={item.key}>
-                      {item.name}
-                    </option>
-                  ))}
-                  {project &&
-                    project !== "Zelo" &&
-                    !projects.some((item) => item.key === project) && (
-                      <option value={project}>{project}</option>
-                    )}
-                </select>
-              </label>
-              <Link to="/projects" className="button button-ghost">
-                {t("finance.manageProjects")}
-              </Link>
-              {
-                <>
-                  <button
-                    type="button"
-                    className="button button-ghost finance-new"
-                    disabled={busy}
-                    onClick={() => {
-                      const draft = newEntryDraft("income", period);
-                      openDraft({
-                        ...draft,
-                        record: { ...draft.record, project: project ?? "" },
-                      });
-                    }}
-                  >
-                    <ArrowDownLeft size={14} aria-hidden="true" />
-                    {t("finance.newIncome")}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-primary finance-new"
-                    disabled={busy}
-                    onClick={() => {
-                      const draft = newEntryDraft("expense", period);
-                      openDraft({
-                        ...draft,
-                        record: { ...draft.record, project: project ?? "" },
-                      });
-                    }}
-                  >
-                    <ArrowUpRight size={14} aria-hidden="true" />
-                    {t("finance.newExpense")}
-                  </button>
-                </>
-              }
+              <button
+                type="button"
+                className="button button-ghost finance-new"
+                disabled={busy}
+                onClick={() => {
+                  const draft = newEntryDraft("income", period);
+                  openDraft({
+                    ...draft,
+                    record: { ...draft.record, project: project ?? "" },
+                  });
+                }}
+              >
+                <ArrowDownLeft size={14} aria-hidden="true" />
+                {t("finance.newIncome")}
+              </button>
+              <button
+                type="button"
+                className="button button-primary finance-new"
+                disabled={busy}
+                onClick={() => {
+                  const draft = newEntryDraft("expense", period);
+                  openDraft({
+                    ...draft,
+                    record: { ...draft.record, project: project ?? "" },
+                  });
+                }}
+              >
+                <ArrowUpRight size={14} aria-hidden="true" />
+                {t("finance.newExpense")}
+              </button>
             </>
           ) : undefined
         }
@@ -330,6 +292,40 @@ export function FinancePage() {
           )}
           <div className="finance-period-bar">
             <MonthNavigator month={month} onChange={changeMonth} />
+            <label className="finance-business">
+              <span>{t("finance.projectFilter")}</span>
+              <select
+                value={project ?? "__all"}
+                disabled={busy}
+                onChange={(event) => {
+                  const next = new URLSearchParams(searchParams);
+                  if (event.target.value === "__all") next.delete("project");
+                  else next.set("project", event.target.value);
+                  setSearchParams(next);
+                  setOffset(0);
+                  setHistory(null);
+                }}
+              >
+                <option value="__all">{t("finance.allProjects")}</option>
+                <option value="">{t("finance.generalCosts")}</option>
+                {!projects.some((item) => item.key === "Zelo") && (
+                  <option value="Zelo">{t("finance.business.zelo")}</option>
+                )}
+                {projects.map((item) => (
+                  <option key={item.id} value={item.key}>
+                    {item.name}
+                  </option>
+                ))}
+                {project &&
+                  project !== "Zelo" &&
+                  !projects.some((item) => item.key === project) && (
+                    <option value={project}>{project}</option>
+                  )}
+              </select>
+            </label>
+            <Link to="/projects" className="finance-projects-link">
+              {t("finance.manageProjects")}
+            </Link>
             <p
               className="finance-sync"
               data-success={Boolean(notice) || undefined}
@@ -352,259 +348,262 @@ export function FinancePage() {
             </p>
           </div>
 
-          <h2 className="finance-section-title">
-            {t("finance.manualEntries")}
-          </h2>
-          <div className="finance-overview-grid">
-            {summary ? (
-              <FinanceSummaryPanel
-                summary={summary.data}
-                period={summary.period}
-                refreshing={summary.period !== period || data.pending.summary}
-                showCoverage={false}
-              />
-            ) : (
-              <FinanceSummarySkeleton />
-            )}
-
-            {summary && (
-              <FinanceAttention
-                summary={summary.data}
-                period={summary.period}
-                disabled={
-                  busy || summary.period !== period || data.pending.summary
-                }
-                onReview={() =>
-                  openDraft(reviewDraft(period, summary.data.review))
-                }
-                onView={(next) => {
-                  changeView(next);
-                  document.getElementById(`finance-tab-${next}`)?.focus();
-                }}
-                onResolve={(next) => {
-                  changeView("entries");
-                  setAttention(next);
-                  document.getElementById("finance-tab-entries")?.focus();
-                }}
-              />
-            )}
-          </div>
-
-          {showProviderIncome && (
-            <section className="finance-automatic">
-              <h2>{t("finance.automaticIncome")}</h2>
-              <ProviderBalancesPanel onForbidden={revoke} />
-              <ZeloFinancePanel
-                manualReceived={
-                  summary?.period === period &&
-                  !data.pending.summary &&
-                  !loadError
-                    ? summary.data.received
-                    : undefined
-                }
-                month={month}
-                onMonthChange={changeMonth}
-                onForbidden={revoke}
-                embedded
-              />
-            </section>
-          )}
-
-          {actionError && (
-            <p role="alert" className="finance-form-error">
-              {actionError}
-            </p>
-          )}
-
-          <div
-            className="finance-workspace"
-            data-editing={Boolean(editor.draft || history) || undefined}
+          <section
+            className="finance-section"
+            aria-labelledby="finance-manual-title"
           >
-            {editor.draft && (
-              <ProjectCatalogContext.Provider value={projects}>
-                <FinanceForm
-                  editor={editor as DraftEditor}
-                  removing={removing}
+            <header className="finance-section-header">
+              <h2 id="finance-manual-title">{t("finance.manualEntries")}</h2>
+            </header>
+            <div className="finance-overview-grid">
+              {summary ? (
+                <FinanceSummaryPanel
+                  summary={summary.data}
+                  period={summary.period}
+                  refreshing={summary.period !== period || data.pending.summary}
+                  showCoverage={false}
                 />
-              </ProjectCatalogContext.Provider>
-            )}
-            {history && !editor.draft && (
-              <HistoryPanel
-                recordId={history.id}
-                title={String(
-                  history.description ?? t("finance.context.untitled"),
-                )}
-                onClose={closeHistory}
-                onForbidden={revoke}
-              />
+              ) : (
+                <FinanceSummarySkeleton />
+              )}
+
+              {summary && (
+                <FinanceAttention
+                  summary={summary.data}
+                  period={summary.period}
+                  disabled={
+                    busy || summary.period !== period || data.pending.summary
+                  }
+                  onReview={() =>
+                    openDraft(reviewDraft(period, summary.data.review))
+                  }
+                  onView={(next) => {
+                    changeView(next);
+                    document.getElementById(`finance-tab-${next}`)?.focus();
+                  }}
+                  onResolve={(next) => {
+                    changeView("entries");
+                    setAttention(next);
+                    document.getElementById("finance-tab-entries")?.focus();
+                  }}
+                />
+              )}
+            </div>
+
+            {actionError && (
+              <p role="alert" className="finance-form-error">
+                {actionError}
+              </p>
             )}
 
-            <section
-              className="finance-ledger"
-              aria-label={t("finance.ledger")}
+            <div
+              className="finance-workspace"
+              data-editing={Boolean(editor.draft || history) || undefined}
             >
-              <div
-                className="finance-tabs"
-                role="tablist"
-                aria-label={t("finance.viewsLabel")}
-              >
-                {ledgerViews.map((tab) => (
-                  <button
-                    key={tab}
-                    id={`finance-tab-${tab}`}
-                    data-view={tab}
-                    type="button"
-                    role="tab"
-                    aria-selected={view === tab}
-                    aria-controls="finance-tabpanel"
-                    tabIndex={view === tab ? 0 : -1}
-                    onKeyDown={onTabKey}
-                    onClick={() => changeView(tab)}
-                  >
-                    {t(`finance.views.${tab}`)}
-                  </button>
-                ))}
-              </div>
+              {editor.draft && (
+                <ProjectCatalogContext.Provider value={projects}>
+                  <FinanceForm
+                    editor={editor as DraftEditor}
+                    removing={removing}
+                  />
+                </ProjectCatalogContext.Provider>
+              )}
+              {history && !editor.draft && (
+                <HistoryPanel
+                  recordId={history.id}
+                  title={String(
+                    history.description ?? t("finance.context.untitled"),
+                  )}
+                  onClose={closeHistory}
+                  onForbidden={revoke}
+                />
+              )}
 
-              <div
-                id="finance-tabpanel"
-                role="tabpanel"
-                aria-labelledby={`finance-tab-${view}`}
-                aria-busy={listStale || undefined}
-                className="finance-tabpanel"
+              <section
+                className="finance-ledger"
+                aria-label={t("finance.ledger")}
               >
-                {attention && (
-                  <div className="finance-pending-context" role="status">
-                    <div>
-                      <strong>{t(`finance.pending.${attention}`)}</strong>
-                      <p>{t("finance.pending.hint")}</p>
-                    </div>
+                <div
+                  className="finance-tabs"
+                  role="tablist"
+                  aria-label={t("finance.viewsLabel")}
+                >
+                  {ledgerViews.map((tab) => (
                     <button
+                      key={tab}
+                      id={`finance-tab-${tab}`}
+                      data-view={tab}
                       type="button"
-                      className="button button-ghost"
-                      onClick={() => changeView("entries")}
+                      role="tab"
+                      aria-selected={view === tab}
+                      aria-controls="finance-tabpanel"
+                      tabIndex={view === tab ? 0 : -1}
+                      onKeyDown={onTabKey}
+                      onClick={() => changeView(tab)}
                     >
-                      {t("finance.pending.clear")}
+                      {t(`finance.views.${tab}`)}
                     </button>
-                  </div>
-                )}
-                <div className="finance-toolbar">
-                  <label className="finance-search">
-                    <Search size={14} aria-hidden="true" />
-                    <span className="sr-only">{t("finance.filter.label")}</span>
-                    <input
-                      type="search"
-                      value={filter}
-                      placeholder={t("finance.filter.placeholder")}
-                      onChange={(event) => setFilter(event.target.value)}
-                    />
-                  </label>
-                  {view === "templates" && (
-                    <div className="finance-toolbar-actions">
+                  ))}
+                </div>
+
+                <div
+                  id="finance-tabpanel"
+                  role="tabpanel"
+                  aria-labelledby={`finance-tab-${view}`}
+                  aria-busy={listStale || undefined}
+                  className="finance-tabpanel"
+                >
+                  {attention && (
+                    <div className="finance-pending-context" role="status">
+                      <div>
+                        <strong>{t(`finance.pending.${attention}`)}</strong>
+                        <p>{t("finance.pending.hint")}</p>
+                      </div>
                       <button
                         type="button"
                         className="button button-ghost"
-                        disabled={busy}
-                        onClick={() => openDraft(newTemplateDraft(period))}
+                        onClick={() => changeView("entries")}
                       >
-                        {t("finance.newTemplate")}
-                      </button>
-                      <button
-                        type="button"
-                        className="button button-ghost"
-                        disabled={busy}
-                        aria-busy={generating || undefined}
-                        onClick={() => void generate()}
-                      >
-                        {generating
-                          ? t("finance.generating")
-                          : t("finance.generate", {
-                              month: format.shortMonth(period),
-                            })}
+                        {t("finance.pending.clear")}
                       </button>
                     </div>
                   )}
-                </div>
-                <p className="finance-view-hint">
-                  {t(`finance.viewHints.${view}`)}
-                </p>
-
-                {!listForView ? (
-                  <div className="finance-table-skeleton" role="status">
-                    <span className="sr-only">{t("finance.loading")}</span>
-                    {Array.from({ length: 4 }, (_, index) => (
-                      <span key={index} className="skeleton" />
-                    ))}
+                  <div className="finance-toolbar">
+                    <label className="finance-search">
+                      <Search size={14} aria-hidden="true" />
+                      <span className="sr-only">
+                        {t("finance.filter.label")}
+                      </span>
+                      <input
+                        type="search"
+                        value={filter}
+                        placeholder={t("finance.filter.placeholder")}
+                        onChange={(event) => setFilter(event.target.value)}
+                      />
+                    </label>
+                    {view === "templates" && (
+                      <div className="finance-toolbar-actions">
+                        <button
+                          type="button"
+                          className="button button-ghost"
+                          disabled={busy}
+                          onClick={() => openDraft(newTemplateDraft(period))}
+                        >
+                          {t("finance.newTemplate")}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-ghost"
+                          disabled={busy}
+                          aria-busy={generating || undefined}
+                          onClick={() => void generate()}
+                        >
+                          {generating
+                            ? t("finance.generating")
+                            : t("finance.generate", {
+                                month: format.shortMonth(period),
+                              })}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                ) : listForView.data.length === 0 ? (
-                  <EmptyState
-                    title={t(
-                      attention
-                        ? "finance.pending.emptyTitle"
-                        : `finance.empty.${view}.title`,
-                    )}
-                    description={t(
-                      attention
-                        ? "finance.pending.emptyHint"
-                        : `finance.empty.${view}.description`,
-                    )}
-                  />
-                ) : rows && rows.length === 0 ? (
-                  <EmptyState
-                    search
-                    title={t("finance.filter.noMatchTitle")}
-                    description={t("finance.filter.noMatch")}
-                  />
-                ) : (
-                  <div
-                    className="finance-table-region"
-                    data-refreshing={listStale || undefined}
-                  >
-                    <LedgerTable
-                      view={view}
-                      rows={rows ?? []}
-                      busy={busy || listStale || Boolean(loadError)}
-                      onAction={onRowAction}
+                  <p className="finance-view-hint">
+                    {t(`finance.viewHints.${view}`)}
+                  </p>
+
+                  {!listForView ? (
+                    <div className="finance-table-skeleton" role="status">
+                      <span className="sr-only">{t("finance.loading")}</span>
+                      {Array.from({ length: 4 }, (_, index) => (
+                        <span key={index} className="skeleton" />
+                      ))}
+                    </div>
+                  ) : listForView.data.length === 0 ? (
+                    <EmptyState
+                      title={t(
+                        attention
+                          ? "finance.pending.emptyTitle"
+                          : `finance.empty.${view}.title`,
+                      )}
+                      description={t(
+                        attention
+                          ? "finance.pending.emptyHint"
+                          : `finance.empty.${view}.description`,
+                      )}
                     />
-                  </div>
-                )}
+                  ) : rows && rows.length === 0 ? (
+                    <EmptyState
+                      search
+                      title={t("finance.filter.noMatchTitle")}
+                      description={t("finance.filter.noMatch")}
+                    />
+                  ) : (
+                    <div
+                      className="finance-table-region"
+                      data-refreshing={listStale || undefined}
+                    >
+                      <LedgerTable
+                        view={view}
+                        rows={rows ?? []}
+                        busy={busy || listStale || Boolean(loadError)}
+                        onAction={onRowAction}
+                      />
+                    </div>
+                  )}
 
-                {(offset > 0 || listForView?.nextOffset != null) && (
-                  <nav
-                    className="finance-pagination"
-                    aria-label={t("finance.pagination.label")}
-                  >
-                    <button
-                      type="button"
-                      className="button button-ghost"
-                      disabled={offset === 0}
-                      onClick={() =>
-                        setOffset(Math.max(0, offset - FINANCE_PAGE_SIZE))
-                      }
+                  {(offset > 0 || listForView?.nextOffset != null) && (
+                    <nav
+                      className="finance-pagination"
+                      aria-label={t("finance.pagination.label")}
                     >
-                      {t("finance.previous")}
-                    </button>
-                    <span>
-                      {t("finance.pagination.page", {
-                        page: offset / FINANCE_PAGE_SIZE + 1,
-                      })}
-                    </span>
-                    <button
-                      type="button"
-                      className="button button-ghost"
-                      disabled={listForView?.nextOffset == null}
-                      onClick={() =>
-                        listForView?.nextOffset != null &&
-                        setOffset(listForView.nextOffset)
-                      }
-                    >
-                      {t("finance.next")}
-                    </button>
-                  </nav>
-                )}
-              </div>
-            </section>
-          </div>
+                      <button
+                        type="button"
+                        className="button button-ghost"
+                        disabled={offset === 0}
+                        onClick={() =>
+                          setOffset(Math.max(0, offset - FINANCE_PAGE_SIZE))
+                        }
+                      >
+                        {t("finance.previous")}
+                      </button>
+                      <span>
+                        {t("finance.pagination.page", {
+                          page: offset / FINANCE_PAGE_SIZE + 1,
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        className="button button-ghost"
+                        disabled={listForView?.nextOffset == null}
+                        onClick={() =>
+                          listForView?.nextOffset != null &&
+                          setOffset(listForView.nextOffset)
+                        }
+                      >
+                        {t("finance.next")}
+                      </button>
+                    </nav>
+                  )}
+                </div>
+              </section>
+            </div>
+          </section>
+
+          {showProviderIncome && (
+            <ZeloFinancePanel
+              manualReceived={
+                summary?.period === period &&
+                !data.pending.summary &&
+                !loadError
+                  ? summary.data.received
+                  : undefined
+              }
+              month={month}
+              onForbidden={revoke}
+            >
+              <ProviderBalancesPanel onForbidden={revoke} />
+            </ZeloFinancePanel>
+          )}
         </div>
       )}
     </section>

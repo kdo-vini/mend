@@ -38,7 +38,12 @@ const snapshot = (period = "2026-10-01"): ZeloFinanceFeed => ({
     },
   ],
 });
-async function setup(page: Page, locale = "en-US", theme = "dark") {
+async function setup(
+  page: Page,
+  locale = "en-US",
+  theme = "dark",
+  expand = true,
+) {
   await page.setViewportSize(
     page.viewportSize()!.width < 650
       ? { width: 390, height: 844 }
@@ -142,7 +147,17 @@ async function setup(page: Page, locale = "en-US", theme = "dark") {
   await expect(projectSelect(page).locator('option[value="Zelo"]')).toHaveText(
     "Zelo",
   );
+  if (expand) await expandZeloCards(page);
   return state;
+}
+// Charges and balances start collapsed; these tests read their contents.
+async function expandZeloCards(page: Page) {
+  const triggers = page.locator(".finance-zelo .disclosure-trigger");
+  await expect(triggers).toHaveCount(3);
+  const closed = page.locator(
+    ".finance-zelo .disclosure-trigger[aria-expanded=false]",
+  );
+  while (await closed.count()) await closed.first().click();
 }
 const projectSelect = (page: Page) =>
   page.locator('select:has(option[value="__all"])');
@@ -387,4 +402,35 @@ test("known net receipts combine with manual receipts once and never with provid
   } finally {
     release();
   }
+});
+
+test("long Finance page scrolls its content, not the sidebar, and cards collapse", async ({
+  page,
+}, info) => {
+  await setup(page, "en-US", "light", false);
+  const triggers = page.locator(".finance-zelo .disclosure-trigger");
+  await expect(triggers).toHaveCount(3);
+  await expect(triggers.nth(0)).toHaveAttribute("aria-expanded", "true");
+  await expect(triggers.nth(1)).toHaveAttribute("aria-expanded", "false");
+  await expect(triggers.nth(2)).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".finance-zelo table")).toBeHidden();
+  await expect(triggers.nth(1)).toContainText("2 charges");
+  await triggers.nth(1).click();
+  await expect(triggers.nth(1)).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("bill_pix", { exact: true })).toBeVisible();
+  await triggers.nth(1).press("Enter");
+  await expect(page.locator(".finance-zelo table")).toBeHidden();
+  if (info.project.name !== "desktop") return;
+  const viewport = page.viewportSize()!;
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight),
+  ).toBeGreaterThan(viewport.height);
+  const sidebar = await page.locator(".app-shell .sidebar").boundingBox();
+  expect(sidebar!.height).toBeLessThanOrEqual(viewport.height);
+  await page.mouse.wheel(0, 2000);
+  await expect
+    .poll(
+      async () => (await page.locator(".app-shell .sidebar").boundingBox())!.y,
+    )
+    .toBeGreaterThanOrEqual(0);
 });

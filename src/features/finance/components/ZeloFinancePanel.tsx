@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
@@ -12,7 +12,7 @@ import type { ZeloFinanceFeed, ZeloPayment, ZeloProviderState } from "../api";
 import { FINANCE_PAGE_SIZE, monthPeriod, todayCivil } from "../model";
 import { useFinanceFormat } from "../format";
 import { useZeloFinance } from "../useZeloFinance";
-import { MonthNavigator } from "./MonthNavigator";
+import { Disclosure } from "../../../shared/ui/Disclosure";
 import { FinanceSummarySkeleton } from "./FinanceSummaryPanel";
 
 type Provider = ZeloPayment["provider"];
@@ -85,19 +85,19 @@ function useZeloFormat() {
  */
 export function ZeloFinancePanel({
   month,
-  onMonthChange,
   onForbidden,
-  embedded = false,
   manualReceived,
+  children,
 }: {
   month: string;
-  onMonthChange: (month: string) => void;
   onForbidden: () => void;
-  embedded?: boolean;
   manualReceived?: number;
+  /** Further collapsible cards of the section, e.g. provider balances. */
+  children?: ReactNode;
 }) {
   const { t } = useTranslation("common");
   const format = useFinanceFormat();
+  const zelo = useZeloFormat();
   const period = monthPeriod(month);
   const { feed, pending, failed, refresh } = useZeloFinance({
     period,
@@ -133,11 +133,17 @@ export function ZeloFinancePanel({
       time: format.dateTime(feed.data.checkedAt),
     });
   })();
+  const brl = feed?.data.totals.find(
+    (total) => total.currency.toUpperCase() === "BRL",
+  );
 
   return (
-    <div className="finance-zelo">
-      <div className="finance-period-bar">
-        {!embedded && <MonthNavigator month={month} onChange={onMonthChange} />}
+    <section
+      className="finance-section finance-zelo"
+      aria-labelledby="finance-zelo-title"
+    >
+      <header className="finance-section-header">
+        <h2 id="finance-zelo-title">{t("finance.automaticIncome")}</h2>
         <div className="finance-zelo-sync">
           <p className="finance-sync" role="status" aria-live="polite">
             {status}
@@ -153,7 +159,7 @@ export function ZeloFinancePanel({
             {pending ? t("finance.zelo.refreshing") : t("finance.zelo.refresh")}
           </button>
         </div>
-      </div>
+      </header>
 
       <p className="finance-zelo-note">{t("finance.zelo.note")}</p>
 
@@ -188,26 +194,49 @@ export function ZeloFinancePanel({
         )
       ) : (
         <>
-          <ZeloSummary
-            manualReceived={!refreshing ? manualReceived : undefined}
-            feed={feed.data}
-            period={feed.period}
-            refreshing={refreshing}
-            onRetry={refresh}
-            retryDisabled={pending}
-          />
-          <ZeloCharges
-            feed={feed.data}
-            period={feed.period}
-            refreshing={refreshing}
-            provider={provider}
-            onProviderChange={setProvider}
-            page={page}
-            onPageChange={setPage}
-          />
+          <Disclosure
+            defaultOpen
+            title={t("finance.zelo.receiptsTitle")}
+            summary={
+              brl && (
+                <>
+                  {t("finance.zelo.totals.received")}{" "}
+                  <strong>{zelo.money(brl.receivedCents, "BRL")}</strong>
+                </>
+              )
+            }
+          >
+            <ZeloSummary
+              manualReceived={!refreshing ? manualReceived : undefined}
+              feed={feed.data}
+              period={feed.period}
+              refreshing={refreshing}
+              onRetry={refresh}
+              retryDisabled={pending}
+            />
+          </Disclosure>
+          <Disclosure
+            title={t("finance.zelo.charges.title", {
+              month: format.month(feed.period),
+            })}
+            summary={t("finance.zelo.charges.count", {
+              count: feed.data.rows.length,
+            })}
+          >
+            <ZeloCharges
+              feed={feed.data}
+              period={feed.period}
+              refreshing={refreshing}
+              provider={provider}
+              onProviderChange={setProvider}
+              page={page}
+              onPageChange={setPage}
+            />
+          </Disclosure>
         </>
       )}
-    </div>
+      {children}
+    </section>
   );
 }
 
@@ -476,19 +505,7 @@ function ZeloCharges({
   };
 
   return (
-    <section
-      className="finance-ledger finance-zelo-charges"
-      aria-labelledby="finance-zelo-charges-title"
-      aria-busy={refreshing || undefined}
-    >
-      <div className="finance-zelo-charges-header">
-        <h2 id="finance-zelo-charges-title">
-          {t("finance.zelo.charges.title", { month })}
-        </h2>
-        <span className="finance-muted">
-          {t("finance.zelo.charges.count", { count: rows.length })}
-        </span>
-      </div>
+    <div className="finance-zelo-charges" aria-busy={refreshing || undefined}>
       <div className="finance-toolbar">
         <label className="finance-zelo-filter">
           <span>{t("finance.zelo.filter.provider")}</span>
@@ -602,6 +619,6 @@ function ZeloCharges({
           </button>
         </nav>
       )}
-    </section>
+    </div>
   );
 }

@@ -842,18 +842,6 @@
   color: var(--text-secondary);
   font-size: 12px;
 }
-.finance-zelo-charges-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  font-size: 12px;
-}
-.finance-zelo-charges-header h2 {
-  font-size: 15px;
-  font-weight: 600;
-}
 .finance-table[data-view="zelo"] [data-column="billed"],
 .finance-table[data-view="zelo"] [data-column="received"] {
   text-align: right;
