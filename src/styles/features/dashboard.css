@@ -1,5 +1,5 @@
 .dashboard-identity {
-  color: var(--muted);
+  color: var(--text-muted);
   margin-bottom: var(--space-6);
   overflow-wrap: anywhere;
 }
@@ -19,7 +19,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   transition: border-color var(--duration-fast) var(--ease);
-  color: var(--ink);
+  color: var(--text);
   background: var(--surface);
   text-decoration: none;
 }
@@ -41,17 +41,17 @@
 
 .dashboard-link p {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
 
 .dashboard-link:hover {
-  border-color: var(--accent);
+  border-color: var(--action);
 }
 
 .auth-internal-note {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 13px;
 }
 

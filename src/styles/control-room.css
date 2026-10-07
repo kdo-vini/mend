@@ -8,7 +8,7 @@
  */
 .app-shell .page,
 .app-shell .inbox-page {
-  color: var(--ink);
+  color: var(--text);
 }
 
 .app-shell .page-header h1,
@@ -30,15 +30,15 @@
 }
 
 .app-shell .conversation-row.selected {
-  box-shadow: inset 2px 0 var(--accent);
+  box-shadow: inset 2px 0 var(--action);
 }
 
 .app-shell .conversation-row.selected .conversation-row-top strong {
-  color: var(--ink);
+  color: var(--text);
 }
 
 .app-shell .conversation-header {
-  background: color-mix(in oklch, var(--surface) 88%, var(--surface-2));
+  background: color-mix(in oklch, var(--surface) 88%, var(--surface-hover));
 }
 
 .app-shell .conversation-header .conversation-identity h2 {
@@ -57,15 +57,15 @@
 }
 
 .app-shell .ai-decision-card {
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--action);
 }
 
 .app-shell .ai-draft-card {
-  border-left: 3px solid var(--signal);
+  border-left: 3px solid var(--positive);
 }
 
 .app-shell .issue-event {
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--action);
   border-radius: var(--radius-card);
 }
 
@@ -74,16 +74,16 @@
 }
 
 .app-shell .message-row.outbound .message-bubble {
-  border-color: color-mix(in oklch, var(--accent) 48%, var(--line-strong));
+  border-color: color-mix(in oklch, var(--action) 48%, var(--line-strong));
 }
 
 .app-shell .composer {
   border-color: var(--line-strong);
-  background: color-mix(in oklch, var(--surface) 92%, var(--surface-2));
+  background: color-mix(in oklch, var(--surface) 92%, var(--surface-hover));
 }
 
 .app-shell .run-list-row.selected {
-  box-shadow: inset 2px 0 var(--accent);
+  box-shadow: inset 2px 0 var(--action);
 }
 
 .app-shell .run-detail-header h2,
@@ -96,11 +96,11 @@
 .app-shell .issue-table tbody tr:hover,
 .app-shell .knowledge-row:hover,
 .app-shell .settings-v2-row:hover {
-  background: color-mix(in oklch, var(--surface-2) 82%, var(--surface));
+  background: color-mix(in oklch, var(--surface-hover) 82%, var(--surface));
 }
 
 .app-shell .settings-v2-nav-item.selected {
-  box-shadow: inset 2px 0 var(--accent);
+  box-shadow: inset 2px 0 var(--action);
 }
 
 .app-shell .settings-v2-section {

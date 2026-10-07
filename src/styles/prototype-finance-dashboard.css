@@ -23,7 +23,7 @@
   font-size: 17px;
 }
 .provider-balances p {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 12px;
   margin: 8px 0;
 }
@@ -34,7 +34,7 @@
 }
 .provider-balance-grid article {
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: var(--radius-feature);
   background: var(--surface);
   padding: 24px;
 }
@@ -45,7 +45,7 @@
   gap: 12px;
 }
 .provider-balance-grid header span {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 11px;
 }
 .provider-balance-grid dl {
@@ -56,7 +56,7 @@
 }
 .provider-balance-grid dt {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .provider-balance-grid dd {
   margin: 6px 0 0;
@@ -102,7 +102,7 @@
 .dashboard-welcome-label {
   display: block;
   font-size: 12px;
-  color: #c8daee;
+  color: var(--on-deep-muted);
   margin-bottom: 22px;
 }
 .app-shell .dashboard-welcome h2 {
@@ -110,7 +110,7 @@
   margin-bottom: 14px;
 }
 .dashboard-welcome-description {
-  color: #c8daee;
+  color: var(--on-deep-muted);
   line-height: 1.7;
   max-width: 56ch;
   font-size: 13px;
@@ -118,7 +118,7 @@
 .dashboard-operation-panel {
   margin-top: 24px;
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: var(--radius-feature);
   background: var(--surface);
   padding: 26px;
 }
@@ -135,7 +135,7 @@
 }
 .dashboard-operation-panel p {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-muted);
   margin-top: 6px;
 }
 .dashboard-operation-row {
@@ -152,7 +152,7 @@
 }
 .dashboard-operation-id {
   font: 11px var(--font-technical);
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .dashboard-operation-empty {
   padding: 20px 0;
@@ -162,9 +162,7 @@
   flex-direction: column;
   position: relative;
   min-height: 346px;
-  background:
-    radial-gradient(ellipse at 95% 0, #376ba5, transparent 62%),
-    linear-gradient(115deg, #112e51, #193e6a);
+  background: var(--deep-gradient);
   box-shadow: 0 16px 30px #23466b1b;
 }
 .finance-summary-hero::before {
@@ -194,7 +192,7 @@
 }
 .finance-hero-header h2 {
   font: 600 12px var(--font-product);
-  color: #c8daee;
+  color: var(--on-deep-muted);
 }
 .finance-hero-status {
   display: inline-flex;
@@ -205,10 +203,10 @@
   border: 1px solid #ffffff24;
   background: #ffffff12;
   font-size: 10px;
-  color: #ffe0a3;
+  color: var(--on-deep-caution);
 }
 .finance-hero-status[data-state="complete"] {
-  color: #afe4cd;
+  color: var(--on-deep-positive);
 }
 .finance-hero-result {
   margin: 22px 0 8px;
@@ -228,7 +226,7 @@
   overflow-wrap: anywhere;
 }
 .finance-hero-description {
-  color: #c8daee;
+  color: var(--on-deep-muted);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -252,14 +250,14 @@
   height: 36px;
   border-radius: 11px;
   background: #ffffff10;
-  color: #aee6d6;
+  color: var(--on-deep-incoming);
 }
 .finance-hero-icon.outgoing {
-  color: #e9ccab;
+  color: var(--on-deep-outgoing);
 }
 .finance-summary-hero dt {
   font-size: 11px;
-  color: #c8daee;
+  color: var(--on-deep-muted);
   margin-bottom: 5px;
 }
 .finance-overview-grid .finance-hero-split dd {
@@ -276,7 +274,7 @@
   border-top: 1px solid #ffffff13;
 }
 .finance-hero-cash h2 {
-  color: #c8daee;
+  color: var(--on-deep-muted);
   font-size: 11px;
   font-weight: 500;
 }
@@ -309,7 +307,7 @@
   width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: var(--accent-wash);
+  background: var(--action-wash);
   grid-row: 1 / 3;
   margin: 0;
   border: 1px solid var(--line);
@@ -319,14 +317,14 @@
   justify-self: start;
   padding-left: 0;
   border-color: transparent;
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .finance-attention-footnote {
   margin-top: auto;
   padding-top: 16px;
 }
 .app-shell .finance-remove-action {
-  color: var(--danger);
+  color: var(--negative);
 }
 @media (max-width: 650px) {
   .dashboard-operation-panel {
@@ -369,7 +367,7 @@
 
 .finance-net-rollup {
   padding: 24px;
-  background: var(--accent-wash);
+  background: var(--action-wash);
   border-bottom: 1px solid var(--line);
 }
 .finance-net-rollup > span {
@@ -387,7 +385,7 @@
   margin-block: 6px;
 }
 .finance-net-rollup small {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .finance-zelo .finance-period-bar {

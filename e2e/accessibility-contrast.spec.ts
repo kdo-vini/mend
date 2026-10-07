@@ -26,12 +26,14 @@ test("secondary text stays readable on app surfaces in both themes", async ({
     for (const theme of ["dark", "light"]) {
       document.documentElement.dataset.theme = theme;
       const styles = getComputedStyle(document.documentElement);
-      const foreground = luminance(styles.getPropertyValue("--muted-2").trim());
+      const foreground = luminance(
+        styles.getPropertyValue("--text-muted").trim(),
+      );
       for (const surface of [
-        "--bg",
+        "--canvas",
         "--surface",
-        "--surface-2",
-        "--surface-3",
+        "--surface-hover",
+        "--surface-selected",
       ]) {
         const background = luminance(styles.getPropertyValue(surface).trim());
         result[`${theme}/${surface}`] =

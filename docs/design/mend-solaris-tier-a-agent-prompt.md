@@ -1,3 +1,5 @@
+> **Superseded.** The Solaris direction is retired; see [DESIGN.md](../../DESIGN.md) (Céu e Profundo).
+
 # Mend × Solaris — Tier A implementation brief
 
 You are the senior brand designer and frontend engineer responsible for rebuilding the public Mend landing page to Tier A quality.
