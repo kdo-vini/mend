@@ -518,5 +518,9 @@ function ProjectCard({
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
+  // Only API-provided messages are user-facing; anything else (a raw
+  // TypeError, a network failure) falls back to the localized copy.
+  return error instanceof LiveActionError && error.status && error.message
+    ? error.message
+    : fallback;
 }
