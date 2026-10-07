@@ -1,8 +1,9 @@
 # Mend workspace design system
 
 Status: approved by Vinicius following the interactive HTML review, October 2026.
-This supersedes older workspace color, geometry and typography guidance in
-DESIGN.md. Marketing and authentication retain their separate compositions.
+Superseded for colour, type and geometry by the Céu e Profundo brand kit in
+[DESIGN.md](../../DESIGN.md) and `src/styles/tokens.css`; this file keeps the
+scope and implementation notes of the October workspace refactor.
 
 ## Intent and scope
 

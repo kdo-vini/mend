@@ -1,3 +1,5 @@
+> **Superseded.** The Solaris direction is retired; see [DESIGN.md](../../DESIGN.md) (Céu e Profundo).
+
 # Mend landing — Tier A review rubric
 
 ## Reference benchmark

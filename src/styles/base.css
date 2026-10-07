@@ -8,8 +8,8 @@ body,
 }
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--ink);
+  background: var(--canvas);
+  color: var(--text);
   font:
     13px/1.45 Inter,
     ui-sans-serif,
@@ -39,9 +39,9 @@ select:focus-visible {
 input,
 textarea,
 select {
-  color: var(--ink);
+  color: var(--text);
 }
 ::selection {
-  background: var(--accent);
-  color: white;
+  background: var(--action-fill);
+  color: var(--on-action);
 }

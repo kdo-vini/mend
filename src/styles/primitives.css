@@ -31,7 +31,7 @@ h1 {
 .page-header p {
   max-width: 58ch;
   margin-top: 7px;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .page-actions,
 .toolbar-actions {
@@ -57,13 +57,13 @@ h1 {
   margin-left: 4px;
 }
 .button-primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: white;
+  border-color: var(--action-fill);
+  background: var(--action-fill);
+  color: var(--on-action);
 }
 .button-primary:hover {
-  background: oklch(0.74 0.14 258);
-  border-color: oklch(0.74 0.14 258);
+  background: var(--action-fill-highlight);
+  border-color: var(--action-fill-highlight);
 }
 .button-primary:disabled {
   opacity: 0.45;
@@ -72,19 +72,19 @@ h1 {
 .button-ghost {
   border-color: var(--line);
   background: var(--surface);
-  color: var(--ink-soft);
+  color: var(--text-secondary);
 }
 .button-ghost:hover {
   border-color: var(--line-strong);
-  background: var(--surface-2);
+  background: var(--surface-hover);
 }
 .button-danger {
-  border-color: oklch(0.69 0.18 25 / 0.4);
-  background: oklch(0.69 0.18 25 / 0.13);
-  color: oklch(0.82 0.12 25);
+  border-color: color-mix(in oklch, var(--negative) 40%, transparent);
+  background: color-mix(in oklch, var(--negative) 13%, transparent);
+  color: var(--negative-text);
 }
 .button-danger:hover {
-  background: oklch(0.69 0.18 25 / 0.22);
+  background: color-mix(in oklch, var(--negative) 22%, transparent);
 }
 .button-small {
   min-height: 28px;
@@ -100,12 +100,12 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
-  color: var(--muted);
+  color: var(--text-muted);
   transition: var(--duration-normal) var(--ease);
 }
 .icon-button:hover {
-  color: var(--ink);
-  background: var(--surface-2);
+  color: var(--text);
+  background: var(--surface-hover);
   border-color: var(--line-strong);
 }
 .icon-button.subtle {
@@ -116,11 +116,11 @@ h1 {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--accent-soft);
+  color: var(--action-strong);
   font-size: 11px;
 }
 .text-button:hover {
-  color: var(--ink);
+  color: var(--text);
 }
 
 .notification-center {
@@ -138,10 +138,10 @@ h1 {
   padding: 0 3px;
   display: grid;
   place-items: center;
-  border: 2px solid var(--sidebar);
+  border: 2px solid var(--surface-subtle);
   border-radius: 999px;
-  background: var(--danger);
-  color: white;
+  background: var(--negative);
+  color: var(--on-action);
   font-size: 8px;
   line-height: 1;
 }
@@ -155,7 +155,7 @@ h1 {
   overflow: hidden;
   overscroll-behavior: contain;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-feature);
   background: var(--surface);
   box-shadow: 0 18px 45px oklch(0 0 0 / 0.34);
   animation: notification-panel-in 150ms var(--ease) both;
@@ -206,12 +206,12 @@ h1 {
 }
 .notification-panel-header strong {
   display: block;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 .notification-panel-header small,
 .notification-panel-footer {
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .notification-list {
@@ -230,12 +230,12 @@ h1 {
   border: 0;
   border-bottom: 1px solid var(--line);
   background: transparent;
-  color: var(--muted);
+  color: var(--text-muted);
   text-align: left;
 }
 .notification-item:hover,
 .notification-item.unread {
-  background: var(--surface-2);
+  background: var(--surface-hover);
 }
 .notification-item-icon {
   width: 26px;
@@ -244,8 +244,8 @@ h1 {
   display: grid;
   place-items: center;
   border-radius: 7px;
-  background: oklch(0.69 0.18 25 / 0.13);
-  color: var(--warning);
+  background: color-mix(in oklch, var(--negative) 13%, transparent);
+  color: var(--caution);
 }
 .notification-item-copy {
   min-width: 0;
@@ -254,22 +254,22 @@ h1 {
   gap: 3px;
 }
 .notification-item-copy strong {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
 }
 .notification-item-copy span {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 10px;
   line-height: 1.45;
 }
 .notification-item-copy small {
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 9px;
 }
 .notification-empty {
   padding: 24px 13px;
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 11px;
   text-align: center;
 }

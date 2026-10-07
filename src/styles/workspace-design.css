@@ -3,84 +3,21 @@
   display: none;
 }
 .finance-overview-grid .finance-summary-validity[data-state="complete"] {
-  color: #afe4cd;
-}
-:root {
-  --font-product: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-display: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-technical: "JetBrains Mono", ui-monospace, monospace;
-  --radius-control: 10px;
-  --radius-card: 16px;
-  --radius-panel: 20px;
-  --settings-nav-gap: 28px;
-  --settings-content-max-width: 960px;
-  --workspace-canvas: #101b2a;
-  --workspace-glow: #284969;
-  --workspace-glow-secondary: #302b50;
-  --workspace-glass: #263b53b8;
-  --workspace-glass-line: #ffffff24;
-  --workspace-shadow: 0 8px 28px #07132122;
-}
-:root[data-theme="light"] {
-  --workspace-canvas: #edf2f7;
-  --workspace-glow: #c5ddf5;
-  --workspace-glow-secondary: #deddf2;
-  --workspace-glass: #ffffffa8;
-  --workspace-glass-line: #fffffff0;
-  --workspace-shadow: 0 8px 28px #2444660c;
-}
-/* Root theme variables also feed portals mounted outside the app shell. */
-:root:has(.app-shell) {
-  --bg: var(--workspace-canvas);
-  --sidebar: #1b2b40;
-  --surface: #1b2b40;
-  --surface-2: #263b54;
-  --surface-3: #314a69;
-  --ink: #e1eaf7;
-  --ink-soft: #cddbee;
-  --muted: #b2c3d9;
-  --muted-2: #b2c3d9;
-  --line: #ffffff18;
-  --line-strong: #526780;
-  --accent: #75a7ff;
-  --accent-soft: #a6c7ff;
-  --accent-wash: #528aec26;
-}
-:root[data-theme="light"]:has(.app-shell) {
-  --sidebar: #f3f7fc;
-  --surface: #ffffff;
-  --surface-2: #eaf1fa;
-  --surface-3: #d9e6f6;
-  --ink: #182d44;
-  --ink-soft: #304a65;
-  --muted: #52677e;
-  --muted-2: #4c6178;
-  --line: #dce4ed;
-  --line-strong: #b6c8dd;
-  --accent: #2468d8;
-  --accent-soft: #235bb1;
-  --accent-wash: #2468e815;
+  color: var(--on-deep-positive);
 }
 .app-shell {
-  background:
-    radial-gradient(ellipse at 8% 15%, var(--workspace-glow), transparent 45%),
-    radial-gradient(
-      ellipse at 95% 5%,
-      var(--workspace-glow-secondary),
-      transparent 40%
-    ),
-    var(--workspace-canvas);
+  background: var(--canvas-gradient);
 }
 .app-shell .sidebar {
   margin: 16px 0 16px 16px;
   min-height: calc(100vh - 32px);
-  border: 1px solid var(--workspace-glass-line);
-  border-radius: 24px;
-  background: var(--workspace-glass);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-shell);
+  background: var(--glass);
   backdrop-filter: blur(24px) saturate(1.3);
   box-shadow:
-    inset 0 1px 0 var(--workspace-glass-line),
-    var(--workspace-shadow);
+    inset 0 1px 0 var(--glass-line),
+    var(--shadow-float);
   padding-top: 25px;
 }
 .app-shell .brand-name {
@@ -88,13 +25,13 @@
   font-size: 22px;
 }
 .app-shell .nav-item {
-  border-radius: 12px;
+  border-radius: var(--radius-nav);
   padding-block: 12px;
 }
 .app-shell .nav-item.active {
   background: var(--surface);
-  box-shadow: var(--workspace-shadow);
-  color: var(--accent-soft);
+  box-shadow: var(--shadow-float);
+  color: var(--action-strong);
 }
 .app-shell .command-trigger {
   border-radius: var(--radius-control);
@@ -127,9 +64,9 @@
   transform: scale(0.96);
 }
 .app-shell .button-primary {
-  background: linear-gradient(#347af0, #235fcf);
-  border-color: #3779df;
-  color: #fff;
+  background: linear-gradient(var(--action-fill-highlight), var(--action-fill));
+  border-color: var(--action-fill);
+  color: var(--on-action);
   box-shadow:
     inset 0 1px 0 #ffffff35,
     0 4px 12px #2468e81c;
@@ -137,16 +74,16 @@
 .app-shell .issue-toolbar,
 .app-shell .finance-period-bar {
   padding: 12px;
-  border: 1px solid var(--workspace-glass-line);
-  border-radius: 16px;
-  background: var(--workspace-glass);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-card);
+  background: var(--glass);
   backdrop-filter: blur(20px);
 }
 .custom-select-menu,
 [data-slot="dropdown-menu-content"],
 [data-slot="select-content"] {
   padding: 6px;
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--dropdown-surface) 96%, transparent);
   backdrop-filter: blur(20px);
   box-shadow: 0 12px 30px #06162826;
@@ -154,13 +91,13 @@
 .custom-select-option,
 [data-slot="dropdown-menu-item"],
 [data-slot="dropdown-menu-radio-item"] {
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   min-height: 34px;
 }
 .app-shell .inbox-layout,
 .app-shell .issue-table-wrap,
 .app-shell .kanban-column {
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-feature);
   background: var(--surface);
   border-color: var(--line);
 }
@@ -176,10 +113,10 @@
 .app-shell .conversation-row {
   width: calc(100% - 16px);
   margin: 4px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-nav);
 }
 .app-shell .conversation-row.selected {
-  background: var(--accent-wash);
+  background: var(--action-wash);
   box-shadow: inset 0 0 0 1px var(--line);
 }
 .app-shell .conversation-header,
@@ -188,22 +125,22 @@
 }
 .app-shell .message-bubble {
   border-radius: 4px 15px 15px 15px;
-  background: var(--surface-2);
+  background: var(--surface-hover);
 }
 .app-shell .message-row.outbound .message-bubble {
-  background: #245fbc;
-  color: #fff;
-  border-color: #3478d3;
+  background: var(--action-fill);
+  color: var(--on-action);
+  border-color: var(--action-fill-highlight);
   border-radius: 15px 4px 15px 15px;
 }
 .app-shell .message-row.outbound .message-bubble a {
-  color: #fff;
+  color: var(--on-action);
   text-decoration: underline;
 }
 .app-shell .settings-v2-sidebar {
   padding: 20px 14px;
-  border-radius: 18px;
-  background: var(--workspace-glass);
+  border-radius: var(--radius-card);
+  background: var(--glass);
   align-self: start;
 }
 .app-shell .settings-v2-sidebar-intro strong {
@@ -222,15 +159,15 @@
 }
 .app-shell .settings-v2-nav-group-label {
   font-weight: 600;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .app-shell .settings-v2-nav-item {
-  border-radius: 9px;
+  border-radius: var(--radius-nav);
   padding-block: 11px;
 }
 .app-shell .settings-v2-nav-item.selected {
   background: var(--surface);
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .app-shell .settings-v2-page .page-header h1 {
   font-family: var(--font-product);
@@ -240,7 +177,7 @@
 .app-shell .settings-v2-section {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius-feature);
   padding: 24px;
   margin-bottom: 20px;
 }
@@ -256,9 +193,9 @@
 }
 .app-shell .dashboard-identity {
   padding: 26px;
-  border-radius: 20px;
-  background: linear-gradient(115deg, #16375c, #2b5585);
-  color: #e5effc;
+  border-radius: var(--radius-feature);
+  background: var(--deep-gradient);
+  color: var(--on-deep);
   font-size: 18px;
 }
 .app-shell .dashboard-links {
@@ -266,7 +203,7 @@
 }
 .app-shell .dashboard-link {
   padding: 24px;
-  border-radius: 16px;
+  border-radius: var(--radius-card);
 }
 .app-shell .dashboard-link h2 {
   font-size: 17px;
@@ -278,11 +215,10 @@
   align-items: stretch;
 }
 .finance-overview-grid .finance-summary {
-  background:
-    radial-gradient(ellipse at 95% 0, #376ba5, transparent 65%), #16375c;
-  color: #fff;
+  background: var(--deep-gradient);
+  color: var(--on-deep);
   border: 0;
-  border-radius: 22px;
+  border-radius: var(--radius-feature);
   overflow: hidden;
 }
 .finance-overview-grid .finance-metrics {
@@ -317,28 +253,28 @@
   background: #ffffff08;
 }
 .finance-overview-grid .finance-metric-group h2 {
-  color: #fff;
+  color: var(--on-deep);
 }
 .finance-overview-grid .finance-metric-group p,
 .finance-overview-grid .finance-metric dt {
-  color: #c8daee;
+  color: var(--on-deep-muted);
 }
 .finance-overview-grid .finance-metric dd {
-  color: #fff;
+  color: var(--on-deep);
   font-size: 22px;
 }
 .finance-overview-grid .finance-metric[data-tone="negative"] dd {
-  color: #ffd0c9;
+  color: var(--on-deep-negative);
 }
 .finance-overview-grid .finance-summary-validity {
-  color: #ffe0a3;
+  color: var(--on-deep-caution);
   border-color: #ffffff20;
 }
 .finance-overview-grid .finance-attention {
   padding: 24px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: var(--radius-feature);
   margin: 0;
 }
 .finance-overview-grid .finance-attention h2 {
@@ -351,7 +287,7 @@
   padding: 18px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: var(--radius-feature);
 }
 .dashboard-overview-layout {
   display: grid;
@@ -361,9 +297,9 @@
 }
 .dashboard-welcome {
   padding: 32px;
-  border-radius: 22px;
-  background: linear-gradient(115deg, #16375c, #2b5585);
-  color: #fff;
+  border-radius: var(--radius-feature);
+  background: var(--deep-gradient);
+  color: var(--on-deep);
 }
 .dashboard-welcome h2 {
   font-family: var(--font-display);
@@ -377,10 +313,10 @@
   padding: 0;
   margin: 18px 0 28px;
   font-size: 13px;
-  color: #c8daee;
+  color: var(--on-deep-muted);
 }
 .app-shell .dashboard-welcome .button {
-  color: #fff;
+  color: var(--on-deep);
   border-color: #ffffff50;
   background: #ffffff10;
 }
@@ -391,19 +327,22 @@
   box-shadow: none;
 }
 .app-shell .finance-zelo-summary {
-  border-radius: 20px;
+  border-radius: var(--radius-feature);
   overflow: hidden;
 }
+/* One Profundo per screen: on Financeiro it belongs to the result card, so the
+   Zelo totals stay an opaque card. */
 .app-shell .finance-zelo-totals {
-  background: #16375c;
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
 .app-shell .finance-zelo-totals .finance-metric-group h2,
 .app-shell .finance-zelo-totals .finance-metric dd {
-  color: #fff;
+  color: var(--text);
 }
 .app-shell .finance-zelo-totals .finance-metric dt,
 .app-shell .finance-zelo-totals .finance-metric .finance-zelo-hint {
-  color: #c8daee;
+  color: var(--text-muted);
 }
 @media (max-width: 1100px) {
   .dashboard-overview-layout {
@@ -417,7 +356,7 @@
   .app-shell .sidebar {
     margin: 8px 0 8px 8px;
     min-height: calc(100vh - 16px);
-    border-radius: 18px;
+    border-radius: var(--radius-card);
   }
   .app-shell .settings-v2-sidebar {
     padding: 12px;
@@ -502,4 +441,19 @@
   .app-shell .settings-v2-inline-field input {
     font-size: 16px;
   }
+}
+/* Form controls carry a 3:1 border (brand kit, Accessibility). */
+.app-shell
+  :is(
+    input:not(
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="color"]
+    ),
+    select,
+    textarea
+  ):not(:focus, [aria-invalid="true"]),
+.custom-select-trigger:not(:focus-visible) {
+  border-color: var(--line-control);
 }

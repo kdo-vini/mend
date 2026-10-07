@@ -2,9 +2,10 @@
 
 Status: canonical implementation guidance for workspace UI.
 
-The approved [workspace design system](MEND_DESIGN_SYSTEM.md) supersedes earlier
-material and typography guidance here. Keep page-frame and responsive contracts;
-use the new floating navigation, proportional settings labels and shared tokens.
+Colour, type, materials and radii follow the Céu e Profundo brand kit in
+[`DESIGN.md`](../../DESIGN.md) and `src/styles/tokens.css`. Keep page-frame and
+responsive contracts; use the floating navigation, proportional labels and
+shared tokens.
 
 Read this file together with [`DESIGN.md`](../../DESIGN.md) before changing a
 feature UI. `DESIGN.md` defines the product mood, color semantics and system

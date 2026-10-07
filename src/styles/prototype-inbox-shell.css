@@ -21,7 +21,7 @@
   grid-template-columns: var(--inbox-rail-width, 250px) minmax(0, 1fr) 235px;
   height: calc(100dvh - 139px);
   min-height: 550px;
-  border-radius: 18px;
+  border-radius: var(--radius-feature);
   overflow: hidden;
 }
 
@@ -39,7 +39,7 @@
 .app-shell .search-field {
   height: 34px;
   margin: 0 0 11px;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
 }
 
 .app-shell .conversation-list {
@@ -51,7 +51,7 @@
   width: calc(100% - 16px);
   margin: 4px 8px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-nav);
 }
 
 .app-shell .conversation-row-hit {
@@ -64,12 +64,12 @@
 }
 
 .app-shell .conversation-row.selected {
-  background: var(--accent-wash);
+  background: var(--action-wash);
   box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .app-shell .conversation-panel {
-  background: color-mix(in oklch, var(--surface) 70%, var(--bg));
+  background: color-mix(in oklch, var(--surface) 70%, var(--canvas));
 }
 
 .app-shell .conversation-header {
@@ -93,12 +93,12 @@
 
 .app-shell .conversation-assignee {
   min-height: 34px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
 }
 
 .app-shell .conversation-ai-toggle {
   min-height: 34px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
 }
 
 .app-shell .message-canvas {
@@ -119,7 +119,7 @@
   margin-top: 29px;
   margin-bottom: 2px;
   padding: 12px;
-  border-radius: 15px;
+  border-radius: var(--radius-card);
 }
 
 .app-shell .issue-event > span:nth-child(2) {
@@ -129,7 +129,7 @@
 .app-shell .composer {
   margin: 0 15px 15px;
   padding: 14px 18px;
-  border-radius: 12px;
+  border-radius: var(--radius-nav);
 }
 
 .app-shell .composer-toolbar {
@@ -159,14 +159,14 @@
 .app-shell .inbox-case-next-action {
   margin: 16px;
   padding: 12px;
-  border-radius: 15px;
+  border-radius: var(--radius-card);
 }
 
 .app-shell .inbox-linked-case {
   gap: 8px;
   margin: 0 16px 16px;
   padding: 15px;
-  border-radius: 15px;
+  border-radius: var(--radius-card);
 }
 
 .app-shell .inbox-linked-case > strong {

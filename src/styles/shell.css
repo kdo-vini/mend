@@ -1,7 +1,7 @@
 .app-shell {
   display: flex;
   min-height: 100vh;
-  background: var(--bg);
+  background: var(--canvas);
 }
 .sidebar {
   width: 242px;
@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   padding: 17px 12px 12px;
-  background: var(--sidebar);
+  background: var(--surface-subtle);
   border-right: 1px solid var(--line);
 }
 .main-shell {
@@ -42,7 +42,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  color: var(--accent);
+  color: var(--brand);
 }
 .brand-mark svg {
   display: block;
@@ -57,13 +57,13 @@
   line-height: 1;
 }
 .brand-name span {
-  color: var(--accent-soft);
+  color: var(--action-strong);
   font-weight: 500;
 }
 .brand-subtitle {
   max-width: 150px;
   margin-top: 4px;
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 10px;
   letter-spacing: 0;
   line-height: 1.25;
@@ -72,7 +72,7 @@
   margin-left: auto;
 }
 .user-row small {
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .command-trigger {
@@ -85,12 +85,12 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-muted);
   text-align: left;
   transition: 160ms var(--ease);
 }
 .command-trigger:hover {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   border-color: var(--line-strong);
   background: var(--surface);
 }
@@ -98,10 +98,10 @@ kbd {
   padding: 2px 5px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: var(--surface-2);
-  color: var(--muted);
+  background: var(--surface-hover);
+  color: var(--text-muted);
   font:
-    10px/1.3 "DM Mono",
+    10px/1.3 "JetBrains Mono",
     monospace;
 }
 .command-trigger kbd {
@@ -109,10 +109,10 @@ kbd {
 }
 .nav-section-label,
 .page-kicker {
-  color: var(--muted-2);
-  font-size: 10px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .nav-section-label {
   padding: 0 9px 6px;
@@ -128,29 +128,29 @@ kbd {
   gap: 10px;
   padding: 8px 9px;
   border-radius: 6px;
-  color: var(--muted);
+  color: var(--text-muted);
   text-decoration: none;
   transition: 160ms var(--ease);
 }
 .nav-item:hover {
   background: var(--surface);
-  color: var(--ink-soft);
+  color: var(--text-secondary);
 }
 .nav-item.active {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--surface-hover);
+  color: var(--text);
 }
 .nav-item.active svg {
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .nav-count {
   margin-left: auto;
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 .nav-item.active .nav-count {
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .sidebar-bottom {
   display: flex;
@@ -168,10 +168,10 @@ kbd {
   padding: 0 4px;
 }
 .sidebar-bottom-label {
-  color: var(--muted-2);
-  font-size: 9px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .sidebar-utilities {
   display: flex;
@@ -186,7 +186,7 @@ kbd {
   gap: 1px;
 }
 .user-row strong {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 500;
 }
@@ -196,8 +196,9 @@ kbd {
   height: 6px;
   flex: 0 0 6px;
   border-radius: 50%;
-  background: var(--whatsapp);
-  box-shadow: 0 0 0 3px oklch(0.72 0.18 145 / 0.1);
+  background: var(--channel-whatsapp);
+  box-shadow: 0 0 0 3px
+    color-mix(in oklch, var(--channel-whatsapp) 10%, transparent);
 }
 .user-row {
   display: flex;
@@ -211,7 +212,7 @@ kbd {
 }
 .user-row:hover {
   background: var(--surface);
-  color: var(--ink);
+  color: var(--text);
 }
 .workspace-availability {
   position: relative;
@@ -248,17 +249,17 @@ kbd {
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
-  color: var(--ink);
+  color: var(--text);
   display: flex;
   align-items: center;
   gap: var(--space-2);
   text-align: left;
 }
 .workspace-availability-option.is-active > svg {
-  color: var(--success);
+  color: var(--positive);
 }
 .workspace-availability-option.is-away > svg {
-  color: var(--warning);
+  color: var(--caution);
 }
 .workspace-availability-popover button:hover:not(:disabled),
 .workspace-availability-popover button:focus-visible,
@@ -266,7 +267,7 @@ kbd {
   background: var(--dropdown-selected);
 }
 .workspace-availability-popover button:disabled {
-  color: var(--muted);
+  color: var(--text-muted);
   cursor: default;
 }
 .workspace-availability-popover .workspace-availability-profile {
@@ -274,12 +275,12 @@ kbd {
   padding-top: var(--space-2);
   border-top: 1px solid var(--line);
   border-radius: 0;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .user-row {
   min-height: 42px;
   border-radius: 6px;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .mobile-topbar,
 .mobile-bottom-nav,
@@ -302,24 +303,24 @@ kbd {
   border: 0;
   border-radius: var(--radius-small);
   background: transparent;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .mobile-more-actions button:hover,
 .mobile-more-actions button:focus-visible {
-  background: var(--surface-3);
-  color: var(--ink);
+  background: var(--surface-selected);
+  color: var(--text);
 }
 
 /* Control Room v2: a quieter frame for the evidence-first workflow. */
 .app-shell {
-  background: var(--bg);
+  background: var(--canvas);
 }
 
 .sidebar {
   width: 248px;
   flex-basis: 248px;
   padding: 20px 14px 14px;
-  background: color-mix(in oklch, var(--sidebar) 92%, var(--bg));
+  background: color-mix(in oklch, var(--surface-subtle) 92%, var(--canvas));
 }
 
 .brand-row {
@@ -355,7 +356,7 @@ kbd {
 
 .nav-item.active {
   border-color: var(--line);
-  background: var(--surface-2);
+  background: var(--surface-hover);
 }
 
 .nav-item.active::before {
@@ -365,7 +366,7 @@ kbd {
   left: -1px;
   width: 2px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--action);
   content: "";
 }
 

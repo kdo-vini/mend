@@ -9,7 +9,7 @@
 }
 .runs-list {
   border-right: 1px solid var(--line);
-  background: var(--sidebar);
+  background: var(--surface-subtle);
 }
 .run-list-row {
   position: relative;
@@ -20,12 +20,12 @@
   border: 0;
   border-bottom: 1px solid var(--line);
   background: transparent;
-  color: var(--ink);
+  color: var(--text);
   text-align: left;
 }
 .run-list-row:hover,
 .run-list-row.selected {
-  background: var(--surface-2);
+  background: var(--surface-hover);
 }
 .run-list-row > div:last-child {
   min-width: 0;
@@ -37,19 +37,19 @@
   gap: 8px;
 }
 .run-list-heading strong {
-  color: var(--accent-soft);
+  color: var(--action-strong);
   font:
-    11px "DM Mono",
+    11px "JetBrains Mono",
     monospace;
 }
 .run-list-heading span {
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .run-list-row p {
   overflow: hidden;
   margin-top: 4px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 11px;
   line-height: 1.45;
   text-overflow: ellipsis;
@@ -60,7 +60,7 @@
   align-items: center;
   gap: 9px;
   margin-top: 8px;
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .run-status-dot {
@@ -69,26 +69,26 @@
   flex: 0 0 7px;
   margin-top: 5px;
   border-radius: 50%;
-  background: var(--muted-2);
+  background: var(--text-muted);
 }
 .run-status-dot.running {
-  background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-wash);
+  background: var(--action);
+  box-shadow: 0 0 0 4px var(--action-wash);
   animation: pulse 1.8s infinite;
 }
 .run-status-dot.queued {
-  background: var(--warning);
+  background: var(--caution);
 }
 .run-status-dot.completed {
-  background: var(--success);
+  background: var(--positive);
 }
 .run-status-dot.approved {
-  background: var(--success);
-  box-shadow: 0 0 0 3px oklch(0.74 0.14 150 / 0.1);
+  background: var(--positive);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--positive) 10%, transparent);
 }
 .run-status-dot.failed,
 .run-status-dot.rejected {
-  background: var(--danger);
+  background: var(--negative);
 }
 .run-status-text {
   display: inline-flex;
@@ -99,42 +99,42 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--muted-2);
+  background: var(--text-muted);
 }
 .run-status-text.running {
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .run-status-text.running > span {
-  background: var(--accent);
+  background: var(--action);
 }
 .run-status-text.queued {
-  color: var(--warning);
+  color: var(--caution);
 }
 .run-status-text.queued > span {
-  background: var(--warning);
+  background: var(--caution);
 }
 .run-status-text.completed {
-  color: var(--success);
+  color: var(--positive);
 }
 .run-status-text.completed > span,
 .run-status-text.approved > span {
-  background: var(--success);
+  background: var(--positive);
 }
 .run-status-text.approved {
-  color: var(--success);
+  color: var(--positive);
 }
 .run-status-text.failed,
 .run-status-text.rejected {
-  color: var(--danger);
+  color: var(--negative);
 }
 .run-status-text.failed > span,
 .run-status-text.rejected > span {
-  background: var(--danger);
+  background: var(--negative);
 }
 .run-detail {
   min-width: 0;
   padding: 24px 27px;
-  background: var(--bg);
+  background: var(--canvas);
 }
 .run-detail-header {
   display: flex;
@@ -149,11 +149,11 @@
 .run-detail-header p {
   max-width: 60ch;
   margin-top: 7px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 11px;
 }
 .muted-separator {
-  color: var(--muted-2);
+  color: var(--text-muted);
 }
 .run-detail-actions {
   display: flex;
@@ -164,7 +164,7 @@
   margin-top: 22px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-feature);
   background: var(--surface);
 }
 .run-mobile-summary,
@@ -180,7 +180,7 @@
 }
 .run-loop-heading h3 {
   margin-top: 4px;
-  color: var(--ink);
+  color: var(--text);
   font-size: 13px;
 }
 .run-failure-banner {
@@ -189,22 +189,22 @@
   gap: 9px;
   margin-top: 14px;
   padding: 11px 12px;
-  border: 1px solid color-mix(in oklch, var(--danger) 38%, var(--line));
+  border: 1px solid color-mix(in oklch, var(--negative) 38%, var(--line));
   border-radius: 6px;
-  background: color-mix(in oklch, var(--danger) 7%, var(--surface));
-  color: var(--danger);
+  background: color-mix(in oklch, var(--negative) 7%, var(--surface));
+  color: var(--negative);
 }
 .run-failure-banner > div {
   min-width: 0;
 }
 .run-failure-banner strong {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
 }
 .run-failure-banner p {
   margin-top: 3px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 10px;
   line-height: 1.5;
 }
@@ -222,31 +222,31 @@
   padding: 0 7px;
   border: 1px solid var(--line);
   border-radius: 5px;
-  color: var(--muted);
+  color: var(--text-muted);
   font:
-    10px "DM Mono",
+    10px "JetBrains Mono",
     monospace;
   text-transform: capitalize;
 }
 .run-provider-tag svg {
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .run-case-status.active {
-  border-color: color-mix(in oklch, var(--accent) 35%, var(--line));
-  color: var(--accent-soft);
+  border-color: color-mix(in oklch, var(--action) 35%, var(--line));
+  color: var(--action-strong);
 }
 .run-case-status.awaiting_human {
-  border-color: color-mix(in oklch, var(--warning) 35%, var(--line));
-  color: var(--warning);
+  border-color: color-mix(in oklch, var(--caution) 35%, var(--line));
+  color: var(--caution);
 }
 .run-case-status.completed {
-  border-color: color-mix(in oklch, var(--success) 35%, var(--line));
-  color: var(--success);
+  border-color: color-mix(in oklch, var(--positive) 35%, var(--line));
+  color: var(--positive);
 }
 .run-case-status.failed,
 .run-case-status.canceled {
-  border-color: color-mix(in oklch, var(--danger) 35%, var(--line));
-  color: var(--danger);
+  border-color: color-mix(in oklch, var(--negative) 35%, var(--line));
+  color: var(--negative);
 }
 .run-loop-track {
   display: grid;
@@ -262,7 +262,7 @@
   justify-items: center;
   gap: 6px;
   min-width: 66px;
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 9px;
   text-align: center;
 }
@@ -279,13 +279,13 @@
   display: none;
 }
 .run-loop-track li.complete::before {
-  background: var(--success);
+  background: var(--positive);
 }
 .run-loop-track li.current {
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .run-loop-track li.complete {
-  color: var(--success);
+  color: var(--positive);
 }
 .run-loop-icon {
   position: relative;
@@ -299,11 +299,11 @@
   background: var(--surface);
 }
 .run-loop-track li.current .run-loop-icon {
-  border-color: var(--accent);
-  background: var(--accent-wash);
+  border-color: var(--action);
+  background: var(--action-wash);
 }
 .run-loop-track li.complete .run-loop-icon {
-  border-color: color-mix(in oklch, var(--success) 45%, var(--line));
+  border-color: color-mix(in oklch, var(--positive) 45%, var(--line));
 }
 .run-loop-facts {
   display: grid;
@@ -319,16 +319,16 @@
   display: grid;
   gap: 4px;
   padding: 10px;
-  background: var(--surface-2);
+  background: var(--surface-hover);
 }
 .run-loop-facts span,
 .run-release-summary dt {
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 9px;
 }
 .run-loop-facts strong,
 .run-release-summary dd {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 500;
 }
@@ -336,14 +336,14 @@
   margin-top: 16px;
 }
 .run-loop-subheading h4 {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 600;
 }
 .run-loop-subheading span {
-  color: var(--muted-2);
+  color: var(--text-muted);
   font:
-    9px "DM Mono",
+    9px "JetBrains Mono",
     monospace;
 }
 .run-evidence-grid {
@@ -358,19 +358,19 @@
   align-items: baseline;
   gap: 4px 8px;
   padding: 9px;
-  border-left: 2px solid var(--signal);
-  background: var(--surface-2);
+  border-left: 2px solid var(--positive);
+  background: var(--surface-hover);
 }
 .run-evidence-grid code {
-  color: var(--signal);
+  color: var(--positive);
   font:
-    8px "DM Mono",
+    8px "JetBrains Mono",
     monospace;
-  text-transform: uppercase;
+  text-transform: none;
 }
 .run-evidence-grid strong {
   overflow: hidden;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 500;
   text-overflow: ellipsis;
@@ -379,7 +379,7 @@
 .run-evidence-grid p,
 .run-loop-empty {
   grid-column: 1 / -1;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 9px;
   line-height: 1.5;
 }
@@ -407,27 +407,27 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .progress-line {
   height: 4px;
   margin: 25px 0 12px;
   overflow: hidden;
   border-radius: 4px;
-  background: var(--surface-2);
+  background: var(--surface-hover);
 }
 .progress-line span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
+  background: var(--action);
   transition: width 600ms var(--ease);
 }
 .run-stat-row {
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .run-stat-row span {
@@ -436,7 +436,7 @@
   gap: 4px;
 }
 .run-stat-row strong {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 .run-attempts {
@@ -444,7 +444,7 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .run-attempts span {
@@ -466,17 +466,17 @@
 }
 .run-review-actions > span {
   flex: 1;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .run-failure-actions {
-  border-color: color-mix(in oklch, var(--danger) 30%, var(--line));
+  border-color: color-mix(in oklch, var(--negative) 30%, var(--line));
 }
 .run-implement-actions {
-  border-color: color-mix(in oklch, var(--accent) 35%, var(--line));
+  border-color: color-mix(in oklch, var(--action) 35%, var(--line));
 }
 .run-notify-actions {
-  border-color: color-mix(in oklch, var(--signal) 30%, var(--line));
+  border-color: color-mix(in oklch, var(--positive) 30%, var(--line));
 }
 .diff-view,
 .check-result pre {
@@ -485,10 +485,10 @@
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--sidebar);
-  color: var(--ink-soft);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
   font:
-    10px/1.6 "DM Mono",
+    10px/1.6 "JetBrains Mono",
     monospace;
   white-space: pre;
   tab-size: 2;
@@ -508,23 +508,23 @@
   align-items: center;
   gap: 8px;
   padding: 9px 10px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 10px;
   cursor: pointer;
 }
 .check-result summary strong {
   flex: 1;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 .check-result summary code {
-  color: var(--muted-2);
+  color: var(--text-muted);
 }
 .check-result.passed summary > span {
-  color: var(--success);
+  color: var(--positive);
 }
 .check-result.failed summary > span {
-  color: var(--danger);
+  color: var(--negative);
 }
 .check-result pre {
   max-height: 260px;
@@ -552,25 +552,25 @@
   place-items: center;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: var(--bg);
+  background: var(--canvas);
 }
 .run-event-node span {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--muted);
+  background: var(--text-muted);
 }
 .run-event-node.accent span {
-  background: var(--accent);
+  background: var(--action);
 }
 .run-event-node.success span {
-  background: var(--success);
+  background: var(--positive);
 }
 .run-event-node.warning span {
-  background: var(--warning);
+  background: var(--caution);
 }
 .run-event-node.danger span {
-  background: var(--danger);
+  background: var(--negative);
 }
 .run-event-line {
   position: absolute;
@@ -595,20 +595,20 @@
   gap: 3px;
 }
 .run-event-copy strong {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 500;
 }
 .run-event-copy code {
-  color: var(--muted-2);
+  color: var(--text-muted);
   font:
-    10px "DM Mono",
+    10px "JetBrains Mono",
     monospace;
 }
 .run-event-copy time {
-  color: var(--muted-2);
+  color: var(--text-muted);
   font:
-    10px "DM Mono",
+    10px "JetBrains Mono",
     monospace;
   white-space: nowrap;
 }
@@ -621,17 +621,17 @@
   gap: 8px;
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 11px;
 }
 .file-row svg {
-  color: var(--accent-soft);
+  color: var(--action-strong);
 }
 .file-row span:nth-child(2) {
   flex: 1;
 }
 .file-change {
-  color: var(--success);
+  color: var(--positive);
   font-size: 10px;
 }
 
@@ -700,15 +700,15 @@
 
   .run-mobile-summary dt,
   .run-mobile-decision-bar > span {
-    color: var(--muted-2);
+    color: var(--text-muted);
     font:
-      9px "DM Mono",
+      11px var(--font-product),
       monospace;
-    text-transform: uppercase;
+    text-transform: none;
   }
 
   .run-mobile-summary dd strong {
-    color: var(--accent-soft);
+    color: var(--action-strong);
   }
 
   .run-mobile-summary dl {
@@ -724,12 +724,12 @@
   .run-mobile-summary dl > div {
     min-width: 0;
     padding: var(--space-3);
-    background: var(--surface-2);
+    background: var(--surface-hover);
   }
 
   .run-mobile-summary dd {
     margin: var(--space-1) 0 0;
-    color: var(--ink-soft);
+    color: var(--text-secondary);
     font-size: 10px;
     line-height: 1.45;
     overflow-wrap: anywhere;
@@ -742,7 +742,7 @@
 
   .run-mobile-summary dd span {
     margin-top: var(--space-1);
-    color: var(--muted);
+    color: var(--text-muted);
   }
 
   .run-mobile-summary .run-mobile-latest-event {
@@ -797,7 +797,7 @@
     margin: var(--space-3) 0 0;
     padding: var(--space-2);
     border: 1px solid var(--line-strong);
-    border-radius: var(--radius-panel);
+    border-radius: var(--radius-feature);
     background: var(--surface);
   }
 

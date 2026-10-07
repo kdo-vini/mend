@@ -6,7 +6,7 @@
   justify-content: center;
   gap: clamp(44px, 8vw, 120px);
   padding: 48px;
-  background: var(--bg);
+  background: var(--canvas);
 }
 .auth-context {
   width: min(520px, 100%);
@@ -14,7 +14,7 @@
 .auth-context h2 {
   max-width: 10ch;
   margin: 21px 0 18px;
-  color: var(--ink);
+  color: var(--text);
   font-size: clamp(34px, 5vw, 62px);
   letter-spacing: -0.035em;
   line-height: 0.99;
@@ -23,7 +23,7 @@
 .auth-context > p {
   max-width: 48ch;
   margin: 0;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -56,7 +56,7 @@
 .onboarding-card > p {
   max-width: 56ch;
   margin: 9px 0 22px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -65,7 +65,7 @@
   flex-direction: column;
   gap: 6px;
   margin-top: 13px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .onboarding-card input {
@@ -74,12 +74,12 @@
   border: 1px solid var(--line);
   border-radius: 5px;
   outline: 0;
-  background: var(--surface-2);
-  color: var(--ink-soft);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 .onboarding-card input:focus {
-  border-color: var(--accent);
+  border-color: var(--action);
 }
 .onboarding-card .button {
   margin-top: 22px;
@@ -87,7 +87,7 @@
 .onboarding-note {
   display: block;
   margin-top: 13px;
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .auth-brand {
@@ -102,7 +102,7 @@
 }
 .auth-card > p {
   margin-top: 8px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -116,11 +116,11 @@
   width: 100%;
   min-height: 38px;
   border-color: var(--line-strong);
-  background: var(--surface-2);
+  background: var(--surface-hover);
 }
 .auth-google:hover:not(:disabled) {
-  border-color: var(--ink-soft);
-  background: var(--surface-3);
+  border-color: var(--text-secondary);
+  background: var(--surface-selected);
 }
 .auth-google:disabled {
   cursor: wait;
@@ -136,7 +136,7 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 10px;
-  color: var(--muted-2);
+  color: var(--text-muted);
   font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -151,7 +151,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 10px;
 }
 .auth-input {
@@ -162,12 +162,12 @@
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--bg);
-  color: var(--muted-2);
+  background: var(--canvas);
+  color: var(--text-muted);
 }
 .auth-input:focus-within {
-  border-color: var(--accent);
-  color: var(--accent-soft);
+  border-color: var(--action);
+  color: var(--action-strong);
 }
 .auth-input input {
   min-width: 0;
@@ -175,7 +175,7 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--ink);
+  color: var(--text);
   font-size: 12px;
 }
 .auth-error,
@@ -187,11 +187,11 @@
 }
 .auth-error {
   background: oklch(0.69 0.18 25 / 0.1);
-  color: var(--danger);
+  color: var(--negative);
 }
 .auth-notice {
   background: oklch(0.74 0.14 150 / 0.1);
-  color: var(--success);
+  color: var(--positive);
 }
 .auth-submit {
   justify-content: center;
@@ -436,7 +436,7 @@
 .auth-divider {
   margin: 2px 0;
   color: #69717e;
-  font-family: "JetBrains Mono", "DM Mono", monospace;
+  font-family: "JetBrains Mono", "JetBrains Mono", monospace;
   font-size: 8px;
   letter-spacing: 0.06em;
 }
