@@ -9,8 +9,14 @@
   background: var(--canvas-gradient);
 }
 .app-shell .sidebar {
+  /* Viewport-tall and sticky: long pages scroll their content, never the
+     sidebar (it used to stretch with the tallest page). */
+  position: sticky;
+  top: 16px;
+  align-self: flex-start;
   margin: 16px 0 16px 16px;
-  min-height: calc(100vh - 32px);
+  height: calc(100dvh - 32px);
+  min-height: 0;
   border: 1px solid var(--glass-line);
   border-radius: var(--radius-shell);
   background: var(--glass);
@@ -330,6 +336,12 @@
   border-radius: var(--radius-feature);
   overflow: hidden;
 }
+/* Inside a disclosure the disclosure is the card: no card-in-card. */
+.app-shell .disclosure :is(.finance-zelo-summary, .finance-zelo-totals) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
 /* One Profundo per screen: on Financeiro it belongs to the result card, so the
    Zelo totals stay an opaque card. */
 .app-shell .finance-zelo-totals {
@@ -354,8 +366,9 @@
 }
 @media (max-width: 820px) {
   .app-shell .sidebar {
+    top: 8px;
     margin: 8px 0 8px 8px;
-    min-height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
     border-radius: var(--radius-card);
   }
   .app-shell .settings-v2-sidebar {

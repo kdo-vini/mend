@@ -588,7 +588,8 @@
         "title": "Recebimentos apurados · projetos selecionados",
         "detail": "{{manual}} registrados manualmente + {{automatic}} líquidos do Zelo",
         "hint": "Em reais, após as taxas de pagamento conhecidas. Valores sem líquido confirmado ficam fora; cobertura parcial, estornos e taxas de repasse exigem conciliação. Saldos e repasses não são somados novamente."
-      }
+      },
+      "receiptsTitle": "Recebimentos do mês"
     },
     "pending": {
       "resolveUnknown": "Revisar valores ausentes",

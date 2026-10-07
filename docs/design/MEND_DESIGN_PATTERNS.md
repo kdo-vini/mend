@@ -79,6 +79,15 @@ left aligned and visually subordinate to the page content.
   separate surfaces.
 - Tables remain border-separated and dense; do not turn a table into spaced
   cards on desktop.
+- Long secondary groups collapse with `Disclosure` (`src/shared/ui/`): the
+  header always shows the title and its key figure, the body springs open with
+  `--ease-spring`. Open the primary group by default; keep the rest closed.
+  Reference: `docs/design/mocks/financeiro-hierarquia.html`.
+
+### Shell
+
+The sidebar is sticky and viewport-tall. Long pages scroll their content; the
+sidebar never grows with the page.
 
 ### Mobile
 

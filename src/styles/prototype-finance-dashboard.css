@@ -1,26 +1,39 @@
-/* Composition from the approved interactive HTML, using live product data. */
-.finance-section-title {
-  font-size: 16px;
-  margin: 24px 0 14px;
+/* Composition from the approved interactive HTML, using live product data.
+   Hierarchy contract: docs/design/mocks/financeiro-hierarquia.html. */
+.finance-section {
+  margin-top: 28px;
 }
-.finance-automatic {
-  margin: 24px 0;
+.finance-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: 15px;
 }
-.finance-automatic > h2 {
-  font-size: 20px;
-  margin-bottom: 18px;
+.finance-section-header h2 {
+  font-size: 17px;
+  font-weight: 600;
 }
-.provider-balances {
-  margin-bottom: 22px;
+.finance-projects-link {
+  color: var(--action);
+  font-size: 13px;
+  font-weight: 550;
+  text-decoration: none;
 }
-.provider-balances > header {
+.finance-projects-link:hover {
+  text-decoration: underline;
+}
+.finance-projects-link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-small);
+}
+.provider-balances .disclosure-inner > header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-}
-.provider-balances h2 {
-  font-size: 17px;
 }
 .provider-balances p {
   color: var(--text-muted);
@@ -86,6 +99,10 @@
   font-size: 32px;
 }
 @media (max-width: 650px) {
+  .app-shell .finance-zelo-totals .finance-net-primary dd:first-of-type {
+    font-size: 20px;
+    overflow-wrap: normal;
+  }
   .provider-balance-grid {
     grid-template-columns: 1fr;
   }
@@ -388,11 +405,14 @@
   color: var(--text-muted);
 }
 
-.finance-zelo .finance-period-bar {
-  position: static;
-}
 @media (max-width: 650px) {
   .finance-page :is(button, input, select, textarea) {
     scroll-margin-block: 80px;
   }
+}
+.finance-page .finance-period-bar {
+  justify-content: flex-start;
+}
+.finance-page .finance-period-bar .finance-sync {
+  margin-left: auto;
 }

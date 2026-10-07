@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { financeApi, type ProviderBalances } from "../api";
 import { isForbidden } from "../useFinanceData";
+import { Disclosure } from "../../../shared/ui/Disclosure";
 const zeroDecimal = new Set([
   "BIF",
   "CLP",
@@ -52,16 +53,34 @@ export function ProviderBalancesPanel({
       style: "currency",
       currency,
     }).format(amount / (zeroDecimal.has(currency) ? 1 : 100));
+  const providers = ["abacatepay", "stripe"] as const;
+  const summary = failed
+    ? t("finance.providerBalances.unknown")
+    : !data
+      ? t("finance.zelo.loading")
+      : providers.map((provider, index) => {
+          const balance = data.providers[provider].balances?.[0];
+          return (
+            <span key={provider}>
+              {index > 0 && " · "}
+              {t(`finance.zelo.providers.${provider}`)}{" "}
+              <strong>
+                {balance
+                  ? money(balance.availableMinor, balance.currency)
+                  : t("finance.zelo.table.unknown")}
+              </strong>
+            </span>
+          );
+        });
   return (
-    <section
+    <Disclosure
       className="provider-balances"
-      aria-label={t("finance.providerBalances.title")}
+      label={t("finance.providerBalances.title")}
+      title={t("finance.providerBalances.title")}
+      summary={summary}
     >
       <header>
-        <div>
-          <h2>{t("finance.providerBalances.title")}</h2>
-          <p>{t("finance.providerBalances.scope")}</p>
-        </div>
+        <p>{t("finance.providerBalances.scope")}</p>
         <button
           type="button"
           className="button button-ghost"
@@ -86,7 +105,7 @@ export function ProviderBalancesPanel({
             })}
           </p>
           <div className="provider-balance-grid">
-            {(["abacatepay", "stripe"] as const).map((provider) => {
+            {providers.map((provider) => {
               const item = data.providers[provider];
               return (
                 <article key={provider}>
@@ -165,6 +184,6 @@ export function ProviderBalancesPanel({
           </div>
         </>
       )}
-    </section>
+    </Disclosure>
   );
 }
