@@ -21,7 +21,9 @@ test("attention review preserves context, restores focus and respects reduced mo
   await expect(
     page.getByLabel("Sources reviewed", { exact: true }),
   ).toBeFocused();
-  await expect(page.locator(".finance-ledger")).toBeVisible();
+  await expect(
+    page.locator(".finance-ledger:not(.finance-zelo-charges)"),
+  ).toBeVisible();
   expect(
     await page
       .locator(".finance-editor")
@@ -87,7 +89,7 @@ const hostinger = {
  * payloads and 403/409 codes). Persistence rules are covered by the real
  * database test; this mock only lets the UI run against the API contract.
  */
-async function mockFinance(page: Page, allowed = true) {
+async function mockFinance(page: Page, allowed = true, visualFixtures = false) {
   const tables: Record<string, Row[]> = {
     entries: [],
     settlements: [],
@@ -97,10 +99,22 @@ async function mockFinance(page: Page, allowed = true) {
   };
   const events: Array<Row & { record_id: string }> = [];
   const calls: Record<string, number> = {};
+  const projects = ["Alpha", "Alpha Pro", "Diagium"].map((key, index) => ({
+    id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(index + 1).padStart(12, "0")}`,
+    key,
+    name: key,
+    description: "",
+    status: "active",
+    version: 1,
+  }));
   const state = { allowed, summaryGate: null as Promise<void> | null };
   const inMonth = (date: unknown, period: string) =>
     String(date).slice(0, 7) === period.slice(0, 7);
   const entry = (id: unknown) => tables.entries.find((row) => row.id === id);
+
+  await page.route("**/api/projects", async (route) => {
+    await route.fulfill({ json: { data: projects } });
+  });
 
   await page.route("**/api/finance/**", async (route) => {
     const request = route.request();
@@ -113,6 +127,59 @@ async function mockFinance(page: Page, allowed = true) {
       await route.fulfill({ json: { allowed: state.allowed } });
       return;
     }
+    if (parts[0] === "provider-balances") {
+      await route.fulfill({
+        json: {
+          checkedAt: "2026-10-06T12:00:00.000Z",
+          providers: Object.fromEntries(
+            ["stripe", "abacatepay"].map((provider) => [
+              provider,
+              {
+                status: "ok",
+                scope: "provider_account",
+                balances: [
+                  {
+                    currency: provider === "stripe" ? "USD" : "BRL",
+                    availableMinor: visualFixtures ? 123456 : 0,
+                    pendingMinor: visualFixtures ? 7890 : 0,
+                  },
+                ],
+                payouts: visualFixtures
+                  ? [
+                      {
+                        id: `${provider}-visual-payout`,
+                        status: "in_transit",
+                        currency: provider === "stripe" ? "USD" : "BRL",
+                        amountMinor: 12000,
+                        feeMinor: provider === "stripe" ? null : 300,
+                        netMinor: provider === "stripe" ? 12000 : null,
+                        arrivalAt:
+                          provider === "stripe"
+                            ? "2026-10-12T00:00:00.000Z"
+                            : null,
+                        createdAt: "2026-10-05T00:00:00.000Z",
+                      },
+                    ]
+                  : [],
+              },
+            ]),
+          ),
+        },
+      });
+      return;
+    }
+    if (parts[0] === "zelo") {
+      await route.fulfill({
+        json: {
+          period,
+          checkedAt: "2026-10-06T12:00:00.000Z",
+          providers: { stripe: "ok", abacatepay: "ok" },
+          rows: [],
+          totals: [],
+        },
+      });
+      return;
+    }
     if (!state.allowed) {
       await route.fulfill({
         status: 403,
@@ -123,16 +190,26 @@ async function mockFinance(page: Page, allowed = true) {
     let body: unknown;
     if (parts[0] === "summary") {
       if (state.summaryGate) await state.summaryGate;
+      const selectedProject = url.searchParams.get("project");
       const live = tables.entries.filter(
-        (r) => r.period === period && !r.cancelled,
+        (r) =>
+          r.period === period &&
+          !r.cancelled &&
+          (selectedProject === null || r.project === selectedProject),
       );
       const total = (kind: string) =>
         live
           .filter((r) => r.kind === kind && typeof r.amount_cents === "number")
           .reduce((sum, r) => sum + Number(r.amount_cents), 0);
-      const cash = tables.settlements.filter(
-        (r) => inMonth(r.paid_on, period) && !r.cancelled,
-      );
+      const cash = tables.settlements.filter((r) => {
+        const linked = entry(r.entry_id);
+        return (
+          inMonth(r.paid_on, period) &&
+          !r.cancelled &&
+          Boolean(linked && !linked.cancelled && linked.kind !== "transfer") &&
+          (selectedProject === null || linked?.project === selectedProject)
+        );
+      });
       const moved = (kind: string) =>
         cash
           .filter((r) => entry(r.entry_id)?.kind === kind)
@@ -210,16 +287,34 @@ async function mockFinance(page: Page, allowed = true) {
       else rows[index] = body as Row;
     } else {
       const entity = parts[0];
+      const selectedProject = url.searchParams.get("project");
       const rows =
         entity === "entries"
-          ? tables.entries.filter((r) => r.period === period)
+          ? tables.entries.filter(
+              (r) =>
+                r.period === period &&
+                (selectedProject === null || r.project === selectedProject),
+            )
           : entity === "settlements"
-            ? tables.settlements.filter((r) => inMonth(r.paid_on, period))
+            ? tables.settlements.filter(
+                (r) =>
+                  inMonth(r.paid_on, period) &&
+                  (selectedProject === null ||
+                    entry(r.entry_id)?.project === selectedProject),
+              )
             : entity === "references"
               ? tables.references.filter(
-                  (r) => entry(r.entry_id)?.period === period,
+                  (r) =>
+                    entry(r.entry_id)?.period === period &&
+                    (selectedProject === null ||
+                      entry(r.entry_id)?.project === selectedProject),
                 )
-              : tables[entity];
+              : entity === "templates"
+                ? tables.templates.filter(
+                    (r) =>
+                      selectedProject === null || r.project === selectedProject,
+                  )
+                : tables[entity];
       const attention = url.searchParams.get("attention");
       const matching = attention
         ? rows.filter(
@@ -514,12 +609,13 @@ test("finance keeps accruals and cash distinct, persists entry and respects mont
   await expect(
     page.getByText("Cobertura parcial — resultado provisório"),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Competência", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Caixa", exact: true }),
-  ).toBeVisible();
+  const summary = page.locator(".finance-summary-hero");
+  await expect(summary).toContainText("Resultado gerencial");
+  await expect(summary).toContainText(
+    "O que pertence a outubro de 2026, independentemente do pagamento.",
+  );
+  await expect(summary).toContainText("Recebido no mês");
+  await expect(summary).toContainText("Pago no mês");
   await page.getByRole("button", { name: "Nova despesa", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Nova despesa", exact: true }),
@@ -825,7 +921,7 @@ test("conflict recovery retains edited amounts, refreshes untouched fields and s
   });
 });
 
-test("cancelling an expense requires a reason, preserves the record and removes its total", async ({
+test("deleting an expense requires confirmation and reason, preserves history and removes its total", async ({
   page,
 }) => {
   await openFinance(page, "en-US");
@@ -834,17 +930,22 @@ test("cancelling an expense requires a reason, preserves the record and removes 
   await page.goto("/financeiro?demo=1");
   await page.getByLabel("Reporting month").fill("2026-10");
   await expect(metric(page, "Accrued expenses")).toContainText("19.90");
-  await page.getByRole("button", { name: "Edit: Hostinger Diagium" }).click();
-  await page
-    .getByLabel("Cancel record (reason required)", { exact: true })
-    .check();
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
-  await expect(editor(page)).toBeVisible();
+  await page.getByRole("button", { name: "Delete: Hostinger Diagium" }).click();
+  const removeForm = editor(page);
+  await expect(
+    removeForm.getByRole("heading", { name: "Delete record", exact: true }),
+  ).toBeVisible();
+  const confirmDelete = removeForm.getByRole("button", {
+    name: "Confirm deletion",
+    exact: true,
+  });
+  await confirmDelete.click();
+  await expect(removeForm).toBeVisible();
   expect(tables.entries[0].version).toBe(1);
-  await page
+  await removeForm
     .getByLabel("Cancellation reason", { exact: true })
     .fill("Duplicate accrual");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await confirmDelete.click();
   await expect(page.locator(".finance-table")).toContainText("Cancelled");
   await expect(page.locator(".finance-table")).toContainText(
     "Reason: Duplicate accrual",
@@ -890,7 +991,7 @@ test("recurring expenses generate the month once, and Supabase costs require a p
   await page.getByRole("button", { name: "Save record", exact: true }).click();
   await expect(editor(page)).toBeVisible();
   expect(tables.templates).toHaveLength(0);
-  await page.getByLabel("Served project").fill("Diagium");
+  await page.getByLabel("Served project").selectOption("Diagium");
   await page.getByRole("button", { name: "Save record", exact: true }).click();
   await expect(page.getByText("Recurring expense saved.")).toBeVisible();
   expect(tables.templates[0]).toMatchObject({
@@ -909,6 +1010,74 @@ test("recurring expenses generate the month once, and Supabase costs require a p
   await expect(metric(page, "Accrued expenses")).toContainText("125.00");
   await page.getByRole("tab", { name: "Accruals" }).click();
   await expect(page.getByRole("cell", { name: /^Supabase Pro/ })).toBeVisible();
+});
+
+test("project selection scopes summary and ledger and preselects a new expense", async ({
+  page,
+}) => {
+  await openFinance(page, "en-US");
+  const { tables } = await mockFinance(page);
+  const period = `${currentMonth()}-01`;
+  tables.entries.push(
+    {
+      ...hostinger,
+      id: "11111111-1111-4111-8111-111111111111",
+      period,
+      project: "Alpha",
+      amount_cents: 10000,
+      description: "Alpha income",
+      kind: "income",
+    },
+    {
+      ...hostinger,
+      id: "22222222-2222-4222-8222-222222222222",
+      period,
+      project: "Alpha Pro",
+      amount_cents: 90000,
+      description: "Alpha Pro income",
+      kind: "income",
+    },
+  );
+  await page.goto("/financeiro?demo=1");
+  const projectFilter = page.locator(".finance-business select");
+  await expect(projectFilter).toHaveValue("__all");
+
+  await projectFilter.selectOption("Alpha");
+  await expect(page).toHaveURL(/project=Alpha$/);
+  await expect(metric(page, "Accrued revenue")).toContainText("100.00");
+  await expect(page.locator(".finance-table")).toContainText("Alpha income");
+  await expect(page.locator(".finance-table")).not.toContainText(
+    "Alpha Pro income",
+  );
+
+  await projectFilter.selectOption("Alpha Pro");
+  await expect(page).toHaveURL(/project=Alpha\+Pro$/);
+  await expect(metric(page, "Accrued revenue")).toContainText("900.00");
+  await expect(page.locator(".finance-table")).toContainText(
+    "Alpha Pro income",
+  );
+  await expect(page.locator(".finance-table")).not.toContainText(
+    "Alpha income",
+  );
+
+  await page.getByRole("button", { name: "New expense", exact: true }).click();
+  const form = editor(page);
+  const servedProject = form.getByLabel("Served project", { exact: true });
+  await expect(servedProject).toHaveValue("Alpha Pro");
+  await form.getByLabel("Description", { exact: true }).fill("Project expense");
+  await form.getByLabel("Amount (BRL)", { exact: true }).fill("12.50");
+  await form.getByLabel("Category", { exact: true }).fill("Operations");
+  await form.getByLabel("Source", { exact: true }).fill("Manual");
+  await form.getByRole("button", { name: "Save record", exact: true }).click();
+  await expect(page.getByText("Entry saved.", { exact: true })).toBeVisible();
+  expect(tables.entries.at(-1)).toMatchObject({
+    description: "Project expense",
+    project: "Alpha Pro",
+    kind: "expense",
+    amount_cents: 1250,
+  });
+  await expect(metric(page, "Accrued expenses")).toContainText("12.50");
+  await expect(page.locator(".finance-table")).toContainText("Project expense");
 });
 
 test("coverage review and unknown amounts drive the coverage status", async ({
@@ -954,3 +1123,53 @@ test("coverage review and unknown amounts drive the coverage status", async ({
     taxes_complete: true,
   });
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`finance visual ${theme}: overview and expense editor fit desktop/mobile`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize(
+      info.project.name === "mobile"
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 900 },
+    );
+    await openFinance(page, "en-US", theme);
+    const { tables } = await mockFinance(page, true, true);
+    tables.entries.push({
+      ...hostinger,
+      id: `${theme === "light" ? "33333333" : "44444444"}-3333-4333-8333-333333333333`,
+      period: `${currentMonth()}-01`,
+      kind: "income",
+      amount_cents: 245000,
+      description: "Synthetic project revenue",
+      category: "Services",
+      source: "Visual fixture",
+      project: "Diagium",
+    });
+
+    await page.goto("/financeiro?demo=1");
+    await expect(page.locator(".finance-summary-hero")).toBeVisible();
+    await expect(page.locator(".provider-balances")).toBeVisible();
+    await expect(page.locator(".provider-balance-grid")).toContainText(
+      "Stripe",
+    );
+    await expect(page.locator(".provider-balance-grid")).toContainText(
+      "AbacatePay",
+    );
+    expect(await noOverflow(page)).toBe(false);
+    await page.screenshot({
+      path: info.outputPath(`finance-${theme}-overview.png`),
+      fullPage: true,
+    });
+
+    await page
+      .getByRole("button", { name: "New expense", exact: true })
+      .click();
+    await expect(editor(page)).toBeVisible();
+    expect(await noOverflow(page)).toBe(false);
+    await page.screenshot({
+      path: info.outputPath(`finance-${theme}-expense-editor.png`),
+      fullPage: true,
+    });
+  });
+}

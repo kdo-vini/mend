@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  FolderKanban,
   CircleDot,
   Inbox as InboxIcon,
   LayoutDashboard,
@@ -12,6 +13,7 @@ import { SUPPORT_AI_SURFACES_ENABLED } from "../../shared/support-ai-surfaces";
 export type WorkspaceNavigationId =
   | "dashboard"
   | "finance"
+  | "projects"
   | "inbox"
   | "issues"
   | "runs"
@@ -21,6 +23,7 @@ export type WorkspaceNavigationId =
 export const navItems = [
   { id: "dashboard", to: "/dashboard", icon: LayoutDashboard },
   { id: "finance", to: "/financeiro", icon: Wallet },
+  { id: "projects", to: "/projects", icon: FolderKanban },
   { id: "inbox", to: "/inbox", icon: InboxIcon },
   { id: "issues", to: "/issues", icon: CircleDot },
   { id: "runs", to: "/agent-runs", icon: TerminalSquare },

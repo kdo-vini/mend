@@ -3,6 +3,7 @@ import { FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Message } from "../../../types";
 import { getMessageMediaUrl, type MessageMediaPurpose } from "../api";
+import { AudioWavePlayer } from "./AudioWavePlayer";
 
 export function MessageMedia({
   workspaceId,
@@ -98,7 +99,7 @@ export function MessageMedia({
       ) : message.type === "audio" ? (
         <div className="message-bubble media-bubble">
           {url ? (
-            <audio controls preload="metadata" src={url} onError={onError} />
+            <AudioWavePlayer key={url} src={url} onError={onError} />
           ) : (
             <span className="media-transcript-status">
               {t("ui.processingMedia")}

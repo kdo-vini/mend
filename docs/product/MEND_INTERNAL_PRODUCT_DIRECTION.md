@@ -12,10 +12,14 @@ Mend é o dashboard interno da Diagium: um único workspace operacional, várias
 
 ## Limites
 
-Em 06/10/2026, Vinicius autorizou a visão de transações reais do Zelo no Mend,
-separada dos totais e lançamentos Diagium. A conexão é somente leitura de PIX
-AbacatePay e faturas Stripe; não inclui mudanças de cobrança ou importação no
-ledger. Ver [contrato e ativação](../engineering/ZELO_FINANCE_CONNECTION.md).
+Em 06/10/2026, Vinicius esclareceu: Diagium é a empresa; Zelo é seu projeto/produto.
+Projetos têm página própria na sidebar, cadastro e vínculo com receitas/despesas
+no Financeiro. A visão consolidada inclui os projetos, preservando o detalhe por
+origem. Stripe e AbacatePay são somente leitura, com taxas/líquido quando
+confirmados e saldos/repasses separados. Não há mudanças de cobrança nem cópia
+dos recebimentos automáticos para o ledger manual. Ver
+[projetos](../engineering/PROJECT_FINANCE.md) e
+[contrato dos provedores](../engineering/ZELO_FINANCE_CONNECTION.md).
 
 - Identidade individual, autorização, RLS e auditoria continuam obrigatórias. Single workspace não significa acesso livre ou senha compartilhada.
 - O UUID operacional é preservado nas referências de canais, conversas, mensagens, eventos e credenciais. Colunas legadas não precisam ser removidas para abandonar multi-tenancy.

@@ -7,6 +7,13 @@ catálogo não substitui os ADRs.
 
 ## Regra principal
 
+Projetos têm catálogo próprio em `features/projects` e `server/projects.ts`.
+Diagium é a empresa; Zelo é um projeto. Chaves imutáveis preservam as referências
+financeiras existentes; `finance_project_summary` calcula totais filtrados no
+banco. Contratos e permissões: [Projects and company finance](PROJECT_FINANCE.md).
+`server/provider-balances.ts` lê saldos e repasses com o mesmo grant financeiro;
+saldos nunca são somados novamente à receita.
+
 O [design system do workspace](../design/MEND_DESIGN_SYSTEM.md) define a direção
 visual aprovada. `src/styles/workspace-design.css` aplica os materiais, fontes e
 hierarquia sobre a geometria existente; os componentes mantêm seus contratos de

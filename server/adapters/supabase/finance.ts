@@ -47,7 +47,14 @@ export class SupabaseFinanceAdapter implements FinancePort {
     );
     return Boolean(data?.length);
   }
-  async summary(period: string) {
+  async summary(period: string, project?: string) {
+    if (project !== undefined)
+      return this.checked(
+        await this.client.rpc("finance_project_summary", {
+          p_period: period,
+          p_project: project,
+        }),
+      );
     return this.checked(
       await this.client.rpc("finance_summary", { p_period: period }),
     );
@@ -66,6 +73,7 @@ export class SupabaseFinanceAdapter implements FinancePort {
     period?: string,
     offset = 0,
     attention?: FinanceAttentionFilter,
+    project?: string,
   ) {
     if (attention && entity !== "entries")
       throw new ApiHttpError(
@@ -77,11 +85,18 @@ export class SupabaseFinanceAdapter implements FinancePort {
       .from(`finance_${entity}`)
       .select(
         entity === "references" || entity === "settlements"
-          ? "*,entry:finance_entries!inner(description,period)"
+          ? "*,entry:finance_entries!inner(description,period,project)"
           : "*",
       )
       .order("id")
       .range(offset, offset + 49);
+    if (project !== undefined && entity !== "reviews")
+      query = query.eq(
+        entity === "references" || entity === "settlements"
+          ? "entry.project"
+          : "project",
+        project,
+      );
     if (attention) {
       // Match finance_summary: internal transfers never affect coverage.
       query = query.eq("cancelled", false).neq("kind", "transfer");

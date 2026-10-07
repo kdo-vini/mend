@@ -26,6 +26,9 @@ const columns = [
   "paid",
   "billed",
   "received",
+  "fee",
+  "net",
+  "available",
 ] as const;
 
 const stateIcon: Record<ZeloProviderState, typeof CheckCircle2> = {
@@ -84,10 +87,14 @@ export function ZeloFinancePanel({
   month,
   onMonthChange,
   onForbidden,
+  embedded = false,
+  manualReceived,
 }: {
   month: string;
   onMonthChange: (month: string) => void;
   onForbidden: () => void;
+  embedded?: boolean;
+  manualReceived?: number;
 }) {
   const { t } = useTranslation("common");
   const format = useFinanceFormat();
@@ -130,7 +137,7 @@ export function ZeloFinancePanel({
   return (
     <div className="finance-zelo">
       <div className="finance-period-bar">
-        <MonthNavigator month={month} onChange={onMonthChange} />
+        {!embedded && <MonthNavigator month={month} onChange={onMonthChange} />}
         <div className="finance-zelo-sync">
           <p className="finance-sync" role="status" aria-live="polite">
             {status}
@@ -182,6 +189,7 @@ export function ZeloFinancePanel({
       ) : (
         <>
           <ZeloSummary
+            manualReceived={!refreshing ? manualReceived : undefined}
             feed={feed.data}
             period={feed.period}
             refreshing={refreshing}
@@ -213,18 +221,24 @@ function ZeloSummary({
   refreshing,
   onRetry,
   retryDisabled,
+  manualReceived,
 }: {
   feed: ZeloFinanceFeed;
   period: string;
   refreshing: boolean;
   onRetry: () => void;
   retryDisabled: boolean;
+  manualReceived?: number;
 }) {
   const { t } = useTranslation("common");
   const format = useFinanceFormat();
   const money = useZeloFormat().money;
   const month = format.month(period);
   const complete = allAnswered(feed);
+  const brl = feed.totals.find(
+    (total) => total.currency.toUpperCase() === "BRL",
+  );
+  const confirmedNet = brl?.netKnownCents ?? (complete && !brl ? 0 : undefined);
   return (
     <section
       className="finance-summary finance-zelo-summary"
@@ -232,6 +246,19 @@ function ZeloSummary({
       aria-busy={refreshing || undefined}
       data-refreshing={refreshing || undefined}
     >
+      {manualReceived !== undefined && confirmedNet !== undefined && (
+        <div className="finance-net-rollup">
+          <span>{t("finance.zelo.rollup.title")}</span>
+          <strong>{money(manualReceived + confirmedNet, "BRL")}</strong>
+          <p>
+            {t("finance.zelo.rollup.detail", {
+              manual: money(manualReceived, "BRL"),
+              automatic: money(confirmedNet, "BRL"),
+            })}
+          </p>
+          <small>{t("finance.zelo.rollup.hint")}</small>
+        </div>
+      )}
       <div className="finance-zelo-sources">
         <h2>{t("finance.zelo.sources.label")}</h2>
         <ul>
@@ -263,6 +290,24 @@ function ZeloSummary({
                 </h2>
               </header>
               <dl>
+                <div className="finance-metric finance-net-primary">
+                  <dt>{t("finance.zelo.net.label")}</dt>
+                  <dd>
+                    {total.netKnownCents === undefined
+                      ? t("finance.zelo.table.unknown")
+                      : money(total.netKnownCents, total.currency)}
+                  </dd>
+                  <dd className="finance-zelo-hint">
+                    {t("finance.zelo.net.hint", {
+                      count:
+                        total.unknownNetCount ??
+                        feed.rows.filter(
+                          (row) =>
+                            row.status === "paid" && row.netCents == null,
+                        ).length,
+                    })}
+                  </dd>
+                </div>
                 <div className="finance-metric">
                   <dt>{t("finance.zelo.totals.received")}</dt>
                   <dd>{money(total.receivedCents, total.currency)}</dd>
@@ -413,6 +458,20 @@ function ZeloCharges({
             {zelo.money(row.receivedCents, row.currency)}
           </span>
         );
+      case "fee":
+        return row.feeCents == null
+          ? t("finance.zelo.table.unknown")
+          : zelo.money(row.feeCents, row.currency);
+      case "net":
+        return row.netCents == null ? (
+          t("finance.zelo.table.unknown")
+        ) : (
+          <strong>{zelo.money(row.netCents, row.currency)}</strong>
+        );
+      case "available":
+        return row.availableAt
+          ? zelo.date(row.availableAt)
+          : t("finance.zelo.table.unknown");
     }
   };
 

@@ -87,6 +87,11 @@ const FeatureFinancePage = lazy(() =>
     default: FinancePage,
   })),
 );
+const FeatureProjectsPage = lazy(() =>
+  import("./features/projects/ProjectsPage").then(({ ProjectsPage }) => ({
+    default: ProjectsPage,
+  })),
+);
 const FeatureIssuesPage = lazy(() =>
   import("./features/issues/pages/IssuesPage").then(({ IssuesPage }) => ({
     default: IssuesPage,
@@ -1125,7 +1130,18 @@ function App() {
             />
           ) : (
             <WorkspaceRoutes
-              dashboard={<DashboardPage operator={operatorIdentity} />}
+              projects={
+                <FeatureBoundary label={t("navigation.projects")}>
+                  <FeatureProjectsPage />
+                </FeatureBoundary>
+              }
+              dashboard={
+                <DashboardPage
+                  operator={operatorIdentity}
+                  issues={issues}
+                  onOpenIssue={setInspectorIssueId}
+                />
+              }
               finance={
                 <FeatureBoundary label={t("finance.loading")}>
                   <FeatureFinancePage />

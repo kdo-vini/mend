@@ -18,6 +18,7 @@ import {
 } from "./supabase.js";
 import { SupabaseJobStore } from "./persistence.js";
 import { createZeloFinanceService } from "./zelo-finance.js";
+import { createProviderBalancesService } from "./provider-balances.js";
 import { authenticateRequest } from "./auth.js";
 import { createApiRouter } from "./api-router.js";
 import type { AuthAdapter } from "./contracts/api-ports.js";
@@ -153,6 +154,7 @@ const CreateInstanceSchema = z
 
 const serverSupabase = createServerSupabaseClient();
 const zeloFinance = createZeloFinanceService();
+const providerBalances = createProviderBalancesService();
 const workerSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
   ? serverSupabase
   : null;
@@ -639,11 +641,12 @@ if (serverSupabase) {
         invitationClient: workerSupabase,
         jobStore: messageJobs,
       });
-      return createApiRouter({ auth: apiAuth, ...apiAdapters, zeloFinance })(
-        request,
-        response,
-        next,
-      );
+      return createApiRouter({
+        auth: apiAuth,
+        ...apiAdapters,
+        zeloFinance,
+        providerBalances,
+      })(request, response, next);
     } catch (error) {
       return next(error);
     }

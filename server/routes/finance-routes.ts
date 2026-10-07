@@ -59,12 +59,28 @@ export function registerFinanceRoutes(ctx: ApiRouteModuleContext) {
     }),
   );
   router.get(
+    "/api/finance/provider-balances",
+    asyncRoute(async (_req, res) => {
+      if (!dependencies.providerBalances)
+        throw new ApiHttpError(
+          503,
+          "provider_balances_unavailable",
+          "Provider balances are unavailable.",
+        );
+      res.setHeader("Cache-Control", "no-store");
+      send(res, 200, await dependencies.providerBalances.load());
+    }),
+  );
+  router.get(
     "/api/finance/summary",
     asyncRoute(async (req, res) =>
       send(
         res,
         200,
-        await port!.summary(parse(financePeriod, req.query.period)),
+        await port!.summary(
+          parse(financePeriod, req.query.period),
+          parse(z.string().max(200).optional(), req.query.project),
+        ),
       ),
     ),
   );
@@ -114,12 +130,13 @@ export function registerFinanceRoutes(ctx: ApiRouteModuleContext) {
     "/api/finance/:entity",
     asyncRoute(async (req, res) => {
       const entity = parse(entitySchema, req.params.entity) as FinanceEntity;
-      const { period, offset, attention } = parse(
+      const { period, offset, attention, project } = parse(
         z
           .object({
             period: financePeriod.optional(),
             offset: z.coerce.number().int().min(0).max(100000).default(0),
             attention: z.enum(["unknown", "estimated"]).optional(),
+            project: z.string().max(200).optional(),
           })
           .strict(),
         req.query,
@@ -132,7 +149,7 @@ export function registerFinanceRoutes(ctx: ApiRouteModuleContext) {
           "invalid_input",
           "Attention filters require entries.",
         );
-      const data = await port!.list(entity, period, offset, attention);
+      const data = await port!.list(entity, period, offset, attention, project);
       send(res, 200, {
         data,
         nextOffset: data.length === 50 ? offset + 50 : null,

@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Message } from "../../../types";
 import { MessageMedia } from "./MessageMedia";
+import i18n from "../../../i18n";
 
 const message: Message = {
   id: "message-1",
@@ -24,7 +25,8 @@ describe("MessageMedia", () => {
   let container: HTMLDivElement;
   let intersect: (visible: boolean) => void;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en-US");
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -75,10 +77,11 @@ describe("MessageMedia", () => {
     );
   });
 
-  it("renders a playable audio control once the voice note url resolves", async () => {
+  it("renders the custom audio player once the voice note url resolves", async () => {
     const audio: Message = {
       ...message,
       type: "audio",
+      transcriptionStatus: "processing",
       text: "",
       attachment: { name: "voice.ogg", meta: "audio/ogg" },
     };
@@ -104,7 +107,13 @@ describe("MessageMedia", () => {
       "https://media.test/voice.ogg",
     );
     expect(container.querySelector("audio")?.hasAttribute("controls")).toBe(
-      true,
+      false,
     );
+    expect(
+      container.querySelector('button[aria-label="Play audio"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('input[type="range"]')).not.toBeNull();
+    expect(container.textContent).toContain("Loading audio");
+    expect(container.textContent).toContain("Transcribing audio");
   });
 });

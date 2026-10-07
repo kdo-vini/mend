@@ -538,6 +538,9 @@ export function MobileBottomNav({
             <NavLink to={myWorkHref} onClick={() => setMoreOpen(false)}>
               {t("navigation.myWork")}
             </NavLink>
+            <NavLink to="/projects" onClick={() => setMoreOpen(false)}>
+              {t("navigation.projects")}
+            </NavLink>
             <NavLink to="/settings" onClick={() => setMoreOpen(false)}>
               {t("navigation.settings")}
             </NavLink>

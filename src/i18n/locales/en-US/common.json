@@ -101,7 +101,8 @@
     "unread_other": "{{count}} unread",
     "shortcutCommand": "⌘ K",
     "dashboard": "Dashboard",
-    "finance": "Finance"
+    "finance": "Finance",
+    "projects": "Projects"
   },
   "app": {
     "currentOperator": "Current operator",
@@ -179,6 +180,16 @@
     "deleteIssueConfirm": "Delete issue"
   },
   "dashboard": {
+    "startHere": "Your starting point for operations.",
+    "welcome": "Welcome to Mend",
+    "greeting": "Good work, {{name}}.",
+    "operationDescription": "Conversations, issues and connections in one place. Resume support or follow work in progress.",
+    "resume": "Pick up where you left off",
+    "resumeDescription": "Active issues, starting with the most recently updated.",
+    "viewIssues": "View issues",
+    "open": "Open",
+    "openIssue": "Open issue: {{title}}",
+    "noActiveIssues": "No active issues to resume.",
     "title": "Diagium dashboard",
     "description": "Diagium internal operations in a single workspace.",
     "signedIn": "{{name}} · {{email}}",
@@ -195,6 +206,31 @@
     "shortcuts": "Shortcuts"
   },
   "finance": {
+    "projectFilter": "Project",
+    "allProjects": "All projects · Diagium",
+    "generalCosts": "General · no project",
+    "manageProjects": "Manage projects",
+    "manualEntries": "Manual records",
+    "automaticIncome": "Automatic revenue · Zelo",
+    "providerBalances": {
+      "netUnconfirmed": "Requested amount; net bank payout is unconfirmed.",
+      "title": "Balances and upcoming payouts",
+      "scope": "Current balance of each provider's whole account. This is not monthly revenue and is not added to receipts.",
+      "available": "Available",
+      "pending": "Pending availability",
+      "payouts": "Payouts in progress",
+      "arrival": "Expected bank arrival: {{date}}",
+      "noDate": "Arrival date not supplied by the provider",
+      "noPayouts": "No payouts in progress reported.",
+      "unknown": "Information unavailable",
+      "fee": "Reported fee: {{amount}}",
+      "failed": "Could not retrieve balances. Try refreshing."
+    },
+    "remove": "Delete",
+    "removeTitle": "Delete record",
+    "removeConfirm": "Confirm deletion",
+    "removeHint": "The record will be cancelled and excluded from totals. Its history will be preserved. Linked payments must be deleted separately under Cash movements.",
+    "netMovement": "Net movement",
     "title": "Diagium finance",
     "overview": "Financial overview",
     "description": "Accruals and cash movements of the Diagium operation, in BRL.",
@@ -450,6 +486,11 @@
       "zelo": "Zelo"
     },
     "zelo": {
+      "net": {
+        "label": "Confirmed net receipts",
+        "hint_one": "After reported payment fees. {{count}} payment has no confirmed net amount. Payout fees, refunds and disputes may require reconciliation.",
+        "hint_other": "After reported payment fees. {{count}} payments have no confirmed net amount. Payout fees, refunds and disputes may require reconciliation."
+      },
       "title": "Zelo finance",
       "description": "Read-only Zelo charges and receipts from AbacatePay and Stripe.",
       "loading": "Loading Zelo figures…",
@@ -459,7 +500,7 @@
       "checkedAt": "Checked {{time}}",
       "showingOther": "Showing {{shown}} while {{month}} loads",
       "staleFailed": "Showing {{shown}}; {{month}} could not be loaded",
-      "note": "Zelo figures are kept separate from Diagium and never added to its totals. Received amounts are gross: provider fees and refunds are not deducted. Sources may be partial.",
+      "note": "Revenue from the Zelo project, a Diagium product. Automatic receipts are identified by provider and do not create duplicate manual records. Unknown net amounts are never replaced with gross amounts.",
       "summaryLabel": "Zelo figures for {{month}}",
       "sources": {
         "label": "Sources"
@@ -505,6 +546,9 @@
       "table": {
         "columns": {
           "charge": "Charge ID",
+          "fee": "Fee",
+          "net": "Net",
+          "available": "Available at provider",
           "source": "Source",
           "status": "Status",
           "created": "Created",
@@ -539,7 +583,12 @@
         "description": "The payment providers could not be reached through Mend. Nothing was changed; try again.",
         "refresh": "The latest Zelo figures could not be loaded. Showing the figures checked {{time}}."
       },
-      "pagination": "Page {{page}} of {{total}}"
+      "pagination": "Page {{page}} of {{total}}",
+      "rollup": {
+        "title": "Known receipts · selected projects",
+        "detail": "{{manual}} manually recorded + {{automatic}} Zelo net",
+        "hint": "BRL, after known payment fees. Unconfirmed net amounts are excluded; partial coverage, refunds and payout fees need reconciliation. Balances and payouts are not counted again."
+      }
     },
     "pending": {
       "resolveUnknown": "Review missing amounts",
@@ -566,6 +615,7 @@
         "unknown": "Add missing amounts so they are included in the monthly result.",
         "references": "Review payments and add the reference supporting each one."
       }
-    }
+    },
+    "projectsUnavailable": "The project catalog could not be loaded."
   }
 }
