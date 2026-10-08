@@ -3281,7 +3281,17 @@ function MediaComposer({
         addFiles(Array.from(event.dataTransfer.files));
       }}
       onPaste={(event) => {
-        const files = Array.from(event.clipboardData.files);
+        // Clipboard images often arrive without a name, which the upload API rejects.
+        const files = Array.from(event.clipboardData.files).map(
+          (file, index) =>
+            file.name.trim()
+              ? file
+              : new File(
+                  [file],
+                  `pasted-${Date.now()}-${index + 1}.${file.type.split("/")[1]?.split("+")[0] || "bin"}`,
+                  { type: file.type, lastModified: file.lastModified },
+                ),
+        );
         if (files.length) {
           event.preventDefault();
           addFiles(files);
