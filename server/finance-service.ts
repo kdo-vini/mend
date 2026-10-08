@@ -26,10 +26,7 @@ const entry = z
     period: financePeriod,
   })
   .strict()
-  .refine((v) => !v.cancelled || v.reason.length > 0)
-  .refine(
-    (v) => !v.source.toLowerCase().includes("supabase") || v.project.length > 0,
-  );
+  .refine((v) => !v.cancelled || v.reason.length > 0);
 const civilDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -62,11 +59,7 @@ export const financeRecords = {
       active: z.boolean(),
     })
     .strict()
-    .refine((v) => v.ends_on === null || v.ends_on >= v.starts_on)
-    .refine(
-      (v) =>
-        !v.source.toLowerCase().includes("supabase") || v.project.length > 0,
-    ),
+    .refine((v) => v.ends_on === null || v.ends_on >= v.starts_on),
   references: z
     .object({
       ...common,

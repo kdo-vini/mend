@@ -106,15 +106,15 @@ describe("finance forms", () => {
     expect(labels()).toContain("Served project");
   });
 
-  it("requires the project as soon as the source is Supabase", async () => {
+  it("keeps the project optional when the source is Supabase", async () => {
     const draft = newEntryDraft("expense", "2026-10-01");
     draft.record.source = "Supabase";
     await render(editorFor(draft));
-    const project = [...container.querySelectorAll("label")].find(
-      (label) => label.textContent === "Served project",
+    expect(container.querySelector("select[required]")).toBeNull();
+    const toggle = container.querySelector<HTMLButtonElement>(
+      ".finance-disclosure-toggle",
     );
-    const input = document.getElementById(project!.htmlFor) as HTMLInputElement;
-    expect(input.required).toBe(true);
+    expect(toggle?.disabled).toBe(false);
   });
 
   it("offers cancellation with a required reason only when editing", async () => {
