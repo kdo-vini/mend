@@ -4745,6 +4745,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      register_automation_outbound: {
+        Args: { p_text: string }
+        Returns: string
+      }
       remove_workspace_member: {
         Args: { p_user_id: string; p_workspace_id: string }
         Returns: boolean

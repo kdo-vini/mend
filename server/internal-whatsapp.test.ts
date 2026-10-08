@@ -14,12 +14,15 @@ import {
 function buildApp(options: {
   env: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
+  markAutomation?: (text: string) => Promise<void>;
 }) {
   const app = express();
   app.use(express.json());
   registerInternalWhatsAppRoutes(app, {
     env: options.env,
     fetchImpl: options.fetchImpl,
+    markAutomation: options.markAutomation,
+    logger: { error: vi.fn(), warn: vi.fn() },
   });
   return app;
 }
@@ -168,5 +171,57 @@ describe("POST /internal/whatsapp/send-text", () => {
     expect(response.body).toEqual({
       error: "TECHNE_WHATSAPP_NOT_CONNECTED",
     });
+  });
+  it("marks the text as automation before forwarding to Chat", async () => {
+    const calls: string[] = [];
+    const markAutomation = vi.fn(async (text: string) => {
+      calls.push(`mark:${text}`);
+    });
+    const fetchImpl = vi.fn(async () => {
+      calls.push("forward");
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    const response = await request(
+      buildApp({
+        env: configuredEnv,
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        markAutomation,
+      }),
+    )
+      .post(OUTBOUND_WHATSAPP_PATH)
+      .set(OUTBOUND_WHATSAPP_KEY_HEADER, "mend-outbound-test-key")
+      .send({ to: "14991537503", message: "  Oi! Aqui é o Vinicius  " });
+    expect(response.status).toBe(200);
+    expect(calls).toEqual(["mark:Oi! Aqui é o Vinicius", "forward"]);
+  });
+
+  it("still sends when the automation mark fails", async () => {
+    const markAutomation = vi.fn(async () => {
+      throw new Error("db down");
+    });
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const response = await request(
+      buildApp({
+        env: configuredEnv,
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        markAutomation,
+      }),
+    )
+      .post(OUTBOUND_WHATSAPP_PATH)
+      .set(OUTBOUND_WHATSAPP_KEY_HEADER, "mend-outbound-test-key")
+      .send({ to: "14991537503", message: "hello" });
+    expect(response.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark automation for a rejected request", async () => {
+    const markAutomation = vi.fn(async () => undefined);
+    await request(buildApp({ env: configuredEnv, markAutomation }))
+      .post(OUTBOUND_WHATSAPP_PATH)
+      .set(OUTBOUND_WHATSAPP_KEY_HEADER, "wrong-key")
+      .send({ to: "14991537503", message: "hello" });
+    expect(markAutomation).not.toHaveBeenCalled();
   });
 });
