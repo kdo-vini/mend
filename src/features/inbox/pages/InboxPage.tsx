@@ -3210,7 +3210,10 @@ function MediaComposer({
     }
   };
 
-  const submitText = async () => {
+  const submit = async () => {
+    // Pending files go out with the typed text as their caption, so a single
+    // press of the composer send button delivers the whole message.
+    if (pendingFiles.length) return submitAttachments();
     const value = text.trim();
     if (!value || sending) return;
     setSending(true);
@@ -3251,11 +3254,17 @@ function MediaComposer({
           if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
         });
         setPendingFiles([]);
+        // The text went out as the caption; keeping it would resend it.
+        setText("");
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
       }
     } finally {
       setSending(false);
     }
   };
+
+  const canSubmit =
+    !sending && (Boolean(text.trim()) || pendingFiles.length > 0);
 
   const insertAiDraft = async () => {
     if (sending || draftLoading) return;
@@ -3393,23 +3402,6 @@ function MediaComposer({
               </div>
             ))}
           </div>
-          <div className="attachment-actions">
-            <button
-              className="button button-primary attachment-send"
-              type="button"
-              disabled={sending}
-              onClick={() => void submitAttachments()}
-            >
-              {sending ? (
-                <LoaderCircle className="spin" size={14} />
-              ) : (
-                <Send size={14} />
-              )}{" "}
-              {sending
-                ? t("ui.sending")
-                : t("ui.sendFiles", { count: pendingFiles.length })}
-            </button>
-          </div>
         </div>
       )}
       <div className="composer-input-row">
@@ -3427,17 +3419,17 @@ function MediaComposer({
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              void submitText();
+              void submit();
             }
           }}
           placeholder={t("ui.writeReplyPlaceholder")}
           rows={1}
         />
         <button
-          className={`send-button ${!text.trim() || sending ? "disabled" : ""}`}
+          className={`send-button ${!canSubmit ? "disabled" : ""}`}
           type="button"
-          disabled={!text.trim() || sending}
-          onClick={() => void submitText()}
+          disabled={!canSubmit}
+          onClick={() => void submit()}
           aria-label={t("send")}
         >
           <Send size={16} />

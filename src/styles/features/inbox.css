@@ -1418,13 +1418,6 @@
   color: var(--text-muted);
   font-size: 9px;
 }
-.attachment-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-.attachment-send {
-  justify-self: end;
-}
 .attachment-remove {
   position: absolute;
   top: 4px;
