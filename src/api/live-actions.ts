@@ -1061,15 +1061,18 @@ export async function uploadLiveMediaAsset(input: LiveMediaUploadInput) {
       percent: 100,
     });
   }
-  const completed = await apiRequest<{
-    assetId: string;
-    batchId: string;
-    status: string;
-  }>(
+  // The complete endpoint answers with the stored asset record, keyed by `id`;
+  // the identifiers the send step needs come from the upload metadata.
+  const completed = await apiRequest<{ status: string }>(
     `/api/media/assets/${encodeURIComponent(metadata.assetId)}/complete`,
     { method: "POST", body: JSON.stringify({}) },
     input.workspaceId,
   );
+  const result = {
+    assetId: metadata.assetId,
+    batchId: metadata.batchId,
+    status: completed.status,
+  };
   const deadline = Date.now() + 120_000;
   while (completed.status === "processing" || completed.status === "uploaded") {
     if (Date.now() > deadline)
@@ -1087,9 +1090,9 @@ export async function uploadLiveMediaAsset(input: LiveMediaUploadInput) {
       throw new LiveActionError("Uploaded media asset was not found.");
     if (asset.status === "failed" || asset.status === "unsupported")
       throw new LiveActionError(`Media processing failed: ${asset.status}.`);
-    if (asset.status === "ready") return { ...completed, ...asset };
+    if (asset.status === "ready") return { ...result, status: asset.status };
   }
-  return completed;
+  return result;
 }
 
 export async function sendLiveMediaBatch(input: {

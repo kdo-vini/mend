@@ -10,6 +10,31 @@ vi.mock("./transport", async () => ({
   mendApiBaseUrl: "https://mend.test",
 }));
 
+vi.mock("../lib/supabase", async () => ({
+  ...(await vi.importActual<typeof import("../lib/supabase")>(
+    "../lib/supabase",
+  )),
+  supabase: {
+    auth: {
+      getSession: async () => ({
+        data: { session: { access_token: "token" } },
+      }),
+    },
+  },
+}));
+
+vi.mock("tus-js-client", () => ({
+  Upload: class {
+    constructor(
+      _file: File,
+      private readonly options: { onSuccess: () => void },
+    ) {}
+    start() {
+      this.options.onSuccess();
+    }
+  },
+}));
+
 import {
   createLiveRepository,
   disconnectLiveGitHub,
@@ -25,6 +50,7 @@ import {
   loadOlderLiveConversationMessages,
   loadLiveWorkspace,
   saveLiveAgentRoutingPolicy,
+  uploadLiveMediaAsset,
   type LiveStageRoutingPolicy,
 } from "./live-actions";
 import type { MendSupabaseClient } from "../lib/supabase";
@@ -366,5 +392,38 @@ describe("repository execution settings", () => {
       { method: "DELETE" },
       "workspace-1",
     );
+  });
+});
+
+describe("live media upload", () => {
+  it("returns the upload asset id although complete answers with `id`", async () => {
+    apiRequest.mockReset();
+    apiRequest
+      .mockResolvedValueOnce({
+        assetId: "11111111-1111-4111-8111-111111111111",
+        batchId: "22222222-2222-4222-8222-222222222222",
+        path: "workspace/asset.png",
+        token: "signed",
+        bucket: "media",
+        uploadEndpoint: "https://storage.test/upload",
+      })
+      .mockResolvedValueOnce({
+        id: "11111111-1111-4111-8111-111111111111",
+        status: "ready",
+      });
+
+    const asset = await uploadLiveMediaAsset({
+      workspaceId: "workspace-1",
+      conversationId: "conversation-1",
+      file: new File(["png"], "image.png", { type: "image/png" }),
+    });
+
+    expect(asset).toEqual({
+      assetId: "11111111-1111-4111-8111-111111111111",
+      batchId: "22222222-2222-4222-8222-222222222222",
+      status: "ready",
+    });
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({});
   });
 });
