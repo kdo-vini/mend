@@ -63,6 +63,11 @@ import {
   WHATSAPP_INGEST_JOB_TYPE,
 } from "./workers/live-worker-shared.js";
 import { SupabaseRunnerHeartbeat } from "./workers/runner-heartbeat.js";
+import {
+  type InboundPushNotifier,
+  createInboundPushNotifier,
+  notifyInboundMessagePush,
+} from "./inbound-push.js";
 
 export type LiveWorkerSupabaseClient = SupabaseClient<Database>;
 export type KnowledgeArticleRow =
@@ -292,6 +297,7 @@ export interface LiveWorkerOptions {
     process(payload: SupportRepositoryResearchJobPayload): Promise<void>;
   };
   knowledge?: LiveWorkerKnowledge;
+  pushNotifier?: InboundPushNotifier;
   /** Mend's own Support AI (default off); Support bot reads supportEvents. */
   supportAiEnabled?: boolean;
   supportEvents?: Pick<SupportEventStore, "record">;
@@ -660,6 +666,8 @@ export class LiveWorker {
       }
     }
 
+    await notifyInboundMessagePush(this.options, binding, message, persisted);
+
     const supportEvent = supportEventFor(binding, message, persisted);
     if (supportEvent) await this.options.supportEvents?.record(supportEvent);
     if (
@@ -897,6 +905,7 @@ export function createSupabaseLiveWorker(
       options.logger,
     ),
     heartbeat: new SupabaseRunnerHeartbeat(options.client),
+    pushNotifier: createInboundPushNotifier(options.client),
     ...(options.logger ? { logger: options.logger } : {}),
     ...(options.onDraftReady ? { onDraftReady: options.onDraftReady } : {}),
     ...(options.onIssueReady ? { onIssueReady: options.onIssueReady } : {}),

@@ -125,6 +125,7 @@
     "nativeNotificationsEnabled": "Native notifications enabled",
     "browserNotificationsBlocked": "Browser notifications are blocked",
     "nativeNotificationsUnsupported": "This browser does not support native notifications here",
+    "nativeNotificationsRequiresInstall": "On iPhone, add Mend to your Home Screen (Share → Add to Home Screen) and enable notifications from the installed app.",
     "nativeNotificationsNotConfigured": "Native notifications are not configured yet",
     "agentRunQueued": "Agent run queued for {{identifier}}",
     "agentRunStarted": "Agent run started for {{identifier}}",

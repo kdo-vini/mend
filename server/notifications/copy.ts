@@ -7,6 +7,10 @@ export type NotificationCopyParams = {
   fixReady?: boolean;
   fixStarted?: boolean;
   startFailed?: boolean;
+  /** Contact or group display name for inbox.message_received. */
+  contact?: string;
+  /** Bounded message text preview; empty for attachment-only messages. */
+  preview?: string;
 };
 
 export type LocalizedNotificationCopy = {
@@ -21,7 +25,9 @@ function interpolate(template: string, params: NotificationCopyParams): string {
   return template
     .replace(/\{\{summary\}\}/g, params.summary ?? "")
     .replace(/\{\{identifier\}\}/g, params.identifier ?? "")
-    .replace(/\{\{detail\}\}/g, params.detail ?? "");
+    .replace(/\{\{detail\}\}/g, params.detail ?? "")
+    .replace(/\{\{contact\}\}/g, params.contact ?? "")
+    .replace(/\{\{preview\}\}/g, params.preview ?? "");
 }
 
 const catalogs: Record<
@@ -68,6 +74,10 @@ const catalogs: Record<
     conversation_message: {
       title: "Nova mensagem no WhatsApp",
       body: "Uma conversa atribuída a você precisa de atenção.",
+    },
+    "inbox.message_received": {
+      title: "Nova mensagem",
+      body: "{{contact}}: {{preview}}",
     },
     "ai.conversation_assigned": {
       title: "Conversa atribuída a você",
@@ -119,6 +129,10 @@ const catalogs: Record<
       title: "New WhatsApp message",
       body: "A conversation assigned to you needs attention.",
     },
+    "inbox.message_received": {
+      title: "New message",
+      body: "{{contact}}: {{preview}}",
+    },
     "ai.conversation_assigned": {
       title: "Conversation assigned to you",
       body: "A conversation needs your attention.",
@@ -141,6 +155,7 @@ const titleKeys: Record<string, string> = {
   "ai.agent_start_failed": "aiAgentStartFailedTitle",
   support_ai_configuration_required: "supportAiConfigurationTitle",
   conversation_message: "conversationMessageTitle",
+  "inbox.message_received": "inboxMessageReceivedTitle",
   "ai.conversation_assigned": "aiConversationAssignedTitle",
   "ai.assignment_waiting": "aiAssignmentWaitingTitle",
 };
@@ -156,6 +171,7 @@ const bodyKeys: Record<string, string> = {
   "ai.agent_start_failed": "aiAgentStartFailedBody",
   support_ai_configuration_required: "supportAiConfigurationBody",
   conversation_message: "conversationMessageBody",
+  "inbox.message_received": "inboxMessageReceivedBody",
   "ai.conversation_assigned": "aiConversationAssignedBody",
   "ai.assignment_waiting": "aiAssignmentWaitingBody",
 };
@@ -180,6 +196,19 @@ export function buildNotificationCopy(
   const catalogKind = resolveCatalogKind(kind, params);
   const entry = catalogs[locale][catalogKind] ?? catalogs["en-US"][catalogKind];
   if (!entry) return null;
+  if (catalogKind === "inbox.message_received") {
+    const contact = params.contact?.trim();
+    const preview =
+      params.preview?.trim() ||
+      (locale === "pt-BR" ? "Enviou um anexo" : "Sent an attachment");
+    return {
+      title: entry.title,
+      body: contact ? `${contact}: ${preview}` : preview,
+      titleKey: titleKeys[catalogKind] ?? "workspaceNotificationFallback",
+      bodyKey: bodyKeys[catalogKind] ?? "workspaceNotificationFallback",
+      params,
+    };
+  }
   return {
     title: interpolate(entry.title, params),
     body: interpolate(entry.body, params),

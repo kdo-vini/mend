@@ -125,6 +125,7 @@
     "issueResolved": "{{identifier}} concluído e cliente avisado",
     "browserNotificationsBlocked": "As notificações do navegador estão bloqueadas",
     "nativeNotificationsUnsupported": "Este navegador não oferece notificações nativas aqui",
+    "nativeNotificationsRequiresInstall": "No iPhone, adicione o Mend à Tela de Início (Compartilhar → Adicionar à Tela de Início) e ative as notificações pelo app instalado.",
     "nativeNotificationsNotConfigured": "As notificações nativas ainda não estão configuradas",
     "agentRunQueued": "Execução do Agent enfileirada para {{identifier}}",
     "agentRunStarted": "Execução do Agent iniciada para {{identifier}}",
