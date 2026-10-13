@@ -13,6 +13,7 @@ export interface PushConfig {
 export type PushSetupResult =
   | "enabled"
   | "unsupported"
+  | "requires-install"
   | "unavailable"
   | "denied";
 
@@ -77,13 +78,27 @@ export async function getPushConfig(): Promise<PushConfig> {
   };
 }
 
-function decodeVapidKey(value: string): ArrayBuffer {
+function decodeVapidKey(value: string): Uint8Array<ArrayBuffer> {
   const padded = `${value}${"=".repeat((4 - (value.length % 4)) % 4)}`
     .replace(/-/g, "+")
     .replace(/_/g, "/");
   const binary = window.atob(padded);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return bytes.buffer.slice(0) as ArrayBuffer;
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function isIosDevice(): boolean {
+  const platform = navigator.platform ?? "";
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function isStandaloneDisplay(): boolean {
+  return (
+    window.matchMedia?.("(display-mode: standalone)").matches === true ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
 }
 
 export async function enableNativePush(
@@ -93,22 +108,27 @@ export async function enableNativePush(
   if (
     typeof window === "undefined" ||
     !window.isSecureContext ||
-    !("serviceWorker" in navigator) ||
-    !("PushManager" in window) ||
-    !("Notification" in window)
+    !("serviceWorker" in navigator)
   )
     return "unsupported";
+  // iOS only exposes Web Push to a Home Screen web app (iOS 16.4+).
+  if (isIosDevice() && !isStandaloneDisplay()) return "requires-install";
+  if (!("PushManager" in window) || !("Notification" in window))
+    return "unsupported";
 
-  const config = await getPushConfig();
-  if (!config.enabled || !config.publicKey) return "unavailable";
-
+  // WebKit only honors the permission prompt inside the user gesture, so ask
+  // before any await (such as the config fetch) can consume the activation.
   const permission =
     Notification.permission === "default"
       ? await Notification.requestPermission()
       : Notification.permission;
   if (permission !== "granted") return "denied";
 
-  const registration = await navigator.serviceWorker.register("/push-sw.js");
+  const config = await getPushConfig();
+  if (!config.enabled || !config.publicKey) return "unavailable";
+
+  await navigator.serviceWorker.register("/push-sw.js");
+  const registration = await navigator.serviceWorker.ready;
   const subscription =
     (await registration.pushManager.getSubscription()) ??
     (await registration.pushManager.subscribe({

@@ -19,4 +19,21 @@ describe("buildNotificationCopy", () => {
     expect(copy?.title).toBe("Bug reported in TEC-9");
     expect(copy?.body).toContain("Checkout fails");
   });
+
+  it("builds a localized inbound message push with a preview", () => {
+    const pt = buildNotificationCopy("inbox.message_received", "pt-BR", {
+      contact: "Ana",
+      preview: "Oi, preciso de ajuda",
+    });
+    expect(pt?.title).toBe("Nova mensagem");
+    expect(pt?.body).toBe("Ana: Oi, preciso de ajuda");
+    const en = buildNotificationCopy("inbox.message_received", "en-US", {
+      contact: "Ana",
+    });
+    expect(en?.title).toBe("New message");
+    expect(en?.body).toBe("Ana: Sent an attachment");
+    expect(
+      buildNotificationCopy("inbox.message_received", "pt-BR", {})?.body,
+    ).toBe("Enviou um anexo");
+  });
 });

@@ -745,7 +745,9 @@ function App() {
             ? t("toasts.browserNotificationsBlocked")
             : status === "unsupported"
               ? t("toasts.nativeNotificationsUnsupported")
-              : t("toasts.nativeNotificationsNotConfigured"),
+              : status === "requires-install"
+                ? t("toasts.nativeNotificationsRequiresInstall")
+                : t("toasts.nativeNotificationsNotConfigured"),
       );
     } catch (error) {
       notify(
