@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
   Archive,
@@ -92,7 +93,12 @@ import {
   getMessageDayKey,
   getMessageDayLabel,
 } from "../message-dates";
-import { renderWhatsAppMarkup } from "../whatsapp-markup";
+import {
+  WhatsAppComposerHighlight,
+  WhatsAppMessageText,
+  WhatsAppPreviewText,
+} from "../components/WhatsAppText";
+import { toggleWhatsAppFormat, type WaFormatMarker } from "../whatsapp-markup";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
@@ -2536,7 +2542,9 @@ function ConversationRow({
             </strong>
             <span>{conversation.lastTime}</span>
           </div>
-          <div className="conversation-preview">{conversation.lastMessage}</div>
+          <div className="conversation-preview">
+            <WhatsAppPreviewText text={conversation.lastMessage} />
+          </div>
           <div className="conversation-row-meta">
             <span>
               {conversation.issueLabel ? (
@@ -3102,12 +3110,7 @@ function MessageBubble({
               className={`message-bubble${visibleText ? "" : " unavailable-message"}`}
             >
               {visibleText ? (
-                <div
-                  className="message-wa-markup"
-                  dangerouslySetInnerHTML={{
-                    __html: renderWhatsAppMarkup(visibleText),
-                  }}
-                />
+                <WhatsAppMessageText text={visibleText} />
               ) : (
                 t("ui.messageUnavailable")
               )}
@@ -3243,6 +3246,19 @@ function MessageBubble({
   );
 }
 
+/** WhatsApp Web formatting shortcuts: Ctrl/⌘+B, I, Shift+X and Shift+M. */
+function formatShortcutMarker(
+  event: ReactKeyboardEvent<HTMLTextAreaElement>,
+): WaFormatMarker | undefined {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return undefined;
+  const key = event.key.toLowerCase();
+  if (!event.shiftKey && key === "b") return "*";
+  if (!event.shiftKey && key === "i") return "_";
+  if (event.shiftKey && key === "x") return "~";
+  if (event.shiftKey && key === "m") return "```";
+  return undefined;
+}
+
 function MediaComposer({
   onSend,
   onTyping,
@@ -3292,6 +3308,7 @@ function MediaComposer({
   const [dragActive, setDragActive] = useState(false);
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -3650,25 +3667,58 @@ function MediaComposer({
         </div>
       )}
       <div className="composer-input-row">
-        <textarea
-          ref={textareaRef}
-          aria-label={t("ui.writeReply")}
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-            onTyping?.();
-            event.currentTarget.style.height = "auto";
-            event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 128)}px`;
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-          placeholder={t("ui.writeReplyPlaceholder")}
-          rows={1}
-        />
+        <div className="composer-field">
+          <div
+            ref={highlightRef}
+            className="composer-highlight"
+            aria-hidden="true"
+          >
+            <WhatsAppComposerHighlight text={text} />
+          </div>
+          <textarea
+            ref={textareaRef}
+            aria-label={t("ui.writeReply")}
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              onTyping?.();
+              event.currentTarget.style.height = "auto";
+              event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 128)}px`;
+            }}
+            onScroll={(event) => {
+              if (highlightRef.current)
+                highlightRef.current.scrollTop = event.currentTarget.scrollTop;
+            }}
+            onKeyDown={(event) => {
+              const marker = formatShortcutMarker(event);
+              if (marker) {
+                event.preventDefault();
+                const field = event.currentTarget;
+                const next = toggleWhatsAppFormat(
+                  field.value,
+                  field.selectionStart,
+                  field.selectionEnd,
+                  marker,
+                );
+                setText(next.text);
+                onTyping?.();
+                requestAnimationFrame(() => {
+                  field.setSelectionRange(
+                    next.selectionStart,
+                    next.selectionEnd,
+                  );
+                });
+                return;
+              }
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+            placeholder={t("ui.writeReplyPlaceholder")}
+            rows={1}
+          />
+        </div>
         <button
           className={`send-button ${!canSubmit ? "disabled" : ""}`}
           type="button"

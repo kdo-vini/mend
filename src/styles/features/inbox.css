@@ -980,6 +980,19 @@
 .message-wa-markup {
   white-space: normal;
 }
+.message-wa-markup > p,
+.message-wa-markup > blockquote,
+.message-wa-markup > ul,
+.message-wa-markup > ol,
+.message-wa-markup > pre {
+  margin: 0;
+}
+.message-wa-markup > * + *:not(.wa-gap) {
+  margin-top: 2px;
+}
+.message-wa-markup .wa-gap {
+  height: 0.6em;
+}
 .message-wa-markup strong {
   font-weight: 700;
   color: var(--text);
@@ -989,6 +1002,69 @@
 }
 .message-wa-markup s {
   text-decoration: line-through;
+}
+.message-wa-markup a {
+  color: var(--action);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.message-wa-markup blockquote {
+  padding-left: 8px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--text-muted);
+}
+.message-wa-markup ul {
+  padding-left: 16px;
+  list-style: disc;
+}
+.message-wa-markup ol {
+  padding-left: 0;
+  list-style: none;
+}
+.message-wa-markup ol li {
+  display: flex;
+  gap: 5px;
+}
+.wa-list-number {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.wa-mono,
+.wa-code {
+  font-family: var(--font-technical);
+  font-size: 0.92em;
+}
+.message-wa-markup pre.wa-mono {
+  white-space: pre-wrap;
+}
+.wa-code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--surface-selected);
+}
+/* Outbound bubbles can be a filled action color: follow the bubble's ink. */
+.message-row.outbound .message-wa-markup strong,
+.message-row.outbound .message-wa-markup a {
+  color: inherit;
+}
+.message-row.outbound .message-wa-markup blockquote {
+  border-left-color: currentColor;
+  color: inherit;
+  opacity: 0.82;
+}
+.message-row.outbound .message-wa-markup .wa-code {
+  background: color-mix(in oklch, currentColor 18%, transparent);
+}
+.conversation-preview strong {
+  font-weight: 650;
+}
+.conversation-preview .wa-mono,
+.conversation-preview .wa-code {
+  padding: 0;
+  background: none;
+}
+.media-caption {
+  display: block;
 }
 .deleted-message,
 .unavailable-message {
@@ -1458,17 +1534,85 @@
   align-items: flex-end;
   gap: 8px;
 }
+/*
+ * The textarea text is transparent; the formatted copy behind it shows
+ * through. Both boxes must lay text out identically, so nothing in the
+ * highlight may change glyph widths: bold is drawn with a text shadow and
+ * code keeps the composer font (Inter ships one upright face, so italic
+ * is a same-width slant).
+ */
+.composer-field {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  display: flex;
+}
+.composer textarea,
+.composer-highlight {
+  margin: 0;
+  padding: 5px 0;
+  border: 0;
+  font-family: var(--font-product);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  word-break: normal;
+}
 .composer textarea {
+  position: relative;
   min-height: 30px;
   max-height: 128px;
   flex: 1;
   resize: none;
-  border: 0;
   outline: 0;
   background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  scrollbar-width: none;
+}
+.composer textarea::-webkit-scrollbar {
+  display: none;
+}
+.composer textarea::selection {
+  background: var(--action-wash);
+  color: transparent;
+}
+.composer-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
   color: var(--text);
-  font-size: 12px;
-  line-height: 1.5;
+  pointer-events: none;
+}
+.composer-highlight strong {
+  font-weight: inherit;
+  text-shadow:
+    0.35px 0 currentColor,
+    -0.35px 0 currentColor;
+}
+.composer-highlight em {
+  font-style: italic;
+}
+.composer-highlight s {
+  text-decoration: line-through;
+}
+.composer-highlight .wa-marker {
+  color: var(--text-muted);
+}
+.composer-highlight .wa-mono,
+.composer-highlight .wa-code {
+  border-radius: 3px;
+  background: var(--surface-selected);
+  font: inherit;
+}
+.composer-highlight .wa-code {
+  padding: 0;
+}
+.composer-highlight .wa-link {
+  color: var(--action);
 }
 .composer textarea::placeholder {
   color: var(--text-muted);
@@ -1497,7 +1641,8 @@
     grid-template-columns: var(--inbox-rail-width) minmax(0, 1fr);
   }
   /* iOS and mobile Chrome zoom focused form controls below 16px. */
-  .inbox-page .composer textarea {
+  .inbox-page .composer textarea,
+  .inbox-page .composer-highlight {
     font-size: 16px;
     line-height: 1.4;
   }

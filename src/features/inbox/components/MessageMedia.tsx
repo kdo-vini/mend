@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Message } from "../../../types";
 import { getMessageMediaUrl, type MessageMediaPurpose } from "../api";
 import { AudioWavePlayer } from "./AudioWavePlayer";
+import { WhatsAppMessageText } from "./WhatsAppText";
 
 export function MessageMedia({
   workspaceId,
@@ -84,7 +85,11 @@ export function MessageMedia({
             alt={message.attachment?.name ?? t("ui.media")}
             onError={onError}
           />
-          {message.text && <span>{message.text}</span>}
+          {message.text && (
+            <span className="media-caption">
+              <WhatsAppMessageText text={message.text} links={false} />
+            </span>
+          )}
         </button>
       ) : message.type === "video" && url ? (
         <button
@@ -94,7 +99,11 @@ export function MessageMedia({
           onClick={onOpen}
         >
           <video preload="none" muted playsInline src={url} onError={onError} />
-          {message.text && <span>{message.text}</span>}
+          {message.text && (
+            <span className="media-caption">
+              <WhatsAppMessageText text={message.text} links={false} />
+            </span>
+          )}
         </button>
       ) : message.type === "audio" ? (
         <div className="message-bubble media-bubble">
@@ -105,7 +114,11 @@ export function MessageMedia({
               {t("ui.processingMedia")}
             </span>
           )}
-          {message.text && <span>{message.text}</span>}
+          {message.text && (
+            <span className="media-caption">
+              <WhatsAppMessageText text={message.text} links={false} />
+            </span>
+          )}
           {!message.text && message.transcriptionStatus === "processing" && (
             <span className="media-transcript-status">
               {t("ui.transcriptionProcessing")}
