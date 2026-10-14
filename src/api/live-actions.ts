@@ -837,6 +837,38 @@ export async function sendLiveMessage(input: {
   );
 }
 
+export interface LiveContactCard {
+  fullName: string;
+  /** Digits only, with the country code. */
+  phoneNumber: string;
+  organization?: string;
+}
+
+/** Shares one or more vCards in the conversation. */
+export async function sendLiveContact(input: {
+  workspaceId: string;
+  conversationId: string;
+  contacts: LiveContactCard[];
+  idempotencyKey?: string;
+}) {
+  if (!input.contacts.length)
+    throw new LiveActionError("At least one contact is required.");
+  return apiRequest<{ message?: unknown }>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        messageType: "contact",
+        contacts: input.contacts,
+        ...(input.idempotencyKey
+          ? { idempotencyKey: input.idempotencyKey }
+          : {}),
+      }),
+    },
+    input.workspaceId,
+  );
+}
+
 export async function deleteLiveConversation(input: {
   workspaceId: string;
   conversationId: string;

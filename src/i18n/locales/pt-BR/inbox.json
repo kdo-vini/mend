@@ -65,6 +65,17 @@
     "submit": "Iniciar conversa",
     "starting": "Iniciando…"
   },
+  "shareContact": {
+    "eyebrow": "Compartilhar contato",
+    "title": "Enviar cartão de contato",
+    "trigger": "Contato",
+    "triggerLabel": "Enviar um cartão de contato",
+    "close": "Fechar cartão de contato",
+    "name": "Nome",
+    "phone": "Telefone",
+    "organization": "Empresa (opcional)",
+    "submit": "Enviar contato"
+  },
   "ui": {
     "newWillAppear": "Novas conversas vão aparecer aqui.",
     "conversations": "Conversas",

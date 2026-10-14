@@ -948,6 +948,58 @@ describe("InboxService and WhatsAppService", () => {
     ).toBe(true);
   });
 
+  it("sends contact cards and records them with a readable body", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, inbound());
+    const provider: WhatsAppProvider = {
+      sendText: vi.fn(async () => ({ key: { id: "unused" } })),
+      sendMedia: vi.fn(async () => ({ key: { id: "unused" } })),
+      sendAudio: vi.fn(async () => ({ key: { id: "unused" } })),
+      sendContact: vi.fn(async () => ({ key: { id: "wamid-out-contact" } })),
+      markAsRead: vi.fn(async () => undefined),
+    };
+    const whatsapp = new WhatsAppService(inbox, provider);
+
+    const sent = await whatsapp.sendContact(
+      { workspaceId, actorUserId: "user-1", actorType: "user" },
+      conversationId,
+      {
+        contacts: [
+          {
+            fullName: "Ivo Silva",
+            phoneNumber: "5511999997777",
+            organization: "Verboo",
+          },
+        ],
+        idempotencyKey: "contact-key-1",
+      },
+    );
+
+    expect(provider.sendContact).toHaveBeenCalledWith({
+      instanceName: "mend-demo",
+      number: "5511999999999",
+      contacts: [
+        {
+          fullName: "Ivo Silva",
+          phoneNumber: "5511999997777",
+          organization: "Verboo",
+        },
+      ],
+      idempotencyKey: "contact-key-1",
+    });
+    expect(sent.providerMessageId).toBe("wamid-out-contact");
+    expect(
+      [...port.messages.values()].find(
+        (message) => message.providerMessageId === "wamid-out-contact",
+      ),
+    ).toMatchObject({
+      direction: "outbound",
+      messageType: "text",
+      text: "📇 Ivo Silva\n5511999997777",
+    });
+  });
+
   it("names a dropped WhatsApp session as the reason a send failed", async () => {
     const port = new FakeInboxPort();
     const inbox = new InboxService(port);

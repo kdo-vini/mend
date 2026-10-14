@@ -22,6 +22,7 @@ import {
   Filter,
   LoaderCircle,
   Mic,
+  Contact,
   LockKeyhole,
   Paperclip,
   PanelRight,
@@ -62,6 +63,7 @@ import {
   resumeLiveConversationAi,
   sendLiveMedia,
   sendLiveMediaBatch,
+  sendLiveContact,
   sendLiveMessage,
   sendLivePresence,
   snoozeLiveConversation,
@@ -80,6 +82,11 @@ import {
   useInboxRailWidth,
 } from "../hooks/useInboxRailWidth";
 import { MessageMedia } from "../components/MessageMedia";
+import {
+  SHARE_CONTACT_DIALOG_ID,
+  ShareContactDialog,
+  type ShareContactInput,
+} from "../components/ShareContactDialog";
 import {
   formatMessageTime,
   getMessageDayKey,
@@ -184,6 +191,7 @@ interface LightboxMedia {
 const composerDrafts = new Map<string, string>();
 const deliveryQueues = new Map<string, Promise<void>>();
 const failedMediaRetryInputs = new Map<string, ComposerMediaInput>();
+const failedContactRetryInputs = new Map<string, ShareContactInput>();
 const outboundPreviewUrls = new Map<string, string>();
 const markReadInFlight = new Set<string>();
 
@@ -958,6 +966,8 @@ export function InboxPage({
   const sendMessage = async (
     text: string,
     idempotencyKey?: string,
+    /** Set when the bubble is a shared contact card rather than typed text. */
+    contact?: ShareContactInput,
   ): Promise<boolean> => {
     if (!text.trim()) return false;
     const conversationId = selected.id;
@@ -995,6 +1005,7 @@ export function InboxPage({
       ),
     );
     const optimisticIds = new Set([optimistic.id]);
+    if (contact) failedContactRetryInputs.set(optimistic.id, contact);
     if (liveMode && workspaceId) {
       const liveWorkspaceId = workspaceId;
       const acceptedToast =
@@ -1004,17 +1015,26 @@ export function InboxPage({
           : t("toasts.messageAccepted");
       await enqueueDelivery(conversationId, async () => {
         try {
-          await sendLiveMessage({
-            workspaceId: liveWorkspaceId,
-            conversationId,
-            text: text.trim(),
-            idempotencyKey: clientId,
-          });
+          if (contact)
+            await sendLiveContact({
+              workspaceId: liveWorkspaceId,
+              conversationId,
+              contacts: [contact],
+              idempotencyKey: clientId,
+            });
+          else
+            await sendLiveMessage({
+              workspaceId: liveWorkspaceId,
+              conversationId,
+              text: text.trim(),
+              idempotencyKey: clientId,
+            });
         } catch (error) {
           patchMessages(conversationId, optimisticIds, { status: "failed" });
           onToast(sendFailureMessage(error), "error");
           return;
         }
+        failedContactRetryInputs.delete(optimistic.id);
         // Promote the optimistic bubble immediately so a slow/partial refresh
         // cannot leave the thread stuck on "Sending…" or a single bubble.
         patchMessages(conversationId, optimisticIds, { status: "sent" });
@@ -1197,6 +1217,14 @@ export function InboxPage({
     if (!text.trim()) return false;
     void sendMessage(text);
     return true;
+  };
+  /** Same body the server records, so the persisted copy retires the bubble. */
+  const queueContactCard = (contact: ShareContactInput) => {
+    void sendMessage(
+      `📇 ${contact.fullName}\n${contact.phoneNumber}`,
+      undefined,
+      contact,
+    );
   };
   const queueComposerMedia = (inputs: ComposerMediaInput[]): boolean => {
     if (!liveMode || !workspaceId) {
@@ -1521,6 +1549,7 @@ export function InboxPage({
 
   const removeFailedMessage = (messageId: string) => {
     failedMediaRetryInputs.delete(messageId);
+    failedContactRetryInputs.delete(messageId);
     setConversations((current) =>
       current.map((conversation) =>
         conversation.id === selected.id
@@ -1536,6 +1565,10 @@ export function InboxPage({
   };
 
   const editFailedMessage = (message: Message) => {
+    if (failedContactRetryInputs.has(message.id)) {
+      onToast(t("errors.editMessage"));
+      return;
+    }
     const mediaInput =
       message.type === "text"
         ? undefined
@@ -1555,6 +1588,8 @@ export function InboxPage({
 
   const retryFailedMessage = async (message: Message) => {
     if (messageActionId) return;
+    // Read before removeFailedMessage clears it, or the card goes out as text.
+    const contact = failedContactRetryInputs.get(message.id);
     const mediaInput =
       message.type === "text"
         ? undefined
@@ -1567,7 +1602,7 @@ export function InboxPage({
     removeFailedMessage(message.id);
     try {
       if (message.type === "text")
-        await sendMessage(message.text, message.clientId);
+        await sendMessage(message.text, message.clientId, contact);
       else if (mediaInput)
         await sendMediaBatch(
           [{ ...mediaInput, caption: message.text || mediaInput.caption }],
@@ -2146,6 +2181,7 @@ export function InboxPage({
               else composerDrafts.delete(selected.id);
             }}
             onPrefillApplied={() => setDraftInsertRequest(undefined)}
+            onShareContact={liveMode ? queueContactCard : undefined}
             onSend={queueComposerMessage}
             onTyping={notifyTyping}
             onSendMediaBatch={queueComposerMedia}
@@ -3216,8 +3252,10 @@ function MediaComposer({
   onPrefillApplied,
   initialText = "",
   onTextChange,
+  onShareContact,
   liveMode,
 }: {
+  onShareContact?: (contact: ShareContactInput) => void;
   initialText?: string;
   onTextChange?: (text: string) => void;
   onPrefillApplied?: () => void;
@@ -3252,6 +3290,7 @@ function MediaComposer({
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [recording, setRecording] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -3524,6 +3563,29 @@ function MediaComposer({
           {recording ? <Square size={14} /> : <Mic size={15} />}{" "}
           {recording ? t("ui.stop") : t("ui.voice")}
         </button>
+        {onShareContact && (
+          <button
+            className="composer-tool"
+            type="button"
+            disabled={recording}
+            aria-label={t("shareContact.triggerLabel")}
+            aria-haspopup="dialog"
+            aria-expanded={contactDialogOpen}
+            aria-controls={SHARE_CONTACT_DIALOG_ID}
+            onClick={() => setContactDialogOpen(true)}
+          >
+            <Contact size={15} /> {t("shareContact.trigger")}
+          </button>
+        )}
+        {contactDialogOpen && onShareContact && (
+          <ShareContactDialog
+            onClose={() => setContactDialogOpen(false)}
+            onShare={(contact) => {
+              setContactDialogOpen(false);
+              onShareContact(contact);
+            }}
+          />
+        )}
         {SUPPORT_AI_SURFACES_ENABLED && (
           <button
             className="composer-tool"

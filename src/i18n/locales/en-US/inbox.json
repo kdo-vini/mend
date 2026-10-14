@@ -65,6 +65,17 @@
     "submit": "Start conversation",
     "starting": "Starting…"
   },
+  "shareContact": {
+    "eyebrow": "Share a contact",
+    "title": "Send contact card",
+    "trigger": "Contact",
+    "triggerLabel": "Send a contact card",
+    "close": "Close contact card",
+    "name": "Name",
+    "phone": "Phone number",
+    "organization": "Company (optional)",
+    "submit": "Send contact"
+  },
   "ui": {
     "newWillAppear": "New conversations will appear here.",
     "conversations": "Conversations",

@@ -388,6 +388,53 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
+  it("sends contact cards in the provider's vCard shape", async () => {
+    const originalFetch = globalThis.fetch;
+    let url = "";
+    let body: Record<string, unknown> | undefined;
+    globalThis.fetch = async (input, init) => {
+      url = String(input);
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({ key: { id: "wamid-contact" } }), {
+        status: 200,
+      });
+    };
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await provider.sendContact({
+        instanceName: "mend-test",
+        number: "5511999998888@s.whatsapp.net",
+        contacts: [
+          { fullName: "Ivo Silva", phoneNumber: "5511999997777" },
+          {
+            fullName: "Ana",
+            phoneNumber: "5511888887777",
+            email: "ana@example.com",
+          },
+        ],
+      });
+      expect(url).toBe(
+        "https://provider.test/v2/message/sendContact/mend-test",
+      );
+      expect(body).toEqual({
+        number: "5511999998888",
+        contact: [
+          { fullName: "Ivo Silva", phoneNumber: "5511999997777" },
+          {
+            fullName: "Ana",
+            phoneNumber: "5511888887777",
+            email: "ana@example.com",
+          },
+        ],
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("keeps the provider instance when webhook setup fails", async () => {
     const originalFetch = globalThis.fetch;
     const calls: string[] = [];

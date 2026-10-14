@@ -55,6 +55,19 @@ export interface SendTextInput {
   /** Stable key for providers that support retry-safe outbound delivery. */
   idempotencyKey?: string;
 }
+export interface SendContactCard {
+  fullName: string;
+  phoneNumber: string;
+  organization?: string;
+  email?: string;
+}
+export interface SendContactInput {
+  instanceName: string;
+  number: string;
+  contacts: SendContactCard[];
+  /** Stable key for providers that support retry-safe outbound delivery. */
+  idempotencyKey?: string;
+}
 export interface SendMediaInput {
   instanceName: string;
   number: string;
@@ -584,6 +597,32 @@ export class WhatsmiauMessagingProvider {
           }),
           text: input.text,
           delay: input.delay,
+        }),
+      },
+    );
+  }
+  /** One or more vCards; WhatsApp groups several into a single bubble. */
+  sendContact(input: SendContactInput) {
+    return this.request<ProviderMessage>(
+      `/message/sendContact/${encodeURIComponent(input.instanceName)}`,
+      {
+        method: "POST",
+        ...(input.idempotencyKey
+          ? { headers: { "idempotency-key": input.idempotencyKey } }
+          : {}),
+        body: JSON.stringify({
+          number: resolveWhatsAppSendDestination({
+            phoneNumber: input.number,
+            remoteJid: input.number,
+          }),
+          contact: input.contacts.map((contact) => ({
+            fullName: contact.fullName,
+            phoneNumber: contact.phoneNumber,
+            ...(contact.organization
+              ? { organization: contact.organization }
+              : {}),
+            ...(contact.email ? { email: contact.email } : {}),
+          })),
         }),
       },
     );
