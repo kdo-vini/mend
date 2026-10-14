@@ -468,6 +468,57 @@ describe("InboxPage new chat", () => {
     expect(composer.value).toBe("");
   });
 
+  it("keeps a stopped voice recording pending instead of sending it", async () => {
+    const { sendLiveMediaBatch } = await import("../api");
+    class FakeMediaRecorder {
+      static isTypeSupported = () => true;
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      start() {
+        this.state = "recording";
+      }
+      requestData() {
+        this.ondataavailable?.({ data: new Blob(["voice"]) });
+      }
+      stop() {
+        this.state = "inactive";
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }),
+      },
+    });
+    URL.createObjectURL = () => "blob:voice";
+    URL.revokeObjectURL = () => undefined;
+    try {
+      await act(async () => root.render(<InboxHarness />));
+      const voice = () =>
+        document.body.querySelector<HTMLButtonElement>(
+          "[aria-pressed].composer-tool",
+        );
+      await act(async () => voice()?.click());
+      expect(voice()?.getAttribute("aria-pressed")).toBe("true");
+      await act(async () => voice()?.click());
+
+      expect(voice()?.getAttribute("aria-pressed")).toBe("false");
+      expect(sendLiveMediaBatch).not.toHaveBeenCalled();
+      expect(
+        document.body.querySelector(".attachment-preview-card audio"),
+      ).not.toBeNull();
+      expect(
+        document.body.querySelector<HTMLButtonElement>(".send-button")
+          ?.disabled,
+      ).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   describe("IA ativa toggle", () => {
     // Ids outside the seed keep snapshot hydration from overwriting the axes.
     const conversationWith = (
