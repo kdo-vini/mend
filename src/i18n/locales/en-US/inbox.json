@@ -149,6 +149,8 @@
     "deleting": "Deleting…",
     "deleteForEveryone": "Delete for everyone",
     "sending": "Sending…",
+    "sendingProgress": "Sending… {{percent}}%",
+    "failed": "Failed",
     "react": "React",
     "processingMedia": "Processing media…",
     "mediaUnsupported": "Format {{format}} is not supported",
