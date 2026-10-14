@@ -137,7 +137,7 @@
     "configureSupportAi": "Configurar IA do Support",
     "aiGenerated": "Gerado por IA",
     "messageDeleted": "Mensagem excluída",
-    "messageUnavailable": "Não foi possível carregar esta mensagem",
+    "messageUnavailable": "Este tipo de mensagem não aparece no Mend. Veja no WhatsApp do celular.",
     "messageReactions": "Reações da mensagem",
     "removeReaction": "Remover reação",
     "removeReactionWithEmoji": "Remover reação {{emoji}}",

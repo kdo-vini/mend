@@ -137,7 +137,7 @@
     "configureSupportAi": "Configure Support AI",
     "aiGenerated": "AI generated",
     "messageDeleted": "Message deleted",
-    "messageUnavailable": "This message could not be loaded",
+    "messageUnavailable": "This message type can't be shown in Mend. Open it in WhatsApp on your phone.",
     "messageReactions": "Message reactions",
     "removeReaction": "Remove reaction",
     "removeReactionWithEmoji": "Remove reaction {{emoji}}",

@@ -7,6 +7,67 @@ import {
 } from "./whatsmiau.js";
 
 describe("Whatsmiau normalization", () => {
+  it("gives shared contacts, locations and polls a readable body", () => {
+    const item = (id: string, message: Record<string, unknown>) => ({
+      key: {
+        id,
+        remoteJid: "5511999999999@s.whatsapp.net",
+        fromMe: false,
+      },
+      messageType: Object.keys(message)[0],
+      message,
+    });
+    const messages = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        messages: [
+          item("contact", {
+            contactMessage: {
+              displayName: "Kayke",
+              vcard:
+                "BEGIN:VCARD\nVERSION:3.0\nN:;Kayke;;;\nFN:Kayke\nitem1.TEL;waid=5511988887777:+55 11 98888-7777\nitem1.X-ABLabel:Celular\nEND:VCARD",
+            },
+          }),
+          item("contacts", {
+            contactsArrayMessage: {
+              contacts: [
+                { displayName: "Ana", vcard: "TEL;type=CELL:+55 11 1111-1111" },
+                { displayName: "Bia" },
+              ],
+            },
+          }),
+          item("location", {
+            locationMessage: {
+              degreesLatitude: -23.5,
+              degreesLongitude: -46.6,
+              name: "Loja",
+            },
+          }),
+          item("poll", {
+            pollCreationMessageV3: {
+              name: "Melhor horário?",
+              options: [{ optionName: "Manhã" }, { optionName: "Tarde" }],
+            },
+          }),
+        ],
+      },
+    });
+
+    expect(messages.map((message) => message.messageType)).toEqual([
+      "text",
+      "text",
+      "text",
+      "text",
+    ]);
+    expect(messages.map((message) => message.text)).toEqual([
+      "📇 Kayke\n+55 11 98888-7777",
+      "📇 Ana\n+55 11 1111-1111\n\n📇 Bia",
+      "📍 Loja\nhttps://maps.google.com/?q=-23.5,-46.6",
+      "📊 Melhor horário?\n• Manhã\n• Tarde",
+    ]);
+  });
+
   it("normalizes Baileys text and media shapes", () => {
     const messages = normalizeWhatsmiauEvent({
       event: "messages.upsert",
