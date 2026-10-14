@@ -18,6 +18,8 @@ import {
   resolveWhatsAppSendDestination,
   type ProviderMessage,
   type SendButtonsInput,
+  type SendContactCard,
+  type SendContactInput,
   type SendListInput,
   type SendReactionInput,
   type SendAudioInput,
@@ -57,6 +59,9 @@ export interface WhatsAppProvider {
   sendMedia(
     input: SendMediaInput,
   ): Promise<ProviderMessage | Record<string, unknown>>;
+  sendContact?(
+    input: SendContactInput,
+  ): Promise<ProviderMessage | Record<string, unknown>>;
   sendAudio(
     input: SendAudioInput,
   ): Promise<ProviderMessage | Record<string, unknown>>;
@@ -80,6 +85,18 @@ export interface SendTextRequest {
   /** Forward a stable retry key to providers that implement deduplication. */
   idempotencyKey?: string;
   onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
+}
+
+export interface SendContactRequest {
+  contacts: SendContactCard[];
+  idempotencyKey?: string;
+}
+
+/** Same body the webhook parser gives inbound contact cards. */
+export function contactCardsText(contacts: readonly SendContactCard[]) {
+  return contacts
+    .map((contact) => `📇 ${contact.fullName}\n${contact.phoneNumber}`)
+    .join("\n\n");
 }
 
 export interface SendReplyChoicesRequest {
@@ -296,6 +313,42 @@ export class WhatsAppService {
       messageType: "text",
       text,
       aiGenerated: input.aiGenerated,
+    });
+    return { message, providerMessageId: id };
+  }
+
+  async sendContact(
+    context: InboxContext,
+    conversationId: string,
+    input: SendContactRequest,
+  ): Promise<OutboundResult> {
+    if (!input.contacts.length || input.contacts.length > 10)
+      throw new Error("message_contacts_invalid");
+    if (!this.provider.sendContact) throw new Error("contact_send_unsupported");
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    const destination = outboundDestination(conversation);
+    const sendContact = this.provider.sendContact.bind(this.provider);
+    const response = await this.delivering(
+      conversation.providerInstanceName,
+      () =>
+        sendContact({
+          instanceName: conversation.providerInstanceName,
+          number: destination,
+          contacts: input.contacts,
+          ...(input.idempotencyKey
+            ? { idempotencyKey: input.idempotencyKey }
+            : {}),
+        }),
+    );
+    const id = providerMessageId(response);
+    const message = await this.inbox.recordOutbound(context, conversationId, {
+      providerMessageId: id,
+      messageType: "text",
+      text: contactCardsText(input.contacts),
     });
     return { message, providerMessageId: id };
   }

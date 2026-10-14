@@ -1067,7 +1067,14 @@ export class SupabaseConversationAdapter implements ConversationPort {
           throw error;
         }
       }
-    } else if (input.messageType === "text")
+    } else if (input.messageType === "contact")
+      await this.whatsapp.sendContact(actor, conversationId, {
+        contacts: input.contacts ?? [],
+        ...(input.idempotencyKey
+          ? { idempotencyKey: input.idempotencyKey }
+          : {}),
+      });
+    else if (input.messageType === "text")
       // Forward the composer's key: a retry after a failed or timed-out send
       // must reach the provider as the same message, not as a second one.
       await this.whatsapp.sendText(actor, conversationId, {

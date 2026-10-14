@@ -272,4 +272,118 @@ describe("conversation-snapshot", () => {
     ]);
     expect(merged.messages[2]?.status).toBe("delivered");
   });
+
+  it("does not retire a fresh send because an older message has the same text", () => {
+    const older = message({
+      id: "m-old",
+      direction: "outbound",
+      text: "Obrigado!",
+      createdAt: "2026-09-20T10:00:00.000Z",
+    });
+    const current: Conversation[] = [
+      {
+        ...baseConversation,
+        messages: [
+          older,
+          message({
+            id: "temp:again",
+            direction: "outbound",
+            text: "Obrigado!",
+            createdAt: "2026-09-20T23:00:00.000Z",
+            status: "sending",
+          }),
+        ],
+      },
+    ];
+    const snapshot: Conversation = { ...baseConversation, messages: [older] };
+
+    const merged = mergeConversationSnapshot(current, snapshot)[0]!;
+    expect(merged.messages.map((item) => item.id)).toEqual([
+      "m-old",
+      "temp:again",
+    ]);
+  });
+
+  it("keeps a failed send until the operator acts on it", () => {
+    const current: Conversation[] = [
+      {
+        ...baseConversation,
+        messages: [
+          message({
+            id: "temp:failed",
+            direction: "outbound",
+            text: "Pode mandar o print?",
+            createdAt: "2026-09-20T23:00:00.000Z",
+            status: "failed",
+          }),
+        ],
+      },
+    ];
+    const snapshot: Conversation = {
+      ...baseConversation,
+      messages: [
+        message({
+          id: "m-other-operator",
+          direction: "outbound",
+          text: "Pode mandar o print?",
+          createdAt: "2026-09-20T23:00:05.000Z",
+        }),
+      ],
+    };
+
+    const merged = mergeConversationSnapshot(current, snapshot)[0]!;
+    expect(merged.messages.map((item) => item.id)).toContain("temp:failed");
+  });
+
+  it("retires an uploading attachment only by its own batch", () => {
+    const earlierPhoto = message({
+      id: "m-photo-1",
+      direction: "outbound",
+      text: "",
+      type: "image",
+      createdAt: "2026-09-20T22:59:00.000Z",
+    });
+    const current: Conversation[] = [
+      {
+        ...baseConversation,
+        messages: [
+          message({
+            id: "temp:photo-2",
+            direction: "outbound",
+            text: "",
+            type: "image",
+            mediaBatchId: "batch-2",
+            createdAt: "2026-09-20T23:00:00.000Z",
+            status: "sending",
+          }),
+        ],
+      },
+    ];
+
+    // Another caption-less photo the thread had not loaded yet is not this one.
+    const unrelated = mergeConversationSnapshot(current, {
+      ...baseConversation,
+      messages: [earlierPhoto],
+    })[0]!;
+    expect(unrelated.messages.map((item) => item.id)).toContain("temp:photo-2");
+
+    const persisted = mergeConversationSnapshot(current, {
+      ...baseConversation,
+      messages: [
+        earlierPhoto,
+        message({
+          id: "m-photo-2",
+          direction: "outbound",
+          text: "",
+          type: "image",
+          mediaBatchId: "batch-2",
+          createdAt: "2026-09-20T23:00:03.000Z",
+        }),
+      ],
+    })[0]!;
+    expect(persisted.messages.map((item) => item.id)).toEqual([
+      "m-photo-1",
+      "m-photo-2",
+    ]);
+  });
 });

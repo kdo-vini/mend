@@ -199,6 +199,8 @@ function App() {
   const [selectedConversationId, setSelectedConversationId] = useState(
     demoMode ? (seedConversations[0]?.id ?? "") : "",
   );
+  const selectedConversationIdRef = useRef(selectedConversationId);
+  selectedConversationIdRef.current = selectedConversationId;
   const [operatorIdentity, setOperatorIdentity] = useState({
     id: "",
     name: t("app.currentOperator"),
@@ -450,19 +452,21 @@ function App() {
                 // The workspace list only embeds the latest message per thread.
                 partialMessages: true,
               }),
-            current.filter((conversation) =>
-              liveData.conversations.some(
-                (snapshot) => snapshot.id === conversation.id,
-              ),
+            // The list only carries the 100 most recent threads. The open
+            // one stays even when older (opened from an issue or a link);
+            // deletions reach it through its own realtime snapshot.
+            current.filter(
+              (conversation) =>
+                conversation.id === selectedConversationIdRef.current ||
+                liveData.conversations.some(
+                  (snapshot) => snapshot.id === conversation.id,
+                ),
             ),
           ),
         );
-        setSelectedConversationId((current) =>
-          liveData.conversations.some(
-            (conversation) => conversation.id === current,
-          )
-            ? current
-            : (liveData.conversations[0]?.id ?? ""),
+        // A background refresh never moves the operator to another thread.
+        setSelectedConversationId(
+          (current) => current || (liveData.conversations[0]?.id ?? ""),
         );
         setIssues(liveData.issues);
         setKnowledgeArticles(liveData.knowledge);
@@ -501,10 +505,15 @@ function App() {
                       workspace.id,
                       target.id,
                     );
-                    if (snapshot && active)
-                      setConversations((current) =>
-                        mergeConversationSnapshot(current, snapshot),
-                      );
+                    if (!active) return;
+                    setConversations((current) =>
+                      snapshot
+                        ? mergeConversationSnapshot(current, snapshot)
+                        : // Deleted (or no longer visible to this operator).
+                          current.filter(
+                            (conversation) => conversation.id !== target.id,
+                          ),
+                    );
                     return;
                   }
                   scheduleWorkspaceRefresh();
@@ -607,10 +616,14 @@ function App() {
       selectedConversationId,
     )
       .then((snapshot) => {
-        if (snapshot && active)
-          setConversations((current) =>
-            mergeConversationSnapshot(current, snapshot),
-          );
+        if (!active) return;
+        setConversations((current) =>
+          snapshot
+            ? mergeConversationSnapshot(current, snapshot)
+            : current.filter(
+                (conversation) => conversation.id !== selectedConversationId,
+              ),
+        );
       })
       .catch((error) => {
         if (active)

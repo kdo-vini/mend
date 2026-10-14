@@ -100,6 +100,71 @@ function unwrapProviderMessage(
   return value;
 }
 
+function vcardPhones(vcard: unknown): string[] {
+  if (typeof vcard !== "string") return [];
+  return vcard
+    .split(/\r?\n/)
+    .filter((line) => /^(item\d+\.)?TEL[;:]/i.test(line))
+    .map((line) => line.slice(line.lastIndexOf(":") + 1).trim())
+    .filter(Boolean);
+}
+
+function contactCardText(value: unknown): string | undefined {
+  const contact = asRecord(value);
+  const name = stringValue(contact.displayName);
+  const lines = [name, ...vcardPhones(contact.vcard)].filter(Boolean);
+  return lines.length ? `📇 ${lines.join("\n")}` : undefined;
+}
+
+/**
+ * Readable body for shared contacts, locations and polls. Without it these
+ * kinds were stored as text with no body and rendered as an unloadable bubble.
+ */
+function structuredMessageText(
+  message: Record<string, unknown>,
+): string | undefined {
+  const single = contactCardText(message.contactMessage);
+  if (single) return single;
+  const contacts = asRecord(message.contactsArrayMessage).contacts;
+  if (Array.isArray(contacts)) {
+    const cards = contacts.map(contactCardText).filter(Boolean);
+    if (cards.length) return cards.join("\n\n");
+  }
+  const location = firstRecord(
+    message.locationMessage,
+    message.liveLocationMessage,
+  );
+  if (Object.keys(location).length) {
+    const latitude = finiteNumber(location.degreesLatitude);
+    const longitude = finiteNumber(location.degreesLongitude);
+    const lines = [
+      stringValue(location.name),
+      stringValue(location.address),
+      latitude !== undefined && longitude !== undefined
+        ? `https://maps.google.com/?q=${latitude},${longitude}`
+        : undefined,
+    ].filter(Boolean);
+    if (lines.length) return `📍 ${lines.join("\n")}`;
+  }
+  const poll = firstRecord(
+    message.pollCreationMessage,
+    message.pollCreationMessageV2,
+    message.pollCreationMessageV3,
+  );
+  const question = stringValue(poll.name);
+  if (question) {
+    const options = Array.isArray(poll.options)
+      ? poll.options
+          .map((option) => stringValue(asRecord(option).optionName))
+          .filter(Boolean)
+      : [];
+    return [`📊 ${question}`, ...options.map((option) => `• ${option}`)].join(
+      "\n",
+    );
+  }
+  return undefined;
+}
+
 function hintedType(
   value: string | undefined,
 ): ProviderContentType | undefined {
@@ -155,6 +220,7 @@ export function readProviderMessageContent(
     asRecord(message.reactionMessage).text,
     listResponse.title,
     buttonResponse.selectedDisplayText,
+    structuredMessageText(message),
   );
   const inlineBase64 = stringValue(
     original.base64,

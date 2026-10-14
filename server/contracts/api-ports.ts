@@ -217,8 +217,15 @@ export interface ConversationSnoozeInput {
 }
 
 export interface SendMessageInput {
-  messageType: "text" | "image" | "video" | "audio" | "document";
+  messageType: "text" | "image" | "video" | "audio" | "document" | "contact";
   text?: string;
+  /** vCards for `messageType: "contact"`. */
+  contacts?: Array<{
+    fullName: string;
+    phoneNumber: string;
+    organization?: string;
+    email?: string;
+  }>;
   caption?: string;
   mediaUrl?: string;
   mediaDataUrl?: string;
