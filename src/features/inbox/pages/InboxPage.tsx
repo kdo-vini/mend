@@ -176,6 +176,17 @@ interface LightboxMedia {
   meta: string;
 }
 
+/*
+ * Outbound send state outlives the inbox page: the thread lives in App state,
+ * so leaving the inbox mid-upload must not drop the queue, the retry inputs
+ * or the local previews of bubbles that are still on screen.
+ */
+const composerDrafts = new Map<string, string>();
+const deliveryQueues = new Map<string, Promise<void>>();
+const failedMediaRetryInputs = new Map<string, ComposerMediaInput>();
+const outboundPreviewUrls = new Map<string, string>();
+const markReadInFlight = new Set<string>();
+
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -275,13 +286,7 @@ export function InboxPage({
   const dismissedAiCards = dismissedAiCardsByScope[aiCardStorageKey] ?? {};
   const [messageActionId, setMessageActionId] = useState<string>();
   const [reactionPendingId, setReactionPendingId] = useState<string>();
-  const failedMediaRetryInputsRef = useRef(
-    new Map<string, ComposerMediaInput>(),
-  );
   const failedMediaRefreshIdsRef = useRef(new Set<string>());
-  const deliveryQueueRef = useRef(new Map<string, Promise<void>>());
-  // Local previews shown on outbound media bubbles until the server copy lands.
-  const outboundPreviewUrlsRef = useRef(new Map<string, string>());
   const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null);
   const [conversationDeleting, setConversationDeleting] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -377,6 +382,9 @@ export function InboxPage({
   const selected =
     conversations.find((item) => item.id === selectedConversationId) ??
     conversations[0];
+  // Read after an await: the operator may have switched threads meanwhile.
+  const latestRef = useRef({ conversations, selectedId: selected?.id });
+  latestRef.current = { conversations, selectedId: selected?.id };
   const lightboxMedia = useMemo<LightboxMedia[]>(
     () =>
       selected?.messages.flatMap((message) => {
@@ -514,25 +522,36 @@ export function InboxPage({
         const queryMatch = normalizeSearch(
           `${conversation.name} ${conversation.company} ${conversation.phone} ${conversation.lastMessage}`,
         ).includes(normalizeSearch(search));
+        // The open thread stays listed when its own state stops matching the
+        // filter (a reply clears "needs attention", opening it clears
+        // "unread"). Dropping it would move the selection, and the composer,
+        // to another customer mid-task.
         return (
-          queryMatch && conversationMatchesInboxFilter(conversation, filter)
+          queryMatch &&
+          (conversation.id === selectedConversationId ||
+            conversationMatchesInboxFilter(conversation, filter))
         );
       }),
-    [conversations, filter, search],
+    [conversations, filter, search, selectedConversationId],
   );
 
+  // A `?conversation=` link selects its thread once per navigation. Applying it
+  // on every list change pulled the operator back to it after any click.
+  const handledConversationLinkRef = useRef<string | null>(null);
   useEffect(() => {
     const conversationId = new URLSearchParams(location.search).get(
       "conversation",
     );
     if (!conversationId) return;
+    if (handledConversationLinkRef.current === location.key) return;
     if (
       !conversations.some((conversation) => conversation.id === conversationId)
     )
       return;
+    handledConversationLinkRef.current = location.key;
     setSelectedConversationId(conversationId);
     setMobileConversationOpen(true);
-  }, [conversations, location.search, setSelectedConversationId]);
+  }, [conversations, location.key, location.search, setSelectedConversationId]);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -639,7 +658,7 @@ export function InboxPage({
   }, [filtered, selectionMode]);
 
   useEffect(() => {
-    const previews = outboundPreviewUrlsRef.current;
+    const previews = outboundPreviewUrls;
     if (!previews.size) return;
     const liveIds = new Set(
       conversations.flatMap((conversation) =>
@@ -652,13 +671,55 @@ export function InboxPage({
       previews.delete(messageId);
     }
   }, [conversations]);
+
+  // Whatever opened the thread (a click, a link, the first load, a filter),
+  // and whenever messages arrive while it is on screen, the operator has read
+  // it. Marking only on click left badges that refreshes kept bringing back.
+  const selectedId = selected?.id;
+  const selectedUnread = selected?.unread ?? 0;
+  const threadOnScreen =
+    mobileConversationOpen ||
+    typeof window === "undefined" ||
+    !window.matchMedia("(max-width: 650px)").matches;
   useEffect(() => {
-    const previews = outboundPreviewUrlsRef.current;
-    return () => {
-      previews.forEach((url) => URL.revokeObjectURL(url));
-      previews.clear();
+    if (!selectedId || !selectedUnread || !threadOnScreen) return;
+    const markRead = () => {
+      if (document.visibilityState !== "visible") return false;
+      setConversations((current) =>
+        current.map((item) =>
+          item.id === selectedId ? { ...item, unread: 0 } : item,
+        ),
+      );
+      if (liveMode && workspaceId && !markReadInFlight.has(selectedId)) {
+        markReadInFlight.add(selectedId);
+        void markLiveConversationRead({
+          workspaceId,
+          conversationId: selectedId,
+        })
+          .catch((error) =>
+            onToast(localizedError(error, t("errors.markRead"))),
+          )
+          .finally(() => markReadInFlight.delete(selectedId));
+      }
+      return true;
     };
-  }, []);
+    if (markRead()) return;
+    const onVisible = () => {
+      if (markRead())
+        document.removeEventListener("visibilitychange", onVisible);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [
+    liveMode,
+    onToast,
+    selectedId,
+    selectedUnread,
+    setConversations,
+    t,
+    threadOnScreen,
+    workspaceId,
+  ]);
 
   if (!selected) {
     return (
@@ -812,17 +873,6 @@ export function InboxPage({
     setSelectedConversationId(conversation.id);
     setMobileConversationOpen(true);
     setContextOpen(false);
-    if (conversation.unread)
-      setConversations((current) =>
-        current.map((item) =>
-          item.id === conversation.id ? { ...item, unread: 0 } : item,
-        ),
-      );
-    if (liveMode && workspaceId && conversation.unread)
-      void markLiveConversationRead({
-        workspaceId,
-        conversationId: conversation.id,
-      }).catch((error) => onToast(localizedError(error, t("errors.markRead"))));
   };
 
   /**
@@ -846,7 +896,7 @@ export function InboxPage({
     conversationId: string,
     deliver: () => Promise<void>,
   ): Promise<void> => {
-    const queue = deliveryQueueRef.current;
+    const queue = deliveryQueues;
     const next = (queue.get(conversationId) ?? Promise.resolve())
       .then(deliver)
       .catch(() => undefined);
@@ -1018,8 +1068,7 @@ export function InboxPage({
         input.file && input.messageType !== "document"
           ? URL.createObjectURL(input.file)
           : undefined;
-      if (previewUrl)
-        outboundPreviewUrlsRef.current.set(`temp:${clientId}`, previewUrl);
+      if (previewUrl) outboundPreviewUrls.set(`temp:${clientId}`, previewUrl);
       return {
         input,
         clientId,
@@ -1034,8 +1083,8 @@ export function InboxPage({
           createdAt: new Date().toISOString(),
           type: input.messageType,
           status: "sending" as const,
-          mediaBatchId: batchId,
-          ...(input.file ? { uploadProgress: 0 } : {}),
+          // Only uploads go out through the batch the server stores.
+          ...(input.file ? { mediaBatchId: batchId, uploadProgress: 0 } : {}),
           attachment: {
             name: input.fileName ?? input.file?.name ?? input.messageType,
             meta: input.mimeType ?? input.file?.type ?? t("ui.attachment"),
@@ -1045,7 +1094,7 @@ export function InboxPage({
       };
     });
     pending.forEach((item) =>
-      failedMediaRetryInputsRef.current.set(item.optimistic.id, item.input),
+      failedMediaRetryInputs.set(item.optimistic.id, item.input),
     );
     setConversations((current) =>
       sortConversations(
@@ -1127,7 +1176,7 @@ export function InboxPage({
         return;
       }
       pending.forEach((item) =>
-        failedMediaRetryInputsRef.current.delete(item.optimistic.id),
+        failedMediaRetryInputs.delete(item.optimistic.id),
       );
       patchMessages(conversationId, optimisticIds, {
         status: "sent",
@@ -1215,10 +1264,13 @@ export function InboxPage({
   };
 
   const setConversationState = async (status: "snoozed" | "resolved") => {
-    const previous = selected;
+    const conversationId = selected.id;
+    const previous = { status: selected.status, attention: selected.attention };
     setConversations((current) =>
       current.map((item) =>
-        item.id === selected.id ? { ...item, status, attention: "none" } : item,
+        item.id === conversationId
+          ? { ...item, status, attention: "none" }
+          : item,
       ),
     );
     try {
@@ -1226,13 +1278,13 @@ export function InboxPage({
         if (status === "snoozed")
           await snoozeLiveConversation({
             workspaceId,
-            conversationId: selected.id,
+            conversationId,
             until: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
           });
         else
           await resolveLiveConversation({
             workspaceId,
-            conversationId: selected.id,
+            conversationId,
           });
       }
       onToast(
@@ -1241,8 +1293,12 @@ export function InboxPage({
           : t("toasts.conversationResolved"),
       );
     } catch (error) {
+      // Roll back only the fields this action changed; messages that arrived
+      // meanwhile stay.
       setConversations((current) =>
-        current.map((item) => (item.id === previous.id ? previous : item)),
+        current.map((item) =>
+          item.id === conversationId ? { ...item, ...previous } : item,
+        ),
       );
       onToast(localizedError(error, t("errors.conversationState")));
     }
@@ -1258,9 +1314,6 @@ export function InboxPage({
       }))
     )
       return;
-    const nextConversation = conversations.find(
-      (conversation) => conversation.id !== conversationId,
-    );
     setConversationDeleting(true);
     try {
       if (liveMode && workspaceId)
@@ -1268,8 +1321,13 @@ export function InboxPage({
       setConversations((current) =>
         current.filter((conversation) => conversation.id !== conversationId),
       );
-      if (selected.id === conversationId) {
-        setSelectedConversationId(nextConversation?.id ?? "");
+      const latest = latestRef.current;
+      if (latest.selectedId === conversationId) {
+        setSelectedConversationId(
+          latest.conversations.find(
+            (conversation) => conversation.id !== conversationId,
+          )?.id ?? "",
+        );
         setMobileConversationOpen(false);
       }
       onToast(t("toasts.conversationDeleted"));
@@ -1388,12 +1446,18 @@ export function InboxPage({
     const deleted = new Set(
       ids.filter((_, index) => results[index]?.status === "fulfilled"),
     );
-    const remaining = conversations.filter(
-      (conversation) => !deleted.has(conversation.id),
+    // Filter the live list, not the copy from before the confirm dialog: a
+    // stale copy erased messages and threads that arrived during the delete.
+    setConversations((current) =>
+      current.filter((conversation) => !deleted.has(conversation.id)),
     );
-    setConversations(remaining);
-    if (deleted.has(selected.id)) {
-      setSelectedConversationId(remaining[0]?.id ?? "");
+    const latest = latestRef.current;
+    if (latest.selectedId && deleted.has(latest.selectedId)) {
+      setSelectedConversationId(
+        latest.conversations.find(
+          (conversation) => !deleted.has(conversation.id),
+        )?.id ?? "",
+      );
       setMobileConversationOpen(false);
     }
     setBulkPending(false);
@@ -1456,7 +1520,7 @@ export function InboxPage({
   };
 
   const removeFailedMessage = (messageId: string) => {
-    failedMediaRetryInputsRef.current.delete(messageId);
+    failedMediaRetryInputs.delete(messageId);
     setConversations((current) =>
       current.map((conversation) =>
         conversation.id === selected.id
@@ -1475,7 +1539,7 @@ export function InboxPage({
     const mediaInput =
       message.type === "text"
         ? undefined
-        : failedMediaRetryInputsRef.current.get(message.id);
+        : failedMediaRetryInputs.get(message.id);
     if (message.type !== "text" && !mediaInput) {
       onToast(t("errors.editMessage"));
       return;
@@ -1494,7 +1558,7 @@ export function InboxPage({
     const mediaInput =
       message.type === "text"
         ? undefined
-        : failedMediaRetryInputsRef.current.get(message.id);
+        : failedMediaRetryInputs.get(message.id);
     if (message.type !== "text" && !mediaInput) {
       onToast(t("errors.retryMessage"));
       return;
@@ -2073,6 +2137,15 @@ export function InboxPage({
             )}
           </div>
           <MediaComposer
+            // One composer per thread: staged files, a recording and the
+            // pending text can never follow the operator into another chat.
+            key={selected.id}
+            initialText={composerDrafts.get(selected.id) ?? ""}
+            onTextChange={(text) => {
+              if (text) composerDrafts.set(selected.id, text);
+              else composerDrafts.delete(selected.id);
+            }}
+            onPrefillApplied={() => setDraftInsertRequest(undefined)}
             onSend={queueComposerMessage}
             onTyping={notifyTyping}
             onSendMediaBatch={queueComposerMedia}
@@ -3140,8 +3213,14 @@ function MediaComposer({
   onSendMediaBatch,
   onUseDraft,
   prefillDraft,
+  onPrefillApplied,
+  initialText = "",
+  onTextChange,
   liveMode,
 }: {
+  initialText?: string;
+  onTextChange?: (text: string) => void;
+  onPrefillApplied?: () => void;
   onSend: (message: string) => boolean | Promise<boolean>;
   onTyping?: () => void;
   onSendMediaBatch?: (
@@ -3165,7 +3244,9 @@ function MediaComposer({
     type: ComposerMediaInput["messageType"];
     previewUrl: string;
   };
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
+  const onPrefillAppliedRef = useRef(onPrefillApplied);
+  onPrefillAppliedRef.current = onPrefillApplied;
   const [sending, setSending] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
@@ -3199,8 +3280,17 @@ function MediaComposer({
         },
       ]);
     }
+    // Consumed once: a remount (switching threads and back) must not stage the
+    // same retry attachment again.
+    onPrefillAppliedRef.current?.();
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [prefillDraft]);
+
+  const onTextChangeRef = useRef(onTextChange);
+  onTextChangeRef.current = onTextChange;
+  useEffect(() => {
+    onTextChangeRef.current?.(text);
+  }, [text]);
 
   useEffect(
     () => () =>
