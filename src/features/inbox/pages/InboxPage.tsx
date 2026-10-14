@@ -3409,21 +3409,27 @@ function MediaComposer({
         recorderRef.current = null;
         recordingStreamRef.current = null;
         setRecording(false);
-        if (onSendMediaBatch) {
-          setSending(true);
-          void Promise.resolve()
-            .then(() =>
-              onSendMediaBatch([
+        if (!audio.size) return;
+        // Stopping only ends the recording: the clip waits in the preview bar,
+        // where the operator listens back and then sends or removes it.
+        setPendingFiles((current) =>
+          current.length >= 10
+            ? current
+            : [
+                ...current,
                 {
+                  id:
+                    globalThis.crypto?.randomUUID?.() ??
+                    `${Date.now()}-${Math.random()}`,
                   file: audio,
-                  messageType: "audio",
                   fileName: audio.name,
                   mimeType: audio.type,
+                  type: "audio",
+                  previewUrl: URL.createObjectURL(audio),
+                  progress: 0,
                 },
-              ]),
-            )
-            .finally(() => setSending(false));
-        }
+              ],
+        );
       };
       recorder.start(250);
       setRecording(true);
