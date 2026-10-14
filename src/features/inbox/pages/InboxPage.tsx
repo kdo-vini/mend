@@ -2970,19 +2970,21 @@ function MessageBubble({
             message.mediaStatus !== "ready" ? (
             <div className="message-bubble attachment-bubble media-unavailable">
               <div className="media-static-preview" aria-hidden="true">
-                {(message.attachment?.meta ?? "media")
+                {(message.attachment?.meta ?? t("ui.media"))
                   .split("/")
                   .at(-1)
                   ?.toUpperCase()}
               </div>
               <span>
-                <strong>{message.attachment?.name ?? "Media"}</strong>
+                <strong>{message.attachment?.name ?? t("ui.media")}</strong>
                 <small>
                   {message.mediaStatus === "processing"
-                    ? "Processing media…"
+                    ? t("ui.processingMedia")
                     : message.mediaStatus === "unsupported"
-                      ? `Format ${message.attachment?.meta ?? "unknown"} is not supported`
-                      : "Media unavailable"}
+                      ? t("ui.mediaUnsupported", {
+                          format: message.attachment?.meta ?? t("ui.unknown"),
+                        })
+                      : t("ui.mediaUnavailable")}
                 </small>
               </span>
             </div>

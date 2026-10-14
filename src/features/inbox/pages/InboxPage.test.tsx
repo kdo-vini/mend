@@ -607,6 +607,63 @@ describe("InboxPage new chat", () => {
     expect(document.body.textContent).not.toContain("Sending…");
   });
 
+  it("labels media that is not ready in the operator's language", async () => {
+    // An id outside the seed keeps snapshot hydration from replacing messages.
+    const conversation: Conversation = {
+      ...seedConversations[0],
+      id: "conv-media-status",
+      messages: [
+        {
+          id: "m-processing",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:00",
+          type: "image",
+          mediaStatus: "processing",
+          attachment: { name: "foto.jpg", meta: "image/jpeg" },
+        },
+        {
+          id: "m-unsupported",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:01",
+          type: "video",
+          mediaStatus: "unsupported",
+          attachment: { name: "clip.avi", meta: "video/x-msvideo" },
+        },
+        {
+          id: "m-failed",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:02",
+          type: "document",
+          mediaStatus: "failed",
+        },
+      ],
+    };
+    await i18n.changeLanguage("pt-BR");
+    try {
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[conversation]} />),
+      );
+      const text = document.body.textContent ?? "";
+      expect(text).toContain("Processando mídia…");
+      expect(text).toContain("O formato video/x-msvideo não é compatível");
+      expect(text).toContain("Mídia indisponível");
+      expect(text).toContain("Mídia");
+      expect(text).not.toContain("Processing media");
+      expect(text).not.toContain("Media unavailable");
+    } finally {
+      await i18n.changeLanguage("en-US");
+    }
+  });
+
   describe("IA ativa toggle", () => {
     // Ids outside the seed keep snapshot hydration from overwriting the axes.
     const conversationWith = (
