@@ -27,6 +27,7 @@ import {
   type SendTextInput,
   type WhatsmiauGroupInfo,
 } from "./whatsmiau.js";
+import { markdownToWhatsApp } from "./whatsapp-format.js";
 import type { SupportFlowNode } from "../src/shared/support-flow.js";
 import {
   formatChoicesAsTextFallback,
@@ -282,7 +283,7 @@ export class WhatsAppService {
     conversationId: string,
     input: SendTextRequest,
   ): Promise<OutboundResult> {
-    const text = input.text.trim();
+    const text = markdownToWhatsApp(input.text.trim());
     if (!text || text.length > 20_000) throw new Error("message_text_invalid");
     const conversation = await this.inbox.getConversation(
       context,
@@ -362,7 +363,7 @@ export class WhatsAppService {
     conversationId: string,
     input: SendReplyChoicesRequest,
   ): Promise<OutboundResult> {
-    const text = input.text.trim();
+    const text = markdownToWhatsApp(input.text.trim());
     if (!text || text.length > 20_000) throw new Error("message_text_invalid");
     const choices = input.choices.slice(0, 3);
     if (choices.length < 2)
@@ -483,7 +484,7 @@ export class WhatsAppService {
       text: string;
     },
   ): Promise<InboxMessageRecord> {
-    const text = input.text.trim();
+    const text = markdownToWhatsApp(input.text.trim());
     if (!text || text.length > 20_000) throw new Error("message_text_invalid");
     const response = await this.delivering(input.instanceName, () =>
       this.provider.sendText({
