@@ -166,7 +166,6 @@ interface ComposerMediaInput {
   mimeType?: string;
   fileName?: string;
   caption?: string;
-  onProgress?: (percent: number) => void;
 }
 
 interface LightboxMedia {
@@ -280,6 +279,9 @@ export function InboxPage({
     new Map<string, ComposerMediaInput>(),
   );
   const failedMediaRefreshIdsRef = useRef(new Set<string>());
+  const deliveryQueueRef = useRef(new Map<string, Promise<void>>());
+  // Local previews shown on outbound media bubbles until the server copy lands.
+  const outboundPreviewUrlsRef = useRef(new Map<string, string>());
   const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null);
   const [conversationDeleting, setConversationDeleting] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -636,6 +638,28 @@ export function InboxPage({
       document.removeEventListener("keydown", handleSelectionShortcut);
   }, [filtered, selectionMode]);
 
+  useEffect(() => {
+    const previews = outboundPreviewUrlsRef.current;
+    if (!previews.size) return;
+    const liveIds = new Set(
+      conversations.flatMap((conversation) =>
+        conversation.messages.map((message) => message.id),
+      ),
+    );
+    for (const [messageId, url] of previews) {
+      if (liveIds.has(messageId)) continue;
+      URL.revokeObjectURL(url);
+      previews.delete(messageId);
+    }
+  }, [conversations]);
+  useEffect(() => {
+    const previews = outboundPreviewUrlsRef.current;
+    return () => {
+      previews.forEach((url) => URL.revokeObjectURL(url));
+      previews.clear();
+    };
+  }, []);
+
   if (!selected) {
     return (
       <div className="inbox-page">
@@ -813,11 +837,73 @@ export function InboxPage({
   };
 
   /**
-   * Queues one outbound message and reports whether the thread took ownership
-   * of it. Delivery is reported on the message itself: a failed send stays in
-   * the thread as a failed bubble with retry, edit and cancel, so the composer
-   * must let go of the text as soon as this resolves true. Returning delivery
-   * success instead would leave the same message in two places at once.
+   * Runs deliveries for one conversation one after another. The composer lets
+   * go of a message as soon as its bubble is in the thread, so the operator can
+   * keep typing; the queue keeps quick consecutive sends reaching WhatsApp in
+   * the order they were written.
+   */
+  const enqueueDelivery = (
+    conversationId: string,
+    deliver: () => Promise<void>,
+  ): Promise<void> => {
+    const queue = deliveryQueueRef.current;
+    const next = (queue.get(conversationId) ?? Promise.resolve())
+      .then(deliver)
+      .catch(() => undefined);
+    queue.set(conversationId, next);
+    void next.then(() => {
+      if (queue.get(conversationId) === next) queue.delete(conversationId);
+    });
+    return next;
+  };
+
+  const patchMessages = (
+    conversationId: string,
+    messageIds: ReadonlySet<string>,
+    patch: Partial<Message>,
+  ) =>
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === conversationId
+          ? {
+              ...item,
+              messages: item.messages.map((message) =>
+                messageIds.has(message.id) ? { ...message, ...patch } : message,
+              ),
+            }
+          : item,
+      ),
+    );
+
+  /**
+   * Best-effort re-read after a send the provider already accepted. A failure
+   * here must never mark the message failed: realtime and the live catch-up
+   * reconcile it, while a "failed" bubble would invite a duplicate resend.
+   */
+  const refreshAfterSend = async (
+    liveWorkspaceId: string,
+    conversationId: string,
+  ) => {
+    try {
+      const snapshot = await loadLiveConversationSnapshot(
+        liveWorkspaceId,
+        conversationId,
+      );
+      if (snapshot)
+        setConversations((current) =>
+          mergeConversationSnapshot(current, snapshot),
+        );
+    } catch {
+      // Reconciled by realtime and the live catch-up.
+    }
+  };
+
+  /**
+   * Queues one outbound message. The optimistic bubble is in the thread before
+   * the first await, so the composer clears immediately (see
+   * `queueComposerMessage`); delivery is reported on the bubble itself, and a
+   * failed send stays there with retry, edit and cancel. The returned promise
+   * settles after delivery, which retry uses to hold its pending state.
    */
   const sendMessage = async (
     text: string,
@@ -858,63 +944,34 @@ export function InboxPage({
         ),
       ),
     );
+    const optimisticIds = new Set([optimistic.id]);
     if (liveMode && workspaceId) {
-      try {
-        await sendLiveMessage({
-          workspaceId,
-          conversationId,
-          text: text.trim(),
-          idempotencyKey: clientId,
-        });
+      const liveWorkspaceId = workspaceId;
+      const acceptedToast =
+        selected.aiMode === "safe_auto" &&
+        selected.automationState === "ai_active"
+          ? t("toasts.messageSentAiPaused")
+          : t("toasts.messageAccepted");
+      await enqueueDelivery(conversationId, async () => {
+        try {
+          await sendLiveMessage({
+            workspaceId: liveWorkspaceId,
+            conversationId,
+            text: text.trim(),
+            idempotencyKey: clientId,
+          });
+        } catch (error) {
+          patchMessages(conversationId, optimisticIds, { status: "failed" });
+          onToast(sendFailureMessage(error), "error");
+          return;
+        }
         // Promote the optimistic bubble immediately so a slow/partial refresh
         // cannot leave the thread stuck on "Sending…" or a single bubble.
-        setConversations((current) =>
-          current.map((item) =>
-            item.id === conversationId
-              ? {
-                  ...item,
-                  messages: item.messages.map((message) =>
-                    message.id === optimistic.id
-                      ? { ...message, status: "sent" as const }
-                      : message,
-                  ),
-                }
-              : item,
-          ),
-        );
-        const snapshot = await loadLiveConversationSnapshot(
-          workspaceId,
-          conversationId,
-        );
-        if (snapshot)
-          setConversations((current) =>
-            mergeConversationSnapshot(current, snapshot),
-          );
-        onToast(
-          selected.aiMode === "safe_auto" &&
-            selected.automationState === "ai_active"
-            ? t("toasts.messageSentAiPaused")
-            : t("toasts.messageAccepted"),
-        );
-        return true;
-      } catch (error) {
-        setConversations((current) =>
-          current.map((item) =>
-            item.id === conversationId
-              ? {
-                  ...item,
-                  messages: item.messages.map((message) =>
-                    message.id === optimistic.id
-                      ? { ...message, status: "failed" }
-                      : message,
-                  ),
-                }
-              : item,
-          ),
-        );
-        onToast(sendFailureMessage(error), "error");
-        return true;
-      }
+        patchMessages(conversationId, optimisticIds, { status: "sent" });
+        onToast(acceptedToast);
+        await refreshAfterSend(liveWorkspaceId, conversationId);
+      });
+      return true;
     }
     setConversations((current) =>
       current.map((item) =>
@@ -935,23 +992,34 @@ export function InboxPage({
   };
 
   /**
-   * Queues one attachment batch. Same ownership contract as `sendMessage`: true
-   * means the thread now holds these attachments, whether or not the provider
-   * accepted them, so the composer tray clears instead of duplicating them.
+   * Queues one attachment batch. Same contract as `sendMessage`: the bubbles,
+   * with a local preview and upload progress, are in the thread before the
+   * first await, and failures stay there as failed bubbles. `idempotencyKey`
+   * is only honoured for a single attachment (a retry), so the server
+   * de-duplicates a resend the provider had already accepted.
    */
   const sendMediaBatch = async (
     inputs: ComposerMediaInput[],
+    idempotencyKey?: string,
   ): Promise<boolean> => {
     if (!liveMode || !workspaceId) {
       onToast(t("toasts.attachmentsUnavailable"), "error");
       return false;
     }
+    const liveWorkspaceId = workspaceId;
     const conversationId = selected.id;
     const batchId = globalThis.crypto?.randomUUID?.() ?? `batch-${Date.now()}`;
     const pending = inputs.map((input) => {
       const clientId =
+        (inputs.length === 1 ? idempotencyKey : undefined) ??
         globalThis.crypto?.randomUUID?.() ??
         `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const previewUrl =
+        input.file && input.messageType !== "document"
+          ? URL.createObjectURL(input.file)
+          : undefined;
+      if (previewUrl)
+        outboundPreviewUrlsRef.current.set(`temp:${clientId}`, previewUrl);
       return {
         input,
         clientId,
@@ -960,16 +1028,18 @@ export function InboxPage({
           clientId,
           conversationId,
           direction: "outbound" as const,
-          sender: "You",
+          sender: t("ui.you"),
           text: input.caption ?? "",
-          time: "now",
+          time: t("ui.now"),
           createdAt: new Date().toISOString(),
           type: input.messageType,
           status: "sending" as const,
           mediaBatchId: batchId,
+          ...(input.file ? { uploadProgress: 0 } : {}),
           attachment: {
             name: input.fileName ?? input.file?.name ?? input.messageType,
-            meta: input.mimeType ?? input.file?.type ?? "Attachment",
+            meta: input.mimeType ?? input.file?.type ?? t("ui.attachment"),
+            ...(previewUrl ? { url: previewUrl } : {}),
           },
         } satisfies Message,
       };
@@ -999,75 +1069,93 @@ export function InboxPage({
         ),
       ),
     );
-    try {
-      const uploaded: Array<{
-        assetId: string;
-        messageType: ComposerMediaInput["messageType"];
-        caption?: string;
-        idempotencyKey: string;
-      }> = [];
-      for (const item of pending) {
-        if (item.input.file) {
-          const asset = await uploadLiveMediaAsset({
-            workspaceId,
-            conversationId,
-            file: item.input.file,
-            batchId,
-            onProgress: (progress) => item.input.onProgress?.(progress.percent),
-          });
-          uploaded.push({
-            assetId: asset.assetId,
-            messageType: item.input.messageType,
-            caption: item.input.caption,
-            idempotencyKey: item.clientId,
-          });
-        } else if (item.input.mediaUrl) {
-          await sendLiveMedia({
-            workspaceId,
-            conversationId,
-            ...item.input,
-            idempotencyKey: item.clientId,
-          });
+    const optimisticIds = new Set(pending.map((item) => item.optimistic.id));
+    await enqueueDelivery(conversationId, async () => {
+      try {
+        const uploaded: Array<{
+          assetId: string;
+          messageType: ComposerMediaInput["messageType"];
+          caption?: string;
+          idempotencyKey: string;
+        }> = [];
+        for (const item of pending) {
+          if (item.input.file) {
+            const bubbleIds = new Set([item.optimistic.id]);
+            let lastPercent = 0;
+            const asset = await uploadLiveMediaAsset({
+              workspaceId: liveWorkspaceId,
+              conversationId,
+              file: item.input.file,
+              batchId,
+              onProgress: (progress) => {
+                const percent = Math.round(progress.percent);
+                if (percent === lastPercent) return;
+                lastPercent = percent;
+                patchMessages(conversationId, bubbleIds, {
+                  uploadProgress: percent,
+                });
+              },
+            });
+            uploaded.push({
+              assetId: asset.assetId,
+              messageType: item.input.messageType,
+              caption: item.input.caption,
+              idempotencyKey: item.clientId,
+            });
+          } else if (item.input.mediaUrl) {
+            await sendLiveMedia({
+              workspaceId: liveWorkspaceId,
+              conversationId,
+              ...item.input,
+              idempotencyKey: item.clientId,
+            });
+          }
         }
-      }
-      if (uploaded.length)
-        await sendLiveMediaBatch({
-          workspaceId,
-          conversationId,
-          batchId,
-          attachments: uploaded,
+        if (uploaded.length)
+          await sendLiveMediaBatch({
+            workspaceId: liveWorkspaceId,
+            conversationId,
+            batchId,
+            attachments: uploaded,
+          });
+      } catch (error) {
+        patchMessages(conversationId, optimisticIds, {
+          status: "failed",
+          uploadProgress: undefined,
         });
-      const snapshot = await loadLiveConversationSnapshot(
-        workspaceId,
-        conversationId,
-      );
+        onToast(localizedError(error, t("errors.sendAttachment")), "error");
+        return;
+      }
       pending.forEach((item) =>
         failedMediaRetryInputsRef.current.delete(item.optimistic.id),
       );
-      if (snapshot)
-        setConversations((current) =>
-          mergeConversationSnapshot(current, snapshot),
-        );
+      patchMessages(conversationId, optimisticIds, {
+        status: "sent",
+        uploadProgress: undefined,
+      });
       onToast(t("toasts.attachmentAccepted"));
-      return true;
-    } catch (error) {
-      setConversations((current) =>
-        current.map((item) =>
-          item.id === conversationId
-            ? {
-                ...item,
-                messages: item.messages.map((message) =>
-                  pending.some((entry) => entry.optimistic.id === message.id)
-                    ? { ...message, status: "failed" }
-                    : message,
-                ),
-              }
-            : item,
-        ),
-      );
-      onToast(localizedError(error, t("errors.sendAttachment")), "error");
-      return true;
+      await refreshAfterSend(liveWorkspaceId, conversationId);
+    });
+    return true;
+  };
+
+  /**
+   * Composer entry points: hand the message to the thread and return at once,
+   * so the text and attachments leave the input as soon as their bubbles are
+   * on screen instead of after the WhatsApp round trip.
+   */
+  const queueComposerMessage = (text: string): boolean => {
+    if (!text.trim()) return false;
+    void sendMessage(text);
+    return true;
+  };
+  const queueComposerMedia = (inputs: ComposerMediaInput[]): boolean => {
+    if (!liveMode || !workspaceId) {
+      onToast(t("toasts.attachmentsUnavailable"), "error");
+      return false;
     }
+    void sendMediaBatch(inputs);
+    return true;
   };
 
   const setConversationAiActive = async (active: boolean) => {
@@ -1417,9 +1505,10 @@ export function InboxPage({
       if (message.type === "text")
         await sendMessage(message.text, message.clientId);
       else if (mediaInput)
-        await sendMediaBatch([
-          { ...mediaInput, caption: message.text || mediaInput.caption },
-        ]);
+        await sendMediaBatch(
+          [{ ...mediaInput, caption: message.text || mediaInput.caption }],
+          message.clientId,
+        );
     } finally {
       setMessageActionId(undefined);
     }
@@ -1984,9 +2073,9 @@ export function InboxPage({
             )}
           </div>
           <MediaComposer
-            onSend={sendMessage}
+            onSend={queueComposerMessage}
             onTyping={notifyTyping}
-            onSendMediaBatch={sendMediaBatch}
+            onSendMediaBatch={queueComposerMedia}
             liveMode={liveMode}
             prefillDraft={
               draftInsertRequest?.conversationId === selected.id
@@ -2881,19 +2970,21 @@ function MessageBubble({
             message.mediaStatus !== "ready" ? (
             <div className="message-bubble attachment-bubble media-unavailable">
               <div className="media-static-preview" aria-hidden="true">
-                {(message.attachment?.meta ?? "media")
+                {(message.attachment?.meta ?? t("ui.media"))
                   .split("/")
                   .at(-1)
                   ?.toUpperCase()}
               </div>
               <span>
-                <strong>{message.attachment?.name ?? "Media"}</strong>
+                <strong>{message.attachment?.name ?? t("ui.media")}</strong>
                 <small>
                   {message.mediaStatus === "processing"
-                    ? "Processing media…"
+                    ? t("ui.processingMedia")
                     : message.mediaStatus === "unsupported"
-                      ? `Format ${message.attachment?.meta ?? "unknown"} is not supported`
-                      : "Media unavailable"}
+                      ? t("ui.mediaUnsupported", {
+                          format: message.attachment?.meta ?? t("ui.unknown"),
+                        })
+                      : t("ui.mediaUnavailable")}
                 </small>
               </span>
             </div>
@@ -3024,9 +3115,14 @@ function MessageBubble({
           aria-label={message.status ?? t("ui.sent")}
         >
           {message.status === "sending" ? (
-            t("ui.sending")
+            message.uploadProgress !== undefined &&
+            message.uploadProgress < 100 ? (
+              t("ui.sendingProgress", { percent: message.uploadProgress })
+            ) : (
+              t("ui.sending")
+            )
           ) : message.status === "failed" ? (
-            "Failed"
+            t("ui.failed")
           ) : message.status === "read" || message.status === "delivered" ? (
             <CheckCheck size={13} />
           ) : (
@@ -3068,7 +3164,6 @@ function MediaComposer({
     mimeType?: string;
     type: ComposerMediaInput["messageType"];
     previewUrl: string;
-    progress: number;
   };
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -3101,7 +3196,6 @@ function MediaComposer({
           mimeType: input.mimeType ?? input.file?.type,
           type: input.messageType,
           previewUrl: input.file ? URL.createObjectURL(input.file) : "",
-          progress: 0,
         },
       ]);
     }
@@ -3149,7 +3243,6 @@ function MediaComposer({
       mimeType: file.type,
       type: typeForFile(file),
       previewUrl: URL.createObjectURL(file),
-      progress: 0,
     }));
     if (!additions.length) return;
     setPendingFiles((current) => [...current, ...additions]);
@@ -3218,10 +3311,10 @@ function MediaComposer({
     if (!value || sending) return;
     setSending(true);
     try {
-      // The thread owns the message the moment it is accepted, including when
-      // delivery fails: it renders there as a failed bubble with retry, edit
-      // and cancel. Keeping the text here too would show it twice and let a
-      // second press send a duplicate.
+      // The thread owns the message as soon as its bubble is on screen, before
+      // WhatsApp answers, and keeps it when delivery fails: it renders there as
+      // a failed bubble with retry, edit and cancel. Keeping the text here too
+      // would show it twice and let a second press send a duplicate.
       if (await onSend(value)) {
         setText("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -3240,12 +3333,6 @@ function MediaComposer({
       fileName: item.fileName,
       mimeType: item.mimeType,
       caption: text.trim() || undefined,
-      onProgress: (percent) =>
-        setPendingFiles((current) =>
-          current.map((entry) =>
-            entry.id === item.id ? { ...entry, progress: percent } : entry,
-          ),
-        ),
     }));
     setSending(true);
     try {
@@ -3397,7 +3484,7 @@ function MediaComposer({
                   {item.file
                     ? (item.file.size / 1024 / 1024).toFixed(1)
                     : (item.mimeType ?? t("ui.media"))}{" "}
-                  {t("ui.megabytes")} · {item.progress}%
+                  {t("ui.megabytes")}
                 </small>
               </div>
             ))}
@@ -3409,7 +3496,6 @@ function MediaComposer({
           ref={textareaRef}
           aria-label={t("ui.writeReply")}
           value={text}
-          disabled={sending}
           onChange={(event) => {
             setText(event.target.value);
             onTyping?.();

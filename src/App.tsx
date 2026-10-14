@@ -30,6 +30,7 @@ import {
   type WorkspaceNotification,
 } from "./api/notifications";
 import {
+  createLiveCatchUp,
   createRealtimeFallback,
   hasActiveRuns,
   listWorkspaces,
@@ -158,6 +159,8 @@ function App() {
   const [runs, setRuns] = useState<CodingRun[]>(demoMode ? seedRuns : []);
   const runsRef = useRef(runs);
   runsRef.current = runs;
+  // Bumped by the live catch-up so the open thread is re-read with the list.
+  const [conversationResync, setConversationResync] = useState(0);
   const [knowledgeArticles, setKnowledgeArticles] = useState<
     KnowledgeArticle[]
   >(demoMode ? seedKnowledge : []);
@@ -471,6 +474,7 @@ function App() {
         if (active) setNotifications(workspaceNotifications);
         if (!workspaceSubscribed) {
           workspaceSubscribed = true;
+          liveCatchUp.start();
           unsubscribe = subscribeToWorkspace(
             client,
             workspace.id,
@@ -521,10 +525,14 @@ function App() {
                   realtimeFallback.stop();
                 } else realtimeFallback.start();
               },
+              onResubscribed: () => liveCatchUp.trigger(),
             },
           );
         }
       } catch (error) {
+        // A failed background reconcile (e.g. a network blip during catch-up)
+        // keeps the loaded workspace and live channel; the next one retries.
+        if (!showLoading && workspaceSubscribed) throw error;
         if (active) {
           unsubscribe();
           workspaceSubscribed = false;
@@ -557,6 +565,11 @@ function App() {
       },
       () => realtimeHealthy,
     );
+    const liveCatchUp = createLiveCatchUp(() => {
+      if (!active || !workspaceSubscribed) return;
+      scheduleWorkspaceRefresh();
+      setConversationResync((current) => current + 1);
+    });
     runStatusTimer = setInterval(() => {
       if (
         !active ||
@@ -572,6 +585,7 @@ function App() {
       active = false;
       unsubscribe();
       realtimeFallback.stop();
+      liveCatchUp.stop();
       if (runStatusTimer) clearInterval(runStatusTimer);
       if (workspaceRefreshTimer) clearTimeout(workspaceRefreshTimer);
     };
@@ -609,7 +623,14 @@ function App() {
     return () => {
       active = false;
     };
-  }, [demoMode, inboxRoute, selectedConversationId, t, workspaceId]);
+  }, [
+    conversationResync,
+    demoMode,
+    inboxRoute,
+    selectedConversationId,
+    t,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (demoMode || !mendApiBaseUrl || !workspaceId) return;

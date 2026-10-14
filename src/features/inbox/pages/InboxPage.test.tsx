@@ -89,6 +89,7 @@ vi.mock("../api", () => ({
   ) => loadOlderLiveConversationMessages(workspaceId, conversationId, before),
   deleteLiveConversation: (input: unknown) => deleteLiveConversation(input),
   deleteLiveMessage: vi.fn(),
+  getMessageMediaUrl: vi.fn(async () => "https://media.example/1"),
   markLiveConversationRead: vi.fn(),
   reactToLiveMessage: vi.fn(),
   pauseLiveConversationAi: (input: unknown) => pauseLiveConversationAi(input),
@@ -466,6 +467,201 @@ describe("InboxPage new chat", () => {
 
     expect(sendLiveMessage).toHaveBeenCalledTimes(1);
     expect(composer.value).toBe("");
+  });
+
+  it("lets go of the text before WhatsApp answers and keeps the composer usable", async () => {
+    let deliver: () => void = () => undefined;
+    sendLiveMessage.mockImplementation(
+      () =>
+        new Promise<undefined>(
+          (resolve) => (deliver = () => resolve(undefined)),
+        ),
+    );
+    await act(async () => root.render(<InboxHarness />));
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    await act(async () => type(composer, "Já estou vendo isso."));
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+
+    // Delivery is still in flight, yet the bubble is in the thread and the
+    // composer is empty and enabled for the next message.
+    expect(sendLiveMessage).toHaveBeenCalledTimes(1);
+    expect(composer.value).toBe("");
+    expect(composer.disabled).toBe(false);
+    expect(document.body.textContent).toContain("Já estou vendo isso.");
+    expect(document.body.textContent).toContain("Sending…");
+
+    await act(async () => deliver());
+    expect(document.body.textContent).not.toContain("Sending…");
+  });
+
+  it("delivers quick consecutive messages in the order they were written", async () => {
+    const pending: Array<() => void> = [];
+    sendLiveMessage.mockImplementation(
+      () =>
+        new Promise<undefined>((resolve) =>
+          pending.push(() => resolve(undefined)),
+        ),
+    );
+    await act(async () => root.render(<InboxHarness />));
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    for (const text of ["Primeira", "Segunda"]) {
+      await act(async () => type(composer, text));
+      await act(async () =>
+        document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+      );
+    }
+
+    expect(sendLiveMessage).toHaveBeenCalledTimes(1);
+    expect(sendLiveMessage.mock.calls[0][0]).toMatchObject({
+      text: "Primeira",
+    });
+    await act(async () => pending[0]());
+    expect(sendLiveMessage).toHaveBeenCalledTimes(2);
+    expect(sendLiveMessage.mock.calls[1][0]).toMatchObject({
+      text: "Segunda",
+    });
+    await act(async () => pending[1]());
+  });
+
+  it("never marks an accepted message failed when the follow-up refresh fails", async () => {
+    const toasts: Array<{ message: string; tone?: string }> = [];
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          onToast={(message, tone) => toasts.push({ message, tone })}
+        />,
+      ),
+    );
+    loadLiveConversationSnapshot.mockRejectedValueOnce(new Error("offline"));
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    await act(async () => type(composer, "Resolvido, obrigado!"));
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+
+    expect(sendLiveMessage).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain("Resolvido, obrigado!");
+    expect(document.body.textContent).not.toContain("Failed");
+    expect(toasts.some((toast) => toast.tone === "error")).toBe(false);
+  });
+
+  it("moves attachments into the thread at once and shows upload progress there", async () => {
+    const api = await import("../api");
+    const upload = vi.mocked(api.uploadLiveMediaAsset);
+    const sendBatch = vi.mocked(api.sendLiveMediaBatch);
+    upload.mockReset();
+    sendBatch.mockReset();
+    sendBatch.mockResolvedValue(undefined as never);
+    let reportProgress: (percent: number) => void = () => undefined;
+    let finishUpload: () => void = () => undefined;
+    upload.mockImplementation(
+      (input) =>
+        new Promise((resolve) => {
+          reportProgress = (percent) =>
+            input.onProgress?.({ percent } as never);
+          finishUpload = () => resolve({ assetId: "asset-1" } as never);
+        }),
+    );
+    const createObjectURL = vi.fn(() => "blob:preview");
+    const revokeObjectURL = vi.fn();
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+
+    await act(async () => root.render(<InboxHarness />));
+    const fileInput =
+      document.body.querySelector<HTMLInputElement>("input[type=file]");
+    if (!fileInput) throw new Error("file input was not rendered");
+    const photo = new File(["png"], "foto.png", { type: "image/png" });
+    Object.defineProperty(fileInput, "files", {
+      value: [photo],
+      configurable: true,
+    });
+    await act(async () =>
+      fileInput.dispatchEvent(new Event("change", { bubbles: true })),
+    );
+    expect(
+      document.body.querySelector(".attachment-preview-bar"),
+    ).not.toBeNull();
+
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+    // The tray is empty while the upload runs; the bubble carries the preview.
+    expect(document.body.querySelector(".attachment-preview-bar")).toBeNull();
+    expect(
+      document.body.querySelector<HTMLImageElement>(
+        ".message-row.outbound img[src='blob:preview']",
+      ),
+    ).not.toBeNull();
+    expect(document.body.textContent).toContain("Sending… 0%");
+
+    await act(async () => reportProgress(42));
+    expect(document.body.textContent).toContain("Sending… 42%");
+
+    await act(async () => finishUpload());
+    expect(sendBatch).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).not.toContain("Sending…");
+  });
+
+  it("labels media that is not ready in the operator's language", async () => {
+    // An id outside the seed keeps snapshot hydration from replacing messages.
+    const conversation: Conversation = {
+      ...seedConversations[0],
+      id: "conv-media-status",
+      messages: [
+        {
+          id: "m-processing",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:00",
+          type: "image",
+          mediaStatus: "processing",
+          attachment: { name: "foto.jpg", meta: "image/jpeg" },
+        },
+        {
+          id: "m-unsupported",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:01",
+          type: "video",
+          mediaStatus: "unsupported",
+          attachment: { name: "clip.avi", meta: "video/x-msvideo" },
+        },
+        {
+          id: "m-failed",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:02",
+          type: "document",
+          mediaStatus: "failed",
+        },
+      ],
+    };
+    await i18n.changeLanguage("pt-BR");
+    try {
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[conversation]} />),
+      );
+      const text = document.body.textContent ?? "";
+      expect(text).toContain("Processando mídia…");
+      expect(text).toContain("O formato video/x-msvideo não é compatível");
+      expect(text).toContain("Mídia indisponível");
+      expect(text).toContain("Mídia");
+      expect(text).not.toContain("Processing media");
+      expect(text).not.toContain("Media unavailable");
+    } finally {
+      await i18n.changeLanguage("en-US");
+    }
   });
 
   describe("IA ativa toggle", () => {

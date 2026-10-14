@@ -92,6 +92,70 @@ export function createRealtimeFallback(
   };
 }
 
+/**
+ * Safety net for a realtime channel that reports SUBSCRIBED but no longer
+ * delivers (sleeping tab, expired socket, dropped network). Realtime does not
+ * replay missed rows, so while the tab is visible this re-reads on an interval
+ * and right after the operator returns to the tab or the network comes back.
+ */
+export function createLiveCatchUp(
+  refresh: () => void,
+  options: {
+    intervalMs?: number;
+    minGapMs?: number;
+    isVisible?: () => boolean;
+  } = {},
+) {
+  const intervalMs = options.intervalMs ?? 30_000;
+  const minGapMs = options.minGapMs ?? 5_000;
+  const isVisible =
+    options.isVisible ??
+    (() =>
+      typeof document === "undefined" ||
+      document.visibilityState === "visible");
+  const isOffline = () =>
+    typeof navigator !== "undefined" && navigator.onLine === false;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let lastRefreshAt = 0;
+
+  const run = (force = false) => {
+    if (!isVisible() || isOffline()) return;
+    const now = Date.now();
+    if (!force && now - lastRefreshAt < minGapMs) return;
+    lastRefreshAt = now;
+    refresh();
+  };
+  const onReturn = () => run();
+  const onTick = () => run(true);
+
+  return {
+    start() {
+      if (timer !== null) return;
+      // Seed the gap so a focus event fired right after load is not a refetch.
+      lastRefreshAt = Date.now();
+      timer = setInterval(onTick, intervalMs);
+      if (typeof window !== "undefined") {
+        window.addEventListener("visibilitychange", onReturn);
+        window.addEventListener("focus", onReturn);
+        window.addEventListener("online", onReturn);
+      }
+    },
+    /** Refresh now, e.g. after the realtime channel re-subscribes. */
+    trigger() {
+      run(true);
+    },
+    stop() {
+      if (timer !== null) clearInterval(timer);
+      timer = null;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("visibilitychange", onReturn);
+        window.removeEventListener("focus", onReturn);
+        window.removeEventListener("online", onReturn);
+      }
+    },
+  };
+}
+
 function belongsToWorkspace(
   payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
   workspaceId: string,
@@ -123,10 +187,17 @@ export function subscribeToWorkspace(
   onChange: (
     payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
   ) => void,
-  options: { onStatus?: (status: string) => void; reconnect?: boolean } = {},
+  options: {
+    onStatus?: (status: string) => void;
+    /** Called when the channel re-subscribes after an outage. */
+    onResubscribed?: () => void;
+    reconnect?: boolean;
+  } = {},
 ): () => void {
   let stopped = false;
   let channel: RealtimeChannel | null = null;
+  let connectAttempt = 0;
+  let subscribedBefore = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectDelay = 1_000;
   let realtimeHealthy = false;
@@ -152,7 +223,10 @@ export function subscribeToWorkspace(
     if (stopped) return;
     realtimeHealthy = false;
     if (channel) void client.removeChannel(channel);
-    const next = client.channel(`workspace:${workspaceId}`);
+    // A unique topic per attempt: removeChannel resolves asynchronously, and
+    // reusing the topic would hand back the channel that is still leaving.
+    connectAttempt += 1;
+    const next = client.channel(`workspace:${workspaceId}:${connectAttempt}`);
     for (const table of workspaceRealtimeTables) {
       const options = {
         event: "*" as const,
@@ -170,6 +244,9 @@ export function subscribeToWorkspace(
       options.onStatus?.(status);
       if (realtimeHealthy) {
         reconnectDelay = 1_000;
+        // Rows written while the channel was down are never replayed.
+        if (subscribedBefore) options.onResubscribed?.();
+        subscribedBefore = true;
       } else if (
         status === "CHANNEL_ERROR" ||
         status === "TIMED_OUT" ||

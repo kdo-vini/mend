@@ -149,6 +149,8 @@
     "deleting": "Excluindo…",
     "deleteForEveryone": "Excluir para todos",
     "sending": "Enviando…",
+    "sendingProgress": "Enviando… {{percent}}%",
+    "failed": "Falhou",
     "react": "Reagir",
     "processingMedia": "Processando mídia…",
     "mediaUnsupported": "O formato {{format}} não é compatível",

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createLiveCatchUp,
   createRealtimeFallback,
   hasActiveRuns,
   subscribeToWorkspace,
@@ -176,5 +177,124 @@ describe("workspace realtime subscriptions", () => {
     vi.advanceTimersByTime(300_000);
     expect(refresh).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
+  });
+
+  it("re-reads after the channel re-subscribes, never on the first join", () => {
+    let statusCallback: ((status: string) => void) | undefined;
+    const channel = {
+      on: vi.fn(() => channel),
+      subscribe: vi.fn((callback?: (status: string) => void) => {
+        statusCallback = callback;
+        return channel;
+      }),
+    };
+    const client = {
+      channel: vi.fn(() => channel),
+      removeChannel: vi.fn(async () => "ok"),
+    } as unknown as MendSupabaseClient;
+    const onResubscribed = vi.fn();
+
+    const unsubscribe = subscribeToWorkspace(
+      client,
+      "workspace-1",
+      () => undefined,
+      { reconnect: false, onResubscribed },
+    );
+
+    statusCallback?.("SUBSCRIBED");
+    expect(onResubscribed).not.toHaveBeenCalled();
+    statusCallback?.("CHANNEL_ERROR");
+    statusCallback?.("SUBSCRIBED");
+    expect(onResubscribed).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+  });
+
+  it("uses a fresh topic per connection so a leaving channel is never reused", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal("document", { visibilityState: "visible" });
+    let statusCallback: ((status: string) => void) | undefined;
+    const channel = {
+      on: vi.fn(() => channel),
+      subscribe: vi.fn((callback?: (status: string) => void) => {
+        statusCallback = callback;
+        return channel;
+      }),
+    };
+    const client = {
+      channel: vi.fn(() => channel),
+      removeChannel: vi.fn(async () => "ok"),
+    } as unknown as MendSupabaseClient;
+
+    const unsubscribe = subscribeToWorkspace(
+      client,
+      "workspace-1",
+      () => undefined,
+    );
+    statusCallback?.("CHANNEL_ERROR");
+    vi.advanceTimersByTime(1_000);
+
+    const topics = vi.mocked(client.channel).mock.calls.map(([topic]) => topic);
+    expect(topics).toHaveLength(2);
+    expect(new Set(topics).size).toBe(2);
+    expect(
+      topics.every((topic) => topic.startsWith("workspace:workspace-1")),
+    ).toBe(true);
+
+    unsubscribe();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("catches up on an interval and when the operator returns to the tab", () => {
+    vi.useFakeTimers();
+    const listeners = new Map<string, () => void>();
+    vi.stubGlobal("window", {
+      addEventListener: vi.fn((event: string, listener: () => void) =>
+        listeners.set(event, listener),
+      ),
+      removeEventListener: vi.fn((event: string) => listeners.delete(event)),
+    });
+    let visible = true;
+    const refresh = vi.fn();
+    const catchUp = createLiveCatchUp(refresh, {
+      intervalMs: 30_000,
+      minGapMs: 5_000,
+      isVisible: () => visible,
+    });
+
+    catchUp.start();
+    // A focus right after load is not a refetch.
+    listeners.get("focus")?.();
+    expect(refresh).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(30_000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    // Hidden tabs do not poll.
+    visible = false;
+    vi.advanceTimersByTime(120_000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    // Returning to the tab re-reads once, even when several events fire.
+    visible = true;
+    listeners.get("visibilitychange")?.();
+    listeners.get("focus")?.();
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    // A realtime re-subscribe always re-reads.
+    catchUp.trigger();
+    expect(refresh).toHaveBeenCalledTimes(3);
+
+    catchUp.stop();
+    expect(listeners.size).toBe(0);
+    vi.advanceTimersByTime(120_000);
+    expect(refresh).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 });
