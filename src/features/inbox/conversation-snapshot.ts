@@ -11,9 +11,14 @@ export {
   type ConversationPreviewLabels,
 } from "../../shared/conversation-preview";
 
-function messageMatchKey(message: Pick<Message, "direction" | "text">): string {
-  return `${message.direction}:${stripHumanWhatsAppIntro(message.text)}`;
+function messageMatchKey(
+  message: Pick<Message, "direction" | "text" | "type">,
+): string {
+  return `${message.direction}:${message.type}:${stripHumanWhatsAppIntro(message.text)}`;
 }
+
+/** Server and browser clocks differ; a persisted copy may look a bit older. */
+const OPTIMISTIC_MATCH_SKEW_MS = 5 * 60_000;
 
 export function sortConversationMessages(messages: Message[]): Message[] {
   return [...messages].sort((left, right) => {
@@ -35,24 +40,66 @@ export function sortConversations(items: Conversation[]): Conversation[] {
   });
 }
 
+/**
+ * Optimistic bubbles still waiting for their persisted copy. A temp is retired
+ * only by a row this merge brings in for the first time, written around or
+ * after the temp: an older message with the same text used to retire a fresh
+ * send, which then had nowhere to show "failed" or offer retry. Failed temps
+ * stay until the operator retries, edits or cancels them.
+ */
 function unmatchedOptimisticMessages(
   existing: Conversation | undefined,
   snapshotMessages: Message[],
 ): Message[] {
-  const persistedTextCounts = new Map<string, number>();
-  for (const message of snapshotMessages) {
-    const key = messageMatchKey(message);
-    persistedTextCounts.set(key, (persistedTextCounts.get(key) ?? 0) + 1);
-  }
+  const known = new Set(
+    (existing?.messages ?? []).map((message) => message.id),
+  );
+  const persisted = snapshotMessages.filter(
+    (message) => !message.id.startsWith("temp:"),
+  );
+  const unseen = persisted.filter((message) => !known.has(message.id));
+  const consumed = new Set<string>();
+  const claim = (
+    candidates: Message[],
+    match: (candidate: Message) => boolean,
+  ) => {
+    const candidate = candidates.find(
+      (item) => !consumed.has(item.id) && match(item),
+    );
+    if (candidate) consumed.add(candidate.id);
+    return Boolean(candidate);
+  };
   return (existing?.messages ?? []).filter((message) => {
     if (!message.id.startsWith("temp:")) return false;
+    if (message.status === "failed") return true;
+    const sentAt = Date.parse(message.createdAt ?? "");
+    const recentEnough = (candidate: Message) => {
+      const persistedAt = Date.parse(candidate.createdAt ?? "");
+      return (
+        Number.isNaN(sentAt) ||
+        Number.isNaN(persistedAt) ||
+        persistedAt >= sentAt - OPTIMISTIC_MATCH_SKEW_MS
+      );
+    };
     const key = messageMatchKey(message);
-    const remaining = persistedTextCounts.get(key) ?? 0;
-    if (remaining > 0) {
-      persistedTextCounts.set(key, remaining - 1);
-      return false;
-    }
-    return true;
+    // Uploaded attachments carry their batch onto the persisted row, so they
+    // match by batch alone: a caption-less key would match any earlier photo.
+    // The batch is written just after the row, so a row already on screen
+    // can still be the one that retires its upload.
+    const retired =
+      message.mediaBatchId !== undefined
+        ? claim(
+            persisted,
+            (candidate) =>
+              candidate.mediaBatchId === message.mediaBatchId &&
+              candidate.type === message.type,
+          )
+        : claim(
+            unseen,
+            (candidate) =>
+              messageMatchKey(candidate) === key && recentEnough(candidate),
+          );
+    return !retired;
   });
 }
 

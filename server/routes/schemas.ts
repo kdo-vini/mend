@@ -169,8 +169,25 @@ export const messagePresenceSchema = z
 export const sendMessageSchema = z
   .object({
     messageType: z
-      .enum(["text", "image", "video", "audio", "document"])
+      .enum(["text", "image", "video", "audio", "document", "contact"])
       .default("text"),
+    contacts: z
+      .array(
+        z
+          .object({
+            fullName: z.string().trim().min(1).max(120),
+            phoneNumber: z
+              .string()
+              .trim()
+              .regex(/^\+?[0-9]{8,15}$/, "phoneNumber must be 8-15 digits"),
+            organization: z.string().trim().max(120).optional(),
+            email: z.string().trim().email().max(254).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(10)
+      .optional(),
     text: z.string().trim().max(20_000).optional(),
     caption: z.string().trim().max(4_000).optional(),
     mediaUrl: z
@@ -221,6 +238,15 @@ export const sendMessageSchema = z
         path: ["text"],
         message: "text is required for text messages",
       });
+    if (value.messageType === "contact") {
+      if (!value.contacts?.length)
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["contacts"],
+          message: "contacts is required for contact messages",
+        });
+      return;
+    }
     if (value.messageType !== "text" && !value.mediaUrl && !value.mediaDataUrl)
       context.addIssue({
         code: z.ZodIssueCode.custom,

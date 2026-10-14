@@ -65,6 +65,17 @@
     "submit": "Start conversation",
     "starting": "Starting…"
   },
+  "shareContact": {
+    "eyebrow": "Share a contact",
+    "title": "Send contact card",
+    "trigger": "Contact",
+    "triggerLabel": "Send a contact card",
+    "close": "Close contact card",
+    "name": "Name",
+    "phone": "Phone number",
+    "organization": "Company (optional)",
+    "submit": "Send contact"
+  },
   "ui": {
     "newWillAppear": "New conversations will appear here.",
     "conversations": "Conversations",
@@ -137,7 +148,7 @@
     "configureSupportAi": "Configure Support AI",
     "aiGenerated": "AI generated",
     "messageDeleted": "Message deleted",
-    "messageUnavailable": "This message could not be loaded",
+    "messageUnavailable": "This message type can't be shown in Mend. Open it in WhatsApp on your phone.",
     "messageReactions": "Message reactions",
     "removeReaction": "Remove reaction",
     "removeReactionWithEmoji": "Remove reaction {{emoji}}",
@@ -149,6 +160,8 @@
     "deleting": "Deleting…",
     "deleteForEveryone": "Delete for everyone",
     "sending": "Sending…",
+    "sendingProgress": "Sending… {{percent}}%",
+    "failed": "Failed",
     "react": "React",
     "processingMedia": "Processing media…",
     "mediaUnsupported": "Format {{format}} is not supported",

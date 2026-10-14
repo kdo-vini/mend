@@ -65,6 +65,17 @@
     "submit": "Iniciar conversa",
     "starting": "Iniciando…"
   },
+  "shareContact": {
+    "eyebrow": "Compartilhar contato",
+    "title": "Enviar cartão de contato",
+    "trigger": "Contato",
+    "triggerLabel": "Enviar um cartão de contato",
+    "close": "Fechar cartão de contato",
+    "name": "Nome",
+    "phone": "Telefone",
+    "organization": "Empresa (opcional)",
+    "submit": "Enviar contato"
+  },
   "ui": {
     "newWillAppear": "Novas conversas vão aparecer aqui.",
     "conversations": "Conversas",
@@ -137,7 +148,7 @@
     "configureSupportAi": "Configurar IA do Support",
     "aiGenerated": "Gerado por IA",
     "messageDeleted": "Mensagem excluída",
-    "messageUnavailable": "Não foi possível carregar esta mensagem",
+    "messageUnavailable": "Este tipo de mensagem não aparece no Mend. Veja no WhatsApp do celular.",
     "messageReactions": "Reações da mensagem",
     "removeReaction": "Remover reação",
     "removeReactionWithEmoji": "Remover reação {{emoji}}",
@@ -149,6 +160,8 @@
     "deleting": "Excluindo…",
     "deleteForEveryone": "Excluir para todos",
     "sending": "Enviando…",
+    "sendingProgress": "Enviando… {{percent}}%",
+    "failed": "Falhou",
     "react": "Reagir",
     "processingMedia": "Processando mídia…",
     "mediaUnsupported": "O formato {{format}} não é compatível",

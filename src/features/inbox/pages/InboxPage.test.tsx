@@ -65,6 +65,7 @@ const loadOlderLiveConversationMessages = vi.fn(
 const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const sendLiveMessage = vi.fn(async (_input: unknown) => undefined);
+const sendLiveContact = vi.fn(async (_input: unknown) => undefined);
 const pauseLiveConversationAi = vi.fn(async (_input: unknown) => undefined);
 const resumeLiveConversationAi = vi.fn(async (_input: unknown) => undefined);
 
@@ -89,7 +90,8 @@ vi.mock("../api", () => ({
   ) => loadOlderLiveConversationMessages(workspaceId, conversationId, before),
   deleteLiveConversation: (input: unknown) => deleteLiveConversation(input),
   deleteLiveMessage: vi.fn(),
-  markLiveConversationRead: vi.fn(),
+  getMessageMediaUrl: vi.fn(async () => "https://media.example/1"),
+  markLiveConversationRead: vi.fn(async () => undefined),
   reactToLiveMessage: vi.fn(),
   pauseLiveConversationAi: (input: unknown) => pauseLiveConversationAi(input),
   requestAiDraft: vi.fn(),
@@ -98,6 +100,7 @@ vi.mock("../api", () => ({
   sendLiveMedia: vi.fn(),
   sendLiveMediaBatch: vi.fn(),
   sendLiveMessage: (input: unknown) => sendLiveMessage(input),
+  sendLiveContact: (input: unknown) => sendLiveContact(input),
   sendLivePresence: vi.fn(async () => undefined),
   snoozeLiveConversation: vi.fn(),
   updateLiveContact: vi.fn(),
@@ -112,10 +115,12 @@ function InboxHarness({
   onToast = () => undefined,
   onConfirm = async () => true,
   initialConversations = [seedConversations[0], seedConversations[1]],
+  initialPath = "/inbox",
 }: {
   onToast?: (message: string, tone?: string) => void;
   onConfirm?: () => Promise<boolean>;
   initialConversations?: Conversation[];
+  initialPath?: string;
 }) {
   const [conversations, setConversations] =
     useState<Conversation[]>(initialConversations);
@@ -123,7 +128,7 @@ function InboxHarness({
     initialConversations[0].id,
   );
   return (
-    <MemoryRouter initialEntries={["/inbox"]}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <InboxPage
         workspaceId="workspace-1"
         conversations={conversations}
@@ -201,6 +206,8 @@ describe("InboxPage new chat", () => {
     resumeLiveConversationAi.mockClear();
     sendLiveMessage.mockReset();
     sendLiveMessage.mockResolvedValue(undefined);
+    sendLiveContact.mockReset();
+    sendLiveContact.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -517,6 +524,327 @@ describe("InboxPage new chat", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("lets go of the text before WhatsApp answers and keeps the composer usable", async () => {
+    let deliver: () => void = () => undefined;
+    sendLiveMessage.mockImplementation(
+      () =>
+        new Promise<undefined>(
+          (resolve) => (deliver = () => resolve(undefined)),
+        ),
+    );
+    await act(async () => root.render(<InboxHarness />));
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    await act(async () => type(composer, "Já estou vendo isso."));
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+
+    // Delivery is still in flight, yet the bubble is in the thread and the
+    // composer is empty and enabled for the next message.
+    expect(sendLiveMessage).toHaveBeenCalledTimes(1);
+    expect(composer.value).toBe("");
+    expect(composer.disabled).toBe(false);
+    expect(document.body.textContent).toContain("Já estou vendo isso.");
+    expect(document.body.textContent).toContain("Sending…");
+
+    await act(async () => deliver());
+    expect(document.body.textContent).not.toContain("Sending…");
+  });
+
+  it("delivers quick consecutive messages in the order they were written", async () => {
+    const pending: Array<() => void> = [];
+    sendLiveMessage.mockImplementation(
+      () =>
+        new Promise<undefined>((resolve) =>
+          pending.push(() => resolve(undefined)),
+        ),
+    );
+    await act(async () => root.render(<InboxHarness />));
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    for (const text of ["Primeira", "Segunda"]) {
+      await act(async () => type(composer, text));
+      await act(async () =>
+        document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+      );
+    }
+
+    expect(sendLiveMessage).toHaveBeenCalledTimes(1);
+    expect(sendLiveMessage.mock.calls[0][0]).toMatchObject({
+      text: "Primeira",
+    });
+    await act(async () => pending[0]());
+    expect(sendLiveMessage).toHaveBeenCalledTimes(2);
+    expect(sendLiveMessage.mock.calls[1][0]).toMatchObject({
+      text: "Segunda",
+    });
+    await act(async () => pending[1]());
+  });
+
+  it("never marks an accepted message failed when the follow-up refresh fails", async () => {
+    const toasts: Array<{ message: string; tone?: string }> = [];
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          onToast={(message, tone) => toasts.push({ message, tone })}
+        />,
+      ),
+    );
+    loadLiveConversationSnapshot.mockRejectedValueOnce(new Error("offline"));
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    await act(async () => type(composer, "Resolvido, obrigado!"));
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+
+    expect(sendLiveMessage).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain("Resolvido, obrigado!");
+    expect(document.body.textContent).not.toContain("Failed");
+    expect(toasts.some((toast) => toast.tone === "error")).toBe(false);
+  });
+
+  it("moves attachments into the thread at once and shows upload progress there", async () => {
+    const api = await import("../api");
+    const upload = vi.mocked(api.uploadLiveMediaAsset);
+    const sendBatch = vi.mocked(api.sendLiveMediaBatch);
+    upload.mockReset();
+    sendBatch.mockReset();
+    sendBatch.mockResolvedValue(undefined as never);
+    let reportProgress: (percent: number) => void = () => undefined;
+    let finishUpload: () => void = () => undefined;
+    upload.mockImplementation(
+      (input) =>
+        new Promise((resolve) => {
+          reportProgress = (percent) =>
+            input.onProgress?.({ percent } as never);
+          finishUpload = () => resolve({ assetId: "asset-1" } as never);
+        }),
+    );
+    const createObjectURL = vi.fn(() => "blob:preview");
+    const revokeObjectURL = vi.fn();
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+
+    await act(async () => root.render(<InboxHarness />));
+    const fileInput =
+      document.body.querySelector<HTMLInputElement>("input[type=file]");
+    if (!fileInput) throw new Error("file input was not rendered");
+    const photo = new File(["png"], "foto.png", { type: "image/png" });
+    Object.defineProperty(fileInput, "files", {
+      value: [photo],
+      configurable: true,
+    });
+    await act(async () =>
+      fileInput.dispatchEvent(new Event("change", { bubbles: true })),
+    );
+    expect(
+      document.body.querySelector(".attachment-preview-bar"),
+    ).not.toBeNull();
+
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+    // The tray is empty while the upload runs; the bubble carries the preview.
+    expect(document.body.querySelector(".attachment-preview-bar")).toBeNull();
+    expect(
+      document.body.querySelector<HTMLImageElement>(
+        ".message-row.outbound img[src='blob:preview']",
+      ),
+    ).not.toBeNull();
+    expect(document.body.textContent).toContain("Sending… 0%");
+
+    await act(async () => reportProgress(42));
+    expect(document.body.textContent).toContain("Sending… 42%");
+
+    await act(async () => finishUpload());
+    expect(sendBatch).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).not.toContain("Sending…");
+  });
+
+  it("labels media that is not ready in the operator's language", async () => {
+    // An id outside the seed keeps snapshot hydration from replacing messages.
+    const conversation: Conversation = {
+      ...seedConversations[0],
+      id: "conv-media-status",
+      messages: [
+        {
+          id: "m-processing",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:00",
+          type: "image",
+          mediaStatus: "processing",
+          attachment: { name: "foto.jpg", meta: "image/jpeg" },
+        },
+        {
+          id: "m-unsupported",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:01",
+          type: "video",
+          mediaStatus: "unsupported",
+          attachment: { name: "clip.avi", meta: "video/x-msvideo" },
+        },
+        {
+          id: "m-failed",
+          conversationId: "conv-media-status",
+          direction: "inbound",
+          sender: "Cliente",
+          text: "",
+          time: "09:02",
+          type: "document",
+          mediaStatus: "failed",
+        },
+      ],
+    };
+    await i18n.changeLanguage("pt-BR");
+    try {
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[conversation]} />),
+      );
+      const text = document.body.textContent ?? "";
+      expect(text).toContain("Processando mídia…");
+      expect(text).toContain("O formato video/x-msvideo não é compatível");
+      expect(text).toContain("Mídia indisponível");
+      expect(text).toContain("Mídia");
+      expect(text).not.toContain("Processing media");
+      expect(text).not.toContain("Media unavailable");
+    } finally {
+      await i18n.changeLanguage("en-US");
+    }
+  });
+
+  function clickConversation(name: string) {
+    const row = [
+      ...document.body.querySelectorAll<HTMLElement>(".conversation-row"),
+    ].find((item) => item.textContent?.includes(name));
+    const hit = row?.querySelector<HTMLElement>(".conversation-row-hit");
+    if (!hit) throw new Error(`conversation ${name} was not rendered`);
+    hit.click();
+  }
+
+  it("applies a ?conversation= link once instead of pulling the operator back", async () => {
+    const [first, second] = [seedConversations[0], seedConversations[1]];
+    await act(async () =>
+      root.render(
+        <InboxHarness initialPath={`/inbox?conversation=${second.id}`} />,
+      ),
+    );
+    expect(openConversationName()).toBe(second.name);
+
+    await act(async () => clickConversation(first.name));
+    const composer = document.body.querySelector("textarea");
+    if (!composer) throw new Error("composer was not rendered");
+    // Any later list change (here: a send) used to re-apply the link.
+    await act(async () => type(composer, "Oi"));
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+    );
+    expect(openConversationName()).toBe(first.name);
+    expect(sendLiveMessage.mock.calls.at(-1)?.[0]).toMatchObject({
+      conversationId: first.id,
+    });
+  });
+
+  it("keeps a typed draft with its own thread", async () => {
+    const [first, second] = [seedConversations[0], seedConversations[1]];
+    await act(async () => root.render(<InboxHarness />));
+    const composer = () => {
+      const element = document.body.querySelector("textarea");
+      if (!element) throw new Error("composer was not rendered");
+      return element;
+    };
+    await act(async () => type(composer(), "Resposta para o primeiro"));
+
+    await act(async () => clickConversation(second.name));
+    expect(composer().value).toBe("");
+
+    await act(async () => clickConversation(first.name));
+    expect(composer().value).toBe("Resposta para o primeiro");
+  });
+
+  it("marks the open thread read however it was opened", async () => {
+    const { markLiveConversationRead } = await import("../api");
+    vi.mocked(markLiveConversationRead).mockClear();
+    const unreadThread = { ...seedConversations[0], unread: 3 };
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          initialConversations={[unreadThread, seedConversations[1]]}
+        />,
+      ),
+    );
+    expect(markLiveConversationRead).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      conversationId: unreadThread.id,
+    });
+  });
+
+  async function shareContact(name: string, phone: string) {
+    await act(async () =>
+      document.body
+        .querySelector<HTMLButtonElement>(
+          "button[aria-label='Send a contact card']",
+        )
+        ?.click(),
+    );
+    await act(async () => type(field("fullName"), name));
+    await act(async () => type(field("phoneNumber"), phone));
+    await act(async () =>
+      [...document.body.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent === "Send contact")
+        ?.click(),
+    );
+  }
+
+  it("shares a contact card from the composer", async () => {
+    await act(async () => root.render(<InboxHarness />));
+    await shareContact("Ivo Silva", "+55 11 99999-7777");
+
+    expect(sendLiveContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: seedConversations[0].id,
+        contacts: [{ fullName: "Ivo Silva", phoneNumber: "5511999997777" }],
+      }),
+    );
+    expect(sendLiveMessage).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("📇 Ivo Silva");
+  });
+
+  it("retries a failed contact card as a card, not as text", async () => {
+    sendLiveContact.mockRejectedValueOnce(new Error("provider down"));
+    await act(async () => root.render(<InboxHarness />));
+    await shareContact("Ivo Silva", "5511999997777");
+    expect(document.body.textContent).toContain("Failed");
+
+    const failedRow = [
+      ...document.body.querySelectorAll<HTMLElement>(".message-row.outbound"),
+    ].find((row) => row.textContent?.includes("Ivo Silva"));
+    await act(async () =>
+      failedRow
+        ?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']")
+        ?.click(),
+    );
+    await act(async () =>
+      [...document.body.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent?.trim() === "Retry")
+        ?.click(),
+    );
+    expect(sendLiveContact).toHaveBeenCalledTimes(2);
+    expect(sendLiveContact.mock.calls[1][0]).toMatchObject({
+      contacts: [{ fullName: "Ivo Silva", phoneNumber: "5511999997777" }],
+      idempotencyKey: (
+        sendLiveContact.mock.calls[0][0] as { idempotencyKey: string }
+      ).idempotencyKey,
+    });
+    expect(sendLiveMessage).not.toHaveBeenCalled();
   });
 
   describe("IA ativa toggle", () => {
