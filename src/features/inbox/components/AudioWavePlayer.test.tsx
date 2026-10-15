@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioWavePlayer } from "./AudioWavePlayer";
-import i18n from "../../../i18n";
+import "../../../i18n";
 
 describe("AudioWavePlayer", () => {
   let root: Root;
@@ -15,7 +15,6 @@ describe("AudioWavePlayer", () => {
   let duration: number;
 
   beforeEach(async () => {
-    await i18n.changeLanguage("en-US");
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -83,20 +82,20 @@ describe("AudioWavePlayer", () => {
 
     await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
     expect(container.querySelector("button")?.getAttribute("aria-label")).toBe(
-      "Play audio",
+      "Reproduzir áudio",
     );
     expect(container.textContent).toContain("1:30");
 
     await act(async () => container.querySelector("button")?.click());
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalledOnce();
     expect(container.querySelector("button")?.getAttribute("aria-label")).toBe(
-      "Pause audio",
+      "Pausar áudio",
     );
 
     await act(async () => container.querySelector("button")?.click());
     expect(HTMLMediaElement.prototype.pause).toHaveBeenCalledOnce();
     expect(container.querySelector("button")?.getAttribute("aria-label")).toBe(
-      "Play audio",
+      "Reproduzir áudio",
     );
 
     const seek = container.querySelector<HTMLInputElement>(

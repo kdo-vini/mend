@@ -29,9 +29,6 @@ vi.mock("../lib/supabase", () => ({
     },
   },
 }));
-vi.mock("../i18n/preferences", () => ({
-  resolveInterfaceLanguage: async () => "en-US",
-}));
 import { AuthGate } from "./AuthGate";
 
 it("preserves workspace state on token refresh and clears it when the account changes", async () => {

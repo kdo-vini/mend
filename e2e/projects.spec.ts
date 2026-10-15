@@ -70,21 +70,15 @@ async function mockProjects(page: Page) {
   };
 }
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-});
-
 test("projects lists live records and links each card to its finance view", async ({
   page,
 }) => {
   await mockProjects(page);
   await page.goto("/projects?demo=1");
 
-  await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Projetos" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Zelo" })).toBeVisible();
-  const financeLink = page.getByRole("link", { name: "Open finance" });
+  const financeLink = page.getByRole("link", { name: "Abrir financeiro" });
   await expect(financeLink).toHaveAttribute("href", "/financeiro?project=Zelo");
   for (const theme of ["light", "dark"]) {
     await page.evaluate((value) => {
@@ -105,7 +99,7 @@ test("projects lists live records and links each card to its finance view", asyn
 
   if (test.info().project.name === "desktop") {
     await expect(
-      page.getByRole("link", { name: "Projects", exact: true }),
+      page.getByRole("link", { name: "Projetos", exact: true }),
     ).toBeVisible();
   }
 });
@@ -116,36 +110,36 @@ test("projects create, edit with conflict recovery, and archive", async ({
   const api = await mockProjects(page);
   await page.goto("/projects?demo=1");
 
-  await page.getByRole("button", { name: "New project" }).click();
-  await page.getByLabel("Project name").fill("Zelo Sites");
-  await page.getByLabel("Description").fill("Web products and systems.");
-  await page.getByRole("button", { name: "Save project" }).click();
+  await page.getByRole("button", { name: "Novo projeto" }).click();
+  await page.getByLabel("Nome do projeto").fill("Zelo Sites");
+  await page.getByLabel("Descrição").fill("Web products and systems.");
+  await page.getByRole("button", { name: "Salvar projeto" }).click();
   await expect(page.getByRole("heading", { name: "Zelo Sites" })).toBeVisible();
   expect(
     api.records.find((project) => project.name === "Zelo Sites")?.key,
   ).toBe("Zelo Sites");
 
-  await page.getByRole("button", { name: "Edit Zelo Sites" }).click();
-  const nameField = page.getByLabel("Project name");
+  await page.getByRole("button", { name: "Editar Zelo Sites" }).click();
+  const nameField = page.getByLabel("Nome do projeto");
   await nameField.fill("Zelo Sites & Systems");
   api.conflictNextSave();
-  await page.getByRole("button", { name: "Save project" }).click();
+  await page.getByRole("button", { name: "Salvar projeto" }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "This project changed in another session",
+    "Este projeto foi alterado em outra sessão",
   );
   await expect(nameField).toHaveValue("Zelo Sites & Systems");
-  await page.getByRole("button", { name: "Reload data" }).click();
+  await page.getByRole("button", { name: "Recarregar dados" }).click();
   await expect(nameField).toHaveValue("Zelo Sites & Systems");
 
-  await page.getByRole("button", { name: "Save project" }).click();
+  await page.getByRole("button", { name: "Salvar projeto" }).click();
   await expect(
     page.getByRole("heading", { name: "Zelo Sites & Systems" }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Archive Zelo Sites & Systems" })
+    .getByRole("button", { name: "Arquivar Zelo Sites & Systems" })
     .click();
-  await page.getByRole("button", { name: "Archive project" }).click();
-  await expect(page.getByRole("heading", { name: "Archived" })).toBeVisible();
+  await page.getByRole("button", { name: "Arquivar projeto" }).click();
+  await expect(page.getByRole("heading", { name: "Arquivados" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Zelo Sites & Systems" }),
   ).toBeVisible();
@@ -161,11 +155,11 @@ test("project editor traps keyboard focus and returns focus on Escape", async ({
   await mockProjects(page);
   await page.goto("/projects?demo=1");
 
-  const createButton = page.getByRole("button", { name: "New project" });
+  const createButton = page.getByRole("button", { name: "Novo projeto" });
   await createButton.click();
-  const dialog = page.getByRole("dialog", { name: "New project" });
-  const nameField = dialog.getByLabel("Project name");
-  const closeButton = dialog.getByRole("button", { name: "Close" });
+  const dialog = page.getByRole("dialog", { name: "Novo projeto" });
+  const nameField = dialog.getByLabel("Nome do projeto");
+  const closeButton = dialog.getByRole("button", { name: "Fechar" });
   await expect(nameField).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");

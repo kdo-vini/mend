@@ -20,7 +20,6 @@ import type {
 } from "./types";
 import { mergeConversationSnapshot } from "./features/inbox/conversation-snapshot";
 import { supabase } from "./lib/supabase";
-import { normalizeLocale, type SupportedLocale } from "./i18n/resources";
 import {
   enableNativePush,
   dismissWorkspaceNotification,
@@ -174,8 +173,6 @@ function App() {
     "idle",
   );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [operationalLanguage, setOperationalLanguage] =
-    useState<SupportedLocale>("en-US");
   const [, setChannel] = useState<WhatsAppInstance | null>(null);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(
@@ -250,9 +247,8 @@ function App() {
   const { confirm: requestConfirmation, confirmationDialog } =
     useConfirmation();
   const handleProfileWorkspaceUpdated = useCallback(
-    (workspace: { id: string; name: string; default_language?: string }) => {
+    (workspace: { id: string; name: string }) => {
       setWorkspaceId(workspace.id);
-      setOperationalLanguage(normalizeLocale(workspace.default_language));
       setLiveDataRetry((current) => current + 1);
     },
     [],
@@ -481,7 +477,6 @@ function App() {
         if (!active) return;
         setWorkspaceId(workspace.id);
         liveWorkspaceId = workspace.id;
-        setOperationalLanguage(normalizeLocale(workspace.default_language));
         const liveData = await loadLiveWorkspace(client, workspace.id);
         if (!active) return;
         setConversations((current) =>
@@ -1266,7 +1261,6 @@ function App() {
                   issues={issues}
                   runs={runs}
                   workspaceId={workspaceId}
-                  operationalLanguage={operationalLanguage}
                   liveMode={!demoMode}
                   assigneeOptions={assigneeOptions}
                   assigneeLabel={assigneeLabel}

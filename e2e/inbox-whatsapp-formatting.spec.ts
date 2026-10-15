@@ -1,11 +1,5 @@
 import { expect, test } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-});
-
 /**
  * The composer shows WhatsApp formatting while typing by painting a styled
  * copy of the text behind a transparent textarea. If the copy laid text out
@@ -17,10 +11,10 @@ test("the composer formats WhatsApp markup in place without drifting", async ({
 }) => {
   await page.goto("/inbox?demo=1");
   await page
-    .getByRole("button", { name: /Open conversation with/ })
+    .getByRole("button", { name: /Abrir conversa com/ })
     .first()
     .click();
-  const field = page.getByRole("textbox", { name: "Write a reply" });
+  const field = page.getByRole("textbox", { name: "Escrever uma resposta" });
   await field.click();
   await field.fill(
     "Olá *Lucas*, segue o _resumo_ com ~erro~ e ```codigo``` para conferir. ".repeat(

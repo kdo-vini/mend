@@ -1,12 +1,10 @@
 import { z } from "zod";
-import type { Json, Database } from "../src/lib/database.types.js";
-import { AuthenticationError, type MendAuthContext } from "./auth.js";
-import { normalizeLocale } from "./locale.js";
+import type { Database } from "../src/lib/database.types.js";
+import type { MendAuthContext } from "./auth.js";
 
 type Tables = Database["public"]["Tables"];
 export type Workspace = Tables["workspaces"]["Row"];
 export type WorkspaceMember = Tables["workspace_members"]["Row"];
-export type AuditLogEntry = Tables["audit_log"]["Row"];
 
 export const workspaceRoles = ["owner", "admin", "agent", "viewer"] as const;
 export type WorkspaceRole = (typeof workspaceRoles)[number];
@@ -26,15 +24,7 @@ export const workspaceCreateSchema = z.object({
     .regex(/^[A-Z][A-Z0-9]{1,7}$/)
     .optional(),
   timezone: z.string().trim().min(1).max(80).optional(),
-  defaultLanguage: z.string().trim().min(2).max(16).optional(),
 });
-
-export const workspaceUpdateSchema = workspaceCreateSchema
-  .partial()
-  .refine(
-    (value) => Object.keys(value).length > 0,
-    "At least one workspace field is required.",
-  );
 
 export const workspaceMemberRoleSchema = z.enum(workspaceRoles);
 
@@ -114,14 +104,6 @@ async function loadMembershipRole(
   return data ? roleOf(data.role) : null;
 }
 
-/** Resolves the caller's role from the membership table, never from request input. */
-export async function getWorkspaceRole(
-  auth: MendAuthContext,
-  workspaceId: string,
-): Promise<WorkspaceRole | null> {
-  return loadMembershipRole(auth, requireWorkspaceId(workspaceId));
-}
-
 export async function requireWorkspaceRole(
   auth: MendAuthContext,
   workspaceId: string,
@@ -174,24 +156,6 @@ export async function listMyWorkspaces(
   });
 }
 
-/** /me/workspace helper: an explicit id is accepted only after membership is verified. */
-export async function getMyWorkspace(
-  auth: MendAuthContext,
-  workspaceId?: string,
-): Promise<WorkspaceWithRole> {
-  const workspaces = await listMyWorkspaces(auth);
-  const workspace = workspaceId
-    ? workspaces.find((candidate) => candidate.id === workspaceId)
-    : workspaces[0];
-  if (!workspace)
-    throw new WorkspaceAuthorizationError(
-      "workspace_not_found",
-      "Workspace was not found.",
-      404,
-    );
-  return workspace;
-}
-
 export async function createWorkspace(
   auth: MendAuthContext,
   input: z.input<typeof workspaceCreateSchema>,
@@ -202,51 +166,9 @@ export async function createWorkspace(
     p_slug: values.slug,
     p_issue_prefix: values.issuePrefix ?? "MEND",
     p_timezone: values.timezone ?? "America/Sao_Paulo",
-    p_default_language: normalizeLocale(values.defaultLanguage),
+    p_default_language: "pt-BR",
   });
   return { ...workspace, role: "owner" };
-}
-
-export async function updateWorkspace(
-  auth: MendAuthContext,
-  workspaceId: string,
-  input: z.input<typeof workspaceUpdateSchema>,
-): Promise<Workspace> {
-  await requireWorkspaceRole(auth, workspaceId, ["owner", "admin"]);
-  const values = workspaceUpdateSchema.parse(input);
-  const updates: Tables["workspaces"]["Update"] = {
-    ...(values.name !== undefined ? { name: values.name } : {}),
-    ...(values.slug !== undefined ? { slug: values.slug } : {}),
-    ...(values.issuePrefix !== undefined
-      ? { issue_prefix: values.issuePrefix }
-      : {}),
-    ...(values.timezone !== undefined ? { timezone: values.timezone } : {}),
-    ...(values.defaultLanguage !== undefined
-      ? { default_language: normalizeLocale(values.defaultLanguage) }
-      : {}),
-  };
-  const { data, error } = await auth.client
-    .from("workspaces")
-    .update(updates)
-    .eq("id", requireWorkspaceId(workspaceId))
-    .select("*")
-    .single();
-  if (error) throw new Error(error.message);
-  return data;
-}
-
-export async function listWorkspaceMembers(
-  auth: MendAuthContext,
-  workspaceId: string,
-): Promise<WorkspaceMember[]> {
-  await requireWorkspaceRole(auth, workspaceId);
-  const { data, error } = await auth.client
-    .from("workspace_members")
-    .select("*")
-    .eq("workspace_id", requireWorkspaceId(workspaceId))
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
-  return data;
 }
 
 export async function addWorkspaceMember(
@@ -263,98 +185,4 @@ export async function addWorkspaceMember(
     p_user_id: z.string().uuid().parse(userId),
     p_role: role,
   });
-}
-
-export async function updateWorkspaceMemberRole(
-  auth: MendAuthContext,
-  workspaceId: string,
-  userId: string,
-  role: WorkspaceRole,
-): Promise<WorkspaceMember> {
-  await requireWorkspaceRole(auth, workspaceId, ["owner", "admin"]);
-  workspaceMemberRoleSchema.parse(role);
-  return callRpc<WorkspaceMember>(auth, "update_workspace_member_role", {
-    p_workspace_id: requireWorkspaceId(workspaceId),
-    p_user_id: z.string().uuid().parse(userId),
-    p_role: role,
-  });
-}
-
-export async function removeWorkspaceMember(
-  auth: MendAuthContext,
-  workspaceId: string,
-  userId: string,
-): Promise<boolean> {
-  await requireWorkspaceRole(auth, workspaceId, ["owner", "admin"]);
-  return callRpc<boolean>(auth, "remove_workspace_member", {
-    p_workspace_id: requireWorkspaceId(workspaceId),
-    p_user_id: z.string().uuid().parse(userId),
-  });
-}
-
-export interface AuditEventInput {
-  workspaceId?: string | null;
-  action: string;
-  entityType: string;
-  entityId?: string | null;
-  metadata?: Json;
-}
-
-export async function recordAuditEvent(
-  auth: MendAuthContext,
-  input: AuditEventInput,
-): Promise<AuditLogEntry> {
-  if (input.workspaceId) await requireWorkspaceRole(auth, input.workspaceId);
-  const { data, error } = await auth.client
-    .from("audit_log")
-    .insert({
-      workspace_id: input.workspaceId ?? null,
-      actor_user_id: auth.user.id,
-      action: input.action,
-      entity_type: input.entityType,
-      entity_id: input.entityId ?? null,
-      metadata_json: input.metadata ?? {},
-    })
-    .select("*")
-    .single();
-  if (error) throw new Error(error.message);
-  return data;
-}
-
-export async function listAuditEvents(
-  auth: MendAuthContext,
-  workspaceId: string,
-): Promise<AuditLogEntry[]> {
-  await requireWorkspaceRole(auth, workspaceId, ["owner", "admin"]);
-  const { data, error } = await auth.client
-    .from("audit_log")
-    .select("*")
-    .eq("workspace_id", requireWorkspaceId(workspaceId))
-    .order("created_at", { ascending: false })
-    .limit(200);
-  if (error) throw new Error(error.message);
-  return data;
-}
-
-/** Converts an unknown route error into a stable API response shape. */
-export function workspaceErrorResponse(error: unknown): {
-  statusCode: number;
-  body: { error: string; message: string };
-} {
-  if (
-    error instanceof WorkspaceAuthorizationError ||
-    error instanceof AuthenticationError
-  ) {
-    return {
-      statusCode: error.statusCode,
-      body: { error: error.code, message: error.message },
-    };
-  }
-  return {
-    statusCode: 500,
-    body: {
-      error: "workspace_request_failed",
-      message: "Workspace request failed.",
-    },
-  };
 }

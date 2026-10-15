@@ -5,10 +5,8 @@ import {
 } from "../../shared/conversation-preview";
 
 export {
-  conversationPreviewLabels,
   conversationPreviewText,
   stripHumanWhatsAppIntro,
-  type ConversationPreviewLabels,
 } from "../../shared/conversation-preview";
 
 function messageMatchKey(

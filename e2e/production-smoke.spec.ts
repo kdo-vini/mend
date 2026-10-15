@@ -15,24 +15,17 @@ test.describe("production smoke", () => {
   });
 
   // Read-only coverage: no login, credentials, or workspace writes.
-  test("internal sign-in renders both supported locales without overflow", async ({
+  test("internal sign-in renders in Portuguese without overflow", async ({
     page,
   }) => {
-    for (const locale of ["pt-BR", "en-US"] as const) {
-      await page.addInitScript((language) => {
-        window.localStorage.setItem("mend.interface-language", language);
-      }, locale);
-      await page.goto(`${productionBaseUrl}/`);
-      await expect(
-        page.getByRole("heading", {
-          name: locale === "pt-BR" ? "Entrar no Mend" : "Sign in to Mend",
-        }),
-      ).toBeVisible();
-      expect(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth > window.innerWidth,
-        ),
-      ).toBe(false);
-    }
+    await page.goto(`${productionBaseUrl}/`);
+    await expect(
+      page.getByRole("heading", { name: "Entrar no Mend" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      ),
+    ).toBe(false);
   });
 });

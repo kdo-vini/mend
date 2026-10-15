@@ -1,15 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const englishInterface = async (page: Page) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-};
+import { expect, test } from "@playwright/test";
 
 test("solo founder can follow a triaged customer case into its run and back", async ({
   page,
 }) => {
-  await englishInterface(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/issues/TEC-24?demo=1");
   await expect(
@@ -20,16 +13,16 @@ test("solo founder can follow a triaged customer case into its run and back", as
   await expect(page).toHaveURL(/\/agent-runs\?/);
   await expect(page).toHaveURL(/demo=1/);
   await expect(page).toHaveURL(/run=run-204/);
-  await expect(page.getByText("Current stage", { exact: true })).toBeVisible();
-  await expect(page.getByText(/68%|investigation/).first()).toBeVisible();
+  await expect(page.getByText("Etapa atual", { exact: true })).toBeVisible();
+  await expect(page.getByText(/68%|investigação/).first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Open issue" }).click();
+  await page.getByRole("button", { name: "Abrir issue" }).click();
   await expect(
-    page.getByRole("button", { name: "Close issue inspector" }),
+    page.getByRole("button", { name: "Fechar inspetor do chamado" }),
   ).toBeVisible();
   await expect(page).toHaveURL(/run=run-204/);
 
-  await page.getByRole("button", { name: "Open full issue" }).click();
+  await page.getByRole("button", { name: "Abrir chamado completo" }).click();
   await expect(page).toHaveURL(/\/issues\/TEC-24/);
   await expect(
     page.getByText("TEC-24", { exact: false }).first(),
@@ -37,21 +30,20 @@ test("solo founder can follow a triaged customer case into its run and back", as
 
   await page.getByRole("button", { name: /Cliente Exemplo/ }).click();
   await expect(page).toHaveURL(/\/inbox\?conversation=/);
-  await expect(page.getByPlaceholder("Write a reply…")).toBeVisible();
+  await expect(page.getByPlaceholder("Escreva uma resposta…")).toBeVisible();
   expect(
     await page.evaluate(() => document.body.scrollWidth),
   ).toBeLessThanOrEqual(390);
 });
 
 test("desktop keeps the run beside the issue it opens", async ({ page }) => {
-  await englishInterface(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/agent-runs?demo=1&run=run-204");
   await expect(page.getByRole("heading", { name: /TEC-24/ })).toBeVisible();
 
-  await page.getByRole("button", { name: "Open issue" }).click();
+  await page.getByRole("button", { name: "Abrir issue" }).click();
   await expect(
-    page.getByRole("button", { name: "Close issue inspector" }),
+    page.getByRole("button", { name: "Fechar inspetor do chamado" }),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/agent-runs\?demo=1&run=run-204/);
   await expect(page.getByRole("button", { name: /TEC-19/ })).toBeVisible();
@@ -60,19 +52,20 @@ test("desktop keeps the run beside the issue it opens", async ({ page }) => {
   expect(inspector).not.toBeNull();
   expect(inspector!.width).toBeLessThan(1440);
 
-  await page.getByRole("button", { name: "Close issue inspector" }).click();
+  await page
+    .getByRole("button", { name: "Fechar inspetor do chamado" })
+    .click();
   await expect(page.getByRole("heading", { name: /TEC-24/ })).toBeVisible();
 });
 
 test("the issue inspector owns the whole screen on mobile widths", async ({
   page,
 }) => {
-  await englishInterface(page);
   await page.setViewportSize({ width: 600, height: 844 });
   await page.goto("/agent-runs?demo=1&run=run-204");
-  await page.getByRole("button", { name: "Open issue" }).click();
+  await page.getByRole("button", { name: "Abrir issue" }).click();
   await expect(
-    page.getByRole("button", { name: "Close issue inspector" }),
+    page.getByRole("button", { name: "Fechar inspetor do chamado" }),
   ).toBeVisible();
 
   const inspector = await page.locator(".issue-inspector").boundingBox();
@@ -83,10 +76,9 @@ test("the issue inspector owns the whole screen on mobile widths", async ({
 test("outbound replies stay inside the mobile message canvas", async ({
   page,
 }) => {
-  await englishInterface(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/inbox?demo=1&conversation=conv-cliente-exemplo");
-  await expect(page.getByPlaceholder("Write a reply…")).toBeVisible();
+  await expect(page.getByPlaceholder("Escreva uma resposta…")).toBeVisible();
 
   const geometry = await page.evaluate(() => {
     const canvas = document.querySelector(".message-canvas");
@@ -111,11 +103,10 @@ test("outbound replies stay inside the mobile message canvas", async ({
 test("the mobile journey entry points keep a comfortable touch target", async ({
   page,
 }) => {
-  await englishInterface(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/inbox?demo=1");
 
-  for (const name of ["Notifications", "Search workspace"]) {
+  for (const name of ["Notificações", "Pesquisar no espaço de trabalho"]) {
     const box = await page
       .locator(".mobile-topbar")
       .getByRole("button", { name })

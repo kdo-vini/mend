@@ -4,7 +4,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import i18n from "../../../i18n";
+import "../../../i18n";
 import { NewChatDialog } from "./NewChatDialog";
 
 const channels = [{ id: "channel-1", name: "Téchne support" }];
@@ -55,7 +55,6 @@ describe("NewChatDialog", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
   });
 
   afterEach(async () => {
@@ -107,7 +106,7 @@ describe("NewChatDialog", () => {
     await render();
     expect(document.body.querySelector("[role=combobox]")).toBeNull();
     expect(document.body.textContent).toContain(
-      "Messaging a number that never wrote to you first can get your WhatsApp account restricted.",
+      "Enviar mensagem para um número que nunca escreveu para você pode restringir sua conta do WhatsApp.",
     );
   });
 });

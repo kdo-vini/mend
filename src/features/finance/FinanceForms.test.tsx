@@ -12,7 +12,7 @@ import {
   it,
   vi,
 } from "vitest";
-import i18n from "../../i18n";
+import "../../i18n";
 import { MemoryRouter } from "react-router-dom";
 import type { FinanceRecord } from "./api";
 import {
@@ -79,7 +79,6 @@ describe("finance forms", () => {
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
     Element.prototype.scrollIntoView = vi.fn();
-    await i18n.changeLanguage("en-US");
   });
 
   beforeEach(() => {
@@ -95,15 +94,15 @@ describe("finance forms", () => {
 
   it("keeps project and allocation folded on a new expense", async () => {
     await render(editorFor(newEntryDraft("expense", "2026-10-01")));
-    expect(container.querySelector("h2")?.textContent).toBe("New expense");
-    expect(labels()).not.toContain("Served project");
-    expect(labels()).not.toContain("Cancel record (reason required)");
+    expect(container.querySelector("h2")?.textContent).toBe("Nova despesa");
+    expect(labels()).not.toContain("Projeto atendido");
+    expect(labels()).not.toContain("Cancelar registro (exige motivo)");
     const toggle = [...container.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Project and allocation"),
+      button.textContent?.includes("Projeto e rateio"),
     );
     expect(toggle?.getAttribute("aria-expanded")).toBe("false");
     await act(async () => toggle?.click());
-    expect(labels()).toContain("Served project");
+    expect(labels()).toContain("Projeto atendido");
   });
 
   it("requires the project as soon as the source is Supabase", async () => {
@@ -111,7 +110,7 @@ describe("finance forms", () => {
     draft.record.source = "Supabase";
     await render(editorFor(draft));
     const project = [...container.querySelectorAll("label")].find(
-      (label) => label.textContent === "Served project",
+      (label) => label.textContent === "Projeto atendido",
     );
     const input = document.getElementById(project!.htmlFor) as HTMLInputElement;
     expect(input.required).toBe(true);
@@ -120,14 +119,16 @@ describe("finance forms", () => {
   it("offers cancellation with a required reason only when editing", async () => {
     const draft = editDraft("entries", { ...entry, cancelled: true });
     await render(editorFor(draft));
-    expect(labels()).toContain("Cancel record (reason required)");
+    expect(labels()).toContain("Cancelar registro (exige motivo)");
     const reason = container.querySelector("textarea");
     expect(reason?.required).toBe(true);
   });
 
   it("records a receipt in entry context without exposing identifiers", async () => {
     await render(editorFor(newSettlementDraft(entry, "2026-10-05")));
-    expect(container.querySelector("h2")?.textContent).toBe("Record receipt");
+    expect(container.querySelector("h2")?.textContent).toBe(
+      "Registrar recebimento",
+    );
     expect(container.querySelector(".finance-context")?.textContent).toContain(
       "Client invoice",
     );
@@ -148,11 +149,11 @@ describe("finance forms", () => {
     };
     await render(editor);
     const save = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Save record",
+      (button) => button.textContent === "Salvar registro",
     );
     expect(save?.disabled).toBe(true);
     const recover = [...container.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Review latest version and keep draft"),
+      button.textContent?.includes("Revisar versão atual sem perder rascunho"),
     );
     await act(async () => recover?.click());
     expect(editor.reloadLatest).toHaveBeenCalled();

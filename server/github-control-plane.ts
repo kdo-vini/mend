@@ -51,11 +51,6 @@ export interface GitHubAppAuthConfig {
   apiVersion?: string;
 }
 
-export interface GitHubAppSetupConfig {
-  slug: string;
-  stateSecret: string;
-}
-
 export interface GitHubSetupStateInput {
   workspaceId: string;
   userId: string;
@@ -154,15 +149,6 @@ export function readGitHubAppAuthConfig(
     apiBaseUrl: env.MEND_GITHUB_API_URL?.trim() || undefined,
     apiVersion: env.MEND_GITHUB_API_VERSION?.trim() || undefined,
   };
-}
-
-export function readGitHubAppSetupConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): GitHubAppSetupConfig | null {
-  const slug = env.MEND_GITHUB_APP_SLUG?.trim();
-  const stateSecret = env.MEND_GITHUB_SETUP_STATE_SECRET?.trim();
-  if (!slug || !stateSecret) return null;
-  return { slug, stateSecret };
 }
 
 function base64UrlJson(value: unknown): string {

@@ -25,7 +25,6 @@ export const supportModelRoles = [
   "transcriptionModel",
   "embeddingModel",
 ] as const;
-export type SupportModelRole = (typeof supportModelRoles)[number];
 
 export interface SupportModelConfig {
   supportModel: string;

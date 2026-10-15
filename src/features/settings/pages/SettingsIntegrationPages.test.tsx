@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import i18n from "../../../i18n";
+import "../../../i18n";
 import type { GoogleConnection } from "../../../api/google-connections";
 import type { McpConnection } from "../../../api/mcp-connections";
 import type { LiveGitHubConnection } from "../api";
@@ -103,7 +103,6 @@ describe("IntegrationLink", () => {
         IS_REACT_ACT_ENVIRONMENT: boolean;
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
   });
 
   it("renders the connected, attention and checking branches with matching status text", async () => {
@@ -129,7 +128,7 @@ describe("IntegrationLink", () => {
           <IntegrationLink
             to="/settings/integrations/mcp"
             icon={<span />}
-            title="MCP plugins"
+            title="Plugins MCP"
             description="d"
             status="checking"
           />
@@ -137,9 +136,9 @@ describe("IntegrationLink", () => {
       );
     });
 
-    expect(container.textContent).toContain("Connected");
-    expect(container.textContent).toContain("Needs attention");
-    expect(container.textContent).toContain("Checking");
+    expect(container.textContent).toContain("Conectado");
+    expect(container.textContent).toContain("Precisa de atenção");
+    expect(container.textContent).toContain("Verificando");
 
     await act(async () => root.unmount());
   });
@@ -152,7 +151,6 @@ describe("SettingsIntegrationsPage status resolution", () => {
         IS_REACT_ACT_ENVIRONMENT: boolean;
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
   });
 
   it("shows Checking while the fetch is in flight, never a false Not configured, then resolves per card, resets on workspace change, and never leaves a stale status behind", async () => {
@@ -183,12 +181,12 @@ describe("SettingsIntegrationsPage status resolution", () => {
         </MemoryRouter>,
       );
     });
-    // Fetch is still pending: every card must read "Checking", never the
-    // false-negative "Not configured" a connected integration would
+    // Fetch is still pending: every card must read "Verificando", never the
+    // false-negative "Não configurado" a connected integration would
     // otherwise flash while the request is in flight.
-    expect(statusesFor("GitHub")).toBe("Checking");
-    expect(statusesFor("Google Calendar")).toBe("Checking");
-    expect(statusesFor("MCP plugins")).toBe("Checking");
+    expect(statusesFor("GitHub")).toBe("Verificando");
+    expect(statusesFor("Google Calendar")).toBe("Verificando");
+    expect(statusesFor("Plugins MCP")).toBe("Verificando");
 
     await act(async () => {
       firstGithub.resolve({ connected: true });
@@ -207,13 +205,13 @@ describe("SettingsIntegrationsPage status resolution", () => {
       ]);
       await Promise.resolve();
     });
-    expect(statusesFor("GitHub")).toBe("Connected");
-    expect(statusesFor("Google Calendar")).toBe("Not configured");
-    expect(statusesFor("Supabase")).toBe("Connected");
-    expect(statusesFor("MCP plugins")).toBe("Needs attention");
+    expect(statusesFor("GitHub")).toBe("Conectado");
+    expect(statusesFor("Google Calendar")).toBe("Não configurado");
+    expect(statusesFor("Supabase")).toBe("Conectado");
+    expect(statusesFor("Plugins MCP")).toBe("Precisa de atenção");
 
     // Switching to a different workspace must not keep workspace-1's
-    // "Connected" on screen while workspace-2's request is in flight.
+    // "Conectado" on screen while workspace-2's request is in flight.
     const secondGithub = deferred<LiveGitHubConnection>();
     github.mockReturnValueOnce(secondGithub.promise);
     google.mockReturnValueOnce(new Promise(() => undefined));
@@ -225,7 +223,7 @@ describe("SettingsIntegrationsPage status resolution", () => {
         </MemoryRouter>,
       );
     });
-    expect(statusesFor("GitHub")).toBe("Checking");
+    expect(statusesFor("GitHub")).toBe("Verificando");
 
     // Clearing the workspace must not keep workspace-2's stale status on
     // screen either; it resolves to the accurate "no workspace" state.
@@ -236,7 +234,7 @@ describe("SettingsIntegrationsPage status resolution", () => {
         </MemoryRouter>,
       );
     });
-    expect(statusesFor("GitHub")).toBe("Not configured");
+    expect(statusesFor("GitHub")).toBe("Não configurado");
 
     await act(async () => root.unmount());
   });

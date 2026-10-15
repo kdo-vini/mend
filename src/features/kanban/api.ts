@@ -416,51 +416,6 @@ export async function createPersonalEvent(input: {
   );
 }
 
-export async function updatePersonalEvent(input: {
-  workspaceId: string;
-  eventId: string;
-  patch: Partial<
-    Pick<PersonalEvent, "title" | "startsAt" | "endsAt" | "allDay" | "location">
-  >;
-}): Promise<PersonalEvent> {
-  if (mendApiBaseUrl)
-    return eventFromApi(
-      await apiRequest<Record<string, unknown>>(
-        `/api/personal-events/${input.eventId}`,
-        { method: "PATCH", body: JSON.stringify(input.patch) },
-        input.workspaceId,
-      ),
-    );
-  const updates: Tables["personal_events"]["Update"] = {
-    ...(input.patch.title !== undefined
-      ? { title: input.patch.title.trim() }
-      : {}),
-    ...(input.patch.startsAt !== undefined
-      ? { starts_at: input.patch.startsAt }
-      : {}),
-    ...(input.patch.endsAt !== undefined
-      ? { ends_at: input.patch.endsAt }
-      : {}),
-    ...(input.patch.allDay !== undefined
-      ? { all_day: input.patch.allDay }
-      : {}),
-    ...(input.patch.location !== undefined
-      ? { location: input.patch.location }
-      : {}),
-  };
-  return eventFromRow(
-    await unwrap(
-      requireClient(supabase)
-        .from("personal_events")
-        .update(updates)
-        .eq("workspace_id", input.workspaceId)
-        .eq("id", input.eventId)
-        .select("*")
-        .single(),
-    ),
-  );
-}
-
 export async function deletePersonalEvent(
   workspaceId: string,
   eventId: string,

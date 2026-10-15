@@ -12,7 +12,7 @@ import {
   it,
   vi,
 } from "vitest";
-import i18n from "../../../i18n";
+import "../../../i18n";
 import type { WhatsAppInstance } from "../api";
 
 vi.mock("../api", () => ({
@@ -44,7 +44,6 @@ describe("WhatsApp connection status", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
   });
 
   beforeEach(() => {
@@ -78,7 +77,7 @@ describe("WhatsApp connection status", () => {
     await render();
     expect(
       container.querySelector(".settings-v2-status")?.textContent?.trim(),
-    ).toBe("Connected");
+    ).toBe("Conectado");
     vi.mocked(settingsApi.refreshLiveChannel).mockResolvedValue({
       ...connected,
       state: "closed",
@@ -92,8 +91,8 @@ describe("WhatsApp connection status", () => {
     });
     expect(
       container.querySelector(".settings-v2-status")?.textContent?.trim(),
-    ).toBe("Needs attention");
-    expect(container.textContent).toContain("Provider state: closed");
+    ).toBe("Precisa de atenção");
+    expect(container.textContent).toContain("Estado do provedor: fechado");
   });
 
   it("checks the provider before showing a cached connected channel", async () => {
@@ -106,8 +105,8 @@ describe("WhatsApp connection status", () => {
 
     expect(
       container.querySelector(".settings-v2-status")?.textContent?.trim(),
-    ).toBe("Needs attention");
-    expect(container.textContent).toContain("Provider state: closed");
+    ).toBe("Precisa de atenção");
+    expect(container.textContent).toContain("Estado do provedor: fechado");
   });
 
   it("keeps the channel usable when live status refresh fails", async () => {
@@ -120,11 +119,13 @@ describe("WhatsApp connection status", () => {
 
     expect(
       container.querySelector(".settings-v2-status")?.textContent?.trim(),
-    ).toBe("Connected");
+    ).toBe("Conectado");
     expect(container.textContent).toContain(
-      "Live status could not be refreshed for some numbers",
+      "Não foi possível atualizar o status de alguns números",
     );
-    expect(container.textContent).not.toContain("WhatsApp is unavailable.");
+    expect(container.textContent).not.toContain(
+      "O WhatsApp está indisponível.",
+    );
   });
 
   it("does not treat a failed provider refresh as a global outage on load", async () => {
@@ -134,16 +135,18 @@ describe("WhatsApp connection status", () => {
 
     await render();
 
-    expect(container.textContent).toContain("Provider state: open");
+    expect(container.textContent).toContain("Estado do provedor: aberto");
     expect(container.textContent).toContain(
-      "Live status could not be refreshed for some numbers",
+      "Não foi possível atualizar o status de alguns números",
     );
-    expect(container.textContent).not.toContain("WhatsApp is unavailable.");
+    expect(container.textContent).not.toContain(
+      "O WhatsApp está indisponível.",
+    );
   });
 
   async function generateQr() {
     const button = [...container.querySelectorAll("button")].find((item) =>
-      item.textContent?.includes("Generate QR"),
+      item.textContent?.includes("Gerar QR"),
     );
     expect(button).toBeDefined();
     await act(async () => button!.click());
@@ -178,7 +181,7 @@ describe("WhatsApp connection status", () => {
     await render();
 
     const button = [...container.querySelectorAll("button")].find((item) =>
-      item.textContent?.includes("Connect"),
+      item.textContent?.includes("Conectar"),
     );
     expect(button).toBeDefined();
     await act(async () => button!.click());
@@ -203,7 +206,7 @@ describe("WhatsApp connection status", () => {
     await render();
 
     const createButton = [...container.querySelectorAll("button")].find(
-      (item) => item.textContent?.includes("Create instance"),
+      (item) => item.textContent?.includes("Criar instância"),
     );
     expect(createButton).toBeDefined();
     await act(async () => createButton!.click());
@@ -227,7 +230,7 @@ describe("WhatsApp connection status", () => {
     await render();
 
     const createButton = [...container.querySelectorAll("button")].find(
-      (item) => item.textContent?.includes("Create instance"),
+      (item) => item.textContent?.includes("Criar instância"),
     );
     await act(async () => createButton!.click());
 
@@ -247,7 +250,7 @@ describe("WhatsApp connection status", () => {
     await render();
 
     const removeButton = [...container.querySelectorAll("button")].find(
-      (item) => item.textContent?.includes("Remove"),
+      (item) => item.textContent?.includes("Excluir"),
     );
     expect(removeButton).toBeDefined();
     await act(async () => removeButton!.click());

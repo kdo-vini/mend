@@ -38,24 +38,15 @@ const snapshot = (period = "2026-10-01"): ZeloFinanceFeed => ({
     },
   ],
 });
-async function setup(
-  page: Page,
-  locale = "en-US",
-  theme = "dark",
-  expand = true,
-) {
+async function setup(page: Page, theme = "dark", expand = true) {
   await page.setViewportSize(
     page.viewportSize()!.width < 650
       ? { width: 390, height: 844 }
       : { width: 1440, height: 900 },
   );
-  await page.addInitScript(
-    ({ locale, theme }) => {
-      localStorage.setItem("mend.interface-language", locale);
-      localStorage.setItem("mend.theme", theme);
-    },
-    { locale, theme },
-  );
+  await page.addInitScript((theme) => {
+    localStorage.setItem("mend.theme", theme);
+  }, theme);
   const state = {
     allowed: true,
     status: 200,
@@ -167,24 +158,19 @@ const selectAllProjects = (page: Page) =>
 const refreshZeloFeed = (page: Page) =>
   page.locator(".finance-zelo-sync button").click();
 
-for (const [locale, theme] of [
-  ["en-US", "dark"],
-  ["pt-BR", "light"],
-]) {
-  test(`Zelo transactions remain separate and readable (${locale}, ${theme})`, async ({
+for (const theme of ["dark", "light"]) {
+  test(`Zelo transactions remain separate and readable (${theme})`, async ({
     page,
   }, info) => {
-    const state = await setup(page, locale, theme);
+    const state = await setup(page, theme);
     await selectZelo(page);
     await expect(projectSelect(page)).toHaveValue("Zelo");
     const panel = page.locator(".finance-zelo");
     await expect(panel.getByText("bill_pix", { exact: true })).toBeVisible();
     await expect(panel.getByText("in_card", { exact: true })).toBeVisible();
-    await expect(panel.locator(".finance-zelo-totals")).toContainText(
-      locale === "pt-BR" ? "173,45" : "173.45",
-    );
+    await expect(panel.locator(".finance-zelo-totals")).toContainText("173,45");
     await expect(page.locator(".finance-new")).toHaveCount(2);
-    await expect(panel).not.toContainText("777.77");
+    await expect(panel).not.toContainText("777,77");
     await expect(page.locator(".provider-balances")).toBeVisible();
     expect(state.providerBalancesCalls).toBeGreaterThan(0);
     await expect(
@@ -200,7 +186,7 @@ for (const [locale, theme] of [
       ),
     ).toBe(true);
     await page.screenshot({
-      path: info.outputPath(`zelo-${locale}-${theme}.png`),
+      path: info.outputPath(`zelo-${theme}.png`),
       fullPage: true,
     });
     const summaryCalls = state.summaryProjects.length;
@@ -269,10 +255,10 @@ test("switching month preserves the old labeled snapshot until its response arri
     await expect.poll(() => state.calls).toBe(2);
     await expect(page.locator(".finance-zelo-summary")).toHaveAttribute(
       "aria-label",
-      /October 2026/,
+      /outubro de 2026/,
     );
     await expect(page.locator(".finance-zelo .finance-sync")).toContainText(
-      "September 2026",
+      "setembro de 2026",
     );
     await expect(page.getByText("bill_pix", { exact: true })).toBeVisible();
     expect(state.summaryCalls).toBeGreaterThan(summaryCalls);
@@ -281,7 +267,7 @@ test("switching month preserves the old labeled snapshot until its response arri
   }
   await expect(page.locator(".finance-zelo-summary")).toHaveAttribute(
     "aria-label",
-    /September 2026/,
+    /setembro de 2026/,
   );
 });
 test("source filtering resets transaction pagination", async ({ page }) => {
@@ -297,7 +283,7 @@ test("source filtering resets transaction pagination", async ({ page }) => {
   await expect(page.locator(".finance-zelo tbody tr")).toHaveCount(50);
   await page
     .locator(".finance-zelo .finance-pagination")
-    .getByRole("button", { name: "Next page", exact: true })
+    .getByRole("button", { name: "Próxima página", exact: true })
     .click();
   await expect(
     page.getByText("bill_transaction_52", { exact: true }),
@@ -339,7 +325,7 @@ test("unknown paid amount stays unknown and the provider is marked partial", asy
   await expect(
     page.locator(".finance-zelo-sources [data-state='partial']"),
   ).toHaveCount(1);
-  await expect(page.locator(".finance-zelo-totals")).toContainText("50.00");
+  await expect(page.locator(".finance-zelo-totals")).toContainText("50,00");
 });
 test("Zelo feed remains available when the project selector returns to all projects", async ({
   page,
@@ -381,17 +367,17 @@ test("known net receipts combine with manual receipts once and never with provid
   await selectZelo(page);
   await refreshZeloFeed(page);
   const rollup = page.locator(".finance-net-rollup");
-  await expect(rollup.locator("strong")).toContainText("220.00");
-  await expect(rollup).toContainText("100.00");
-  await expect(rollup).toContainText("120.00");
-  await expect(page.locator(".provider-balances")).toContainText("1,000.00");
+  await expect(rollup.locator("strong")).toContainText("220,00");
+  await expect(rollup).toContainText("100,00");
+  await expect(rollup).toContainText("120,00");
+  await expect(page.locator(".provider-balances")).toContainText("1.000,00");
   await expect(page.locator(".finance-net-primary")).toContainText(
-    "1 payment has no confirmed net",
+    "1 pagamento sem líquido confirmado",
   );
   const stripe = page
     .locator(".finance-zelo table tr")
     .filter({ hasText: "in_card" });
-  await expect(stripe).toContainText("Unknown");
+  await expect(stripe).toContainText("Desconhecido");
   let release!: () => void;
   state.hold = new Promise<void>((resolve) => {
     release = resolve;
@@ -407,14 +393,14 @@ test("known net receipts combine with manual receipts once and never with provid
 test("long Finance page scrolls its content, not the sidebar, and cards collapse", async ({
   page,
 }, info) => {
-  await setup(page, "en-US", "light", false);
+  await setup(page, "light", false);
   const triggers = page.locator(".finance-zelo .disclosure-trigger");
   await expect(triggers).toHaveCount(3);
   await expect(triggers.nth(0)).toHaveAttribute("aria-expanded", "true");
   await expect(triggers.nth(1)).toHaveAttribute("aria-expanded", "false");
   await expect(triggers.nth(2)).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".finance-zelo table")).toBeHidden();
-  await expect(triggers.nth(1)).toContainText("2 charges");
+  await expect(triggers.nth(1)).toContainText("2 cobranças");
   await triggers.nth(1).click();
   await expect(triggers.nth(1)).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByText("bill_pix", { exact: true })).toBeVisible();

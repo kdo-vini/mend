@@ -4,7 +4,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import i18n from "../../../i18n";
+import "../../../i18n";
 import type { Issue } from "../../../types";
 import { CreateIssueDialog, RunAgentDialog } from "./IssueDialogs";
 
@@ -22,7 +22,6 @@ describe("CreateIssueDialog", () => {
         IS_REACT_ACT_ENVIRONMENT: boolean;
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
   });
 
   it("closes immediately on submit and ignores duplicate clicks", async () => {
@@ -137,7 +136,6 @@ describe("RunAgentDialog", () => {
         IS_REACT_ACT_ENVIRONMENT: boolean;
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
   });
 
   it("locks the start action and shows progress until the request settles", async () => {
@@ -175,7 +173,7 @@ describe("RunAgentDialog", () => {
     expect(onStart).toHaveBeenCalledTimes(1);
     expect(startButton()?.disabled).toBe(true);
     expect(startButton()?.getAttribute("aria-busy")).toBe("true");
-    expect(startButton()?.textContent).toContain("Starting");
+    expect(startButton()?.textContent).toContain("Iniciando");
 
     await act(async () => {
       startButton()?.click();

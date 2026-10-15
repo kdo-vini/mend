@@ -26,13 +26,6 @@ export function isDemoModeRequested() {
   );
 }
 
-export function enableDemoMode() {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem("mend.demo", "1");
-    window.location.reload();
-  }
-}
-
 export class LiveActionError extends Error {
   constructor(
     message: string,

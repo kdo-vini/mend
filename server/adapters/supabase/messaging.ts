@@ -18,7 +18,6 @@ import {
   SupabaseInboxPort,
   type ConversationAction,
 } from "../../inbox-service.js";
-import { normalizeLocale, type SupportedLocale } from "../../locale.js";
 import { SupabaseMediaPipeline } from "../../media-pipeline.js";
 import { SupabaseMediaStorage, validateRemoteMediaUrl } from "../../media.js";
 import {
@@ -573,7 +572,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
   }
 
   /**
-   * Resolves the operator label and workspace language used to introduce the
+   * Resolves the operator label used to introduce the
    * human agent on WhatsApp ("_*Lucas está te atendendo*_"). The intro is
    * added only on the first human outbound in the conversation.
    */
@@ -582,36 +581,20 @@ export class SupabaseConversationAdapter implements ConversationPort {
     body: string,
     options?: { conversationId?: string },
   ): Promise<string> {
-    const [memberResult, workspaceResult] = await Promise.all([
-      this.client
-        .from("workspace_members")
-        .select("display_name")
-        .eq("workspace_id", context.workspaceId)
-        .eq("user_id", context.userId)
-        .maybeSingle(),
-      this.client
-        .from("workspaces")
-        .select("default_language")
-        .eq("id", context.workspaceId)
-        .maybeSingle(),
-    ]);
+    const memberResult = await this.client
+      .from("workspace_members")
+      .select("display_name")
+      .eq("workspace_id", context.workspaceId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
     const member = checked("workspace_members.agent_intro", memberResult) as {
       display_name?: unknown;
     } | null;
-    const workspace = checked(
-      "workspaces.agent_intro_language",
-      workspaceResult,
-    ) as { default_language?: unknown } | null;
-    const locale: SupportedLocale = normalizeLocale(
-      workspace?.default_language,
-    );
-    const displayName =
-      str(member?.display_name).trim() ||
-      (locale === "en-US" ? "Support" : "Suporte");
+    const displayName = str(member?.display_name).trim() || "Suporte";
     const includeIntro = options?.conversationId
       ? !(await this.hasPriorHumanOutbound(context, options.conversationId))
       : true;
-    return formatHumanWhatsAppText(displayName, body, locale, {
+    return formatHumanWhatsAppText(displayName, body, {
       includeIntro,
     });
   }
@@ -1129,15 +1112,6 @@ export class SupabaseConversationAdapter implements ConversationPort {
     const knowledge = rows(checked("knowledge_articles.published", articles))
       .map((item) => `${str(item.title)}\n${str(item.body)}`)
       .join("\n\n");
-    const workspace = await this.client
-      .from("workspaces")
-      .select("default_language")
-      .eq("id", context.workspaceId)
-      .single();
-    const workspaceRow = checked("workspace.language", workspace) as {
-      default_language?: unknown;
-    };
-    const operationalLanguage = normalizeLocale(workspaceRow.default_language);
     const provider = this.agentCredentials
       ? await resolveSupportAiProvider(
           context.workspaceId,
@@ -1151,7 +1125,6 @@ export class SupabaseConversationAdapter implements ConversationPort {
     const draft = await provider.draftReply(
       `${values}${input.instruction ? `\nOperator instruction: ${input.instruction}` : ""}`,
       knowledge,
-      operationalLanguage,
     );
     return {
       conversationId,

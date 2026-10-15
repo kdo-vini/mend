@@ -44,7 +44,6 @@ export const workspaceCreateSchema = z
       .regex(/^[A-Z][A-Z0-9]{1,7}$/)
       .default("TEC"),
     timezone: z.string().trim().min(1).max(80).default("UTC"),
-    defaultLanguage: z.string().trim().min(2).max(12).default("pt-BR"),
   })
   .strict();
 export const workspacePatchSchema = workspaceCreateSchema.partial().strict();
@@ -315,18 +314,6 @@ export const repositoryListQuerySchema = z
     cursor: z.string().trim().max(200).optional(),
   })
   .strict();
-export const repositoryPath = z
-  .string()
-  .trim()
-  .max(500)
-  .refine(
-    (value) => !value.includes("\0"),
-    "Path contains an invalid character",
-  )
-  .refine(
-    (value) => !/(^|[\\/])\.\.([\\/]|$)/.test(value),
-    "Path traversal is not allowed",
-  );
 const repositoryFields = {
   name: z.string().trim().min(1).max(160),
   defaultBranch: z.string().trim().min(1).max(160).default("main"),

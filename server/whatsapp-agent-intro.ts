@@ -1,5 +1,3 @@
-import { normalizeLocale, type SupportedLocale } from "./locale.js";
-
 /** First token of a display name, e.g. "Lucas Silva" → "Lucas". */
 export function agentFirstName(displayName: string): string {
   const trimmed = displayName.trim().replace(/\s+/g, " ");
@@ -11,30 +9,19 @@ export function agentFirstName(displayName: string): string {
  * Full attending phrase with WhatsApp bold+italic on the entire line.
  * Must be exactly `_*…*_` — never `*Name* …` (name-only bold).
  */
-export function agentAttendingLine(
-  agentName: string,
-  locale: SupportedLocale = "pt-BR",
-): string {
+export function agentAttendingLine(agentName: string): string {
   const name = agentFirstName(agentName);
   if (!name) return "";
-  const phrase =
-    locale === "en-US"
-      ? `${name} is assisting you`
-      : `${name} está te atendendo`;
+  const phrase = `${name} está te atendendo`;
   // Outer italic (_), inner bold (*): whole phrase is italic + bold.
   return `_*${phrase}*_`;
 }
 
 /** Previous format that bolded only the agent name — rewrite on sight. */
-function legacyAgentAttendingLine(
-  agentName: string,
-  locale: SupportedLocale,
-): string {
+function legacyAgentAttendingLine(agentName: string): string {
   const name = agentFirstName(agentName);
   if (!name) return "";
-  return locale === "en-US"
-    ? `*${name}* is assisting you`
-    : `*${name}* está te atendendo`;
+  return `*${name}* está te atendendo`;
 }
 
 /**
@@ -44,11 +31,10 @@ function legacyAgentAttendingLine(
 function upgradeLegacyIntroPrefix(
   text: string,
   agentName: string,
-  locale: SupportedLocale,
 ): string | null {
-  const legacy = legacyAgentAttendingLine(agentName, locale);
+  const legacy = legacyAgentAttendingLine(agentName);
   if (!legacy || !text.startsWith(legacy)) return null;
-  const intro = agentAttendingLine(agentName, locale);
+  const intro = agentAttendingLine(agentName);
   return `${intro}${text.slice(legacy.length)}`;
 }
 
@@ -60,25 +46,23 @@ function upgradeLegacyIntroPrefix(
 export function formatHumanWhatsAppText(
   agentName: string,
   body: string,
-  locale: SupportedLocale | string = "pt-BR",
   options?: { includeIntro?: boolean },
 ): string {
   const text = body.trim();
   if (!text) return text;
-  const resolvedLocale = normalizeLocale(locale);
   if (options?.includeIntro === false) {
     // Strip a leftover intro if a retry body still carries one.
-    const intro = agentAttendingLine(agentName, resolvedLocale);
-    const legacy = legacyAgentAttendingLine(agentName, resolvedLocale);
+    const intro = agentAttendingLine(agentName);
+    const legacy = legacyAgentAttendingLine(agentName);
     if (intro && text.startsWith(intro))
       return text.slice(intro.length).replace(/^\n+/, "").trim() || text;
     if (legacy && text.startsWith(legacy))
       return text.slice(legacy.length).replace(/^\n+/, "").trim() || text;
     return text;
   }
-  const intro = agentAttendingLine(agentName, resolvedLocale);
+  const intro = agentAttendingLine(agentName);
   if (!intro) return text;
-  const upgraded = upgradeLegacyIntroPrefix(text, agentName, resolvedLocale);
+  const upgraded = upgradeLegacyIntroPrefix(text, agentName);
   if (upgraded) return upgraded;
   if (text.startsWith(intro)) return text;
   return `${intro}\n\n${text}`;

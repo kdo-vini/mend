@@ -77,7 +77,6 @@ import {
 } from "./supabase.js";
 import { WhatsmiauMessagingProvider } from "./whatsmiau.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
-export { SupabaseExternalOperationAdapter } from "./adapters/supabase/external-operations.js";
 export { SupabaseImpactAdapter } from "./adapters/supabase/impact.js";
 export { SupabaseKnowledgeAdapter } from "./adapters/supabase/knowledge.js";
 

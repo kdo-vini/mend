@@ -1,7 +1,6 @@
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import type { Database } from "../lib/database.types";
 import { requireSupabase, type MendSupabaseClient } from "../lib/supabase";
-import { normalizeLocale } from "../i18n/resources";
 
 type Tables = Database["public"]["Tables"];
 export type Workspace = Tables["workspaces"]["Row"];
@@ -18,7 +17,6 @@ export interface WorkspaceCreateInput {
   slug: string;
   issuePrefix?: string;
   timezone?: string;
-  defaultLanguage?: string;
 }
 
 export interface WorkspaceUpdateInput {
@@ -26,7 +24,6 @@ export interface WorkspaceUpdateInput {
   slug?: string;
   issuePrefix?: string;
   timezone?: string;
-  defaultLanguage?: string;
 }
 
 function clientOrDefault(client?: MendSupabaseClient): MendSupabaseClient {
@@ -231,9 +228,6 @@ export function updateWorkspace(
     ...(input.timezone !== undefined
       ? { timezone: input.timezone.trim() }
       : {}),
-    ...(input.defaultLanguage !== undefined
-      ? { default_language: normalizeLocale(input.defaultLanguage) }
-      : {}),
   };
   return Promise.resolve(
     clientOrDefault(client)
@@ -289,50 +283,5 @@ export function updateMyWorkspaceMemberDisplayName(
         if (result.error) throw new Error(result.error.message);
         return result.data;
       });
-  });
-}
-
-export function addWorkspaceMember(
-  workspaceId: string,
-  userId: string,
-  role: WorkspaceRole = "agent",
-  client?: MendSupabaseClient,
-): Promise<WorkspaceMember> {
-  return callRpc<WorkspaceMember>(
-    clientOrDefault(client),
-    "add_workspace_member",
-    {
-      p_workspace_id: workspaceId,
-      p_user_id: userId,
-      p_role: role,
-    },
-  );
-}
-
-export function updateWorkspaceMemberRole(
-  workspaceId: string,
-  userId: string,
-  role: WorkspaceRole,
-  client?: MendSupabaseClient,
-): Promise<WorkspaceMember> {
-  return callRpc<WorkspaceMember>(
-    clientOrDefault(client),
-    "update_workspace_member_role",
-    {
-      p_workspace_id: workspaceId,
-      p_user_id: userId,
-      p_role: role,
-    },
-  );
-}
-
-export function removeWorkspaceMember(
-  workspaceId: string,
-  userId: string,
-  client?: MendSupabaseClient,
-): Promise<boolean> {
-  return callRpc<boolean>(clientOrDefault(client), "remove_workspace_member", {
-    p_workspace_id: workspaceId,
-    p_user_id: userId,
   });
 }

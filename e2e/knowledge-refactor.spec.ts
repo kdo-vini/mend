@@ -168,17 +168,13 @@ async function installLiveKnowledgeHarness(
 
 async function openLiveKnowledge(page: Page) {
   await page.goto("/knowledge?auth=1");
-  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
-  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Knowledge" })).toBeVisible();
+  await page.getByRole("textbox", { name: "E-mail" }).fill(testUser.email);
+  await page.getByRole("textbox", { name: "Senha" }).fill("password-123");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Base de conhecimento" }),
+  ).toBeVisible();
 }
-
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-});
 
 test("desktop Knowledge opens a scan-first adjacent preview", async ({
   page,
@@ -189,10 +185,10 @@ test("desktop Knowledge opens a scan-first adjacent preview", async ({
     .getByRole("button", { name: /Como lidar com pagamentos Pix pendentes/ })
     .click();
   await expect(
-    page.getByRole("complementary", { name: "Article preview" }),
+    page.getByRole("complementary", { name: "Visualização do artigo" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Available to AI", { exact: true }),
+    page.getByText("Disponível para a IA", { exact: true }),
   ).toBeVisible();
   const collectionBox = await page
     .locator(".knowledge-collection")
@@ -228,7 +224,7 @@ test("mobile Knowledge moves focus into detail and restores it on Back", async (
   });
 
   await article.click();
-  const back = page.getByRole("button", { name: "Back to articles" });
+  const back = page.getByRole("button", { name: "Voltar aos artigos" });
   await expect(back).toBeFocused();
   await expect(back).toHaveCSS("min-height", "44px");
 
@@ -244,26 +240,30 @@ test("demo Knowledge reconciles selection when filtering and creating", async ({
   await page
     .getByRole("button", { name: /Como lidar com pagamentos Pix pendentes/ })
     .click();
-  await page.getByLabel("Search knowledge").fill("Política");
-  await expect(page.getByText("Internal draft", { exact: true })).toBeVisible();
-  await page.getByLabel("Search knowledge").fill("does not exist");
-  await expect(page.getByText("No matching articles")).toBeVisible();
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByLabel("Buscar conhecimento").fill("Política");
+  await expect(
+    page.getByText("Rascunho interno", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Buscar conhecimento").fill("does not exist");
+  await expect(page.getByText("Nenhum artigo corresponde")).toBeVisible();
+  await page.getByRole("button", { name: "Limpar filtros" }).click();
   await expect(page.locator(".knowledge-preview")).toHaveCount(0);
 
   await page
-    .getByRole("combobox", { name: "Filter knowledge by category" })
+    .getByRole("combobox", { name: "Filtrar conhecimento por categoria" })
     .click();
   await page.getByRole("option", { name: "Payments" }).click();
   await expect(page.locator(".knowledge-preview")).toHaveCount(0);
-  await page.getByRole("button", { name: "New article" }).click();
+  await page.getByRole("button", { name: "Novo artigo" }).click();
   await expect(
     page.getByRole("button", { name: /Novo artigo de conhecimento/ }),
   ).toBeVisible();
-  await expect(page.getByText("Internal draft", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("combobox", { name: "Filter knowledge by category" }),
-  ).toContainText("All categories");
+    page.getByText("Rascunho interno", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Filtrar conhecimento por categoria" }),
+  ).toContainText("Todas as categorias");
 });
 
 test("Knowledge uses stacked detail at intermediate content widths", async ({
@@ -287,9 +287,6 @@ test("Knowledge uses stacked detail at intermediate content widths", async ({
 
 test("Knowledge explains draft eligibility in Portuguese", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "pt-BR");
-  });
   await page.goto("/knowledge?demo=1");
   await page
     .getByRole("button", { name: /Política de respostas automáticas/ })
@@ -320,55 +317,59 @@ test("live Knowledge preserves filtered CRUD selection through real API calls", 
     page.getByRole("button", { name: /Unrelated internal note/ }),
   ).toBeVisible();
 
-  const search = page.getByLabel("Search knowledge");
+  const search = page.getByLabel("Buscar conhecimento");
   await search.fill("does not exist");
-  await expect(page.getByText("No matching articles")).toBeVisible();
+  await expect(page.getByText("Nenhum artigo corresponde")).toBeVisible();
   await expect(page.locator(".knowledge-preview")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Clear filters" }),
+    page.getByRole("button", { name: "Limpar filtros" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "New article" }).click();
-  await page.getByLabel("Title").fill("Created under filter");
-  await page.getByLabel("Article body").fill("Created article body");
-  await page.getByRole("button", { name: "Save article" }).click();
+  await page.getByRole("button", { name: "Novo artigo" }).click();
+  await page.getByLabel("Título").fill("Created under filter");
+  await page.getByLabel("Corpo do artigo").fill("Created article body");
+  await page.getByRole("button", { name: "Salvar artigo" }).click();
   await expect(search).toHaveValue("");
-  await expect(page.getByText("Internal draft", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Back to articles" }),
+    page.getByText("Rascunho interno", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Voltar aos artigos" }),
   ).toBeFocused();
 
-  await page.getByRole("button", { name: "Edit article" }).click();
-  await page.getByLabel("Title").fill("Renamed after filtered save");
-  await page.getByRole("button", { name: "Save article" }).click();
+  await page.getByRole("button", { name: "Editar artigo" }).click();
+  await page.getByLabel("Título").fill("Renamed after filtered save");
+  await page.getByRole("button", { name: "Salvar artigo" }).click();
   await expect(
     page.getByRole("heading", { name: "Renamed after filtered save" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Back to articles" }).click();
+  await page.getByRole("button", { name: "Voltar aos artigos" }).click();
   await search.fill("Renamed after filtered save");
   await page
     .getByRole("button", { name: /Renamed after filtered save/ })
     .click();
-  await page.getByRole("button", { name: "Delete article" }).click();
-  const clear = page.getByRole("button", { name: "Clear filters" });
+  await page.getByRole("button", { name: "Excluir artigo" }).click();
+  const clear = page.getByRole("button", { name: "Limpar filtros" });
   await expect(clear).toBeVisible();
   await expect(clear).toBeFocused();
   await clear.click();
   await search.fill("live");
   await page.getByRole("button", { name: /Published live guide/ }).click();
-  await page.getByRole("button", { name: "Delete article" }).click();
+  await page.getByRole("button", { name: "Excluir artigo" }).click();
   await expect(
     page.getByRole("heading", { name: "Draft live notes" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Delete article" }).click();
+  await page.getByRole("button", { name: "Excluir artigo" }).click();
   await expect(clear).toBeFocused();
   await clear.click();
   await page.getByRole("button", { name: /Unrelated internal note/ }).click();
-  await page.getByRole("button", { name: "Delete article" }).click();
-  await expect(page.getByText("No knowledge articles yet")).toBeVisible();
+  await page.getByRole("button", { name: "Excluir artigo" }).click();
   await expect(
-    page.locator(".page-header").getByRole("button", { name: "New article" }),
+    page.getByText("Nenhum artigo de conhecimento ainda"),
+  ).toBeVisible();
+  await expect(
+    page.locator(".page-header").getByRole("button", { name: "Novo artigo" }),
   ).toBeFocused();
   expect(harness.writes).toEqual([
     "POST",

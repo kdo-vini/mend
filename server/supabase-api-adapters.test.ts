@@ -1042,7 +1042,6 @@ describe("Supabase API adapters", () => {
         slug: "",
         issuePrefix: "MEND",
         timezone: "UTC",
-        defaultLanguage: "pt-BR",
         createdAt: null,
         updatedAt: null,
         role: "agent",
@@ -1074,7 +1073,6 @@ describe("Supabase API adapters", () => {
         slug: "techne",
         issuePrefix: "TEC",
         timezone: "UTC",
-        defaultLanguage: "pt-BR",
       }),
     ).resolves.toMatchObject({ id: workspaceId, role: "owner" });
     expect(client.rpcCalls).toEqual([

@@ -23,23 +23,6 @@ export function createMendSupabaseClient(
   });
 }
 
-/**
- * Server-side factory for trusted workers/API handlers. Never pass a
- * service-role key to this module from browser code.
- */
-export function createMendServerClient(
-  url: string,
-  serviceRoleKey: string,
-): MendSupabaseClient {
-  return createMendSupabaseClient({
-    url,
-    key: serviceRoleKey,
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  });
-}
-
 const browserEnv = (
   import.meta as ImportMeta & {
     env?: Record<string, string | undefined>;

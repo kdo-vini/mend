@@ -1,18 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-});
-
 test("Automation separates customer replies from intake", async ({ page }) => {
   await page.goto("/settings/automation/replies?demo=1");
-  await expect(page.getByRole("link", { name: "Replies" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Respostas" })).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await page.getByRole("link", { name: "Intake" }).click();
+  await page.getByRole("link", { name: "Coleta inicial" }).click();
   await expect(page).toHaveURL(/\/settings\/automation\/intake/);
 });
 
@@ -21,13 +15,13 @@ test("Agents and models separates providers from run policy", async ({
 }) => {
   await page.goto("/settings/engineering/agents/providers?demo=1");
   await expect(
-    page.getByRole("heading", { name: "Agents & models" }),
+    page.getByRole("heading", { name: "Agentes e modelos" }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Providers" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Provedores" })).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await page.getByRole("link", { name: "Run policy" }).click();
+  await page.getByRole("link", { name: "Política de execução" }).click();
   await expect(page).toHaveURL(
     /\/settings\/engineering\/agents\/issues\/run-policy/,
   );
@@ -38,7 +32,7 @@ test("integration providers remain details, not sidebar destinations", async ({
 }) => {
   await page.goto("/settings/integrations?demo=1");
   await expect(page.getByRole("link", { name: "GitHub" })).toBeVisible();
-  await expect(page.getByText("Not configured", { exact: true })).toHaveCount(
+  await expect(page.getByText("Não configurado", { exact: true })).toHaveCount(
     4,
   );
   await expect(

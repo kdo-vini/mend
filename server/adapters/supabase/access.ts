@@ -12,7 +12,6 @@ import {
   type WorkspacePort,
   type WorkspaceRole,
 } from "../../contracts/api-ports.js";
-import { normalizeLocale } from "../../locale.js";
 import type { AnySupabaseClient } from "./types.js";
 import {
   auditLog,
@@ -160,7 +159,7 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
       p_slug: input.slug,
       p_issue_prefix: input.issuePrefix ?? "MEND",
       p_timezone: input.timezone ?? "America/Sao_Paulo",
-      p_default_language: normalizeLocale(input.defaultLanguage),
+      p_default_language: "pt-BR",
     });
     return {
       ...workspace(rpcRow(checked("create_workspace", result))),
@@ -196,9 +195,6 @@ export class SupabaseWorkspaceAdapter implements WorkspacePort {
           ? { issue_prefix: value.issuePrefix }
           : {}),
         ...(value.timezone !== undefined ? { timezone: value.timezone } : {}),
-        ...(value.defaultLanguage !== undefined
-          ? { default_language: normalizeLocale(value.defaultLanguage) }
-          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", workspaceId)

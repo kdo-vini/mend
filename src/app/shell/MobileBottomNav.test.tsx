@@ -13,7 +13,7 @@ import {
   vi,
 } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import i18n from "../../i18n";
+import "../../i18n";
 import { MobileBottomNav } from "./WorkspaceShell";
 
 let container: HTMLDivElement;
@@ -38,7 +38,6 @@ describe("MobileBottomNav availability", () => {
   });
 
   it("lets a touch user open availability and choose Active from More", async () => {
-    await i18n.changeLanguage("pt-BR");
     const onSetAvailability = vi.fn();
     await act(async () => {
       root.render(
