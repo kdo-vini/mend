@@ -58,7 +58,10 @@ import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { WorkspaceRoutes } from "./app/routes/WorkspaceRoutes";
 import { useAppShortcuts } from "./app/shortcuts/useAppShortcuts";
 import { notificationDestination } from "./app/shell/notification-destination";
-import { workspaceRefreshTarget } from "./app/live-workspace-sync";
+import {
+  createLiveRefreshBatcher,
+  workspaceRefreshTarget,
+} from "./app/live-workspace-sync";
 import {
   MobileBottomNav as ShellMobileBottomNav,
   MobileTopbar as ShellMobileTopbar,
@@ -403,22 +406,57 @@ function App() {
     let reconcileQueue = Promise.resolve();
     let realtimeHealthy = false;
     let runStatusTimer: ReturnType<typeof setInterval> | null = null;
-    let workspaceRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshConversation = async (
+      workspaceId: string,
+      conversationId: string,
+    ) => {
+      const snapshot = await loadLiveConversationSnapshot(
+        client,
+        workspaceId,
+        conversationId,
+      );
+      if (!active) return;
+      setConversations((current) =>
+        snapshot
+          ? mergeConversationSnapshot(current, snapshot)
+          : // Deleted (or no longer visible to this operator).
+            current.filter(
+              (conversation) => conversation.id !== conversationId,
+            ),
+      );
+    };
+    let liveWorkspaceId: string | null = null;
+    const refreshBatcher = createLiveRefreshBatcher((batch) => {
+      reconcileQueue = reconcileQueue
+        .then(async () => {
+          if (!active) return;
+          if (batch.workspace) await hydrate(false);
+          const workspaceId = liveWorkspaceId;
+          if (!active || !workspaceId) return;
+          if (batch.notifications) {
+            const nextNotifications = await listWorkspaceNotifications(
+              client,
+              workspaceId,
+            );
+            if (active) setNotifications(nextNotifications);
+          }
+          await Promise.all(
+            batch.conversationIds.map((id) =>
+              refreshConversation(workspaceId, id),
+            ),
+          );
+        })
+        .catch((error) => {
+          if (active)
+            setLiveDataError(
+              error instanceof Error
+                ? error.message
+                : t("errors.liveReconciliation"),
+            );
+        });
+    });
     const scheduleWorkspaceRefresh = () => {
-      if (workspaceRefreshTimer || !active) return;
-      workspaceRefreshTimer = setTimeout(() => {
-        workspaceRefreshTimer = null;
-        reconcileQueue = reconcileQueue
-          .then(() => (active ? hydrate(false) : undefined))
-          .catch((error) => {
-            if (active)
-              setLiveDataError(
-                error instanceof Error
-                  ? error.message
-                  : t("errors.liveReconciliation"),
-              );
-          });
-      }, 250);
+      if (active) refreshBatcher.add({ kind: "workspace" });
     };
     const hydrate = async (showLoading = true) => {
       try {
@@ -442,6 +480,7 @@ function App() {
         }
         if (!active) return;
         setWorkspaceId(workspace.id);
+        liveWorkspaceId = workspace.id;
         setOperationalLanguage(normalizeLocale(workspace.default_language));
         const liveData = await loadLiveWorkspace(client, workspace.id);
         if (!active) return;
@@ -483,49 +522,14 @@ function App() {
             client,
             workspace.id,
             (payload) => {
-              reconcileQueue = reconcileQueue
-                .then(async () => {
-                  if (!active) return;
-                  const target = workspaceRefreshTarget({
-                    table: String(payload.table ?? ""),
-                    new: payload.new as Record<string, unknown>,
-                    old: payload.old as Record<string, unknown>,
-                  });
-                  if (target.kind === "notifications") {
-                    const nextNotifications = await listWorkspaceNotifications(
-                      client,
-                      workspace.id,
-                    );
-                    if (active) setNotifications(nextNotifications);
-                    return;
-                  }
-                  if (target.kind === "conversation") {
-                    const snapshot = await loadLiveConversationSnapshot(
-                      client,
-                      workspace.id,
-                      target.id,
-                    );
-                    if (!active) return;
-                    setConversations((current) =>
-                      snapshot
-                        ? mergeConversationSnapshot(current, snapshot)
-                        : // Deleted (or no longer visible to this operator).
-                          current.filter(
-                            (conversation) => conversation.id !== target.id,
-                          ),
-                    );
-                    return;
-                  }
-                  scheduleWorkspaceRefresh();
-                })
-                .catch((error) => {
-                  if (active)
-                    setLiveDataError(
-                      error instanceof Error
-                        ? error.message
-                        : t("errors.liveReconciliation"),
-                    );
-                });
+              if (!active) return;
+              refreshBatcher.add(
+                workspaceRefreshTarget({
+                  table: String(payload.table ?? ""),
+                  new: payload.new as Record<string, unknown>,
+                  old: payload.old as Record<string, unknown>,
+                }),
+              );
             },
             {
               onStatus: (status) => {
@@ -596,7 +600,7 @@ function App() {
       realtimeFallback.stop();
       liveCatchUp.stop();
       if (runStatusTimer) clearInterval(runStatusTimer);
-      if (workspaceRefreshTimer) clearTimeout(workspaceRefreshTimer);
+      refreshBatcher.stop();
     };
   }, [demoMode, liveDataRetry, notify, t]);
 
