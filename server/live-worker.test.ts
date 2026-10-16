@@ -573,39 +573,6 @@ describe("live Whatsmiau worker", () => {
     expect(await store.listDeadLetters()).toHaveLength(0);
   });
 
-  it("acks an undecrypted provider stub without storing it", async () => {
-    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
-    const inbox = new FakeInbox();
-    const worker = new LiveWorker({
-      jobStore: store,
-      inboundDebounceMs: 0,
-      channelResolver: new FakeResolver(binding),
-      inbox,
-    });
-    await store.enqueue({
-      type: "whatsmiau.message.received",
-      payload: {
-        event: "messages.upsert",
-        message: {
-          instanceName: message.instanceName,
-          providerMessageId: message.providerMessageId,
-          remoteJid: message.remoteJid,
-          phoneNumber: message.phoneNumber,
-          direction: "inbound",
-          messageType: "text",
-          raw: { messageType: "unknown", message: {} },
-        },
-      },
-      dedupeKey: "stub",
-      maxAttempts: 3,
-    });
-
-    expect(await worker.poll()).toBe(true);
-    expect(inbox.calls).toHaveLength(0);
-    expect((await store.list())[0].status).toBe("completed");
-    expect(await store.listDeadLetters()).toHaveLength(0);
-  });
-
   it("uses provider metadata for a group title without blocking ingestion", async () => {
     const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
     const inbox = new FakeInbox();

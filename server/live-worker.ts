@@ -33,7 +33,6 @@ import {
 import { type TriageResult } from "./triage.js";
 import { type WhatsAppProvider } from "./whatsapp-service.js";
 import { type NormalizedWhatsmiauMessage } from "./whatsmiau.js";
-import { isUndecryptedProviderStub } from "./whatsmiau-message.js";
 import type { WhatsmiauMessageJobPayload } from "./worker.js";
 import {
   knowledgeRepositorySyncJobPayloadSchema,
@@ -636,12 +635,6 @@ export class LiveWorker {
 
     if (job.workspaceId && job.workspaceId !== binding.workspaceId) {
       throw new Error("job_workspace_channel_mismatch");
-    }
-
-    // Undecrypted stub: the redelivery with the real content reuses its id.
-    if (isUndecryptedProviderStub(message.raw ?? {})) {
-      console.warn("[mend-live-worker] undecrypted stub skipped", job.id);
-      return this.markWebhookEvent(job.id, "processed");
     }
 
     const persisted = await this.options.inbox.persistNormalizedMessage(

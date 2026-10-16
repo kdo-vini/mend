@@ -5,7 +5,10 @@ import {
   resolveWhatsAppSendDestination,
   WhatsmiauMessagingProvider,
 } from "./whatsmiau.js";
-import { isUndecryptedProviderStub } from "./whatsmiau-message.js";
+import {
+  isUndecryptedProviderStub,
+  UNDECRYPTED_MESSAGE_TEXT,
+} from "./whatsmiau-message.js";
 
 describe("Whatsmiau normalization", () => {
   it("gives shared contacts, locations and polls a readable body", () => {
@@ -799,5 +802,26 @@ describe("undecrypted provider stub", () => {
       }),
     ).toBe(false);
     expect(isUndecryptedProviderStub({ message: {} })).toBe(false);
+  });
+
+  it("stores a readable notice instead of an empty bubble", () => {
+    const [message] = normalizeWhatsmiauEvent({
+      event: "messages.upsert",
+      instance: "mend-demo",
+      data: {
+        key: {
+          id: "stub-1",
+          remoteJid: "5511999999999@s.whatsapp.net",
+          fromMe: false,
+        },
+        messageType: "unknown",
+        message: {},
+      },
+    });
+    expect(message).toMatchObject({
+      messageType: "text",
+      text: UNDECRYPTED_MESSAGE_TEXT,
+      direction: "inbound",
+    });
   });
 });

@@ -225,6 +225,7 @@ export function readProviderMessageContent(
     listResponse.title,
     buttonResponse.selectedDisplayText,
     structuredMessageText(message),
+    isUndecryptedProviderStub(value) ? UNDECRYPTED_MESSAGE_TEXT : undefined,
   );
   const inlineBase64 = stringValue(
     original.base64,
@@ -278,10 +279,12 @@ export function readProviderMessageContent(
 
 /**
  * Stub the provider sends when Baileys could not decrypt a message: messageType
- * "unknown" and an empty `message`. It has no body to store, and storing it
- * would make the inbox drop the real content when the provider redelivers the
- * same id after the decryption retry.
+ * "unknown" and an empty `message`. The provider never redelivers the content,
+ * so the inbox shows this notice instead of an empty bubble.
  */
+export const UNDECRYPTED_MESSAGE_TEXT =
+  "⚠️ O WhatsApp não entregou o conteúdo desta mensagem. Peça para o cliente reenviar.";
+
 export function isUndecryptedProviderStub(
   value: Record<string, unknown>,
 ): boolean {
