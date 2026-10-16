@@ -276,6 +276,24 @@ export function readProviderMessageContent(
   };
 }
 
+/**
+ * Stub the provider sends when Baileys could not decrypt a message: messageType
+ * "unknown" and an empty `message`. It has no body to store, and storing it
+ * would make the inbox drop the real content when the provider redelivers the
+ * same id after the decryption retry.
+ */
+export function isUndecryptedProviderStub(
+  value: Record<string, unknown>,
+): boolean {
+  const original = asRecord(value.message);
+  return (
+    stringValue(value.messageType, original.messageType)?.toLowerCase() ===
+      "unknown" &&
+    Object.keys(original).length === 0 &&
+    !stringValue(value.mediaUrl, asRecord(value.media).url, value.base64)
+  );
+}
+
 /** Browser-fetchable media URL. Encrypted WhatsApp CDN links stay out of the inbox. */
 export function publicProviderMediaUrl(
   ...values: unknown[]

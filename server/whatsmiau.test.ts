@@ -5,6 +5,7 @@ import {
   resolveWhatsAppSendDestination,
   WhatsmiauMessagingProvider,
 } from "./whatsmiau.js";
+import { isUndecryptedProviderStub } from "./whatsmiau-message.js";
 
 describe("Whatsmiau normalization", () => {
   it("gives shared contacts, locations and polls a readable body", () => {
@@ -769,5 +770,34 @@ describe("Whatsmiau normalization", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("undecrypted provider stub", () => {
+  it("matches only the empty unknown message", () => {
+    expect(
+      isUndecryptedProviderStub({ messageType: "unknown", message: {} }),
+    ).toBe(true);
+    expect(isUndecryptedProviderStub({ messageType: "unknown" })).toBe(true);
+    expect(
+      isUndecryptedProviderStub({
+        messageType: "conversation",
+        message: { conversation: "oi" },
+      }),
+    ).toBe(false);
+    expect(
+      isUndecryptedProviderStub({
+        messageType: "unknown",
+        message: { protocolMessage: { type: 0 } },
+      }),
+    ).toBe(false);
+    expect(
+      isUndecryptedProviderStub({
+        messageType: "unknown",
+        message: {},
+        mediaUrl: "https://example.com/a.ogg",
+      }),
+    ).toBe(false);
+    expect(isUndecryptedProviderStub({ message: {} })).toBe(false);
   });
 });
