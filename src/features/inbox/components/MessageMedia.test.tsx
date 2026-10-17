@@ -115,4 +115,32 @@ describe("MessageMedia", () => {
     expect(container.textContent).toContain("Carregando áudio");
     expect(container.textContent).toContain("Transcrevendo áudio");
   });
+
+  it.each(["document", "image", "video"] as const)(
+    "shows the caption of a %s even before its media loads",
+    async (type) => {
+      const media: Message = {
+        ...message,
+        type,
+        text: "Segue o relatório de tráfego",
+        attachment: { name: "Relatorio.pdf", meta: "application/pdf" },
+      };
+      await act(async () => {
+        root.render(
+          <MessageMedia
+            workspaceId="workspace-1"
+            message={media}
+            resolveUrl={vi.fn(async () => "https://media.test/file")}
+            onError={() => undefined}
+            onOpen={() => undefined}
+          />,
+        );
+      });
+
+      expect(container.querySelector(".media-caption")?.textContent).toBe(
+        "Segue o relatório de tráfego",
+      );
+      expect(container.textContent).toContain("Relatorio.pdf");
+    },
+  );
 });

@@ -181,7 +181,7 @@ export function toUiMessage(
         : record.sender_type === "ai"
           ? "Mend AI"
           : "Mend operator"),
-    text: record.text ?? record.caption ?? "",
+    text: record.text || record.caption || "",
     time: displayTime(record.created_at),
     createdAt: record.created_at,
     type: messageType,

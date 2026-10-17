@@ -1370,6 +1370,20 @@
   color: var(--text-muted);
   font-size: 10px;
 }
+.document-bubble {
+  display: grid;
+  gap: 7px;
+  max-width: min(420px, 70vw);
+}
+.document-bubble .attachment-bubble {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .media-unavailable {
   color: var(--text-muted);
 }
