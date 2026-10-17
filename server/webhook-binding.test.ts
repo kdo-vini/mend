@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveWebhookInstanceName,
   selectExactChannelBinding,
   type WebhookChannelBinding,
 } from "../supabase/functions/whats-mend-webhook/binding.js";
@@ -39,5 +40,42 @@ describe("Whatsmiau webhook tenant binding", () => {
 
   it("does not bind an event that omits its instance identifier", () => {
     expect(selectExactChannelBinding(channels, undefined)).toBeNull();
+  });
+});
+
+describe("Whatsmiau webhook instance resolution", () => {
+  it("binds by the registered URL instance when the payload reports an internal id", () => {
+    const resolved = resolveWebhookInstanceName({
+      urlInstanceName: "mend-support",
+      reportedInstanceName: "3f9c1b7e-internal-id",
+    });
+    expect(resolved).toEqual({ instanceName: "mend-support", mismatch: true });
+    expect(selectExactChannelBinding(channels, resolved.instanceName)).toEqual(
+      channels[1],
+    );
+  });
+
+  it("keeps using the payload instance for webhooks registered without one", () => {
+    expect(
+      resolveWebhookInstanceName({
+        urlInstanceName: null,
+        reportedInstanceName: "zelo-support",
+      }),
+    ).toEqual({ instanceName: "zelo-support", mismatch: false });
+  });
+
+  it("does not flag a mismatch when both sources agree or one is blank", () => {
+    expect(
+      resolveWebhookInstanceName({
+        urlInstanceName: " mend-support ",
+        reportedInstanceName: "mend-support",
+      }),
+    ).toEqual({ instanceName: "mend-support", mismatch: false });
+    expect(
+      resolveWebhookInstanceName({
+        urlInstanceName: "",
+        reportedInstanceName: undefined,
+      }),
+    ).toEqual({ instanceName: undefined, mismatch: false });
   });
 });

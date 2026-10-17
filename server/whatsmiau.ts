@@ -558,6 +558,10 @@ export class WhatsmiauMessagingProvider {
     // webhook requests. The Edge Function accepts the same secret as a path
     // segment so callbacks remain authenticated.
     url.pathname = `${url.pathname.replace(/\/$/, "")}/${encodeURIComponent(input.secret)}`;
+    // The payload's `instance` field is not a stable channel key: after a
+    // reconnect Whatsmiau reported an internal identifier and every event was
+    // quarantined. The Edge Function binds by this registered name instead.
+    url.searchParams.set("instance", input.instanceName);
     // Subscribing to `messages.edited` makes Whatsmiau deliver edits ONLY
     // through it (the legacy `messages.upsert` editedMessage form stops, and is
     // removed on 2026-11-04). Opt in once the Edge Function handler and the
