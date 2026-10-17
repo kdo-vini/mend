@@ -971,7 +971,7 @@ test("deleting an expense requires confirmation and reason, preserves history an
   await expect(history.locator("del").first()).toContainText("No");
 });
 
-test("recurring expenses generate the month once, and Supabase costs require a project", async ({
+test("recurring expenses generate the month once, and Supabase costs keep the project optional", async ({
   page,
 }) => {
   await openFinance(page, "en-US");
@@ -986,11 +986,9 @@ test("recurring expenses generate the month once, and Supabase costs require a p
   await page.getByLabel("Amount (BRL)", { exact: true }).fill("125,00");
   await page.getByLabel("Category", { exact: true }).fill("Infrastructure");
   await page.getByLabel("Source", { exact: true }).fill("Supabase");
-  // Supabase reveals the project field as required.
-  await expect(page.getByLabel("Served project")).toBeVisible();
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
-  await expect(editor(page)).toBeVisible();
-  expect(tables.templates).toHaveLength(0);
+  // Project attribution stays optional, even for Supabase costs.
+  await expect(page.getByLabel("Served project")).toHaveCount(0);
+  await page.getByRole("button", { name: /Project and allocation/ }).click();
   await page.getByLabel("Served project").selectOption("Diagium");
   await page.getByRole("button", { name: "Save record", exact: true }).click();
   await expect(page.getByText("Recurring expense saved.")).toBeVisible();
