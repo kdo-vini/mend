@@ -3,23 +3,22 @@ import { Link } from "react-router-dom";
 import { ProjectCatalogContext } from "../../../projects/ProjectCatalogContext";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
-import { needsProject, textValue as text } from "../../model";
+import { textValue as text } from "../../model";
 import type { DraftEditor } from "../../useFinanceEditor";
 import { CheckboxField, TextField } from "../FinanceFields";
 
 /**
  * Optional cost details (served project and allocation rule) stay folded
- * unless they already hold data or the source requires a project.
+ * unless they already hold data.
  */
 export function CostDetails({ editor }: { editor: DraftEditor }) {
   const { t } = useTranslation("common");
   const id = useId();
   const { record } = editor.draft;
   const projects = useContext(ProjectCatalogContext);
-  const required = needsProject(record);
   const hasData = Boolean(text(record.project) || text(record.allocation));
   const [open, setOpen] = useState(hasData);
-  const expanded = open || required;
+  const expanded = open;
   return (
     <div className="finance-disclosure">
       <button
@@ -27,7 +26,6 @@ export function CostDetails({ editor }: { editor: DraftEditor }) {
         className="finance-disclosure-toggle"
         aria-expanded={expanded}
         aria-controls={id}
-        disabled={required}
         onClick={() => setOpen((value) => !value)}
       >
         <ChevronDown size={14} aria-hidden="true" />
@@ -43,7 +41,6 @@ export function CostDetails({ editor }: { editor: DraftEditor }) {
             <select
               id={`${id}-project`}
               value={text(record.project)}
-              required={required}
               onChange={(event) => editor.update("project", event.target.value)}
             >
               <option value="">{t("finance.generalCosts")}</option>

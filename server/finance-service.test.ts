@@ -33,11 +33,11 @@ describe("financial input boundary", () => {
       financeRecords.entries.safeParse({ ...entry, amount_cents: 0 }).success,
     ).toBe(false);
   });
-  it("requires project attribution for Supabase and a reason for cancellation", () => {
+  it("keeps the project optional for Supabase and requires a cancellation reason", () => {
     expect(
       financeRecords.entries.safeParse({ ...entry, source: "Supabase" })
         .success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       financeRecords.entries.safeParse({ ...entry, cancelled: true }).success,
     ).toBe(false);

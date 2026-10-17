@@ -289,12 +289,6 @@ export function draftToRecord(draft: FinanceDraft) {
 }
 
 /** Whether the optional cost details need to be visible for this draft. */
-export function needsProject(record: FinanceFields) {
-  return String(record.source ?? "")
-    .toLowerCase()
-    .includes("supabase");
-}
-
 function parseOrUndefined(text: string) {
   try {
     return parseFinanceAmount(text);
