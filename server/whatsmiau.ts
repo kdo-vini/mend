@@ -558,6 +558,14 @@ export class WhatsmiauMessagingProvider {
     // webhook requests. The Edge Function accepts the same secret as a path
     // segment so callbacks remain authenticated.
     url.pathname = `${url.pathname.replace(/\/$/, "")}/${encodeURIComponent(input.secret)}`;
+    // Subscribing to `messages.edited` makes Whatsmiau deliver edits ONLY
+    // through it (the legacy `messages.upsert` editedMessage form stops, and is
+    // removed on 2026-11-04). Opt in once the Edge Function handler and the
+    // `messages.edited_at` migration are deployed.
+    const editedEvents =
+      process.env.WHATSMIAU_WEBHOOK_MESSAGES_EDITED === "true"
+        ? ["messages.edited"]
+        : [];
     return this.request<void>(
       `/webhook/set/${encodeURIComponent(input.instanceName)}`,
       {
@@ -568,6 +576,7 @@ export class WhatsmiauMessagingProvider {
             url: url.toString(),
             events: [
               "messages.upsert",
+              ...editedEvents,
               "messages.update",
               "messages.delete",
               "messages.set",

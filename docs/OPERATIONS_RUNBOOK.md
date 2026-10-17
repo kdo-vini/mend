@@ -70,6 +70,14 @@ Set these server-side values in the deployment secret manager:
 
 Configure the Whatsmiau webhook to the public `/webhooks/whatsmiau` endpoint and verify the authorization header with a signed test event before connecting a customer number.
 
+**Rollout do evento `messages.edited` (prazo do provedor: 2026-11-04).** Mensagens editadas hoje chegam como `messages.upsert` com `messageType: editedMessage`; ao assinar `messages.edited` elas passam a chegar só por ele. Ordem obrigatória:
+
+1. Aplicar a migração `20261017120000_message_edited_at.sql` (`supabase db push`).
+2. Fazer deploy da Edge Function `whats-mend-webhook` (traz o handler).
+3. Definir `WHATSMIAU_WEBHOOK_MESSAGES_EDITED=true` no servidor e re-registrar o webhook (conectar/atualizar o canal em Settings). Verificar editando uma mensagem pelo celular: o balão muda de texto e mostra "Editada".
+
+Rollback: remover a variável e re-registrar o webhook volta ao formato legado até o prazo.
+
 Repository-backed support knowledge uses the separate signed GitHub endpoint,
 exact-commit activation and release gates documented in
 [`engineering/multirepo-knowledge-operations.md`](engineering/multirepo-knowledge-operations.md).

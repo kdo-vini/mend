@@ -231,6 +231,7 @@ export function toUiMessage(
         : undefined,
     quotedMessageId: record.quoted_message_id ?? undefined,
     deleted: record.is_deleted,
+    editedAt: record.edited_at ?? undefined,
   };
 }
 

@@ -46,6 +46,7 @@ const baseMessage: MessageRecord = {
   provider_status: "delivered",
   provider_timestamp: "2026-08-03T20:00:00.000Z",
   is_deleted: false,
+  edited_at: null,
   created_at: "2026-08-03T20:00:00.000Z",
   updated_at: "2026-08-03T20:00:00.000Z",
 };
@@ -66,6 +67,14 @@ describe("live message mapper", () => {
     expect(toUiMessage({ ...baseMessage, is_deleted: true }).deleted).toBe(
       true,
     );
+  });
+
+  it("exposes the provider edit time only for edited messages", () => {
+    expect(toUiMessage(baseMessage).editedAt).toBeUndefined();
+    expect(
+      toUiMessage({ ...baseMessage, edited_at: "2026-08-03T21:00:00.000Z" })
+        .editedAt,
+    ).toBe("2026-08-03T21:00:00.000Z");
   });
 
   it("uses the contact name for inbound messages but not outbound messages", () => {

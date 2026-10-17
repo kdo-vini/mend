@@ -3332,6 +3332,7 @@ export type Database = {
           created_at: string
           direction: string
           duration_seconds: number | null
+          edited_at: string | null
           file_name: string | null
           file_size: number | null
           id: string
@@ -3367,6 +3368,7 @@ export type Database = {
           created_at?: string
           direction: string
           duration_seconds?: number | null
+          edited_at?: string | null
           file_name?: string | null
           file_size?: number | null
           id?: string
@@ -3402,6 +3404,7 @@ export type Database = {
           created_at?: string
           direction?: string
           duration_seconds?: number | null
+          edited_at?: string | null
           file_name?: string | null
           file_size?: number | null
           id?: string

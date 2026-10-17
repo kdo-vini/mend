@@ -3075,6 +3075,9 @@ function MessageBubble({
         )}
         {senderName || message.sender} ·{" "}
         {formatMessageTime(message.createdAt, message.time)}
+        {message.editedAt && !message.deleted && (
+          <> · {t("ui.messageEdited")}</>
+        )}
       </div>
       <div className="message-content-row">
         <div className="message-bubble-wrap">

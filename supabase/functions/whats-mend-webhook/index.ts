@@ -7,6 +7,7 @@ import {
   publicProviderMediaUrl,
   readProviderMessageContent,
 } from "./message-content.ts";
+import { extractProviderMessageEdit } from "./message-edit.ts";
 
 type JsonRecord = Record<string, unknown>;
 type MessageType =
@@ -189,6 +190,44 @@ async function markProviderMessageDeleted(
   if (error)
     throw new Error(`message_delete_update_failed:${error.code ?? "database"}`);
   return { updated: Boolean(rows?.length) };
+}
+
+async function applyProviderMessageEdit(
+  client: ReturnType<typeof createClient>,
+  binding: { id: string; workspace_id: string },
+  payload: JsonRecord,
+): Promise<{ updated: boolean }> {
+  const edit = extractProviderMessageEdit(payload);
+  if (!edit) return { updated: false };
+  const { data: existing, error: lookupError } = await client
+    .from("messages")
+    .select("id, message_type")
+    .eq("workspace_id", binding.workspace_id)
+    .eq("channel_connection_id", binding.id)
+    .eq("provider_message_id", edit.providerMessageId)
+    .eq("is_deleted", false)
+    .maybeSingle();
+  if (lookupError)
+    throw new Error(
+      `message_edit_lookup_failed:${lookupError.code ?? "database"}`,
+    );
+  // An edit for a message we never stored (e.g. sent before the channel was
+  // connected) is not worth creating a bubble for.
+  if (!existing) return { updated: false };
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from("messages")
+    .update({
+      text: edit.text,
+      ...(existing.message_type !== "text" ? { caption: edit.text } : {}),
+      edited_at: now,
+      updated_at: now,
+    })
+    .eq("workspace_id", binding.workspace_id)
+    .eq("id", existing.id);
+  if (error)
+    throw new Error(`message_edit_update_failed:${error.code ?? "database"}`);
+  return { updated: true };
 }
 
 async function upsertProviderContacts(
@@ -628,6 +667,23 @@ Deno.serve(async (request) => {
         event,
         processed: result.updated ? 1 : 0,
         ...(result.status ? { status: result.status } : {}),
+      });
+    }
+
+    if (event === "messages.edited") {
+      const result = await applyProviderMessageEdit(client, binding, payload);
+      await client
+        .from("channel_connections")
+        .update({
+          last_event_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", binding.id)
+        .eq("workspace_id", binding.workspace_id);
+      return response(202, {
+        accepted: true,
+        event,
+        processed: result.updated ? 1 : 0,
       });
     }
 

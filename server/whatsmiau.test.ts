@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   normalizePhoneNumber,
   normalizeWhatsmiauEvent,
@@ -618,6 +618,40 @@ describe("Whatsmiau normalization", () => {
         },
       });
     } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("subscribes to messages.edited only when explicitly enabled", async () => {
+    const originalFetch = globalThis.fetch;
+    const subscribed: string[][] = [];
+    globalThis.fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as {
+        webhook: { events: string[] };
+      };
+      subscribed.push(body.webhook.events);
+      return new Response(null, { status: 204 });
+    };
+    const configure = () =>
+      new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      ).configureWebhook({
+        instanceName: "mend-test",
+        url: "https://mend.test/functions/v1/whats-mend-webhook",
+        secret: "path-secret",
+      });
+
+    try {
+      vi.stubEnv("WHATSMIAU_WEBHOOK_MESSAGES_EDITED", "");
+      await configure();
+      vi.stubEnv("WHATSMIAU_WEBHOOK_MESSAGES_EDITED", "true");
+      await configure();
+      expect(subscribed[0]).not.toContain("messages.edited");
+      expect(subscribed[1]).toContain("messages.edited");
+      expect(subscribed[1]).toContain("messages.upsert");
+    } finally {
+      vi.unstubAllEnvs();
       globalThis.fetch = originalFetch;
     }
   });

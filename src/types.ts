@@ -69,6 +69,8 @@ export interface Message {
   };
   quotedMessageId?: string;
   deleted?: boolean;
+  /** Set when the provider reported an edit of this message. */
+  editedAt?: string;
   reactions?: Array<{ emoji: string; mine: boolean; pending?: boolean }>;
   pendingReaction?: string;
 }
