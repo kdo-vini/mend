@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { issueStatusOptions } from "../status-options";
 import {
   BookOpen,
   CircleDot,
@@ -550,15 +551,7 @@ export function EditIssueDialog({
             {t("dialogs.status")}
             <Select
               value={status}
-              options={[
-                "Triage",
-                "Backlog",
-                "Todo",
-                "In Progress",
-                "Review",
-                "Done",
-                "Canceled",
-              ].map((item) => ({ value: item, label: item }))}
+              options={issueStatusOptions(t)}
               onChange={(value) => setStatus(value as IssueStatus)}
             />
           </label>

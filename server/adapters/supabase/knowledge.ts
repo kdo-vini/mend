@@ -287,13 +287,5 @@ export class SupabaseKnowledgeAdapter implements KnowledgePort {
 
 export {
   chunkPublishedArticle,
-  KnowledgeRetriever,
   OpenAiKnowledgeEmbeddings,
-} from "../../knowledge-retrieval.js";
-export type {
-  IndexedKnowledgeChunk,
-  KnowledgeArticleForIndexing,
-  KnowledgeEmbeddingPort,
-  KnowledgeSearchPort,
-  KnowledgeSearchResult,
 } from "../../knowledge-retrieval.js";

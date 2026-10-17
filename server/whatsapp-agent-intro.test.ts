@@ -13,30 +13,25 @@ describe("whatsapp-agent-intro", () => {
   });
 
   it("builds italic+bold attending intros on the whole phrase", () => {
-    expect(agentAttendingLine("Vinícius Silva", "pt-BR")).toBe(
+    expect(agentAttendingLine("Vinícius Silva")).toBe(
       "_*Vinícius está te atendendo*_",
     );
-    expect(agentAttendingLine("Lucas Silva", "en-US")).toBe(
-      "_*Lucas is assisting you*_",
-    );
     // Never bold only the name.
-    expect(agentAttendingLine("Vinicius", "pt-BR")).not.toMatch(
-      /^\*[^*]+\* está/,
-    );
+    expect(agentAttendingLine("Vinicius")).not.toMatch(/^\*[^*]+\* está/);
   });
 
   it("places the agent intro above the reply body", () => {
-    expect(formatHumanWhatsAppText("Lucas", "Boa tarde!", "pt-BR")).toBe(
+    expect(formatHumanWhatsAppText("Lucas", "Boa tarde!")).toBe(
       "_*Lucas está te atendendo*_\n\nBoa tarde!",
     );
-    expect(formatHumanWhatsAppText("Lucas Silva", "Hello there", "en-US")).toBe(
-      "_*Lucas is assisting you*_\n\nHello there",
+    expect(formatHumanWhatsAppText("Lucas Silva", "Olá!")).toBe(
+      "_*Lucas está te atendendo*_\n\nOlá!",
     );
   });
 
   it("skips the intro when includeIntro is false", () => {
     expect(
-      formatHumanWhatsAppText("Lucas", "Boa tarde!", "pt-BR", {
+      formatHumanWhatsAppText("Lucas", "Boa tarde!", {
         includeIntro: false,
       }),
     ).toBe("Boa tarde!");
@@ -47,19 +42,16 @@ describe("whatsapp-agent-intro", () => {
       formatHumanWhatsAppText(
         "Vinicius",
         "*Vinicius* está te atendendo\n\nBoa tarde!",
-        "pt-BR",
       ),
     ).toBe("_*Vinicius está te atendendo*_\n\nBoa tarde!");
   });
 
   it("does not stack the intro on retries that already include it", () => {
-    const once = formatHumanWhatsAppText("Lucas", "Boa tarde!", "pt-BR");
-    expect(formatHumanWhatsAppText("Lucas", once, "pt-BR")).toBe(once);
+    const once = formatHumanWhatsAppText("Lucas", "Boa tarde!");
+    expect(formatHumanWhatsAppText("Lucas", once)).toBe(once);
   });
 
   it("falls through when the agent name is empty", () => {
-    expect(formatHumanWhatsAppText("   ", "Boa tarde!", "pt-BR")).toBe(
-      "Boa tarde!",
-    );
+    expect(formatHumanWhatsAppText("   ", "Boa tarde!")).toBe("Boa tarde!");
   });
 });

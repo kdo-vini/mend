@@ -32,7 +32,7 @@ There is no separate marketing palette. The older "Solaris" near-black stage and
    rules and space, not from hiding information.
 4. **One sky, one deep, one loop.** Céu is the ground, Profundo the emphasis,
    the Closed Loop mark the only symbol.
-5. **Bilingual by default.** `pt-BR` first, `en-US` always.
+5. **Portuguese only.** Internal tool: every screen speaks `pt-BR`.
 
 ## Tokens (`src/styles/tokens.css`)
 
@@ -121,7 +121,7 @@ tile.
   perpetual decoration; respect `prefers-reduced-motion` and reduced
   transparency.
 - Confirmations use `ConfirmDialog`; never `alert`, `confirm` or `prompt`.
-- Every visible string exists in `pt-BR` and `en-US` and passes
+- Every visible string lives in the `pt-BR` catalog and passes
   `npm run i18n:check`.
 
 ## Finance specifics

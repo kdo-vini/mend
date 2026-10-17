@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { RequestContext, WorkspaceRole } from "./contracts/api-ports.js";
+import type { RequestContext } from "./contracts/api-ports.js";
 
 export const personalTaskStatusSchema = z.enum(["todo", "in_progress", "done"]);
 
@@ -169,8 +169,4 @@ export interface KanbanIssuePort {
     identifier: string,
     input: KanbanMoveInput,
   ): Promise<unknown | null>;
-}
-
-export function canEditPersonalPlanning(role: WorkspaceRole): boolean {
-  return role !== "viewer";
 }

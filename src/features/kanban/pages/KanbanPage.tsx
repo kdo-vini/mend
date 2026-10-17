@@ -23,7 +23,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import type { Issue, IssueStatus, IssueType } from "../../../types";
-import { currentInterfaceLanguage } from "../../../i18n/preferences";
+import { appLocale } from "../../../i18n/resources";
 import { issueViewHref } from "../../../app/routes/workspace-routing";
 import { ViewTabs } from "../../../shared/ui/ViewTabs";
 import {
@@ -149,14 +149,14 @@ function addDays(date: string, days: number) {
 
 function dateLabel(value: string | null | undefined, noDueDate: string) {
   if (!value) return noDueDate;
-  return new Intl.DateTimeFormat(currentInterfaceLanguage(), {
+  return new Intl.DateTimeFormat(appLocale, {
     month: "short",
     day: "numeric",
   }).format(new Date(`${value}T12:00:00`));
 }
 
 function eventTimeLabel(value: string) {
-  return new Intl.DateTimeFormat(currentInterfaceLanguage(), {
+  return new Intl.DateTimeFormat(appLocale, {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));

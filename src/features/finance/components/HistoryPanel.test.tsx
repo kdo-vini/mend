@@ -5,14 +5,13 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ history: vi.fn() }));
 vi.mock("../api", () => ({ financeApi: { history: mock.history } }));
-import i18n from "../../../i18n";
+import "../../../i18n";
 import { HistoryPanel } from "./HistoryPanel";
 
 it("never labels a previous record's audit events as the newly selected record", async () => {
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
-  await i18n.changeLanguage("en-US");
   HTMLElement.prototype.scrollIntoView = vi.fn();
   mock.history.mockResolvedValueOnce({
     data: [

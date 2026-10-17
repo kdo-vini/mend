@@ -32,8 +32,3 @@ export class SupabaseImpactAdapter implements ImpactPort {
 }
 
 export { computeImpactSummary, runnerIsReady };
-export type {
-  ImpactPeriod,
-  RunnerHeartbeat,
-  WorkflowFactValue,
-} from "../../impact.js";

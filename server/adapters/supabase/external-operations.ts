@@ -110,8 +110,6 @@ export class SupabaseExternalOperationAdapter implements ExternalOperationPort {
 
 export { executeRecoverableOperation, externalRequestDigest };
 export type {
-  ExternalOperationKind,
   ExternalOperationPort,
   ExternalOperationRecord,
-  ExternalOperationStatus,
 } from "../../external-operations.js";

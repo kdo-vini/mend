@@ -9,7 +9,6 @@ import type {
   RepositoryInput,
   RepositoryPatchInput,
 } from "../contracts/api-ports.js";
-import { normalizeLocale } from "../locale.js";
 
 export type Row = Record<string, unknown>;
 export type DbResult = { data: unknown; error: { message?: string } | null };
@@ -57,7 +56,6 @@ export function workspace(rowValue: Row): Row {
     slug: str(rowValue.slug),
     issuePrefix: str(rowValue.issue_prefix, "MEND"),
     timezone: str(rowValue.timezone, "UTC"),
-    defaultLanguage: normalizeLocale(rowValue.default_language),
     ...(rowValue.github_installation_id
       ? { githubInstallationId: String(rowValue.github_installation_id) }
       : {}),

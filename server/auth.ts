@@ -1,4 +1,4 @@
-import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type { Request } from "express";
 import type { User } from "@supabase/supabase-js";
 import {
   createServerSupabaseClient,
@@ -90,45 +90,4 @@ export async function authenticateRequest(
     ...options,
     authorization: request.headers.authorization,
   });
-}
-
-export interface AuthenticatedRequest extends Request {
-  mendAuth?: MendAuthContext;
-}
-
-/** Express middleware for future protected routes; it is intentionally not mounted here. */
-export function requireBearerAuth(
-  options: Omit<AuthenticateBearerOptions, "authorization"> = {},
-): RequestHandler {
-  return (request: Request, response: Response, next: NextFunction) => {
-    void authenticateRequest(request, options)
-      .then((context) => {
-        (request as AuthenticatedRequest).mendAuth = context;
-        next();
-      })
-      .catch((error: unknown) => {
-        const authError =
-          error instanceof AuthenticationError
-            ? error
-            : new AuthenticationError(
-                "invalid_bearer",
-                "Bearer token is invalid or expired.",
-              );
-        response
-          .status(authError.statusCode)
-          .json({ error: authError.code, message: authError.message });
-      });
-  };
-}
-
-export function requireRequestAuth(
-  request: Pick<Request, "headers"> & { mendAuth?: MendAuthContext },
-): MendAuthContext {
-  if (!request.mendAuth) {
-    throw new AuthenticationError(
-      "missing_bearer",
-      "Request authentication has not been established.",
-    );
-  }
-  return request.mendAuth;
 }

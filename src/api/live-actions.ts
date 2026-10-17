@@ -1,4 +1,3 @@
-import type { User } from "@supabase/supabase-js";
 import type { Database } from "../lib/database.types";
 import { supabase, type MendSupabaseClient } from "../lib/supabase";
 import type {
@@ -31,7 +30,6 @@ import {
 } from "./transport";
 
 export {
-  enableDemoMode,
   isDemoModeRequested,
   isLiveConfigured,
   LiveActionError,
@@ -262,15 +260,6 @@ const dbRunMode = (value: CodingRun["mode"]) =>
     "Propose fix": "propose_fix",
     "Implement fix": "implement_fix",
   })[value] ?? "investigate";
-
-export async function getCurrentUser(
-  client: MendSupabaseClient | null = supabase,
-): Promise<User | null> {
-  if (!client) return null;
-  const { data, error } = await client.auth.getUser();
-  if (error) throw new LiveActionError(error.message);
-  return data.user;
-}
 
 export async function listLiveWorkspaces(
   client: MendSupabaseClient | null = supabase,
@@ -649,17 +638,6 @@ export interface LiveWorkspaceInvitation {
   updatedAt?: string | null;
 }
 
-export interface LiveAuditLogEntry {
-  id: string;
-  workspaceId?: string | null;
-  actorUserId?: string | null;
-  action: string;
-  entityType: string;
-  entityId?: string | null;
-  metadata?: Record<string, unknown>;
-  createdAt?: string | null;
-}
-
 function queryString(values: object): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(values))
@@ -777,23 +755,6 @@ export async function revokeLiveWorkspaceInvitation(input: {
     { method: "DELETE" },
     input.workspaceId,
   );
-}
-
-export async function listLiveAuditLog(
-  workspaceId: string,
-  options: {
-    action?: string;
-    entityType?: string;
-    limit?: number;
-    cursor?: string;
-  } = {},
-): Promise<LiveAuditLogEntry[]> {
-  const result = await apiRequest<{ data: LiveAuditLogEntry[] }>(
-    `/api/workspaces/${encodeURIComponent(workspaceId)}/audit-log${queryString(options)}`,
-    {},
-    workspaceId,
-  );
-  return result.data ?? [];
 }
 
 export async function getLiveIssueHistory(input: {
@@ -2355,18 +2316,6 @@ export async function createLiveChannel(input: {
   return channelToInstance(result);
 }
 
-export async function connectLiveChannel(input: {
-  workspaceId: string;
-  channelId: string;
-}): Promise<WhatsAppInstance> {
-  const result = await apiRequest<ApiChannel>(
-    `/api/channels/${encodeURIComponent(input.channelId)}/connect`,
-    { method: "POST", body: JSON.stringify({}) },
-    input.workspaceId,
-  );
-  return channelToInstance(result);
-}
-
 export async function getLiveChannelQr(input: {
   workspaceId: string;
   channelId: string;
@@ -2408,57 +2357,6 @@ export async function removeLiveChannel(input: {
 }): Promise<void> {
   await apiRequest<{ removed: boolean }>(
     `/api/channels/${encodeURIComponent(input.channelId)}`,
-    { method: "DELETE" },
-    input.workspaceId,
-  );
-}
-
-export function listWhatsAppInstances() {
-  return apiRequest<WhatsAppInstance[]>("/api/whatsapp/instances");
-}
-
-export function createWhatsAppInstance(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<WhatsAppInstance>(
-    "/api/whatsapp/instances",
-    {
-      method: "POST",
-      body: JSON.stringify({ instanceName: input.instanceName }),
-    },
-    input.workspaceId,
-  );
-}
-
-export function connectWhatsAppInstance(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<WhatsAppInstance>(
-    `/api/whatsapp/instances/${encodeURIComponent(input.instanceName)}/connect`,
-    { method: "POST", body: JSON.stringify({}) },
-    input.workspaceId,
-  );
-}
-
-export function getWhatsAppQr(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<{ qr: string }>(
-    `/api/whatsapp/instances/${encodeURIComponent(input.instanceName)}/qr`,
-    {},
-    input.workspaceId,
-  );
-}
-
-export function disconnectWhatsAppInstance(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<WhatsAppInstance>(
-    `/api/whatsapp/instances/${encodeURIComponent(input.instanceName)}`,
     { method: "DELETE" },
     input.workspaceId,
   );

@@ -32,7 +32,6 @@ describe("support AI providers", () => {
         conversation: "Como abro o caixa?",
         knowledgeContext: "[evidence kb:chunk-1] Abra em Operações.",
         evidenceKeys: ["kb:chunk-1"],
-        language: "pt-BR",
         mcpConnections: [],
       }),
     ).resolves.toMatchObject({
@@ -58,7 +57,6 @@ describe("support AI providers", () => {
     }).draftReplyWithContext({
       conversation: "O cliente respondeu sim.",
       knowledgeContext: "Como cadastrar produtos.",
-      language: "pt-BR",
       mcpConnections: [],
       guidedHowTo: { topic: "cadastrar produtos", step: 2 },
     });
@@ -86,13 +84,14 @@ describe("support AI providers", () => {
     const provider = new OpenAiSupportProvider(client, { model: "test-model" });
 
     await expect(
-      provider.draftReply("hello", "Checkout closes at 18:00.", "en-US"),
+      provider.draftReply("hello", "Checkout closes at 18:00."),
     ).resolves.toBe("Draft reply");
     await expect(provider.triage("checkout fails")).resolves.toContain(
       '"intent":"bug"',
     );
     expect(calls).toHaveLength(2);
     expect(calls[0]).toContain("Checkout closes at 18:00.");
+    expect(calls[0]).toContain("Brazilian Portuguese");
     expect(calls[0]).toContain("Answer the customer's current ask only");
     expect(calls[0]).toContain(
       "For a multi-step how-to request, first ask whether the customer wants guidance",
@@ -159,7 +158,7 @@ describe("support AI providers", () => {
           },
         }),
       );
-      await provider.draftReply("hello", undefined, "en-US");
+      await provider.draftReply("hello", undefined);
       expect(calls[0]?.model).toBe("gpt-local");
     } finally {
       for (const [key, value] of Object.entries(previous)) {
@@ -201,7 +200,7 @@ describe("support AI providers", () => {
       }),
     );
 
-    await provider.draftReply("hello", undefined, "en-US");
+    await provider.draftReply("hello", undefined);
     expect(calls[0]?.model).toBe("gpt-test");
   });
 
@@ -230,7 +229,7 @@ describe("support AI providers", () => {
       }),
     );
 
-    await provider.draftReply("hello", undefined, "en-US");
+    await provider.draftReply("hello", undefined);
     await provider.analyzeMedia({
       conversation: "The customer sent an image.",
       files: [
@@ -297,7 +296,6 @@ describe("support AI providers", () => {
       model: "test-model",
     }).draftReplyWithContext({
       conversation: "normalized_phone: 5511999999999",
-      language: "pt-BR",
       mcpConnections: [
         {
           id: "plugin-1",

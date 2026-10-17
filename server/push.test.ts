@@ -122,7 +122,7 @@ describe("workspace web push", () => {
     );
   });
 
-  it("localizes known notification kinds per recipient preference", async () => {
+  it("renders known notification kinds with the Portuguese copy", async () => {
     process.env.VAPID_PUBLIC_KEY = "public";
     process.env.VAPID_PRIVATE_KEY = "private";
     pushMocks.sendNotification.mockResolvedValue({});
@@ -140,19 +140,8 @@ describe("workspace web push", () => {
         error: null,
       })),
     };
-    const preferences = {
-      eq: vi.fn(() => preferences),
-      maybeSingle: vi.fn(async () => ({
-        data: { interface_language: "pt-BR" },
-        error: null,
-      })),
-    };
     const client = {
-      from: vi.fn((table: string) =>
-        table === "push_subscriptions"
-          ? { select: vi.fn(() => subscriptions) }
-          : { select: vi.fn(() => preferences) },
-      ),
+      from: vi.fn(() => ({ select: vi.fn(() => subscriptions) })),
     };
 
     await new WorkspacePushNotifier().notify(client as never, "workspace-1", {
@@ -166,51 +155,7 @@ describe("workspace web push", () => {
       expect.stringContaining("Nova mensagem no WhatsApp"),
       expect.anything(),
     );
-  });
-
-  it("uses English when the recipient explicitly selected English", async () => {
-    process.env.VAPID_PUBLIC_KEY = "public";
-    process.env.VAPID_PRIVATE_KEY = "private";
-    pushMocks.sendNotification.mockResolvedValue({});
-    const subscriptions = {
-      eq: vi.fn(async () => ({
-        data: [
-          {
-            id: "subscription-en",
-            user_id: "user-en",
-            endpoint: "https://push.example/en",
-            p256dh: "p256dh",
-            auth: "auth",
-          },
-        ],
-        error: null,
-      })),
-    };
-    const preferences = {
-      eq: vi.fn(() => preferences),
-      maybeSingle: vi.fn(async () => ({
-        data: { interface_language: "en-US" },
-        error: null,
-      })),
-    };
-    const client = {
-      from: vi.fn((table: string) =>
-        table === "push_subscriptions"
-          ? { select: vi.fn(() => subscriptions) }
-          : { select: vi.fn(() => preferences) },
-      ),
-    };
-
-    await new WorkspacePushNotifier().notify(client as never, "workspace-1", {
-      title: "New WhatsApp message",
-      body: "A conversation assigned to you needs attention.",
-      kind: "conversation_message",
-    });
-
-    expect(pushMocks.sendNotification).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringContaining("New WhatsApp message"),
-      expect.anything(),
-    );
+    expect(client.from).toHaveBeenCalledTimes(1);
+    expect(client.from).toHaveBeenCalledWith("push_subscriptions");
   });
 });

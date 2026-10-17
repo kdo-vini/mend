@@ -1,4 +1,4 @@
-import { currentInterfaceLanguage } from "../../i18n/preferences";
+import { appLocale } from "../../i18n/resources";
 
 export function normalizeSearch(value: string) {
   return value
@@ -9,14 +9,11 @@ export function normalizeSearch(value: string) {
 }
 
 export function formatActivityTime(value: unknown) {
-  if (typeof value !== "string" || !value)
-    return currentInterfaceLanguage() === "pt-BR"
-      ? "Horário desconhecido"
-      : "Unknown time";
+  if (typeof value !== "string" || !value) return "Horário desconhecido";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : new Intl.DateTimeFormat(currentInterfaceLanguage(), {
+    : new Intl.DateTimeFormat(appLocale, {
         dateStyle: "short",
         timeStyle: "short",
       }).format(date);

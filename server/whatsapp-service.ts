@@ -750,11 +750,3 @@ export class WhatsAppService {
     });
   }
 }
-
-export function createWhatsAppService(
-  inbox: InboxService,
-  provider: WhatsAppProvider,
-  mediaStorage?: MediaStorage,
-) {
-  return new WhatsAppService(inbox, provider, mediaStorage);
-}

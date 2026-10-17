@@ -2,12 +2,6 @@ import { expect, test } from "@playwright/test";
 
 const phone = { width: 393, height: 852 };
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-});
-
 /**
  * An outbound bubble's action menu opens from a trigger sitting well left of
  * the screen edge, and the menu is right-anchored to it. Without a viewport
@@ -21,7 +15,7 @@ test("the message action menu opens fully inside a phone viewport", async ({
   await page.setViewportSize(phone);
   await page.goto("/inbox?demo=1");
   await page
-    .getByRole("button", { name: /Open conversation with/ })
+    .getByRole("button", { name: /Abrir conversa com/ })
     .first()
     .click();
   const trigger = page

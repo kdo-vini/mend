@@ -75,7 +75,6 @@ export const supportFlowSchema = z
 
 export type SupportFlow = z.infer<typeof supportFlowSchema>;
 export type SupportFlowNode = z.infer<typeof supportFlowNodeSchema>;
-export type SupportFlowOption = z.infer<typeof supportFlowOptionSchema>;
 
 export const defaultSupportFlow = (): SupportFlow => ({
   version: 1,
@@ -107,17 +106,4 @@ export function flowFromChannelSettings(value: unknown): SupportFlow {
       ? (value as Record<string, unknown>)
       : {};
   return parseSupportFlow(settings.supportFlow) ?? defaultSupportFlow();
-}
-
-export function flowToChannelSettings(
-  settingsValue: unknown,
-  flow: SupportFlow,
-): Record<string, unknown> {
-  const settings =
-    settingsValue &&
-    typeof settingsValue === "object" &&
-    !Array.isArray(settingsValue)
-      ? (settingsValue as Record<string, unknown>)
-      : {};
-  return { ...settings, supportFlow: flow };
 }

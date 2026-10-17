@@ -57,7 +57,6 @@ export interface WorkspaceCreateInput {
   slug: string;
   issuePrefix: string;
   timezone: string;
-  defaultLanguage: string;
 }
 
 export type WorkspacePatchInput = Partial<WorkspaceCreateInput>;

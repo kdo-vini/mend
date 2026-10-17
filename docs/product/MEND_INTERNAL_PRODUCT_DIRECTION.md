@@ -26,6 +26,6 @@ dos recebimentos automáticos para o ledger manual. Ver
 - Selecionar o UUID canônico exige verificação dos bindings existentes; ausência de configuração falha fechada.
 - Bots mantêm os contratos atuais de autenticação, cursor, idempotência, `replyAllowed` e associação exata à instância WhatsApp. O bridge não concede acesso financeiro.
 - Credenciais, mudanças de infraestrutura e dados de produção não fazem parte da implementação local.
-- Interface bilíngue, responsiva e alinhada ao design existente. QA continua obrigatório para merge de mudanças visíveis.
+- Interface somente em pt-BR (uso interno), responsiva e alinhada ao design existente. QA continua obrigatório para merge de mudanças visíveis.
 
 Referências: [plano](DIAGIUM_DASHBOARD_PLAN.md), [ficha da transição](FICHA_INTERNAL_DASHBOARD.md) e [ADR](../engineering/decisions/ADR-012-internal-single-workspace.md).

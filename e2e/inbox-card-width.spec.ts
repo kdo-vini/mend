@@ -11,13 +11,10 @@ for (const viewport of [
       width: viewport.width,
       height: viewport.height,
     });
-    await page.addInitScript(() => {
-      localStorage.setItem("mend.interface-language", "en-US");
-    });
     await page.goto("/inbox?demo=1");
 
     await page
-      .getByRole("button", { name: /Open conversation with/ })
+      .getByRole("button", { name: /Abrir conversa com/ })
       .first()
       .click();
 

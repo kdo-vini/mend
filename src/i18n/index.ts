@@ -1,38 +1,19 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import { normalizeLocale, resources } from "./resources";
-
-const storedLocale =
-  typeof window === "undefined"
-    ? "pt-BR"
-    : normalizeLocale(window.localStorage.getItem("mend.interface-language"));
+import { appLocale, resources } from "./resources";
 
 void i18n.use(initReactI18next).init({
   resources,
-  lng: storedLocale,
-  fallbackLng: "pt-BR",
-  supportedLngs: ["pt-BR", "en-US"],
+  lng: appLocale,
+  fallbackLng: appLocale,
+  supportedLngs: [appLocale],
   defaultNS: "common",
-  ns: [
-    "projects",
-    "common",
-    "auth",
-    "inbox",
-    "issues",
-    "knowledge",
-    "runs",
-    "settings",
-    "notifications",
-    "marketing",
-    "onboarding",
-    "kanban",
-  ],
+  ns: Object.keys(resources[appLocale]),
   interpolation: { escapeValue: false },
   returnNull: false,
   react: { useSuspense: false },
 });
 
-if (typeof document !== "undefined")
-  document.documentElement.lang = storedLocale;
+if (typeof document !== "undefined") document.documentElement.lang = appLocale;
 
 export default i18n;

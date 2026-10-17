@@ -13,7 +13,7 @@ import {
   it,
   vi,
 } from "vitest";
-import i18n from "../../../i18n";
+import "../../../i18n";
 import { seedConversations } from "../../../data";
 import type { Conversation } from "../../../types";
 import { conversationMatchesInboxFilter } from "../inbox-filters";
@@ -177,7 +177,6 @@ describe("InboxPage new chat", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
     window.matchMedia = ((query: string) => ({
       matches: false,
       media: query,
@@ -337,7 +336,7 @@ describe("InboxPage new chat", () => {
     await act(async () => root.render(<InboxHarness />));
 
     const select = [...document.body.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Select",
+      (button) => button.textContent?.trim() === "Selecionar",
     );
     await act(async () => select?.click());
 
@@ -354,7 +353,7 @@ describe("InboxPage new chat", () => {
       ),
     );
 
-    expect(document.body.textContent).toContain("2 selected");
+    expect(document.body.textContent).toContain("2 selecionadas");
     expect(
       [
         ...document.body.querySelectorAll<HTMLInputElement>(
@@ -367,7 +366,7 @@ describe("InboxPage new chat", () => {
   it("selects a contiguous range with Shift+click", async () => {
     await act(async () => root.render(<InboxHarness />));
     const select = [...document.body.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Select",
+      (button) => button.textContent?.trim() === "Selecionar",
     );
     await act(async () => select?.click());
     const checkboxes = [
@@ -379,7 +378,7 @@ describe("InboxPage new chat", () => {
     await act(async () => checkboxes[0]?.click());
     const rowButtons = [
       ...document.body.querySelectorAll<HTMLButtonElement>(
-        "button[aria-label^='Toggle selection']",
+        "button[aria-label^='Alternar seleção']",
       ),
     ];
     await act(async () =>
@@ -389,7 +388,7 @@ describe("InboxPage new chat", () => {
     );
 
     expect(checkboxes.every((checkbox) => checkbox.checked)).toBe(true);
-    expect(document.body.textContent).toContain("2 selected");
+    expect(document.body.textContent).toContain("2 selecionadas");
   });
 
   it("offers an unread filter backed by unread counts", async () => {
@@ -406,7 +405,7 @@ describe("InboxPage new chat", () => {
   it("deletes every selected conversation after one confirmation", async () => {
     await act(async () => root.render(<InboxHarness />));
     const select = [...document.body.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Select",
+      (button) => button.textContent?.trim() === "Selecionar",
     );
     await act(async () => select?.click());
     await act(async () =>
@@ -425,7 +424,7 @@ describe("InboxPage new chat", () => {
     );
 
     expect(deleteLiveConversation).toHaveBeenCalledTimes(2);
-    expect(document.body.textContent).toContain("No conversations yet");
+    expect(document.body.textContent).toContain("Nenhuma conversa ainda");
   });
 
   it("hands a failed send to the thread instead of leaving it in the composer", async () => {
@@ -453,12 +452,12 @@ describe("InboxPage new chat", () => {
     // the composer is empty so a second press cannot send a duplicate.
     expect(composer.value).toBe("");
     expect(document.body.textContent).toContain("Boa noite! É isso mesmo.");
-    expect(document.body.textContent).toContain("Failed");
+    expect(document.body.textContent).toContain("Falhou");
     expect(toasts.at(-1)?.tone).toBe("error");
     // The server named the reason, so the operator is told what to do about it
     // rather than the same "could not be sent" every failure used to produce.
     expect(toasts.at(-1)?.message).toBe(
-      "The WhatsApp channel is disconnected. Reconnect it in Settings, then tap Retry.",
+      "O canal do WhatsApp está desconectado. Reconecte-o em Configurações e toque em Reenviar.",
     );
   });
 
@@ -548,10 +547,10 @@ describe("InboxPage new chat", () => {
     expect(composer.value).toBe("");
     expect(composer.disabled).toBe(false);
     expect(document.body.textContent).toContain("Já estou vendo isso.");
-    expect(document.body.textContent).toContain("Sending…");
+    expect(document.body.textContent).toContain("Enviando…");
 
     await act(async () => deliver());
-    expect(document.body.textContent).not.toContain("Sending…");
+    expect(document.body.textContent).not.toContain("Enviando…");
   });
 
   it("delivers quick consecutive messages in the order they were written", async () => {
@@ -603,7 +602,7 @@ describe("InboxPage new chat", () => {
 
     expect(sendLiveMessage).toHaveBeenCalledTimes(1);
     expect(document.body.textContent).toContain("Resolvido, obrigado!");
-    expect(document.body.textContent).not.toContain("Failed");
+    expect(document.body.textContent).not.toContain("Falhou");
     expect(toasts.some((toast) => toast.tone === "error")).toBe(false);
   });
 
@@ -654,14 +653,14 @@ describe("InboxPage new chat", () => {
         ".message-row.outbound img[src='blob:preview']",
       ),
     ).not.toBeNull();
-    expect(document.body.textContent).toContain("Sending… 0%");
+    expect(document.body.textContent).toContain("Enviando… 0%");
 
     await act(async () => reportProgress(42));
-    expect(document.body.textContent).toContain("Sending… 42%");
+    expect(document.body.textContent).toContain("Enviando… 42%");
 
     await act(async () => finishUpload());
     expect(sendBatch).toHaveBeenCalledTimes(1);
-    expect(document.body.textContent).not.toContain("Sending…");
+    expect(document.body.textContent).not.toContain("Enviando…");
   });
 
   it("labels media that is not ready in the operator's language", async () => {
@@ -704,21 +703,16 @@ describe("InboxPage new chat", () => {
         },
       ],
     };
-    await i18n.changeLanguage("pt-BR");
-    try {
-      await act(async () =>
-        root.render(<InboxHarness initialConversations={[conversation]} />),
-      );
-      const text = document.body.textContent ?? "";
-      expect(text).toContain("Processando mídia…");
-      expect(text).toContain("O formato video/x-msvideo não é compatível");
-      expect(text).toContain("Mídia indisponível");
-      expect(text).toContain("Mídia");
-      expect(text).not.toContain("Processing media");
-      expect(text).not.toContain("Media unavailable");
-    } finally {
-      await i18n.changeLanguage("en-US");
-    }
+    await act(async () =>
+      root.render(<InboxHarness initialConversations={[conversation]} />),
+    );
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Processando mídia…");
+    expect(text).toContain("O formato video/x-msvideo não é compatível");
+    expect(text).toContain("Mídia indisponível");
+    expect(text).toContain("Mídia");
+    expect(text).not.toContain("Processing media");
+    expect(text).not.toContain("Media unavailable");
   });
 
   function clickConversation(name: string) {
@@ -791,7 +785,7 @@ describe("InboxPage new chat", () => {
     await act(async () =>
       document.body
         .querySelector<HTMLButtonElement>(
-          "button[aria-label='Send a contact card']",
+          "button[aria-label='Enviar um cartão de contato']",
         )
         ?.click(),
     );
@@ -799,7 +793,7 @@ describe("InboxPage new chat", () => {
     await act(async () => type(field("phoneNumber"), phone));
     await act(async () =>
       [...document.body.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "Send contact")
+        .find((button) => button.textContent === "Enviar contato")
         ?.click(),
     );
   }
@@ -822,7 +816,7 @@ describe("InboxPage new chat", () => {
     sendLiveContact.mockRejectedValueOnce(new Error("provider down"));
     await act(async () => root.render(<InboxHarness />));
     await shareContact("Ivo Silva", "5511999997777");
-    expect(document.body.textContent).toContain("Failed");
+    expect(document.body.textContent).toContain("Falhou");
 
     const failedRow = [
       ...document.body.querySelectorAll<HTMLElement>(".message-row.outbound"),
@@ -834,7 +828,7 @@ describe("InboxPage new chat", () => {
     );
     await act(async () =>
       [...document.body.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent?.trim() === "Retry")
+        .find((button) => button.textContent?.trim() === "Tentar novamente")
         ?.click(),
     );
     expect(sendLiveContact).toHaveBeenCalledTimes(2);
@@ -875,7 +869,7 @@ describe("InboxPage new chat", () => {
           />,
         ),
       );
-      expect(aiSwitch().textContent).toBe("AI active");
+      expect(aiSwitch().textContent).toBe("IA ativa");
       expect(aiSwitch().getAttribute("aria-checked")).toBe("true");
       expect(
         document.body.querySelector(".conversation-assignee"),
@@ -884,17 +878,17 @@ describe("InboxPage new chat", () => {
       await act(async () =>
         document.body
           .querySelector<HTMLButtonElement>(
-            "button[aria-label='Conversation actions']",
+            "button[aria-label='Ações da conversa']",
           )
           ?.click(),
       );
       const menu = document.body.querySelector(".context-menu")?.textContent;
       expect(menu).toBeTruthy();
       for (const label of [
-        "Pause AI",
-        "Resume AI",
+        "Pausar IA",
+        "Retomar IA",
         "Copilot",
-        "Auto-reply",
+        "Resposta automática",
         "Manual",
       ])
         expect(menu).not.toContain(label);
@@ -903,19 +897,14 @@ describe("InboxPage new chat", () => {
     });
 
     it("renders the Portuguese label", async () => {
-      await i18n.changeLanguage("pt-BR");
-      try {
-        await act(async () =>
-          root.render(
-            <InboxHarness
-              initialConversations={[conversationWith("draft", "ai_active")]}
-            />,
-          ),
-        );
-        expect(aiSwitch().textContent).toBe("IA ativa");
-      } finally {
-        await i18n.changeLanguage("en-US");
-      }
+      await act(async () =>
+        root.render(
+          <InboxHarness
+            initialConversations={[conversationWith("draft", "ai_active")]}
+          />,
+        ),
+      );
+      expect(aiSwitch().textContent).toBe("IA ativa");
     });
 
     it("shows off for human_paused even when ai_mode is still safe_auto", async () => {

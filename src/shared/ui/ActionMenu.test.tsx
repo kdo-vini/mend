@@ -4,7 +4,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import i18n from "../../i18n";
+import "../../i18n";
 import { ActionMenu } from "./ActionMenu";
 
 const phone = { width: 393, height: 852 };
@@ -64,7 +64,6 @@ describe("ActionMenu placement", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
   });
 
   beforeEach(() => {

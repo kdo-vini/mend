@@ -1,10 +1,9 @@
-/* Diagium finance: ledger page and home overview. Uses the shared page frame,
+/* Diagium finance: ledger page. Uses the shared page frame,
    button primitives and tokens; only finance-specific layout lives here. */
 
 .finance-page input,
 .finance-page select,
-.finance-page textarea,
-.finance-panel input {
+.finance-page textarea {
   min-width: 0;
   min-height: var(--control-height);
   padding: 6px 10px;
@@ -19,15 +18,13 @@
   line-height: 1.45;
 }
 .finance-page input:hover,
-.finance-page textarea:hover,
-.finance-panel input:hover {
+.finance-page textarea:hover {
   border-color: var(--line-strong);
 }
 .finance-page input[aria-invalid="true"] {
   border-color: var(--negative);
 }
-.finance-page .button,
-.finance-panel .button {
+.finance-page .button {
   text-decoration: none;
 }
 .finance-page .button:disabled {
@@ -203,10 +200,6 @@
   display: block;
   margin-bottom: var(--space-1);
   color: var(--text-secondary);
-}
-.finance-restricted-note {
-  color: var(--text-muted);
-  font-size: 12px;
 }
 .finance-form-error {
   display: flex;
@@ -711,30 +704,6 @@
   font-size: 11px;
 }
 
-/* Home overview */
-.finance-panel {
-  display: grid;
-  gap: var(--space-3);
-  margin-bottom: var(--space-6);
-}
-.finance-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-.finance-panel-header h2 {
-  font-size: 15px;
-  font-weight: 600;
-}
-.finance-panel-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
 /* Business switch and the read-only Zelo view */
 .finance-business,
 .finance-zelo-filter {
@@ -893,10 +862,8 @@
     flex: 1;
   }
   .finance-page .button,
-  .finance-panel .button,
   .finance-page input,
   .finance-page textarea,
-  .finance-panel input,
   .finance-tabs [role="tab"],
   .finance-row-actions .button {
     min-height: var(--mobile-touch-target);

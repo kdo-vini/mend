@@ -6,11 +6,6 @@
     "tagline": "Continue entregando. Feche o ciclo do suporte.",
     "workspaceEyebrow": "Espaço de trabalho Mend"
   },
-  "language": {
-    "label": "Idioma da interface",
-    "english": "English",
-    "portuguese": "Português (Brasil)"
-  },
   "actions": {
     "save": "Salvar",
     "cancel": "Cancelar",
@@ -37,7 +32,6 @@
   },
   "errors": {
     "generic": "Algo deu errado. Tente novamente.",
-    "preferencesSave": "Não foi possível salvar sua preferência de idioma.",
     "supabaseUnavailable": "O Supabase é necessário para carregar seu perfil.",
     "invalidInput": "Confira as informações e tente novamente.",
     "workspaceNotFound": "Não foi possível encontrar esse espaço de trabalho.",
