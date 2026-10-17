@@ -1,6 +1,6 @@
 /* global URL, self, caches, fetch */
 
-const SHELL_CACHE = "mend-shell-v1";
+const SHELL_CACHE = "mend-shell-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -14,6 +14,9 @@ self.addEventListener("install", (event) => {
           "/favicon.svg",
           "/icon-192.svg",
           "/icon-512.svg",
+          "/icon-192.png",
+          "/icon-512.png",
+          "/apple-touch-icon.png",
         ]),
       )
       .catch(() => undefined)
@@ -82,7 +85,7 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Mend";
   const options = {
     body: payload.body || "You have a new workspace notification.",
-    icon: "/favicon.svg",
+    icon: "/icon-192.png",
     badge: "/favicon.svg",
     tag: payload.tag || "mend-notification",
     data: { url: payload.url || "/inbox" },

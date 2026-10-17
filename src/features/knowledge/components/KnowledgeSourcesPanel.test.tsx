@@ -13,7 +13,7 @@ import {
   it,
   vi,
 } from "vitest";
-import i18n from "../../../i18n";
+import "../../../i18n";
 import type { KnowledgeProduct, KnowledgeSourceSummary } from "../../../types";
 import { KnowledgeSourcesPanel } from "./KnowledgeSourcesPanel";
 
@@ -56,7 +56,6 @@ describe("KnowledgeSourcesPanel", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("pt-BR");
   });
 
   beforeEach(() => {

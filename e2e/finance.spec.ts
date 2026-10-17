@@ -9,17 +9,17 @@ test("attention review preserves context, restores focus and respects reduced mo
       : { width: 1440, height: 900 },
   );
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await openFinance(page, "en-US", "dark");
+  await openFinance(page, "dark");
   await mockFinance(page);
   await page.goto("/financeiro?demo=1", { waitUntil: "domcontentloaded" });
   const review = page.getByRole("button", {
-    name: "Review coverage",
+    name: "Revisar cobertura",
     exact: true,
   });
   await review.focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByLabel("Sources reviewed", { exact: true }),
+    page.getByLabel("Fontes conferidas", { exact: true }),
   ).toBeFocused();
   await expect(
     page.locator(".finance-ledger:not(.finance-zelo-charges)"),
@@ -38,17 +38,19 @@ test("attention review preserves context, restores focus and respects reduced mo
     fullPage: true,
   });
   for (const label of [
-    "Sources reviewed",
-    "Expenses reviewed",
-    "Taxes reviewed",
+    "Fontes conferidas",
+    "Despesas conferidas",
+    "Impostos conferidos",
   ])
     await page.getByLabel(label, { exact: true }).check();
-  await page.getByRole("button", { name: "Save review", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Salvar revisão", exact: true })
+    .click();
   await expect(
-    page.getByText("Checks up to date", { exact: true }),
+    page.getByText("Conferências em dia", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("Coverage review saved.", { exact: true }),
+    page.getByText("Revisão de cobertura salva.", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".finance-editor")).toHaveCount(0);
   expect(await noOverflow(page)).toBe(false);
@@ -340,14 +342,10 @@ async function mockFinance(page: Page, allowed = true, visualFixtures = false) {
   return { tables, calls, state };
 }
 
-async function openFinance(page: Page, locale: "pt-BR" | "en-US", theme = "") {
-  await page.addInitScript(
-    ([language, mode]) => {
-      localStorage.setItem("mend.interface-language", language);
-      if (mode) localStorage.setItem("mend.theme", mode);
-    },
-    [locale, theme],
-  );
+async function openFinance(page: Page, theme = "") {
+  await page.addInitScript((mode) => {
+    if (mode) localStorage.setItem("mend.theme", mode);
+  }, theme);
 }
 
 const metric = (page: Page, label: string) =>
@@ -359,7 +357,7 @@ const editor = (page: Page) => page.locator(".finance-editor");
 test("pending saves cannot be displaced by a different financial action", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   tables.entries.push({ ...hostinger, period: `${currentMonth()}-01` });
   let release!: () => void;
@@ -371,38 +369,45 @@ test("pending saves cannot be displaced by a different financial action", async 
     await route.fallback();
   });
   await page.goto("/financeiro?demo=1");
-  await page.getByRole("button", { name: "Edit: Hostinger Diagium" }).click();
-  await page.getByLabel("Description", { exact: true }).fill("Updated expense");
+  await page.getByRole("button", { name: "Editar: Hostinger Diagium" }).click();
+  await page.getByLabel("Descrição", { exact: true }).fill("Updated expense");
   const saving = page.waitForRequest(
     (request) =>
       request.method() === "POST" &&
       request.url().endsWith("/api/finance/entries"),
   );
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
   await saving;
   try {
     await expect(
-      page.getByRole("button", { name: "New income", exact: true }),
+      page.getByRole("button", { name: "Nova receita", exact: true }),
     ).toBeDisabled();
     await expect(
-      page.getByRole("button", { name: "New expense", exact: true }),
+      page.getByRole("button", { name: "Nova despesa", exact: true }),
     ).toBeDisabled();
     await expect(
-      page.getByRole("button", { name: "Review coverage", exact: true }),
+      page.getByRole("button", { name: "Revisar cobertura", exact: true }),
     ).toBeDisabled();
     await page
       .getByRole("button", {
-        name: "Actions for Hostinger Diagium",
+        name: "Ações para Hostinger Diagium",
         exact: true,
       })
       .click();
     await expect(
-      page.getByRole("menuitem", { name: "Change history", exact: true }),
+      page.getByRole("menuitem", {
+        name: "Histórico de alterações",
+        exact: true,
+      }),
     ).toBeDisabled();
   } finally {
     release();
   }
-  await expect(page.getByText("Entry saved.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Lançamento salvo.", { exact: true }),
+  ).toBeVisible();
 });
 
 test("attention resolves records beyond the first page and refreshes after saving", async ({
@@ -413,7 +418,7 @@ test("attention resolves records beyond the first page and refreshes after savin
       ? { width: 390, height: 844 }
       : { width: 1440, height: 900 },
   );
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   const period = `${currentMonth()}-01`;
   tables.entries.push(
@@ -457,13 +462,13 @@ test("attention resolves records beyond the first page and refreshes after savin
   });
   await page.goto("/financeiro?demo=1");
   await expect(
-    page.getByRole("button", { name: "Edit: Missing invoice", exact: true }),
+    page.getByRole("button", { name: "Editar: Missing invoice", exact: true }),
   ).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Review missing amounts", exact: true })
+    .getByRole("button", { name: "Revisar valores ausentes", exact: true })
     .click();
   await expect(page.locator(".finance-pending-context")).toContainText(
-    "Entries with missing amounts",
+    "Lançamentos com valor ausente",
   );
   await expect(page.locator(".finance-table")).not.toContainText("Confirmed 0");
   await expect(page.locator(".finance-table")).not.toContainText(
@@ -473,23 +478,25 @@ test("attention resolves records beyond the first page and refreshes after savin
     "Internal transfer",
   );
   await page
-    .getByRole("button", { name: "Edit: Missing invoice", exact: true })
+    .getByRole("button", { name: "Editar: Missing invoice", exact: true })
     .click();
   expect(await noOverflow(page)).toBe(false);
   await page.screenshot({
     path: info.outputPath("guided-review.png"),
     fullPage: true,
   });
-  await page.getByLabel("Amount (BRL)", { exact: true }).fill("25.00");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await page.getByLabel("Valor (R$)", { exact: true }).fill("25.00");
+  await page
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
   await expect(
-    page.getByText("No pending entries on this page", { exact: true }),
+    page.getByText("Nenhuma pendência nesta página", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Review missing amounts", exact: true }),
+    page.getByRole("button", { name: "Revisar valores ausentes", exact: true }),
   ).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Review estimates", exact: true })
+    .getByRole("button", { name: "Revisar estimativas", exact: true })
     .click();
   await expect(page.locator(".finance-table")).toContainText(
     "Estimated hosting",
@@ -498,7 +505,7 @@ test("attention resolves records beyond the first page and refreshes after savin
     "Missing invoice",
   );
   await page
-    .getByRole("button", { name: "Show all entries", exact: true })
+    .getByRole("button", { name: "Mostrar todos os lançamentos", exact: true })
     .click();
   await expect(page.locator(".finance-table")).toContainText("Confirmed 0");
 });
@@ -506,7 +513,7 @@ test("attention resolves records beyond the first page and refreshes after savin
 test("leaving attention ignores its late response and preserves the general ledger", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   tables.entries.push({
     ...hostinger,
@@ -524,11 +531,11 @@ test("leaving attention ignores its late response and preserves the general ledg
   });
   await page.goto("/financeiro?demo=1");
   await page
-    .getByRole("button", { name: "Review missing amounts", exact: true })
+    .getByRole("button", { name: "Revisar valores ausentes", exact: true })
     .click();
   await expect(page.locator(".finance-table")).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Show all entries", exact: true })
+    .getByRole("button", { name: "Mostrar todos os lançamentos", exact: true })
     .click();
   await expect(page.locator(".finance-table")).toContainText(
     "Hostinger Diagium",
@@ -540,14 +547,17 @@ test("leaving attention ignores its late response and preserves the general ledg
   await response;
   await expect(page.locator(".finance-pending-context")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Edit: Hostinger Diagium", exact: true }),
+    page.getByRole("button", {
+      name: "Editar: Hostinger Diagium",
+      exact: true,
+    }),
   ).toBeEnabled();
 });
 
 test("coverage review waits for the selected month's summary", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   tables.reviews.push({
     id: "22222222-2222-4222-8222-222222222222",
@@ -568,38 +578,38 @@ test("coverage review waits for the selected month's summary", async ({
   });
   await page.goto("/financeiro?demo=1");
   await expect(
-    page.getByRole("button", { name: "Review coverage", exact: true }),
+    page.getByRole("button", { name: "Revisar cobertura", exact: true }),
   ).toBeEnabled();
   const loading = page.waitForRequest(
     (request) =>
       request.url().includes("/api/finance/summary?") &&
       request.url().includes("2099-09-01"),
   );
-  await page.getByLabel("Reporting month").fill("2099-09");
+  await page.getByLabel("Mês de referência").fill("2099-09");
   await loading;
   try {
     await expect(
-      page.getByRole("button", { name: "Review coverage", exact: true }),
+      page.getByRole("button", { name: "Revisar cobertura", exact: true }),
     ).toBeDisabled();
   } finally {
     release();
   }
   await expect(
-    page.getByRole("button", { name: "Review coverage", exact: true }),
+    page.getByRole("button", { name: "Revisar cobertura", exact: true }),
   ).toBeEnabled();
   await page
-    .getByRole("button", { name: "Review coverage", exact: true })
+    .getByRole("button", { name: "Revisar cobertura", exact: true })
     .click();
-  await expect(editor(page)).toContainText("September 2099");
+  await expect(editor(page)).toContainText("setembro de 2099");
   await expect(
-    page.getByLabel("Sources reviewed", { exact: true }),
+    page.getByLabel("Fontes conferidas", { exact: true }),
   ).not.toBeChecked();
 });
 
 test("finance keeps accruals and cash distinct, persists entry and respects month on desktop/mobile", async ({
   page,
 }, info) => {
-  await openFinance(page, "pt-BR");
+  await openFinance(page);
   await mockFinance(page);
   await page.goto("/financeiro?demo=1");
   await expect(
@@ -662,7 +672,7 @@ test("finance keeps accruals and cash distinct, persists entry and respects mont
 test("home keeps finance exclusive to its own route", async ({
   page,
 }, info) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { calls } = await mockFinance(page);
   await page.goto("/dashboard?demo=1");
   await expect(page.locator(".dashboard-links")).toBeVisible();
@@ -673,72 +683,62 @@ test("home keeps finance exclusive to its own route", async ({
   expect(calls["GET entries"] ?? 0).toBe(0);
   expect(await noOverflow(page)).toBe(false);
   await page.screenshot({
-    path: info.outputPath("dashboard-en-US.png"),
+    path: info.outputPath("dashboard.png"),
     fullPage: true,
   });
 });
 
-test("financial permission denies data and actions in either locale", async ({
-  page,
-}) => {
-  for (const locale of ["pt-BR", "en-US"] as const) {
-    await openFinance(page, locale);
-    await mockFinance(page, false);
-    await page.goto("/financeiro?demo=1");
-    await expect(
-      page.getByText(
-        locale === "pt-BR"
-          ? /Acesso financeiro restrito\. Peça/
-          : /Finance access is restricted\. Ask/,
-      ),
-    ).toBeVisible();
-    await expect(page.locator(".finance-metrics")).toHaveCount(0);
-    await expect(editor(page)).toHaveCount(0);
-    await expect(
-      page.getByRole("button", {
-        name: locale === "pt-BR" ? "Nova despesa" : "New expense",
-      }),
-    ).toHaveCount(0);
-  }
+test("financial permission denies data and actions", async ({ page }) => {
+  await openFinance(page);
+  await mockFinance(page, false);
+  await page.goto("/financeiro?demo=1");
+  await expect(
+    page.getByText(/Acesso financeiro restrito\. Peça/),
+  ).toBeVisible();
+  await expect(page.locator(".finance-metrics")).toHaveCount(0);
+  await expect(editor(page)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Nova despesa" })).toHaveCount(
+    0,
+  );
 });
 
 test("revoked access mid-session removes displayed figures immediately", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables, state } = await mockFinance(page);
   tables.entries.push({ ...hostinger });
   await page.goto("/financeiro?demo=1");
-  await page.getByLabel("Reporting month").fill("2026-10");
-  await expect(metric(page, "Accrued expenses")).toContainText("19.90");
+  await page.getByLabel("Mês de referência").fill("2026-10");
+  await expect(metric(page, "Despesas por competência")).toContainText("19,90");
   state.allowed = false;
-  await page.getByRole("tab", { name: "Cash movements" }).click();
-  await expect(page.getByText(/Finance access is restricted\./)).toBeVisible();
+  await page.getByRole("tab", { name: "Movimentações de caixa" }).click();
+  await expect(page.getByText(/Acesso financeiro restrito\./)).toBeVisible();
   await expect(page.locator(".finance-metrics")).toHaveCount(0);
   await expect(page.getByText("Hostinger Diagium")).toHaveCount(0);
   // Dashboard has no financial surface; returning to Finance stays revoked.
   await page.locator('a[href="/dashboard"]:visible').first().click();
   await expect(
-    page.getByRole("heading", { name: "Diagium dashboard", exact: true }),
+    page.getByRole("heading", { name: "Dashboard Diagium", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".finance-metrics")).toHaveCount(0);
   await page.goBack();
-  await expect(page.getByText(/Finance access is restricted\./)).toBeVisible();
+  await expect(page.getByText(/Acesso financeiro restrito\./)).toBeVisible();
   await expect(page.locator(".finance-metrics")).toHaveCount(0);
 });
 
 test("returning to finance paints cached figures while revalidating", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables, calls, state } = await mockFinance(page);
   tables.entries.push({ ...hostinger, period: `${currentMonth()}-01` });
   await page.goto("/financeiro?demo=1");
-  await expect(metric(page, "Accrued expenses")).toContainText("19.90");
+  await expect(metric(page, "Despesas por competência")).toContainText("19,90");
   await page.locator('a[href="/dashboard"]:visible').first().click();
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(
-    page.getByRole("heading", { name: "Diagium dashboard", exact: true }),
+    page.getByRole("heading", { name: "Dashboard Diagium", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".finance-metrics")).toHaveCount(0);
   const accessChecks = calls["GET access"];
@@ -750,14 +750,16 @@ test("returning to finance paints cached figures while revalidating", async ({
   await page.goBack();
   try {
     await expect(
-      page.getByRole("heading", { name: "Diagium finance", exact: true }),
+      page.getByRole("heading", { name: "Financeiro Diagium", exact: true }),
     ).toBeVisible();
     // Every mount rechecks access; prove cached values before the fresh summary can return.
     await expect.poll(() => calls["GET access"]).toBeGreaterThan(accessChecks);
     await expect
       .poll(() => calls["GET summary"])
       .toBeGreaterThan(summaryChecks);
-    await expect(metric(page, "Accrued expenses")).toContainText("19.90");
+    await expect(metric(page, "Despesas por competência")).toContainText(
+      "19,90",
+    );
   } finally {
     release();
   }
@@ -766,24 +768,32 @@ test("returning to finance paints cached figures while revalidating", async ({
 test("switching ledger tabs keeps figures and does not repeat access or summary calls", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables, calls } = await mockFinance(page);
   tables.entries.push({ ...hostinger });
   await page.goto("/financeiro?demo=1");
-  await page.getByLabel("Reporting month").fill("2026-10");
-  await expect(metric(page, "Accrued expenses")).toContainText("19.90");
+  await page.getByLabel("Mês de referência").fill("2026-10");
+  await expect(metric(page, "Despesas por competência")).toContainText("19,90");
   const before = { ...calls };
-  for (const tab of ["Cash movements", "Recurring expenses", "Evidence"]) {
+  for (const tab of [
+    "Movimentações de caixa",
+    "Despesas recorrentes",
+    "Origens",
+  ]) {
     await page.getByRole("tab", { name: tab }).click();
     await expect(page.getByRole("tab", { name: tab })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    await expect(metric(page, "Accrued expenses")).toContainText("19.90");
+    await expect(metric(page, "Despesas por competência")).toContainText(
+      "19,90",
+    );
   }
-  await page.getByRole("tab", { name: "Accruals" }).focus();
+  await page.getByRole("tab", { name: "Competência" }).focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: "Cash movements" })).toBeFocused();
+  await expect(
+    page.getByRole("tab", { name: "Movimentações de caixa" }),
+  ).toBeFocused();
   expect(calls["GET access"]).toBe(before["GET access"]);
   expect(calls["GET summary"]).toBe(before["GET summary"]);
 });
@@ -791,24 +801,24 @@ test("switching ledger tabs keeps figures and does not repeat access or summary 
 test("payment starts from the entry with explicit date, partial amount and no raw identifiers", async ({
   page,
 }, info) => {
-  await openFinance(page, "en-US", "dark");
+  await openFinance(page, "dark");
   const { tables } = await mockFinance(page);
   await page.goto("/financeiro?demo=1");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.getByLabel("Reporting month").fill("2026-10");
-  await page.getByRole("button", { name: "New expense", exact: true }).click();
+  await page.getByLabel("Mês de referência").fill("2026-10");
+  await page.getByRole("button", { name: "Nova despesa", exact: true }).click();
+  await page.getByLabel("Descrição", { exact: true }).fill("Hostinger Diagium");
+  await page.getByLabel("Valor (R$)", { exact: true }).fill("19.90");
+  await page.getByLabel("Categoria", { exact: true }).fill("Infrastructure");
+  await page.getByLabel("Fonte / origem", { exact: true }).fill("Hostinger");
   await page
-    .getByLabel("Description", { exact: true })
-    .fill("Hostinger Diagium");
-  await page.getByLabel("Amount (BRL)", { exact: true }).fill("19.90");
-  await page.getByLabel("Category", { exact: true }).fill("Infrastructure");
-  await page.getByLabel("Source", { exact: true }).fill("Hostinger");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
   await page
-    .getByRole("button", { name: "Record payment: Hostinger Diagium" })
+    .getByRole("button", { name: "Registrar pagamento: Hostinger Diagium" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Record payment", exact: true }),
+    page.getByRole("heading", { name: "Registrar pagamento", exact: true }),
   ).toBeVisible();
   await expect(editor(page).locator(".finance-context")).toContainText(
     "Hostinger Diagium",
@@ -820,22 +830,24 @@ test("payment starts from the entry with explicit date, partial amount and no ra
     ))
     expect(value).not.toMatch(uuid);
   await expect(
-    page.getByLabel("Amount received or paid (BRL)", { exact: true }),
+    page.getByLabel("Valor recebido ou pago (R$)", { exact: true }),
   ).toHaveValue("19.90");
   await page
-    .getByLabel("Amount received or paid (BRL)", { exact: true })
+    .getByLabel("Valor recebido ou pago (R$)", { exact: true })
     .fill("10.00");
   await page
-    .getByLabel("Actual receipt/payment date", { exact: true })
+    .getByLabel("Data efetiva de recebimento/pagamento", { exact: true })
     .fill("2026-10-05");
-  await page.getByLabel("Account or channel", { exact: true }).fill("Bank");
+  await page.getByLabel("Conta ou canal", { exact: true }).fill("Bank");
   await page.screenshot({
-    path: info.outputPath("payment-dark-en-US.png"),
+    path: info.outputPath("payment-dark.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
-  await expect(metric(page, "Cash paid this month")).toContainText("10.00");
-  await expect(metric(page, "Accrued expenses")).toContainText("19.90");
+  await page
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
+  await expect(metric(page, "Pago no mês")).toContainText("10,00");
+  await expect(metric(page, "Despesas por competência")).toContainText("19,90");
   expect(tables.settlements[0]).toMatchObject({
     entry_id: tables.entries[0].id,
     paid_on: "2026-10-05",
@@ -843,16 +855,16 @@ test("payment starts from the entry with explicit date, partial amount and no ra
     source: "Bank",
   });
 
-  await page.getByRole("tab", { name: "Cash movements" }).click();
+  await page.getByRole("tab", { name: "Movimentações de caixa" }).click();
   await expect(
     page.getByRole("cell", { name: /^Hostinger Diagium/ }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Actions for Hostinger Diagium" })
+    .getByRole("button", { name: "Ações para Hostinger Diagium" })
     .click();
-  await page.getByRole("menuitem", { name: "Link evidence" }).click();
+  await page.getByRole("menuitem", { name: "Vincular origem" }).click();
   await expect(
-    page.getByRole("heading", { name: "Link evidence to cash movement" }),
+    page.getByRole("heading", { name: "Vincular origem à movimentação" }),
   ).toBeVisible();
   for (const value of await editor(page)
     .locator("input")
@@ -860,19 +872,21 @@ test("payment starts from the entry with explicit date, partial amount and no ra
       inputs.map((input) => (input as HTMLInputElement).value),
     ))
     expect(value).not.toMatch(uuid);
-  await page.getByLabel("Evidence source", { exact: true }).fill("Bank");
+  await page.getByLabel("Fonte do comprovante", { exact: true }).fill("Bank");
   await page
-    .getByLabel("External identifier (optional)", { exact: true })
+    .getByLabel("Identificador externo (opcional)", { exact: true })
     .fill("qa-statement-1");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
-  await expect(page.getByText("Evidence linked.")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
+  await expect(page.getByText("Origem vinculada.")).toBeVisible();
   expect(tables.references[0]).toMatchObject({
     entry_id: tables.entries[0].id,
     settlement_id: tables.settlements[0].id,
     source: "Bank",
     external_id: "qa-statement-1",
   });
-  await page.getByRole("tab", { name: "Evidence" }).click();
+  await page.getByRole("tab", { name: "Origens" }).click();
   await expect(
     page.getByRole("cell", { name: "qa-statement-1" }),
   ).toBeVisible();
@@ -882,37 +896,41 @@ test("payment starts from the entry with explicit date, partial amount and no ra
 test("conflict recovery retains edited amounts, refreshes untouched fields and saves the latest version", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   tables.entries.push({ ...hostinger });
   await page.goto("/financeiro?demo=1");
-  await page.getByLabel("Reporting month").fill("2026-10");
-  await page.getByRole("button", { name: "Edit: Hostinger Diagium" }).click();
-  await page.getByLabel("Amount (BRL)", { exact: true }).fill("25.99");
+  await page.getByLabel("Mês de referência").fill("2026-10");
+  await page.getByRole("button", { name: "Editar: Hostinger Diagium" }).click();
+  await page.getByLabel("Valor (R$)", { exact: true }).fill("25.99");
   tables.entries[0] = {
     ...tables.entries[0],
     version: 2,
     description: "Hostinger updated",
     amount_cents: 3000,
   };
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
   await expect(
-    page.getByRole("button", { name: "Save record", exact: true }),
+    page.getByRole("button", { name: "Salvar registro", exact: true }),
   ).toBeDisabled();
   await page
     .getByRole("button", {
-      name: "Review latest version and keep draft",
+      name: "Revisar versão atual sem perder rascunho",
       exact: true,
     })
     .click();
-  await expect(page.getByLabel("Amount (BRL)", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("Valor (R$)", { exact: true })).toHaveValue(
     "25.99",
   );
-  await expect(page.getByLabel("Description", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("Descrição", { exact: true })).toHaveValue(
     "Hostinger updated",
   );
-  await expect(page.locator(".finance-editor aside")).toContainText("30.00");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await expect(page.locator(".finance-editor aside")).toContainText("30,00");
+  await page
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
   await expect(editor(page)).toHaveCount(0);
   expect(tables.entries[0]).toMatchObject({
     version: 3,
@@ -924,36 +942,43 @@ test("conflict recovery retains edited amounts, refreshes untouched fields and s
 test("deleting an expense requires confirmation and reason, preserves history and removes its total", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   tables.entries.push({ ...hostinger });
   await page.goto("/financeiro?demo=1");
-  await page.getByLabel("Reporting month").fill("2026-10");
-  await expect(metric(page, "Accrued expenses")).toContainText("19.90");
-  await page.getByRole("button", { name: "Delete: Hostinger Diagium" }).click();
+  await page.getByLabel("Mês de referência").fill("2026-10");
+  await expect(metric(page, "Despesas por competência")).toContainText("19,90");
+  await page
+    .getByRole("button", { name: "Excluir: Hostinger Diagium" })
+    .click();
   const removeForm = editor(page);
   await expect(
-    removeForm.getByRole("heading", { name: "Delete record", exact: true }),
+    removeForm.getByRole("heading", {
+      name: "Excluir lançamento",
+      exact: true,
+    }),
   ).toBeVisible();
   const confirmDelete = removeForm.getByRole("button", {
-    name: "Confirm deletion",
+    name: "Confirmar exclusão",
     exact: true,
   });
   await confirmDelete.click();
   await expect(removeForm).toBeVisible();
   expect(tables.entries[0].version).toBe(1);
   await removeForm
-    .getByLabel("Cancellation reason", { exact: true })
+    .getByLabel("Motivo do cancelamento", { exact: true })
     .fill("Duplicate accrual");
   await confirmDelete.click();
-  await expect(page.locator(".finance-table")).toContainText("Cancelled");
+  await expect(page.locator(".finance-table")).toContainText("Cancelado");
   await expect(page.locator(".finance-table")).toContainText(
-    "Reason: Duplicate accrual",
+    "Motivo: Duplicate accrual",
   );
-  await expect(metric(page, "Accrued expenses")).toContainText("0.00");
+  await expect(metric(page, "Despesas por competência")).toContainText("0,00");
   // Cancelled entries can no longer receive payments.
   await expect(
-    page.getByRole("button", { name: "Record payment: Hostinger Diagium" }),
+    page.getByRole("button", {
+      name: "Registrar pagamento: Hostinger Diagium",
+    }),
   ).toHaveCount(0);
   expect(tables.entries).toHaveLength(1);
   expect(tables.entries[0]).toMatchObject({
@@ -962,36 +987,38 @@ test("deleting an expense requires confirmation and reason, preserves history an
     version: 2,
   });
   await page
-    .getByRole("button", { name: "Actions for Hostinger Diagium" })
+    .getByRole("button", { name: "Ações para Hostinger Diagium" })
     .click();
-  await page.getByRole("menuitem", { name: "Change history" }).click();
+  await page.getByRole("menuitem", { name: "Histórico de alterações" }).click();
   const history = page.locator(".finance-history");
-  await expect(history).toContainText("Changed");
+  await expect(history).toContainText("Alterado");
   await expect(history).toContainText("Duplicate accrual");
-  await expect(history.locator("del").first()).toContainText("No");
+  await expect(history.locator("del").first()).toContainText("Não");
 });
 
 test("recurring expenses generate the month once, and Supabase costs keep the project optional", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   await page.goto("/financeiro?demo=1");
-  await page.getByLabel("Reporting month").fill("2026-10");
-  await page.getByRole("tab", { name: "Recurring expenses" }).click();
+  await page.getByLabel("Mês de referência").fill("2026-10");
+  await page.getByRole("tab", { name: "Despesas recorrentes" }).click();
   await page
-    .getByRole("button", { name: "New recurring expense", exact: true })
+    .getByRole("button", { name: "Nova despesa recorrente", exact: true })
     .click();
-  await page.getByLabel("Description", { exact: true }).fill("Supabase Pro");
-  await page.getByLabel("Amount (BRL)", { exact: true }).fill("125,00");
-  await page.getByLabel("Category", { exact: true }).fill("Infrastructure");
-  await page.getByLabel("Source", { exact: true }).fill("Supabase");
+  await page.getByLabel("Descrição", { exact: true }).fill("Supabase Pro");
+  await page.getByLabel("Valor (R$)", { exact: true }).fill("125,00");
+  await page.getByLabel("Categoria", { exact: true }).fill("Infrastructure");
+  await page.getByLabel("Fonte / origem", { exact: true }).fill("Supabase");
   // Project attribution stays optional, even for Supabase costs.
-  await expect(page.getByLabel("Served project")).toHaveCount(0);
-  await page.getByRole("button", { name: /Project and allocation/ }).click();
-  await page.getByLabel("Served project").selectOption("Diagium");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
-  await expect(page.getByText("Recurring expense saved.")).toBeVisible();
+  await expect(page.getByLabel("Projeto atendido")).toHaveCount(0);
+  await page.getByRole("button", { name: /Projeto e rateio/ }).click();
+  await page.getByLabel("Projeto atendido").selectOption("Diagium");
+  await page
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
+  await expect(page.getByText("Despesa recorrente salva.")).toBeVisible();
   expect(tables.templates[0]).toMatchObject({
     starts_on: "2026-10-01",
     ends_on: null,
@@ -999,21 +1026,23 @@ test("recurring expenses generate the month once, and Supabase costs keep the pr
     amount_cents: 12500,
     project: "Diagium",
   });
-  await page.getByRole("button", { name: /Generate .* expenses/ }).click();
-  await expect(page.getByText(/1 expense generated/)).toBeVisible();
-  await page.getByRole("button", { name: /Generate .* expenses/ }).click();
-  await expect(page.getByText(/0 expenses generated/)).toBeVisible();
+  await page.getByRole("button", { name: /Gerar despesas de .*/ }).click();
+  await expect(page.getByText(/1 despesa gerada/)).toBeVisible();
+  await page.getByRole("button", { name: /Gerar despesas de .*/ }).click();
+  await expect(page.getByText(/0 despesa gerada/)).toBeVisible();
   expect(tables.entries).toHaveLength(1);
   expect(tables.settlements).toHaveLength(0);
-  await expect(metric(page, "Accrued expenses")).toContainText("125.00");
-  await page.getByRole("tab", { name: "Accruals" }).click();
+  await expect(metric(page, "Despesas por competência")).toContainText(
+    "125,00",
+  );
+  await page.getByRole("tab", { name: "Competência" }).click();
   await expect(page.getByRole("cell", { name: /^Supabase Pro/ })).toBeVisible();
 });
 
 test("project selection scopes summary and ledger and preselects a new expense", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   const period = `${currentMonth()}-01`;
   tables.entries.push(
@@ -1042,7 +1071,9 @@ test("project selection scopes summary and ledger and preselects a new expense",
 
   await projectFilter.selectOption("Alpha");
   await expect(page).toHaveURL(/project=Alpha$/);
-  await expect(metric(page, "Accrued revenue")).toContainText("100.00");
+  await expect(metric(page, "Faturamento por competência")).toContainText(
+    "100,00",
+  );
   await expect(page.locator(".finance-table")).toContainText("Alpha income");
   await expect(page.locator(".finance-table")).not.toContainText(
     "Alpha Pro income",
@@ -1050,7 +1081,9 @@ test("project selection scopes summary and ledger and preselects a new expense",
 
   await projectFilter.selectOption("Alpha Pro");
   await expect(page).toHaveURL(/project=Alpha\+Pro$/);
-  await expect(metric(page, "Accrued revenue")).toContainText("900.00");
+  await expect(metric(page, "Faturamento por competência")).toContainText(
+    "900,00",
+  );
   await expect(page.locator(".finance-table")).toContainText(
     "Alpha Pro income",
   );
@@ -1058,30 +1091,34 @@ test("project selection scopes summary and ledger and preselects a new expense",
     "Alpha income",
   );
 
-  await page.getByRole("button", { name: "New expense", exact: true }).click();
+  await page.getByRole("button", { name: "Nova despesa", exact: true }).click();
   const form = editor(page);
-  const servedProject = form.getByLabel("Served project", { exact: true });
+  const servedProject = form.getByLabel("Projeto atendido", { exact: true });
   await expect(servedProject).toHaveValue("Alpha Pro");
-  await form.getByLabel("Description", { exact: true }).fill("Project expense");
-  await form.getByLabel("Amount (BRL)", { exact: true }).fill("12.50");
-  await form.getByLabel("Category", { exact: true }).fill("Operations");
-  await form.getByLabel("Source", { exact: true }).fill("Manual");
-  await form.getByRole("button", { name: "Save record", exact: true }).click();
-  await expect(page.getByText("Entry saved.", { exact: true })).toBeVisible();
+  await form.getByLabel("Descrição", { exact: true }).fill("Project expense");
+  await form.getByLabel("Valor (R$)", { exact: true }).fill("12.50");
+  await form.getByLabel("Categoria", { exact: true }).fill("Operations");
+  await form.getByLabel("Fonte / origem", { exact: true }).fill("Manual");
+  await form
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
+  await expect(
+    page.getByText("Lançamento salvo.", { exact: true }),
+  ).toBeVisible();
   expect(tables.entries.at(-1)).toMatchObject({
     description: "Project expense",
     project: "Alpha Pro",
     kind: "expense",
     amount_cents: 1250,
   });
-  await expect(metric(page, "Accrued expenses")).toContainText("12.50");
+  await expect(metric(page, "Despesas por competência")).toContainText("12,50");
   await expect(page.locator(".finance-table")).toContainText("Project expense");
 });
 
 test("coverage review and unknown amounts drive the coverage status", async ({
   page,
 }) => {
-  await openFinance(page, "en-US");
+  await openFinance(page);
   const { tables } = await mockFinance(page);
   tables.entries.push({
     ...hostinger,
@@ -1089,30 +1126,36 @@ test("coverage review and unknown amounts drive the coverage status", async ({
     estimated: false,
   });
   await page.goto("/financeiro?demo=1");
-  await page.getByLabel("Reporting month").fill("2026-10");
-  await expect(page.getByText("1 unknown amount")).toBeVisible();
-  await expect(page.locator(".finance-table")).toContainText("Unknown amount");
-  await page.getByRole("button", { name: "Review coverage" }).click();
+  await page.getByLabel("Mês de referência").fill("2026-10");
+  await expect(page.getByText("1 valor desconhecido")).toBeVisible();
+  await expect(page.locator(".finance-table")).toContainText(
+    "Valor desconhecido",
+  );
+  await page.getByRole("button", { name: "Revisar cobertura" }).click();
   for (const label of [
-    "Sources reviewed",
-    "Expenses reviewed",
-    "Taxes reviewed",
+    "Fontes conferidas",
+    "Despesas conferidas",
+    "Impostos conferidos",
   ])
     await page.getByLabel(label, { exact: true }).check();
-  await page.getByRole("button", { name: "Save review", exact: true }).click();
-  await expect(page.getByText("Coverage review saved.")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Salvar revisão", exact: true })
+    .click();
+  await expect(page.getByText("Revisão de cobertura salva.")).toBeVisible();
   await expect(
-    page.getByText("Sources, expenses and taxes not yet reviewed"),
+    page.getByText("Fontes, despesas e impostos ainda não revisados"),
   ).toHaveCount(0);
   // Still partial while an amount is unknown.
   await expect(
-    page.getByText("Partial coverage — provisional result"),
+    page.getByText("Cobertura parcial — resultado provisório"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Edit: Hostinger Diagium" }).click();
-  await page.getByLabel("Amount (BRL)", { exact: true }).fill("19,90");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await page.getByRole("button", { name: "Editar: Hostinger Diagium" }).click();
+  await page.getByLabel("Valor (R$)", { exact: true }).fill("19,90");
+  await page
+    .getByRole("button", { name: "Salvar registro", exact: true })
+    .click();
   await expect(
-    page.getByText("Monthly coverage confirmed by the operator."),
+    page.getByText("Cobertura mensal confirmada pelo operador."),
   ).toBeVisible();
   expect(tables.reviews[0]).toMatchObject({
     period: "2026-10-01",
@@ -1131,7 +1174,7 @@ for (const theme of ["light", "dark"] as const) {
         ? { width: 390, height: 844 }
         : { width: 1440, height: 900 },
     );
-    await openFinance(page, "en-US", theme);
+    await openFinance(page, theme);
     const { tables } = await mockFinance(page, true, true);
     tables.entries.push({
       ...hostinger,
@@ -1161,7 +1204,7 @@ for (const theme of ["light", "dark"] as const) {
     });
 
     await page
-      .getByRole("button", { name: "New expense", exact: true })
+      .getByRole("button", { name: "Nova despesa", exact: true })
       .click();
     await expect(editor(page)).toBeVisible();
     expect(await noOverflow(page)).toBe(false);

@@ -3,9 +3,6 @@ import { expect, test } from "@playwright/test";
 test("approved workspace surfaces preserve navigation and settings typography in both themes", async ({
   page,
 }, info) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("mend.interface-language", "pt-BR");
-  });
   for (const theme of ["light", "dark"]) {
     for (const route of [
       "dashboard",

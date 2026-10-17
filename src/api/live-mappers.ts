@@ -31,14 +31,13 @@ import type {
   BugVerdict,
   CodingAgentProvider,
 } from "../types";
-import { currentInterfaceLanguage } from "../i18n/preferences";
+import { appLocale } from "../i18n/resources";
 import { conversationPreviewText } from "../shared/conversation-preview";
 
 type Tables = Database["public"]["Tables"];
 export type ContactRecord = Tables["contacts"]["Row"];
 export type ChannelConnectionRecord = Tables["channel_connections"]["Row"];
 export type AiDraftRecord = Tables["ai_drafts"]["Row"];
-export type AiDraftKnowledgeRecord = Tables["ai_draft_knowledge"]["Row"];
 export interface WorkspaceData {
   workspaces: Workspace[];
   workspace: Workspace | null;
@@ -154,7 +153,7 @@ function displayTime(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(currentInterfaceLanguage(), {
+  return new Intl.DateTimeFormat(appLocale, {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
@@ -182,7 +181,7 @@ export function toUiMessage(
         : record.sender_type === "ai"
           ? "Mend AI"
           : "Mend operator"),
-    text: record.text ?? record.caption ?? "",
+    text: record.text || record.caption || "",
     time: displayTime(record.created_at),
     createdAt: record.created_at,
     type: messageType,
@@ -930,8 +929,4 @@ export function toUiKnowledge(
     sourcePath: apiRecord.sourcePath ?? null,
     sourceRevision: apiRecord.sourceRevision ?? null,
   };
-}
-
-export function toWorkspaceLabel(workspace: Workspace) {
-  return { id: workspace.id, name: workspace.name, slug: workspace.slug };
 }

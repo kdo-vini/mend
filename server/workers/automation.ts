@@ -64,7 +64,6 @@ import type {
   LiveWorkerSupabaseClient,
   UncheckedSupabaseClient,
 } from "../live-worker.js";
-import { normalizeLocale } from "../locale.js";
 import {
   connectionEncryptionKey,
   mcpArgumentsHmac,
@@ -357,22 +356,20 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         ? escalationDecision
         : provisionalDecision;
     if (allowHumanHandoffReply) {
-      const locale = await this.workspaceLocale(input.binding.workspaceId);
       draft = {
         conversationId: input.persisted.conversationId,
         messageId: input.persisted.id,
         idempotencyKey: input.idempotencyKey,
-        body: humanHandoffReplyBody(locale),
+        body: humanHandoffReplyBody(),
         knowledgeArticleIds: [],
         triage,
       };
     } else if (allowBugAutoReply) {
-      const locale = await this.workspaceLocale(input.binding.workspaceId);
       draft = {
         conversationId: input.persisted.conversationId,
         messageId: input.persisted.id,
         idempotencyKey: input.idempotencyKey,
-        body: bugAcknowledgmentReplyBody(locale),
+        body: bugAcknowledgmentReplyBody(),
         knowledgeArticleIds: [],
         triage,
       };
@@ -920,26 +917,21 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     if (!intent) return;
     if (modePolicy.policy.routes[intent] !== "human_escalation") return;
 
-    const locale = await this.workspaceLocale(input.binding.workspaceId);
     const triage: TriageResult = {
       intent,
       priority: intent === "incident" ? "urgent" : "high",
       confidence: 0.95,
       summary:
         intent === "billing"
-          ? locale === "pt-BR"
-            ? "Cliente perguntou sobre pagamento ou renovação do plano."
-            : "Customer asked about plan payment or renewal."
-          : locale === "pt-BR"
-            ? "Cliente relatou indisponibilidade ou falha de acesso."
-            : "Customer reported a blocking outage or access failure.",
+          ? "Cliente perguntou sobre pagamento ou renovação do plano."
+          : "Cliente relatou indisponibilidade ou falha de acesso.",
       unsafe: false,
     };
     const draft: LiveWorkerDraft = {
       conversationId: input.persisted.conversationId,
       messageId: input.persisted.id,
       idempotencyKey: input.idempotencyKey,
-      body: humanHandoffReplyBody(locale),
+      body: humanHandoffReplyBody(),
       knowledgeArticleIds: [],
       triage,
     };
@@ -1299,24 +1291,14 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       startFailed?: boolean;
     } = {},
   ): Promise<void> {
-    const locale = await this.workspaceLocale(input.binding.workspaceId);
-    const copy =
-      buildNotificationCopy(kind, locale, {
-        summary: triage.summary,
-        identifier: extras.identifier,
-        detail: extras.detail,
-        fixReady: extras.fixReady,
-        fixStarted: extras.fixStarted,
-        startFailed: extras.startFailed,
-      }) ??
-      buildNotificationCopy(kind, "en-US", {
-        summary: triage.summary,
-        identifier: extras.identifier,
-        detail: extras.detail,
-        fixReady: extras.fixReady,
-        fixStarted: extras.fixStarted,
-        startFailed: extras.startFailed,
-      });
+    const copy = buildNotificationCopy(kind, {
+      summary: triage.summary,
+      identifier: extras.identifier,
+      detail: extras.detail,
+      fixReady: extras.fixReady,
+      fixStarted: extras.fixStarted,
+      startFailed: extras.startFailed,
+    });
     const title = boundedText(copy?.title ?? kind, 240);
     const body = boundedText(copy?.body ?? triage.summary, 2_000);
     const result = await this.metadataClient
@@ -1963,24 +1945,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       .catch(() => undefined);
   }
 
-  private async workspaceLocale(
-    workspaceId: string,
-  ): Promise<ReturnType<typeof normalizeLocale>> {
-    const workspace = await this.metadataClient
-      .from("workspaces")
-      .select("default_language")
-      .eq("id", workspaceId)
-      .maybeSingle();
-    if (workspace.error)
-      throw new Error(
-        "supabase:workspaces:language:" + workspace.error.message,
-      );
-    return normalizeLocale(
-      (workspace.data as { default_language?: unknown } | null)
-        ?.default_language,
-    );
-  }
-
   private async buildDraft(
     input: LiveWorkerAutomationInput,
     triage: TriageResult,
@@ -1991,18 +1955,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     options: { allowUngrounded?: boolean } = {},
   ): Promise<LiveWorkerDraft | undefined> {
     if (triage.unsafe || !decision.allowed || mode === "off") return undefined;
-    const workspace = await this.metadataClient
-      .from("workspaces")
-      .select("default_language")
-      .eq("id", input.binding.workspaceId)
-      .maybeSingle();
-    if (workspace.error)
-      throw new Error(
-        "supabase:workspaces:language:" + workspace.error.message,
-      );
-    const workspaceRow = (workspace.data ?? {}) as {
-      default_language?: unknown;
-    };
     const phone = await this.customerPhone(input);
     const history = await this.conversationHistory(input);
     const conversation = [
@@ -2051,7 +2003,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       ? await provider.draftReplyWithContext({
           conversation,
           knowledgeContext: safeKnowledgeContext(knowledge),
-          language: normalizeLocale(workspaceRow.default_language),
           mcpConnections,
           ...(guidedHowTo?.status === "in_progress"
             ? {
@@ -2069,7 +2020,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           body: await provider.draftReply(
             conversation,
             safeKnowledgeContext(knowledge),
-            normalizeLocale(workspaceRow.default_language),
           ),
           mcpEvidence: false,
           mcpCalls: [],
@@ -2104,7 +2054,6 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
             await provider.draftReply(
               conversation,
               safeKnowledgeContext(knowledge),
-              normalizeLocale(workspaceRow.default_language),
             ),
             12_000,
           ),
@@ -2233,19 +2182,16 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       );
     if (state.error)
       throw new Error(`supabase:conversation_ai_state:${state.error.message}`);
-    const locale = await this.workspaceLocale(input.binding.workspaceId);
-    const copy =
-      buildNotificationCopy("support_ai_configuration_required", locale) ??
-      buildNotificationCopy("support_ai_configuration_required", "en-US");
+    const copy = buildNotificationCopy("support_ai_configuration_required");
     const notification = await this.metadataClient
       .from("notifications")
       .insert({
         workspace_id: input.binding.workspaceId,
         kind: "support_ai_configuration_required",
-        title: copy?.title ?? "Support AI configuration required",
+        title: copy?.title ?? "Configuração da IA de suporte necessária",
         body:
           copy?.body ??
-          "Configure the workspace support credential and models, then resume AI.",
+          "Configure a credencial e os modelos de suporte do espaço de trabalho e retome a IA.",
         entity_type: "conversation",
         entity_id: input.persisted.conversationId,
         payload_json: {

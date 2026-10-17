@@ -44,7 +44,6 @@ export const workspaceCreateSchema = z
       .regex(/^[A-Z][A-Z0-9]{1,7}$/)
       .default("TEC"),
     timezone: z.string().trim().min(1).max(80).default("UTC"),
-    defaultLanguage: z.string().trim().min(2).max(12).default("pt-BR"),
   })
   .strict();
 export const workspacePatchSchema = workspaceCreateSchema.partial().strict();
@@ -169,8 +168,25 @@ export const messagePresenceSchema = z
 export const sendMessageSchema = z
   .object({
     messageType: z
-      .enum(["text", "image", "video", "audio", "document"])
+      .enum(["text", "image", "video", "audio", "document", "contact"])
       .default("text"),
+    contacts: z
+      .array(
+        z
+          .object({
+            fullName: z.string().trim().min(1).max(120),
+            phoneNumber: z
+              .string()
+              .trim()
+              .regex(/^\+?[0-9]{8,15}$/, "phoneNumber must be 8-15 digits"),
+            organization: z.string().trim().max(120).optional(),
+            email: z.string().trim().email().max(254).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(10)
+      .optional(),
     text: z.string().trim().max(20_000).optional(),
     caption: z.string().trim().max(4_000).optional(),
     mediaUrl: z
@@ -221,6 +237,15 @@ export const sendMessageSchema = z
         path: ["text"],
         message: "text is required for text messages",
       });
+    if (value.messageType === "contact") {
+      if (!value.contacts?.length)
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["contacts"],
+          message: "contacts is required for contact messages",
+        });
+      return;
+    }
     if (value.messageType !== "text" && !value.mediaUrl && !value.mediaDataUrl)
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -289,18 +314,6 @@ export const repositoryListQuerySchema = z
     cursor: z.string().trim().max(200).optional(),
   })
   .strict();
-export const repositoryPath = z
-  .string()
-  .trim()
-  .max(500)
-  .refine(
-    (value) => !value.includes("\0"),
-    "Path contains an invalid character",
-  )
-  .refine(
-    (value) => !/(^|[\\/])\.\.([\\/]|$)/.test(value),
-    "Path traversal is not allowed",
-  );
 const repositoryFields = {
   name: z.string().trim().min(1).max(160),
   defaultBranch: z.string().trim().min(1).max(160).default("main"),

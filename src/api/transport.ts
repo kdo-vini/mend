@@ -26,13 +26,6 @@ export function isDemoModeRequested() {
   );
 }
 
-export function enableDemoMode() {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem("mend.demo", "1");
-    window.location.reload();
-  }
-}
-
 export class LiveActionError extends Error {
   constructor(
     message: string,
@@ -116,6 +109,13 @@ export async function apiRequest<T>(
           typeof apiError.message === "string"
         ? apiError.message
         : `Mend API request failed (${response.status}).`;
-  if (!response.ok) throw new LiveActionError(message, response.status, code);
+  if (!response.ok) {
+    const details =
+      apiError && typeof apiError === "object" && "details" in apiError
+        ? apiError.details
+        : undefined;
+    if (details) console.warn("Mend API error details", path, details);
+    throw new LiveActionError(message, response.status, code);
+  }
   return body as T;
 }

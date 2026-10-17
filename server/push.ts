@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 import type { Database } from "../src/lib/database.types.js";
-import { normalizeLocale, type SupportedLocale } from "./locale.js";
 import {
   buildNotificationCopy,
   type NotificationCopyParams,
@@ -26,14 +25,9 @@ export interface WorkspacePushPayload {
 
 function localizePushPayload(
   payload: WorkspacePushPayload,
-  locale: SupportedLocale,
 ): Pick<WorkspacePushPayload, "title" | "body"> {
   if (!payload.kind) return { title: payload.title, body: payload.body };
-  const copy = buildNotificationCopy(
-    payload.kind,
-    locale,
-    payload.copyParams ?? {},
-  );
+  const copy = buildNotificationCopy(payload.kind, payload.copyParams ?? {});
   if (!copy) return { title: payload.title, body: payload.body };
   return { title: copy.title, body: copy.body };
 }
@@ -84,17 +78,7 @@ export class WorkspacePushNotifier {
     const settled = await Promise.allSettled(
       subscriptions.map(async (subscription) => {
         try {
-          let locale: SupportedLocale = "pt-BR";
-          if (subscription.user_id) {
-            const preference = await client
-              .from("user_preferences")
-              .select("interface_language")
-              .eq("user_id", subscription.user_id)
-              .maybeSingle();
-            if (!preference.error)
-              locale = normalizeLocale(preference.data?.interface_language);
-          }
-          const localized = localizePushPayload(payload, locale);
+          const localized = localizePushPayload(payload);
           await webpush.sendNotification(
             {
               endpoint: subscription.endpoint,

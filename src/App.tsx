@@ -20,7 +20,6 @@ import type {
 } from "./types";
 import { mergeConversationSnapshot } from "./features/inbox/conversation-snapshot";
 import { supabase } from "./lib/supabase";
-import { normalizeLocale, type SupportedLocale } from "./i18n/resources";
 import {
   enableNativePush,
   dismissWorkspaceNotification,
@@ -30,6 +29,7 @@ import {
   type WorkspaceNotification,
 } from "./api/notifications";
 import {
+  createLiveCatchUp,
   createRealtimeFallback,
   hasActiveRuns,
   listWorkspaces,
@@ -57,7 +57,10 @@ import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { WorkspaceRoutes } from "./app/routes/WorkspaceRoutes";
 import { useAppShortcuts } from "./app/shortcuts/useAppShortcuts";
 import { notificationDestination } from "./app/shell/notification-destination";
-import { workspaceRefreshTarget } from "./app/live-workspace-sync";
+import {
+  createLiveRefreshBatcher,
+  workspaceRefreshTarget,
+} from "./app/live-workspace-sync";
 import {
   MobileBottomNav as ShellMobileBottomNav,
   MobileTopbar as ShellMobileTopbar,
@@ -158,6 +161,8 @@ function App() {
   const [runs, setRuns] = useState<CodingRun[]>(demoMode ? seedRuns : []);
   const runsRef = useRef(runs);
   runsRef.current = runs;
+  // Bumped by the live catch-up so the open thread is re-read with the list.
+  const [conversationResync, setConversationResync] = useState(0);
   const [knowledgeArticles, setKnowledgeArticles] = useState<
     KnowledgeArticle[]
   >(demoMode ? seedKnowledge : []);
@@ -168,8 +173,6 @@ function App() {
     "idle",
   );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [operationalLanguage, setOperationalLanguage] =
-    useState<SupportedLocale>("en-US");
   const [, setChannel] = useState<WhatsAppInstance | null>(null);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(
@@ -196,6 +199,8 @@ function App() {
   const [selectedConversationId, setSelectedConversationId] = useState(
     demoMode ? (seedConversations[0]?.id ?? "") : "",
   );
+  const selectedConversationIdRef = useRef(selectedConversationId);
+  selectedConversationIdRef.current = selectedConversationId;
   const [operatorIdentity, setOperatorIdentity] = useState({
     id: "",
     name: t("app.currentOperator"),
@@ -242,9 +247,8 @@ function App() {
   const { confirm: requestConfirmation, confirmationDialog } =
     useConfirmation();
   const handleProfileWorkspaceUpdated = useCallback(
-    (workspace: { id: string; name: string; default_language?: string }) => {
+    (workspace: { id: string; name: string }) => {
       setWorkspaceId(workspace.id);
-      setOperationalLanguage(normalizeLocale(workspace.default_language));
       setLiveDataRetry((current) => current + 1);
     },
     [],
@@ -398,22 +402,57 @@ function App() {
     let reconcileQueue = Promise.resolve();
     let realtimeHealthy = false;
     let runStatusTimer: ReturnType<typeof setInterval> | null = null;
-    let workspaceRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshConversation = async (
+      workspaceId: string,
+      conversationId: string,
+    ) => {
+      const snapshot = await loadLiveConversationSnapshot(
+        client,
+        workspaceId,
+        conversationId,
+      );
+      if (!active) return;
+      setConversations((current) =>
+        snapshot
+          ? mergeConversationSnapshot(current, snapshot)
+          : // Deleted (or no longer visible to this operator).
+            current.filter(
+              (conversation) => conversation.id !== conversationId,
+            ),
+      );
+    };
+    let liveWorkspaceId: string | null = null;
+    const refreshBatcher = createLiveRefreshBatcher((batch) => {
+      reconcileQueue = reconcileQueue
+        .then(async () => {
+          if (!active) return;
+          if (batch.workspace) await hydrate(false);
+          const workspaceId = liveWorkspaceId;
+          if (!active || !workspaceId) return;
+          if (batch.notifications) {
+            const nextNotifications = await listWorkspaceNotifications(
+              client,
+              workspaceId,
+            );
+            if (active) setNotifications(nextNotifications);
+          }
+          await Promise.all(
+            batch.conversationIds.map((id) =>
+              refreshConversation(workspaceId, id),
+            ),
+          );
+        })
+        .catch((error) => {
+          if (active)
+            setLiveDataError(
+              error instanceof Error
+                ? error.message
+                : t("errors.liveReconciliation"),
+            );
+        });
+    });
     const scheduleWorkspaceRefresh = () => {
-      if (workspaceRefreshTimer || !active) return;
-      workspaceRefreshTimer = setTimeout(() => {
-        workspaceRefreshTimer = null;
-        reconcileQueue = reconcileQueue
-          .then(() => (active ? hydrate(false) : undefined))
-          .catch((error) => {
-            if (active)
-              setLiveDataError(
-                error instanceof Error
-                  ? error.message
-                  : t("errors.liveReconciliation"),
-              );
-          });
-      }, 250);
+      if (active) refreshBatcher.add({ kind: "workspace" });
     };
     const hydrate = async (showLoading = true) => {
       try {
@@ -437,7 +476,7 @@ function App() {
         }
         if (!active) return;
         setWorkspaceId(workspace.id);
-        setOperationalLanguage(normalizeLocale(workspace.default_language));
+        liveWorkspaceId = workspace.id;
         const liveData = await loadLiveWorkspace(client, workspace.id);
         if (!active) return;
         setConversations((current) =>
@@ -447,19 +486,21 @@ function App() {
                 // The workspace list only embeds the latest message per thread.
                 partialMessages: true,
               }),
-            current.filter((conversation) =>
-              liveData.conversations.some(
-                (snapshot) => snapshot.id === conversation.id,
-              ),
+            // The list only carries the 100 most recent threads. The open
+            // one stays even when older (opened from an issue or a link);
+            // deletions reach it through its own realtime snapshot.
+            current.filter(
+              (conversation) =>
+                conversation.id === selectedConversationIdRef.current ||
+                liveData.conversations.some(
+                  (snapshot) => snapshot.id === conversation.id,
+                ),
             ),
           ),
         );
-        setSelectedConversationId((current) =>
-          liveData.conversations.some(
-            (conversation) => conversation.id === current,
-          )
-            ? current
-            : (liveData.conversations[0]?.id ?? ""),
+        // A background refresh never moves the operator to another thread.
+        setSelectedConversationId(
+          (current) => current || (liveData.conversations[0]?.id ?? ""),
         );
         setIssues(liveData.issues);
         setKnowledgeArticles(liveData.knowledge);
@@ -471,48 +512,19 @@ function App() {
         if (active) setNotifications(workspaceNotifications);
         if (!workspaceSubscribed) {
           workspaceSubscribed = true;
+          liveCatchUp.start();
           unsubscribe = subscribeToWorkspace(
             client,
             workspace.id,
             (payload) => {
-              reconcileQueue = reconcileQueue
-                .then(async () => {
-                  if (!active) return;
-                  const target = workspaceRefreshTarget({
-                    table: String(payload.table ?? ""),
-                    new: payload.new as Record<string, unknown>,
-                    old: payload.old as Record<string, unknown>,
-                  });
-                  if (target.kind === "notifications") {
-                    const nextNotifications = await listWorkspaceNotifications(
-                      client,
-                      workspace.id,
-                    );
-                    if (active) setNotifications(nextNotifications);
-                    return;
-                  }
-                  if (target.kind === "conversation") {
-                    const snapshot = await loadLiveConversationSnapshot(
-                      client,
-                      workspace.id,
-                      target.id,
-                    );
-                    if (snapshot && active)
-                      setConversations((current) =>
-                        mergeConversationSnapshot(current, snapshot),
-                      );
-                    return;
-                  }
-                  scheduleWorkspaceRefresh();
-                })
-                .catch((error) => {
-                  if (active)
-                    setLiveDataError(
-                      error instanceof Error
-                        ? error.message
-                        : t("errors.liveReconciliation"),
-                    );
-                });
+              if (!active) return;
+              refreshBatcher.add(
+                workspaceRefreshTarget({
+                  table: String(payload.table ?? ""),
+                  new: payload.new as Record<string, unknown>,
+                  old: payload.old as Record<string, unknown>,
+                }),
+              );
             },
             {
               onStatus: (status) => {
@@ -521,10 +533,14 @@ function App() {
                   realtimeFallback.stop();
                 } else realtimeFallback.start();
               },
+              onResubscribed: () => liveCatchUp.trigger(),
             },
           );
         }
       } catch (error) {
+        // A failed background reconcile (e.g. a network blip during catch-up)
+        // keeps the loaded workspace and live channel; the next one retries.
+        if (!showLoading && workspaceSubscribed) throw error;
         if (active) {
           unsubscribe();
           workspaceSubscribed = false;
@@ -557,6 +573,11 @@ function App() {
       },
       () => realtimeHealthy,
     );
+    const liveCatchUp = createLiveCatchUp(() => {
+      if (!active || !workspaceSubscribed) return;
+      scheduleWorkspaceRefresh();
+      setConversationResync((current) => current + 1);
+    });
     runStatusTimer = setInterval(() => {
       if (
         !active ||
@@ -572,8 +593,9 @@ function App() {
       active = false;
       unsubscribe();
       realtimeFallback.stop();
+      liveCatchUp.stop();
       if (runStatusTimer) clearInterval(runStatusTimer);
-      if (workspaceRefreshTimer) clearTimeout(workspaceRefreshTimer);
+      refreshBatcher.stop();
     };
   }, [demoMode, liveDataRetry, notify, t]);
 
@@ -593,10 +615,14 @@ function App() {
       selectedConversationId,
     )
       .then((snapshot) => {
-        if (snapshot && active)
-          setConversations((current) =>
-            mergeConversationSnapshot(current, snapshot),
-          );
+        if (!active) return;
+        setConversations((current) =>
+          snapshot
+            ? mergeConversationSnapshot(current, snapshot)
+            : current.filter(
+                (conversation) => conversation.id !== selectedConversationId,
+              ),
+        );
       })
       .catch((error) => {
         if (active)
@@ -609,7 +635,14 @@ function App() {
     return () => {
       active = false;
     };
-  }, [demoMode, inboxRoute, selectedConversationId, t, workspaceId]);
+  }, [
+    conversationResync,
+    demoMode,
+    inboxRoute,
+    selectedConversationId,
+    t,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (demoMode || !mendApiBaseUrl || !workspaceId) return;
@@ -745,7 +778,9 @@ function App() {
             ? t("toasts.browserNotificationsBlocked")
             : status === "unsupported"
               ? t("toasts.nativeNotificationsUnsupported")
-              : t("toasts.nativeNotificationsNotConfigured"),
+              : status === "requires-install"
+                ? t("toasts.nativeNotificationsRequiresInstall")
+                : t("toasts.nativeNotificationsNotConfigured"),
       );
     } catch (error) {
       notify(
@@ -1226,7 +1261,6 @@ function App() {
                   issues={issues}
                   runs={runs}
                   workspaceId={workspaceId}
-                  operationalLanguage={operationalLanguage}
                   liveMode={!demoMode}
                   assigneeOptions={assigneeOptions}
                   assigneeLabel={assigneeLabel}

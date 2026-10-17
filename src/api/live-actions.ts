@@ -1,4 +1,3 @@
-import type { User } from "@supabase/supabase-js";
 import type { Database } from "../lib/database.types";
 import { supabase, type MendSupabaseClient } from "../lib/supabase";
 import type {
@@ -31,7 +30,6 @@ import {
 } from "./transport";
 
 export {
-  enableDemoMode,
   isDemoModeRequested,
   isLiveConfigured,
   LiveActionError,
@@ -262,15 +260,6 @@ const dbRunMode = (value: CodingRun["mode"]) =>
     "Propose fix": "propose_fix",
     "Implement fix": "implement_fix",
   })[value] ?? "investigate";
-
-export async function getCurrentUser(
-  client: MendSupabaseClient | null = supabase,
-): Promise<User | null> {
-  if (!client) return null;
-  const { data, error } = await client.auth.getUser();
-  if (error) throw new LiveActionError(error.message);
-  return data.user;
-}
 
 export async function listLiveWorkspaces(
   client: MendSupabaseClient | null = supabase,
@@ -649,17 +638,6 @@ export interface LiveWorkspaceInvitation {
   updatedAt?: string | null;
 }
 
-export interface LiveAuditLogEntry {
-  id: string;
-  workspaceId?: string | null;
-  actorUserId?: string | null;
-  action: string;
-  entityType: string;
-  entityId?: string | null;
-  metadata?: Record<string, unknown>;
-  createdAt?: string | null;
-}
-
 function queryString(values: object): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(values))
@@ -779,23 +757,6 @@ export async function revokeLiveWorkspaceInvitation(input: {
   );
 }
 
-export async function listLiveAuditLog(
-  workspaceId: string,
-  options: {
-    action?: string;
-    entityType?: string;
-    limit?: number;
-    cursor?: string;
-  } = {},
-): Promise<LiveAuditLogEntry[]> {
-  const result = await apiRequest<{ data: LiveAuditLogEntry[] }>(
-    `/api/workspaces/${encodeURIComponent(workspaceId)}/audit-log${queryString(options)}`,
-    {},
-    workspaceId,
-  );
-  return result.data ?? [];
-}
-
 export async function getLiveIssueHistory(input: {
   workspaceId: string;
   identifier: string;
@@ -828,6 +789,38 @@ export async function sendLiveMessage(input: {
       body: JSON.stringify({
         messageType: "text",
         text: input.text.trim(),
+        ...(input.idempotencyKey
+          ? { idempotencyKey: input.idempotencyKey }
+          : {}),
+      }),
+    },
+    input.workspaceId,
+  );
+}
+
+export interface LiveContactCard {
+  fullName: string;
+  /** Digits only, with the country code. */
+  phoneNumber: string;
+  organization?: string;
+}
+
+/** Shares one or more vCards in the conversation. */
+export async function sendLiveContact(input: {
+  workspaceId: string;
+  conversationId: string;
+  contacts: LiveContactCard[];
+  idempotencyKey?: string;
+}) {
+  if (!input.contacts.length)
+    throw new LiveActionError("At least one contact is required.");
+  return apiRequest<{ message?: unknown }>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        messageType: "contact",
+        contacts: input.contacts,
         ...(input.idempotencyKey
           ? { idempotencyKey: input.idempotencyKey }
           : {}),
@@ -1061,15 +1054,18 @@ export async function uploadLiveMediaAsset(input: LiveMediaUploadInput) {
       percent: 100,
     });
   }
-  const completed = await apiRequest<{
-    assetId: string;
-    batchId: string;
-    status: string;
-  }>(
+  // The complete endpoint answers with the stored asset record, keyed by `id`;
+  // the identifiers the send step needs come from the upload metadata.
+  const completed = await apiRequest<{ status: string }>(
     `/api/media/assets/${encodeURIComponent(metadata.assetId)}/complete`,
     { method: "POST", body: JSON.stringify({}) },
     input.workspaceId,
   );
+  const result = {
+    assetId: metadata.assetId,
+    batchId: metadata.batchId,
+    status: completed.status,
+  };
   const deadline = Date.now() + 120_000;
   while (completed.status === "processing" || completed.status === "uploaded") {
     if (Date.now() > deadline)
@@ -1087,9 +1083,9 @@ export async function uploadLiveMediaAsset(input: LiveMediaUploadInput) {
       throw new LiveActionError("Uploaded media asset was not found.");
     if (asset.status === "failed" || asset.status === "unsupported")
       throw new LiveActionError(`Media processing failed: ${asset.status}.`);
-    if (asset.status === "ready") return { ...completed, ...asset };
+    if (asset.status === "ready") return { ...result, status: asset.status };
   }
-  return completed;
+  return result;
 }
 
 export async function sendLiveMediaBatch(input: {
@@ -2320,18 +2316,6 @@ export async function createLiveChannel(input: {
   return channelToInstance(result);
 }
 
-export async function connectLiveChannel(input: {
-  workspaceId: string;
-  channelId: string;
-}): Promise<WhatsAppInstance> {
-  const result = await apiRequest<ApiChannel>(
-    `/api/channels/${encodeURIComponent(input.channelId)}/connect`,
-    { method: "POST", body: JSON.stringify({}) },
-    input.workspaceId,
-  );
-  return channelToInstance(result);
-}
-
 export async function getLiveChannelQr(input: {
   workspaceId: string;
   channelId: string;
@@ -2373,57 +2357,6 @@ export async function removeLiveChannel(input: {
 }): Promise<void> {
   await apiRequest<{ removed: boolean }>(
     `/api/channels/${encodeURIComponent(input.channelId)}`,
-    { method: "DELETE" },
-    input.workspaceId,
-  );
-}
-
-export function listWhatsAppInstances() {
-  return apiRequest<WhatsAppInstance[]>("/api/whatsapp/instances");
-}
-
-export function createWhatsAppInstance(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<WhatsAppInstance>(
-    "/api/whatsapp/instances",
-    {
-      method: "POST",
-      body: JSON.stringify({ instanceName: input.instanceName }),
-    },
-    input.workspaceId,
-  );
-}
-
-export function connectWhatsAppInstance(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<WhatsAppInstance>(
-    `/api/whatsapp/instances/${encodeURIComponent(input.instanceName)}/connect`,
-    { method: "POST", body: JSON.stringify({}) },
-    input.workspaceId,
-  );
-}
-
-export function getWhatsAppQr(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<{ qr: string }>(
-    `/api/whatsapp/instances/${encodeURIComponent(input.instanceName)}/qr`,
-    {},
-    input.workspaceId,
-  );
-}
-
-export function disconnectWhatsAppInstance(input: {
-  instanceName: string;
-  workspaceId: string;
-}) {
-  return apiRequest<WhatsAppInstance>(
-    `/api/whatsapp/instances/${encodeURIComponent(input.instanceName)}`,
     { method: "DELETE" },
     input.workspaceId,
   );

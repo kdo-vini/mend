@@ -20,7 +20,6 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { BrandMark } from "./BrandLockup";
-import { resolveInterfaceLanguage } from "../i18n/preferences";
 import {
   consumeAuthAttempt,
   resetAuthRateLimit,
@@ -123,10 +122,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
       const { data, error: sessionError } = await client.auth.getSession();
       if (!active) return;
       if (sessionError) setError(i18n.t("sessionError", { ns: "auth" }));
-      if (data.session) {
-        await resolveInterfaceLanguage(client);
-        if (!active) return;
-      }
       setSession(data.session);
       setLoading(false);
     };
@@ -142,7 +137,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
         // authenticated events. Loading here unmounts the workspace for a
         // moment whenever the browser returns from the background.
         setSession(nextSession);
-        void resolveInterfaceLanguage(client);
       },
     );
     return () => {

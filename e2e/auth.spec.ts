@@ -19,12 +19,6 @@ const testSession = {
   user: testUser,
 };
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-});
-
 test("password auth shows a clear message for malformed email", async ({
   page,
 }) => {
@@ -35,12 +29,12 @@ test("password auth shows a clear message for malformed email", async ({
   });
 
   await page.goto("/?auth=1");
-  await page.getByRole("textbox", { name: "Email" }).fill("founder@company");
-  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("textbox", { name: "E-mail" }).fill("founder@company");
+  await page.getByRole("textbox", { name: "Senha" }).fill("password-123");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
 
   await expect(page.getByRole("alert")).toContainText(
-    "Enter a valid email address.",
+    "Insira um e-mail válido.",
   );
   await expect(page.locator(".auth-input-invalid")).toHaveCount(1);
   expect(tokenCalled).toBe(false);
@@ -63,8 +57,8 @@ test("password auth stops repeated attempts before the provider call", async ({
   });
 
   await page.goto("/?auth=1");
-  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
-  await page.getByRole("textbox", { name: "Password" }).fill("wrong-password");
+  await page.getByRole("textbox", { name: "E-mail" }).fill(testUser.email);
+  await page.getByRole("textbox", { name: "Senha" }).fill("wrong-password");
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
     await page.locator(".auth-submit").click();
@@ -72,7 +66,7 @@ test("password auth stops repeated attempts before the provider call", async ({
   }
 
   await expect(page.getByRole("alert")).toContainText(
-    "Too many attempts in a short time.",
+    "Muitas tentativas em pouco tempo.",
   );
   expect(tokenCalls).toBe(5);
 });
@@ -93,13 +87,9 @@ test("mobile login keeps the full-screen geometry without public registration", 
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
 
-  await expect(page.getByRole("tab", { name: "Create account" })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole("tab", { name: "Criar conta" })).toHaveCount(0);
   await expect(
-    page.getByText(
-      "Internal access by invitation. Use your authorized account.",
-    ),
+    page.getByText("Acesso interno por convite. Use sua conta autorizada."),
   ).toBeVisible();
 
   expect(signInRect).toEqual({ width: 390, height: 844 });
@@ -125,16 +115,16 @@ test("auth errors stay soft and inside the mobile frame", async ({ page }) => {
     const rect = element.getBoundingClientRect();
     return { width: rect.width, height: rect.height };
   });
-  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
-  await page.getByRole("textbox", { name: "Password" }).fill("wrong-password");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("textbox", { name: "E-mail" }).fill(testUser.email);
+  await page.getByRole("textbox", { name: "Senha" }).fill("wrong-password");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
 
   await expect(page.getByRole("alert")).toContainText(
-    "Incorrect email or password.",
+    "E-mail ou senha incorretos.",
   );
   await expect(page.locator(".auth-input-invalid")).toHaveCount(2);
   await expect(
-    page.getByRole("button", { name: "Create your account", exact: true }),
+    page.getByRole("button", { name: "Crie sua conta", exact: true }),
   ).toHaveCount(0);
   const after = await card.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -197,15 +187,15 @@ test("login creates a session and leaves the auth route for the workspace", asyn
   });
 
   await page.goto("/?auth=1");
-  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
-  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("textbox", { name: "E-mail" }).fill(testUser.email);
+  await page.getByRole("textbox", { name: "Senha" }).fill("password-123");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
 
   await expect(
-    page.getByText("The internal workspace has not been configured yet."),
+    page.getByText("O espaço interno ainda não foi configurado."),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Sign in to Mend" }),
+    page.getByRole("heading", { name: "Entrar no Mend" }),
   ).toHaveCount(0);
 });
 
@@ -219,15 +209,11 @@ test("root is the internal login, with no marketing or public signup", async ({
   });
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Sign in to Mend" }),
+    page.getByRole("heading", { name: "Entrar no Mend" }),
   ).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Create account" })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole("tab", { name: "Criar conta" })).toHaveCount(0);
   await expect(
-    page.getByText(
-      "Internal access by invitation. Use your authorized account.",
-    ),
+    page.getByText("Acesso interno por convite. Use sua conta autorizada."),
   ).toBeVisible();
   expect(signupCalls).toBe(0);
 });

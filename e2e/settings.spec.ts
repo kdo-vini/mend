@@ -1,11 +1,5 @@
 import { expect, test } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-});
-
 test("settings keeps the standard workspace page frame", async ({ page }) => {
   await page.goto("/settings?demo=1");
   const settingsFrame = await page
@@ -34,7 +28,7 @@ test("settings opens as a compact outcome-oriented hub", async ({ page }) => {
   await page.goto("/settings?demo=1");
 
   await expect(
-    page.getByRole("heading", { name: "Workspace settings" }),
+    page.getByRole("heading", { name: "Configurações do espaço de trabalho" }),
   ).toBeVisible();
   if (test.info().project.name === "mobile") {
     await expect(page.locator(".settings-v2-shell")).toHaveCSS(
@@ -45,9 +39,9 @@ test("settings opens as a compact outcome-oriented hub", async ({ page }) => {
       "padding-top",
       "16px",
     );
-    await expect(page.getByLabel("Settings section")).toBeVisible();
+    await expect(page.getByLabel("Seção de configurações")).toBeVisible();
     await page
-      .getByLabel("Settings section")
+      .getByLabel("Seção de configurações")
       .selectOption("/settings/engineering/agents/issues/providers");
   } else {
     await expect(page.locator(".settings-v2-shell")).toHaveCSS(
@@ -59,20 +53,20 @@ test("settings opens as a compact outcome-oriented hub", async ({ page }) => {
       "29px",
     );
     await expect(
-      page.getByRole("link", { name: "Agents & models", exact: true }),
+      page.getByRole("link", { name: "Agentes e modelos", exact: true }),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "GitHub" })).toHaveCount(0);
     await page
-      .getByRole("link", { name: "Agents & models", exact: true })
+      .getByRole("link", { name: "Agentes e modelos", exact: true })
       .click();
   }
   await expect(page).toHaveURL(
     /\/settings\/engineering\/agents\/issues\/providers\?demo=1/,
   );
   await expect(
-    page.getByRole("heading", { name: "Agents & models" }),
+    page.getByRole("heading", { name: "Agentes e modelos" }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Providers" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Provedores" })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -91,18 +85,20 @@ test("settings navigation becomes a compact mobile selector", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/settings?demo=1");
 
-  await expect(page.getByLabel("Settings section")).toBeVisible();
+  await expect(page.getByLabel("Seção de configurações")).toBeVisible();
   await expect(page.locator(".settings-v2-nav")).toBeHidden();
 
   await page
-    .getByLabel("Settings section")
+    .getByLabel("Seção de configurações")
     .selectOption("/settings/automation/replies");
   await expect(page).toHaveURL(/\/settings\/automation\/replies\?demo=1/);
-  await expect(page.getByText("No workspace selected")).toBeVisible();
-  await expect(page.getByText("Loading AI policy…")).toHaveCount(0);
+  await expect(
+    page.getByText("Nenhum espaço de trabalho selecionado"),
+  ).toBeVisible();
+  await expect(page.getByText("Carregando política da IA…")).toHaveCount(0);
 
   const selectorHeight = await page
-    .getByLabel("Settings section")
+    .getByLabel("Seção de configurações")
     .evaluate((element) => element.getBoundingClientRect().height);
   expect(selectorHeight).toBeGreaterThanOrEqual(44);
 
@@ -115,7 +111,7 @@ test("the mobile settings selector sits directly above its content", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/settings?demo=1");
-  await expect(page.getByLabel("Settings section")).toBeVisible();
+  await expect(page.getByLabel("Seção de configurações")).toBeVisible();
 
   const gap = await page.evaluate(() => {
     const shell = document.querySelector(".settings-v2-shell");
@@ -156,16 +152,13 @@ test("desktop settings keeps its two-column layout", async ({ page }) => {
 });
 
 test("settings uses the selected language for providers", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "pt-BR");
-  });
   await page.goto("/settings/engineering/agents/providers?demo=1");
 
   await expect(
     page.getByRole("heading", { name: "Agentes e modelos" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Connected providers", { exact: true }),
+    page.getByText("Provedores conectados", { exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByText(
@@ -186,7 +179,7 @@ test("legacy provider connections redirects to the canonical agents route", asyn
     /\/settings\/engineering\/agents\/issues\/providers\?demo=1&source=bookmark/,
   );
   await expect(
-    page.getByRole("heading", { name: "Agents & models" }),
+    page.getByRole("heading", { name: "Agentes e modelos" }),
   ).toBeVisible();
 });
 
@@ -194,25 +187,23 @@ test("canonical automation routes select their matching decision tabs", async ({
   page,
 }) => {
   await page.goto("/settings/automation/replies?demo=1");
-  await expect(page.getByRole("link", { name: "Replies" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Respostas" })).toHaveAttribute(
     "aria-current",
     "page",
   );
 
   await page.goto("/settings/automation/intake?demo=1");
-  await expect(page.getByRole("link", { name: "Intake" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    page.getByRole("link", { name: "Coleta inicial" }),
+  ).toHaveAttribute("aria-current", "page");
 
   await page.goto("/settings/automation/flows?demo=1&source=bookmark");
   await expect(page).toHaveURL(
     /\/settings\/automation\/intake\?demo=1&source=bookmark/,
   );
-  await expect(page.getByRole("link", { name: "Intake" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    page.getByRole("link", { name: "Coleta inicial" }),
+  ).toHaveAttribute("aria-current", "page");
 });
 
 test("nested sibling routes expose their computed navigation item as current", async ({
@@ -223,10 +214,10 @@ test("nested sibling routes expose their computed navigation item as current", a
   );
 
   await page.goto("/settings/automation/intake?demo=1");
-  await expect(currentItem).toHaveText("Automation");
+  await expect(currentItem).toHaveText("Automação");
 
   await page.goto("/settings/engineering/agents/run-policy?demo=1");
-  await expect(currentItem).toHaveText("Agents & models");
+  await expect(currentItem).toHaveText("Agentes e modelos");
 });
 
 test("settings taxonomy remains usable in light and dark themes", async ({
@@ -241,10 +232,10 @@ test("settings taxonomy remains usable in light and dark themes", async ({
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     if (test.info().project.name === "mobile") {
-      await expect(page.getByLabel("Settings section")).toBeVisible();
+      await expect(page.getByLabel("Seção de configurações")).toBeVisible();
     } else {
       await expect(
-        page.getByRole("link", { name: "Automation", exact: true }),
+        page.getByRole("link", { name: "Automação", exact: true }),
       ).toBeVisible();
     }
   }

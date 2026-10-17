@@ -1,10 +1,4 @@
-import { createHash } from "node:crypto";
-import {
-  DebouncedJobQueue,
-  type EnqueueJobInput,
-  type JobRecord,
-  type JobStore,
-} from "./jobs.js";
+import { type EnqueueJobInput, type JobRecord, type JobStore } from "./jobs.js";
 import {
   normalizeWhatsmiauEvent,
   type NormalizedWhatsmiauMessage,
@@ -84,35 +78,5 @@ export class WhatsmiauWorker {
       await this.store.fail(job.id, error, new Date(), this.workerId);
     }
     return true;
-  }
-}
-
-export function eventDedupeKey(payload: unknown): string {
-  return `whatsmiau-event:${createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 32)}`;
-}
-
-/** In-memory helper used by the webhook adapter and tests; production can supply a Postgres-backed JobStore. */
-export class DebouncedWhatsmiauQueue {
-  private readonly queue: DebouncedJobQueue<WhatsmiauMessageJobPayload>;
-
-  constructor(store: JobStore<WhatsmiauMessageJobPayload>, debounceMs = 1_000) {
-    this.queue = new DebouncedJobQueue(store, debounceMs);
-  }
-
-  schedule(
-    message: NormalizedWhatsmiauMessage,
-    event = "messages.upsert",
-    workspaceId?: string,
-    debounceMs?: number,
-  ) {
-    return this.queue.schedule(
-      {
-        ...(workspaceId ? { workspaceId } : {}),
-        type: "whatsmiau.message.received",
-        payload: { event, message },
-        dedupeKey: `whatsmiau:conversation:${workspaceId ?? "unscoped"}:${message.instanceName}:${message.remoteJid}`,
-      },
-      debounceMs,
-    );
   }
 }

@@ -19,7 +19,6 @@ test("workspace bootstrap does not restart when its resolved ID is published", a
   };
   await page.addInitScript(
     ({ user }) => {
-      localStorage.setItem("mend.interface-language", "en-US");
       localStorage.setItem(
         "sb-127-auth-token",
         JSON.stringify({
@@ -70,9 +69,6 @@ test("workspace bootstrap does not restart when its resolved ID is published", a
 test("switching finance views preserves totals and does not reload the summary", async ({
   page,
 }) => {
-  await page.addInitScript(() =>
-    localStorage.setItem("mend.interface-language", "en-US"),
-  );
   let summaries = 0;
   let cashLoads = 0;
   let holdRevalidation = false;
@@ -130,10 +126,12 @@ test("switching finance views preserves totals and does not reload the summary",
     await route.fulfill({ json: { data: [], nextOffset: null } });
   });
   await page.goto("/financeiro?demo=1");
-  const total = page.getByText(/1,234\.56/).first();
+  const total = page.getByText(/1\.234,56/).first();
   await expect(total).toBeVisible();
   const initialSummaries = summaries;
-  await page.getByRole("tab", { name: "Cash movements", exact: true }).click();
+  await page
+    .getByRole("tab", { name: "Movimentações de caixa", exact: true })
+    .click();
   await expect(total).toBeVisible();
   await expect.poll(() => cashLoads).toBeGreaterThan(0);
   expect(summaries).toBe(initialSummaries);
@@ -142,10 +140,10 @@ test("switching finance views preserves totals and does not reload the summary",
   await page.locator('a[href^="/issues"]:visible').first().click();
   await expect(page).toHaveURL(/\/issues/);
   await expect(
-    page.getByRole("heading", { name: "Issues", exact: true }),
+    page.getByRole("heading", { name: "Casos", exact: true }),
   ).toBeVisible();
   if (!(await page.locator('a[href^="/financeiro"]:visible').count()))
-    await page.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("button", { name: "Mais", exact: true }).click();
   holdRevalidation = true;
   try {
     await page.locator('a[href^="/financeiro"]:visible').first().click();

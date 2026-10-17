@@ -10,12 +10,6 @@ import {
 type Tables = Database["public"]["Tables"];
 export type AuditLogRecord = Tables["audit_log"]["Row"];
 
-export interface AiConversationPolicy {
-  totalConversations: number;
-  counts: Record<AiMode, number>;
-  dominantMode: AiMode | "mixed";
-}
-
 export interface LiveWorkspaceAiPolicy extends WorkspaceAiPolicy {
   totalConversations: number;
   counts: Record<AiMode, number>;

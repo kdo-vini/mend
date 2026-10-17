@@ -4,7 +4,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it } from "vitest";
-import i18n from "../../../i18n";
+import "../../../i18n";
 import { LiveActionError } from "../../../api/transport";
 import type { LiveAgentConnection } from "../api";
 import { catalogFailurePresentation } from "../catalog-errors";
@@ -49,7 +49,6 @@ describe("ProviderComparisonTable", () => {
         IS_REACT_ACT_ENVIRONMENT: boolean;
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage("en-US");
   });
 
   it("keeps duplicate labels as independent comparison rows with actions", async () => {
@@ -78,13 +77,13 @@ describe("ProviderComparisonTable", () => {
       "Production provider",
     );
     expect(
-      container.querySelectorAll('td[data-label="Authentication"]'),
+      container.querySelectorAll('td[data-label="Autenticação"]'),
     ).toHaveLength(2);
     expect(
       container.querySelectorAll('button[aria-haspopup="menu"]'),
     ).toHaveLength(2);
-    expect(container.textContent).toContain("2 models");
-    expect(container.textContent).toContain("Pending");
+    expect(container.textContent).toContain("2 modelos");
+    expect(container.textContent).toContain("Pendente");
 
     await act(async () => {
       rows[0]

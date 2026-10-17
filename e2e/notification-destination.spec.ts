@@ -126,9 +126,6 @@ async function installLiveAlertsHarness(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
   await installLiveAlertsHarness(page);
 });
 
@@ -136,19 +133,19 @@ test("an issue notification opens that issue, not the issue list", async ({
   page,
 }, testInfo) => {
   await page.goto("/inbox?auth=1");
-  await page.getByRole("textbox", { name: "Email" }).fill(testUser.email);
-  await page.getByRole("textbox", { name: "Password" }).fill("password-123");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("textbox", { name: "E-mail" }).fill(testUser.email);
+  await page.getByRole("textbox", { name: "Senha" }).fill("password-123");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
 
   const shell =
     testInfo.project.name === "mobile" ? ".mobile-topbar" : ".sidebar";
   const trigger = page
     .locator(shell)
-    .getByRole("button", { name: /Notifications/ });
-  await expect(trigger).toHaveAccessibleName(/1 unread/);
+    .getByRole("button", { name: /Notificações/ });
+  await expect(trigger).toHaveAccessibleName(/1 não lida/);
   await trigger.click();
 
-  const panel = page.getByRole("dialog", { name: "Notifications" });
+  const panel = page.getByRole("dialog", { name: "Notificações" });
   await expect(panel).toBeVisible();
   await panel
     .getByRole("button", { name: /Issue needs your decision/ })

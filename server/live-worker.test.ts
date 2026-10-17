@@ -330,6 +330,68 @@ async function enqueue(
 }
 
 describe("live Whatsmiau worker", () => {
+  describe("inbound push notifications", () => {
+    async function run(
+      notify: () => Promise<unknown>,
+      direction: "inbound" | "outbound" = "inbound",
+    ) {
+      const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+      const inbox = new FakeInbox();
+      const warn = vi.fn();
+      const pushNotifier = { notify: vi.fn(notify) };
+      const worker = new LiveWorker({
+        jobStore: store,
+        channelResolver: new FakeResolver(binding),
+        inbox,
+        pushNotifier,
+        logger: { warn },
+        supportAiEnabled: false,
+      });
+      await store.enqueue({
+        type: "whatsmiau.message.received",
+        payload: {
+          event: "messages.upsert",
+          message: { ...message, direction },
+        },
+        dedupeKey: `push-${direction}`,
+        maxAttempts: 3,
+      });
+      await worker.poll();
+      return { pushNotifier, inbox, warn, store };
+    }
+
+    it("pushes for an inbound message even when Support AI is off", async () => {
+      const { pushNotifier } = await run(async () => undefined);
+      expect(pushNotifier.notify).toHaveBeenCalledOnce();
+      expect(pushNotifier.notify).toHaveBeenCalledWith(
+        "workspace-1",
+        expect.objectContaining({
+          kind: "inbox.message_received",
+          url: "/inbox?conversation=conversation-1",
+          tag: "inbox-message:conversation-1",
+          copyParams: {
+            contact: "5511999999999",
+            preview: "Checkout is failing",
+          },
+        }),
+      );
+    });
+
+    it("does not push for outbound messages", async () => {
+      const { pushNotifier } = await run(async () => undefined, "outbound");
+      expect(pushNotifier.notify).not.toHaveBeenCalled();
+    });
+
+    it("keeps ingesting when the push notifier throws", async () => {
+      const { inbox, warn, store } = await run(async () => {
+        throw new Error("push down");
+      });
+      expect(inbox.calls).toHaveLength(1);
+      expect(warn).toHaveBeenCalled();
+      expect((await store.list())[0]?.status).toBe("completed");
+    });
+  });
+
   it("deduplicates coding runs by mode and recovers a completed run", async () => {
     const filters: Array<[string, unknown]> = [];
     const completedRun = {
@@ -1340,7 +1402,6 @@ describe("live Whatsmiau worker", () => {
         '"direction":"outbound","text":"Nosso estoque é sincronizado pelo ERP."',
       ),
       expect.any(String),
-      "pt-BR",
     );
     expect(draftReply.mock.calls[0]?.[0]).toContain(
       '"reply_target":{"id":"message-unknown","direction":"inbound"',

@@ -187,7 +187,21 @@ function secretMatches(
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-registerInternalWhatsAppRoutes(app, { logger });
+registerInternalWhatsAppRoutes(app, {
+  logger,
+  markAutomation: workerSupabase
+    ? async (text) => {
+        const result = await workerSupabase.rpc(
+          "register_automation_outbound",
+          { p_text: text },
+        );
+        if (result.error)
+          throw new Error(
+            `supabase:register_automation_outbound:${result.error.message}`,
+          );
+      }
+    : undefined,
+});
 registerInternalSupportRoutes(app, {
   internalWorkspace: {
     resolve: () =>

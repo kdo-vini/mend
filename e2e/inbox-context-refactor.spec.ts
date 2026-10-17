@@ -1,20 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("mend.interface-language", "en-US");
-  });
-});
-
 test("desktop Inbox keeps active case context beside the conversation", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/inbox?demo=1");
-  const context = page.getByRole("complementary", { name: "Case context" });
+  const context = page.getByRole("complementary", { name: "Contexto do caso" });
   await expect(context).toBeVisible();
   await expect(context.getByText("TEC-24", { exact: false })).toBeVisible();
-  await expect(context.getByText("Next action", { exact: true })).toBeVisible();
+  await expect(
+    context.getByText("Próxima ação", { exact: true }),
+  ).toBeVisible();
 });
 
 test("mobile founder can open context and return to the reply composer", async ({
@@ -23,12 +19,12 @@ test("mobile founder can open context and return to the reply composer", async (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/inbox?demo=1");
   await page
-    .getByRole("button", { name: /Open conversation with/ })
+    .getByRole("button", { name: /Abrir conversa com/ })
     .first()
     .click();
   const trigger = page.locator(".inbox-context-trigger");
   await expect(
-    page.getByRole("button", { name: "Open case context" }),
+    page.getByRole("button", { name: "Abrir contexto do caso" }),
   ).toBeVisible();
   const triggerBox = await trigger.boundingBox();
   expect(triggerBox?.width).toBeGreaterThanOrEqual(44);
@@ -37,10 +33,10 @@ test("mobile founder can open context and return to the reply composer", async (
   await trigger.focus();
   await page.keyboard.press("Enter");
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
-  const context = page.getByRole("complementary", { name: "Case context" });
+  const context = page.getByRole("complementary", { name: "Contexto do caso" });
   await expect(context).toHaveAttribute("id", "inbox-case-context");
   await expect(context).toBeVisible();
-  const close = page.getByRole("button", { name: "Close case context" });
+  const close = page.getByRole("button", { name: "Fechar contexto do caso" });
   await expect(close).toBeFocused();
   const closeBox = await close.boundingBox();
   expect(closeBox?.width).toBeGreaterThanOrEqual(44);
@@ -55,13 +51,13 @@ test("mobile founder can open context and return to the reply composer", async (
 
   await trigger.click();
   const closeAfterReopen = page.getByRole("button", {
-    name: "Close case context",
+    name: "Fechar contexto do caso",
   });
   await expect(closeAfterReopen).toBeFocused();
   await closeAfterReopen.click();
   await expect(context).toBeHidden();
   await expect(trigger).toBeFocused();
-  await expect(page.getByPlaceholder("Write a reply…")).toBeVisible();
+  await expect(page.getByPlaceholder("Escreva uma resposta…")).toBeVisible();
   expect(
     await page.evaluate(() => document.body.scrollWidth),
   ).toBeLessThanOrEqual(390);
@@ -79,11 +75,11 @@ for (const viewport of [
       height: viewport.height,
     });
     await page.goto("/inbox?demo=1");
-    await expect(page.getByRole("button", { name: "New issue" })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByRole("button", { name: "Novo chamado" }),
+    ).toHaveCount(0);
 
-    const trigger = page.getByRole("button", { name: "New chat" });
+    const trigger = page.getByRole("button", { name: "Nova conversa" });
     await expect(trigger).toBeVisible();
     const triggerBox = await trigger.boundingBox();
     expect(triggerBox?.height).toBeGreaterThanOrEqual(
@@ -95,17 +91,17 @@ for (const viewport of [
     await expect(dialog).toBeVisible();
     await expect(
       dialog.getByText(
-        "Messaging a number that never wrote to you first can get your WhatsApp account restricted.",
+        "Enviar mensagem para um número que nunca escreveu para você pode restringir sua conta do WhatsApp.",
       ),
     ).toBeVisible();
 
-    const submit = dialog.getByRole("button", { name: "Start conversation" });
+    const submit = dialog.getByRole("button", { name: "Iniciar conversa" });
     await expect(submit).toBeDisabled();
-    await dialog.getByLabel("Phone number").fill("+55 11 99999-9999");
+    await dialog.getByLabel("Número de telefone").fill("+55 11 99999-9999");
     await expect(submit).toBeDisabled();
-    await dialog.getByLabel("First message").fill("Hello from Téchne");
+    await dialog.getByLabel("Primeira mensagem").fill("Hello from Téchne");
     await expect(submit).toBeEnabled();
-    await dialog.getByLabel("Phone number").fill("+55 11");
+    await dialog.getByLabel("Número de telefone").fill("+55 11");
     await expect(submit).toBeDisabled();
 
     expect(
@@ -128,14 +124,14 @@ test("compact Inbox traps and restores focus while case context is modal", async
   await page.goto("/inbox?demo=1");
   const trigger = page.locator(".inbox-context-trigger");
   await expect(
-    page.getByRole("button", { name: "Open case context" }),
+    page.getByRole("button", { name: "Abrir contexto do caso" }),
   ).toBeVisible();
-  const context = page.getByRole("complementary", { name: "Case context" });
+  const context = page.getByRole("complementary", { name: "Contexto do caso" });
 
   await expect(trigger).toHaveAttribute("aria-controls", "inbox-case-context");
   await trigger.click();
   await expect(
-    page.getByRole("button", { name: "Close case context" }),
+    page.getByRole("button", { name: "Fechar contexto do caso" }),
   ).toBeFocused();
   await expect(page.locator("#root")).toHaveAttribute("aria-hidden", "true");
   await page.keyboard.press("Shift+Tab");
@@ -206,16 +202,14 @@ test("compact iPhone Inbox does not scroll behind the bottom navigation", async 
   expect(listGeometry!.railBottom).toBeLessThanOrEqual(listGeometry!.navTop);
 
   await page
-    .getByRole("button", { name: /Open conversation with/ })
+    .getByRole("button", { name: /Abrir conversa com/ })
     .first()
     .click();
   const composer = page.locator(".composer");
   await expect(composer).toBeVisible();
   await expect(nav).toBeHidden();
   await expect(page.locator(".mobile-topbar")).toBeHidden();
-  await expect(
-    page.getByRole("button", { name: "Conversations" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Conversas" })).toBeVisible();
 
   const detailGeometry = await page.evaluate(() => {
     const composer = document.querySelector(".composer");
@@ -244,11 +238,11 @@ test("mobile reply composer uses a non-zooming text size", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 });
   await page.goto("/inbox?demo=1");
   await page
-    .getByRole("button", { name: /Open conversation with/ })
+    .getByRole("button", { name: /Abrir conversa com/ })
     .first()
     .click();
 
-  const composer = page.getByPlaceholder("Write a reply…");
+  const composer = page.getByPlaceholder("Escreva uma resposta…");
   await expect(composer).toBeVisible();
   const fontSize = await composer.evaluate((element) =>
     Number.parseFloat(getComputedStyle(element).fontSize),

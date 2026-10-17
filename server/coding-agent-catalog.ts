@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -303,10 +302,6 @@ export class DefaultCodingCatalogProvider implements CodingCatalogProvider {
       await rm(homeDirectory, { recursive: true, force: true });
     }
   }
-}
-
-export function createCatalogRequestId(): string {
-  return randomUUID();
 }
 
 export function catalogProviderFor(

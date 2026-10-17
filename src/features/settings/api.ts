@@ -1,6 +1,4 @@
 export {
-  connectLiveChannel,
-  connectWhatsAppInstance,
   createLiveChannel,
   createLiveRepository,
   updateLiveRepository,
@@ -19,19 +17,14 @@ export {
   cancelLiveAgentLogin,
   listLiveAgentRoutingPolicies,
   saveLiveAgentRoutingPolicy,
-  createWhatsAppInstance,
   disconnectLiveChannel,
   removeLiveChannel,
-  disconnectWhatsAppInstance,
   getLiveChannelQr,
-  getWhatsAppQr,
   listLiveChannels,
   listLiveRepositories,
-  listWhatsAppInstances,
   refreshLiveChannel,
   loadLiveChannelFlow,
   saveLiveChannelFlow,
-  startLiveGitHubSetup,
   getLiveGitHubConnection,
   listLiveGitHubRepositories,
   startLiveGitHubWorkspaceSetup,
@@ -45,7 +38,6 @@ export {
   resendLiveWorkspaceInvitation,
   revokeLiveWorkspaceInvitation,
 } from "../../api/live-actions";
-export type { SupportFlow, SupportFlowNode } from "../../shared/support-flow";
 export type {
   WhatsAppInstance,
   LiveWorkspaceMember,
@@ -58,7 +50,6 @@ export type {
   LiveAgentLoginJob,
   LiveStageRoutingPolicy,
   CodingStage,
-  CodingAuthMethod,
 } from "../../api/live-actions";
 export {
   disconnectLiveGoogleConnection,
@@ -66,10 +57,7 @@ export {
   saveLiveGoogleCalendarSelection,
   startLiveGoogleOAuth,
 } from "../../api/google-connections";
-export type {
-  GoogleCalendar,
-  GoogleConnection,
-} from "../../api/google-connections";
+export type { GoogleConnection } from "../../api/google-connections";
 export {
   listLiveAuditLog,
   loadLiveAiConversationPolicy,
@@ -92,7 +80,6 @@ export {
 } from "../../api/mcp-connections";
 export type {
   McpConnection,
-  McpToolRecord,
   SupabaseMcpFeature,
 } from "../../api/mcp-connections";
 export { supabase } from "../../lib/supabase";

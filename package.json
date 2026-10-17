@@ -21,7 +21,8 @@
     "test:e2e": "playwright test",
     "transcribe:audio": "node --env-file=.env --import tsx/esm server/transcribe-audio-backfill.ts",
     "test:finance-db": "node scripts/test-finance-db.mjs",
-    "test:projects-db": "node scripts/test-projects-db.mjs"
+    "test:projects-db": "node scripts/test-projects-db.mjs",
+    "test:automation-db": "node scripts/test-automation-outbound-db.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

@@ -12,7 +12,7 @@ import {
   it,
   vi,
 } from "vitest";
-import i18n from "../../i18n";
+import "../../i18n";
 import { WorkspaceAvailability } from "./WorkspaceAvailability";
 
 let container: HTMLDivElement;
@@ -61,7 +61,6 @@ describe("WorkspaceAvailability", () => {
   });
 
   it("shows only the avatar and name before the availability menu opens", async () => {
-    await i18n.changeLanguage("en-US");
     await render();
 
     const trigger = container.querySelector<HTMLButtonElement>(".user-row");
@@ -73,7 +72,6 @@ describe("WorkspaceAvailability", () => {
   });
 
   it("opens on keyboard focus and changes to Active", async () => {
-    await i18n.changeLanguage("en-US");
     const { onChange } = await render();
     const trigger = container.querySelector<HTMLButtonElement>(".user-row");
     expect(trigger).not.toBeNull();
@@ -81,7 +79,7 @@ describe("WorkspaceAvailability", () => {
 
     expect(trigger?.getAttribute("aria-expanded")).toBe("true");
     const active = [...document.body.querySelectorAll("button")].find(
-      (button) => button.textContent?.includes("Active"),
+      (button) => button.textContent?.includes("Ativo"),
     );
     expect(active).toBeDefined();
     await act(async () => active?.click());
@@ -89,13 +87,12 @@ describe("WorkspaceAvailability", () => {
   });
 
   it("can reopen after Escape closes the menu from the focused trigger", async () => {
-    await i18n.changeLanguage("en-US");
     await render();
     const trigger = container.querySelector<HTMLButtonElement>(".user-row");
     await act(async () => trigger!.focus());
     expect(trigger?.getAttribute("aria-expanded")).toBe("true");
     const active = [...document.body.querySelectorAll("button")].find(
-      (button) => button.textContent?.includes("Active"),
+      (button) => button.textContent?.includes("Ativo"),
     );
     await act(async () => active?.focus());
 
@@ -114,7 +111,6 @@ describe("WorkspaceAvailability", () => {
   });
 
   it("opens on pointer hover and exposes Away in Portuguese", async () => {
-    await i18n.changeLanguage("pt-BR");
     const { onChange } = await render({ isActive: true });
     const rootElement = container.querySelector<HTMLElement>(
       ".workspace-availability",
@@ -136,7 +132,6 @@ describe("WorkspaceAvailability", () => {
   });
 
   it("keeps the menu open while the pointer crosses the hover bridge", async () => {
-    await i18n.changeLanguage("en-US");
     await render({ isActive: true });
     const rootElement = container.querySelector<HTMLElement>(
       ".workspace-availability",
@@ -158,14 +153,13 @@ describe("WorkspaceAvailability", () => {
   });
 
   it("opens from a click for touch users and keeps profile access in the menu", async () => {
-    await i18n.changeLanguage("en-US");
     const { onOpenProfile } = await render({ isActive: true });
     const trigger = container.querySelector<HTMLButtonElement>(".user-row");
     await act(async () => trigger?.click());
 
     expect(trigger?.getAttribute("aria-expanded")).toBe("true");
     const profile = [...document.body.querySelectorAll("button")].find(
-      (button) => button.textContent === "Profile",
+      (button) => button.textContent === "Perfil",
     );
     expect(profile).toBeDefined();
     await act(async () => profile?.click());

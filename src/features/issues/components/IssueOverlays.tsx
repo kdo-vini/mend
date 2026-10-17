@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { issueStatusOptions } from "../status-options";
 import {
   ArrowLeft,
   ArrowUp,
@@ -29,7 +30,6 @@ import type {
 } from "../../../types";
 import { agentRunDestination } from "../../../app/routes/workspace-routing";
 import { formatActivityTime } from "../../../shared/lib/format";
-import type { SupportedLocale } from "../../../i18n/resources";
 import {
   ActivityItem,
   AssigneeOption,
@@ -55,7 +55,6 @@ export function IssueDetailPage({
   issues,
   runs,
   workspaceId,
-  operationalLanguage,
   liveMode,
   assigneeOptions,
   assigneeLabel,
@@ -70,7 +69,6 @@ export function IssueDetailPage({
   issues: Issue[];
   runs: CodingRun[];
   workspaceId: string | null;
-  operationalLanguage: SupportedLocale;
   liveMode: boolean;
   assigneeOptions: AssigneeOption[];
   assigneeLabel: (value: string) => string;
@@ -279,9 +277,7 @@ export function IssueDetailPage({
                 }
                 if (issue.conversationId) {
                   setResolutionMessage(
-                    operationalLanguage === "pt-BR"
-                      ? `Olá! O chamado ${issue.identifier} foi resolvido. Se o problema continuar, responda por aqui e reabrimos o atendimento.`
-                      : `Hello! Issue ${issue.identifier} has been resolved. If the problem continues, reply here and we will reopen the conversation.`,
+                    `Olá! O chamado ${issue.identifier} foi resolvido. Se o problema continuar, responda por aqui e reabrimos o atendimento.`,
                   );
                   setResolutionOpen(true);
                   return;
@@ -329,15 +325,7 @@ export function IssueDetailPage({
               <InlineSelect
                 label={t("detail.status")}
                 value={issue.status}
-                options={[
-                  "Triage",
-                  "Backlog",
-                  "Todo",
-                  "In Progress",
-                  "Review",
-                  "Done",
-                  "Canceled",
-                ]}
+                options={issueStatusOptions(t)}
                 renderValue={(value) => (
                   <StatusPill status={value as IssueStatus} />
                 )}
@@ -767,15 +755,7 @@ export function IssueInspector({
             <InlineSelect
               label={t("detail.status")}
               value={issue.status}
-              options={[
-                "Triage",
-                "Backlog",
-                "Todo",
-                "In Progress",
-                "Review",
-                "Done",
-                "Canceled",
-              ]}
+              options={issueStatusOptions(t)}
               renderValue={(value) => (
                 <StatusPill status={value as IssueStatus} />
               )}

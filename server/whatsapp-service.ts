@@ -18,6 +18,8 @@ import {
   resolveWhatsAppSendDestination,
   type ProviderMessage,
   type SendButtonsInput,
+  type SendContactCard,
+  type SendContactInput,
   type SendListInput,
   type SendReactionInput,
   type SendAudioInput,
@@ -25,6 +27,7 @@ import {
   type SendTextInput,
   type WhatsmiauGroupInfo,
 } from "./whatsmiau.js";
+import { markdownToWhatsApp } from "./whatsapp-format.js";
 import type { SupportFlowNode } from "../src/shared/support-flow.js";
 import {
   formatChoicesAsTextFallback,
@@ -57,6 +60,9 @@ export interface WhatsAppProvider {
   sendMedia(
     input: SendMediaInput,
   ): Promise<ProviderMessage | Record<string, unknown>>;
+  sendContact?(
+    input: SendContactInput,
+  ): Promise<ProviderMessage | Record<string, unknown>>;
   sendAudio(
     input: SendAudioInput,
   ): Promise<ProviderMessage | Record<string, unknown>>;
@@ -80,6 +86,18 @@ export interface SendTextRequest {
   /** Forward a stable retry key to providers that implement deduplication. */
   idempotencyKey?: string;
   onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
+}
+
+export interface SendContactRequest {
+  contacts: SendContactCard[];
+  idempotencyKey?: string;
+}
+
+/** Same body the webhook parser gives inbound contact cards. */
+export function contactCardsText(contacts: readonly SendContactCard[]) {
+  return contacts
+    .map((contact) => `📇 ${contact.fullName}\n${contact.phoneNumber}`)
+    .join("\n\n");
 }
 
 export interface SendReplyChoicesRequest {
@@ -265,7 +283,7 @@ export class WhatsAppService {
     conversationId: string,
     input: SendTextRequest,
   ): Promise<OutboundResult> {
-    const text = input.text.trim();
+    const text = markdownToWhatsApp(input.text.trim());
     if (!text || text.length > 20_000) throw new Error("message_text_invalid");
     const conversation = await this.inbox.getConversation(
       context,
@@ -300,6 +318,42 @@ export class WhatsAppService {
     return { message, providerMessageId: id };
   }
 
+  async sendContact(
+    context: InboxContext,
+    conversationId: string,
+    input: SendContactRequest,
+  ): Promise<OutboundResult> {
+    if (!input.contacts.length || input.contacts.length > 10)
+      throw new Error("message_contacts_invalid");
+    if (!this.provider.sendContact) throw new Error("contact_send_unsupported");
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    const destination = outboundDestination(conversation);
+    const sendContact = this.provider.sendContact.bind(this.provider);
+    const response = await this.delivering(
+      conversation.providerInstanceName,
+      () =>
+        sendContact({
+          instanceName: conversation.providerInstanceName,
+          number: destination,
+          contacts: input.contacts,
+          ...(input.idempotencyKey
+            ? { idempotencyKey: input.idempotencyKey }
+            : {}),
+        }),
+    );
+    const id = providerMessageId(response);
+    const message = await this.inbox.recordOutbound(context, conversationId, {
+      providerMessageId: id,
+      messageType: "text",
+      text: contactCardsText(input.contacts),
+    });
+    return { message, providerMessageId: id };
+  }
+
   /**
    * Sends a clarification as WhatsApp reply buttons (≤3) when the provider
    * supports them; otherwise falls back to numbered plain text.
@@ -309,7 +363,7 @@ export class WhatsAppService {
     conversationId: string,
     input: SendReplyChoicesRequest,
   ): Promise<OutboundResult> {
-    const text = input.text.trim();
+    const text = markdownToWhatsApp(input.text.trim());
     if (!text || text.length > 20_000) throw new Error("message_text_invalid");
     const choices = input.choices.slice(0, 3);
     if (choices.length < 2)
@@ -430,7 +484,7 @@ export class WhatsAppService {
       text: string;
     },
   ): Promise<InboxMessageRecord> {
-    const text = input.text.trim();
+    const text = markdownToWhatsApp(input.text.trim());
     if (!text || text.length > 20_000) throw new Error("message_text_invalid");
     const response = await this.delivering(input.instanceName, () =>
       this.provider.sendText({
@@ -695,12 +749,4 @@ export class WhatsAppService {
       ...(input.participant ? { participant: input.participant } : {}),
     });
   }
-}
-
-export function createWhatsAppService(
-  inbox: InboxService,
-  provider: WhatsAppProvider,
-  mediaStorage?: MediaStorage,
-) {
-  return new WhatsAppService(inbox, provider, mediaStorage);
 }

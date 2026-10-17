@@ -1753,7 +1753,3 @@ export class CodexService {
     };
   }
 }
-
-export function createCodexService(ports: CodexServicePorts): CodexService {
-  return new CodexService(ports);
-}

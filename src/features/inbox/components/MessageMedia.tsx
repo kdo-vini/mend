@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Message } from "../../../types";
 import { getMessageMediaUrl, type MessageMediaPurpose } from "../api";
 import { AudioWavePlayer } from "./AudioWavePlayer";
+import { WhatsAppMessageText } from "./WhatsAppText";
 
 export function MessageMedia({
   workspaceId,
@@ -69,6 +70,14 @@ export function MessageMedia({
     }
   };
 
+  // Documents and not-yet-loaded media carry the caption too; dropping it
+  // made the text the operator sent vanish from the conversation.
+  const caption = message.text ? (
+    <span className="media-caption">
+      <WhatsAppMessageText text={message.text} />
+    </span>
+  ) : null;
+
   return (
     <div ref={rootRef}>
       {message.type === "image" && url ? (
@@ -84,7 +93,11 @@ export function MessageMedia({
             alt={message.attachment?.name ?? t("ui.media")}
             onError={onError}
           />
-          {message.text && <span>{message.text}</span>}
+          {message.text && (
+            <span className="media-caption">
+              <WhatsAppMessageText text={message.text} links={false} />
+            </span>
+          )}
         </button>
       ) : message.type === "video" && url ? (
         <button
@@ -94,7 +107,11 @@ export function MessageMedia({
           onClick={onOpen}
         >
           <video preload="none" muted playsInline src={url} onError={onError} />
-          {message.text && <span>{message.text}</span>}
+          {message.text && (
+            <span className="media-caption">
+              <WhatsAppMessageText text={message.text} links={false} />
+            </span>
+          )}
         </button>
       ) : message.type === "audio" ? (
         <div className="message-bubble media-bubble">
@@ -105,7 +122,11 @@ export function MessageMedia({
               {t("ui.processingMedia")}
             </span>
           )}
-          {message.text && <span>{message.text}</span>}
+          {message.text && (
+            <span className="media-caption">
+              <WhatsAppMessageText text={message.text} links={false} />
+            </span>
+          )}
           {!message.text && message.transcriptionStatus === "processing" && (
             <span className="media-transcript-status">
               {t("ui.transcriptionProcessing")}
@@ -118,20 +139,26 @@ export function MessageMedia({
           )}
         </div>
       ) : message.type === "document" ? (
-        <button
-          className="message-bubble attachment-bubble"
-          type="button"
-          onClick={() => void openDocument()}
-        >
-          <FileText size={18} />
-          <span>
-            <strong>{message.attachment?.name ?? t("ui.media")}</strong>
-            <small>{message.attachment?.meta ?? t("ui.media")}</small>
-          </span>
-        </button>
+        <div className="message-bubble document-bubble">
+          <button
+            className="attachment-bubble"
+            type="button"
+            onClick={() => void openDocument()}
+          >
+            <FileText size={18} />
+            <span>
+              <strong>{message.attachment?.name ?? t("ui.media")}</strong>
+              <small>{message.attachment?.meta ?? t("ui.media")}</small>
+            </span>
+          </button>
+          {caption}
+        </div>
       ) : (
-        <div className="message-bubble attachment-bubble media-unavailable">
-          <span>{message.attachment?.name ?? t("ui.media")}</span>
+        <div className="message-bubble media-bubble">
+          <div className="attachment-bubble media-unavailable">
+            <span>{message.attachment?.name ?? t("ui.media")}</span>
+          </div>
+          {caption}
         </div>
       )}
     </div>

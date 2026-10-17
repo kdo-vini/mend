@@ -10,7 +10,6 @@ for (const theme of ["light", "dark"] as const) {
         : { width: 1440, height: 900 },
     );
     await page.addInitScript((mode) => {
-      localStorage.setItem("mend.interface-language", "en-US");
       localStorage.setItem("mend.theme", mode);
     }, theme);
     await page.goto("/inbox?demo=1");
@@ -79,24 +78,31 @@ for (const theme of ["light", "dark"] as const) {
 
     const player = page.locator(".audio-wave-player");
     const audio = page.locator(".audio-wave-player audio");
-    const play = page.getByRole("button", { name: "Play audio", exact: true });
+    const play = page.getByRole("button", {
+      name: "Reproduzir áudio",
+      exact: true,
+    });
     await expect(player).toBeVisible();
     await expect(audio).toHaveAttribute("preload", "metadata");
-    await expect(page.getByLabel("Seek audio", { exact: true })).toBeEnabled();
+    await expect(
+      page.getByLabel("Avançar ou retroceder no áudio", { exact: true }),
+    ).toBeEnabled();
     await expect(page.locator(".audio-wave-player__time")).toContainText(
       "0:06",
     );
 
     await play.click();
     const pause = page.getByRole("button", {
-      name: "Pause audio",
+      name: "Pausar áudio",
       exact: true,
     });
     await expect(pause).toBeVisible();
     await pause.click();
     await expect(play).toBeVisible();
 
-    const seek = page.getByLabel("Seek audio", { exact: true });
+    const seek = page.getByLabel("Avançar ou retroceder no áudio", {
+      exact: true,
+    });
     await seek.fill("2");
     await expect(seek).toHaveValue("2");
     await expect(seek).toHaveAttribute("aria-valuetext", "0:02 / 0:06");

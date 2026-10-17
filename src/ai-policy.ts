@@ -130,10 +130,6 @@ export const DEFAULT_WORKSPACE_AI_POLICY: WorkspaceAiPolicy = {
   mcpFailurePolicy: "generic_reply",
 };
 
-export function isAiMode(value: unknown): value is AiMode {
-  return value === "off" || value === "draft" || value === "safe_auto";
-}
-
 export function isTriageIntent(value: unknown): value is TriageIntent {
   return (triageIntentValues as readonly unknown[]).includes(value);
 }

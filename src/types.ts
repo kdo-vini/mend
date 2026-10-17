@@ -48,6 +48,8 @@ export interface Message {
   createdAt?: string;
   type: MessageType;
   status?: "sending" | "sent" | "delivered" | "read" | "failed";
+  /** Client-only upload percentage while an outbound attachment is sending. */
+  uploadProgress?: number;
   aiGenerated?: boolean;
   mediaStatus?: "processing" | "ready" | "failed" | "unsupported";
   transcriptionStatus?: "processing" | "ready" | "failed";

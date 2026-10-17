@@ -12,6 +12,12 @@ import {
 
 export interface InternalWhatsAppRouteOptions {
   fetchImpl?: typeof fetch;
+  /**
+   * Registers the text as Zelo automation before it is sent, so the fromMe
+   * echo does not trip the human-takeover pause. Failure only logs: the send
+   * still goes out and the echo pauses the AI, as before.
+   */
+  markAutomation?: (text: string) => Promise<void>;
   logger?: Pick<Logger, "error" | "warn">;
   env?: NodeJS.ProcessEnv;
 }
@@ -62,6 +68,17 @@ export function registerInternalWhatsAppRoutes(
         request.get("idempotency-key")?.trim() ||
         request.get("x-idempotency-key")?.trim() ||
         undefined;
+
+      if (options.markAutomation) {
+        try {
+          await options.markAutomation(parsed.data.message);
+        } catch (error) {
+          options.logger?.warn(
+            { err: error },
+            "Automation outbound mark failed; echo will pause the AI",
+          );
+        }
+      }
 
       try {
         const result = await forwardZeloChatSendText(

@@ -36,7 +36,7 @@ Before adding a helper, adapter, integration or authorization flow, consult `doc
 
 Every feature that involves UI must read `DESIGN.md` before implementation and follow its design patterns, tokens, accessibility rules, and review checklist. New confirmation flows must use the shared app-native confirmation pattern documented there.
 
-All frontend UI is bilingual by contract. Follow [the frontend internationalization contract](docs/engineering/INTERNATIONALIZATION.md): every user-visible string must exist in both `pt-BR` and `en-US`, flow through the active Profile language toggle, and pass `npm run i18n:check` plus `npm run i18n:frontend`.
+Mend is internal and Portuguese-only: there is no English UI or server copy. Follow [the frontend copy contract](docs/engineering/INTERNATIONALIZATION.md): every user-visible string lives in the `pt-BR` catalog and passes `npm run i18n:check` plus `npm run i18n:frontend`.
 
 ## Build, Test, and Development Commands
 
