@@ -53,6 +53,19 @@ export function cleanInstanceName(value: string): string {
   return normalized.length <= 240 ? normalized : "";
 }
 
+/**
+ * Whatsmiau history sync (`messages.set`, also sent as `MESSAGES_SET`) replays
+ * the phone's backlog after a (re)pairing. The worker stores those messages so
+ * the inbox is complete, but never pushes, emits Support events or runs AI on
+ * them: the team may already have handled them elsewhere.
+ */
+export function isHistoryImportEvent(event: unknown): boolean {
+  return (
+    typeof event === "string" &&
+    event.trim().toLowerCase().replaceAll("_", ".") === "messages.set"
+  );
+}
+
 export async function validateQueuedBinding(
   resolver: LiveWorkerChannelResolver,
   binding: LiveChannelBinding,
