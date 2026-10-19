@@ -377,6 +377,28 @@ describe("live Whatsmiau worker", () => {
       );
     });
 
+    it("does not push for messages replayed by history sync", async () => {
+      const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+      const inbox = new FakeInbox();
+      const pushNotifier = { notify: vi.fn(async () => undefined) };
+      const worker = new LiveWorker({
+        jobStore: store,
+        channelResolver: new FakeResolver(binding),
+        inbox,
+        pushNotifier,
+        supportAiEnabled: false,
+      });
+      await store.enqueue({
+        type: "whatsmiau.message.received",
+        payload: { event: "MESSAGES_SET", message },
+        dedupeKey: "push-history",
+        maxAttempts: 3,
+      });
+      await worker.poll();
+      expect(inbox.calls).toHaveLength(1);
+      expect(pushNotifier.notify).not.toHaveBeenCalled();
+    });
+
     it("does not push for outbound messages", async () => {
       const { pushNotifier } = await run(async () => undefined, "outbound");
       expect(pushNotifier.notify).not.toHaveBeenCalled();
@@ -1537,6 +1559,55 @@ describe("Support AI kill-switch (Fase A)", () => {
         phoneNumber: "5511999999999",
       }),
     ]);
+  });
+
+  it("stores history-sync messages without Support events or AI stages", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const inbox = new FakeInbox();
+    const automation = new SendStageAutomation();
+    const events = new InMemorySupportEventStore();
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox,
+      automation,
+      supportAiEnabled: true,
+      supportEvents: events,
+    });
+    await store.enqueue({
+      type: "whatsmiau.message.received",
+      payload: { event: "messages.set", message },
+      dedupeKey: "history-1",
+      maxAttempts: 3,
+    });
+
+    expect(await worker.poll()).toBe(true);
+    expect(await worker.poll()).toBe(false);
+    expect(inbox.calls).toHaveLength(1);
+    expect(events.rows).toHaveLength(0);
+    expect(automation.sent).toHaveLength(0);
+    const jobs = await store.list();
+    expect(jobs.map((job) => job.type)).toEqual(["whatsmiau.message.received"]);
+    expect(jobs[0]?.status).toBe("completed");
+  });
+
+  it("still runs the AI stage for live messages when Support AI is on", async () => {
+    const store = new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+    const worker = new LiveWorker({
+      jobStore: store,
+      inboundDebounceMs: 0,
+      channelResolver: new FakeResolver(binding),
+      inbox: new FakeInbox(),
+      automation: new SendStageAutomation(),
+      supportAiEnabled: true,
+      supportEvents: new InMemorySupportEventStore(),
+    });
+    await enqueue(store, "live-1");
+    await worker.poll();
+    expect((await store.list()).map((job) => job.type)).toContain(
+      "mend.process_inbound_message",
+    );
   });
 
   it("records one event per message across duplicate deliveries", async () => {

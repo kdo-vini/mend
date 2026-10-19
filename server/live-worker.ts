@@ -50,6 +50,7 @@ import { SupabaseLiveWorkerKnowledge } from "./workers/knowledge.js";
 import {
   cleanInstanceName,
   DEFAULT_INBOUND_DEBOUNCE_MS,
+  isHistoryImportEvent,
   validateQueuedBinding,
   CODING_RUN_CONTINUATION_JOB_TYPE,
   KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE,
@@ -665,6 +666,9 @@ export class LiveWorker {
         // Group metadata is supplemental; message ingestion must still finish.
       }
     }
+
+    if (isHistoryImportEvent(job.payload?.event))
+      return this.markWebhookEvent(job.id, "processed", persisted.id);
 
     await notifyInboundMessagePush(this.options, binding, message, persisted);
 
