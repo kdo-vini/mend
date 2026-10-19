@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import {
+  resolveWebhookInstanceName,
   selectExactChannelBinding,
   type WebhookChannelBinding,
 } from "./binding.ts";
@@ -552,7 +553,8 @@ Deno.serve(async (request) => {
     /^Bearer\s+/i,
     "",
   );
-  const pathParts = new URL(request.url).pathname.split("/").filter(Boolean);
+  const requestUrl = new URL(request.url);
+  const pathParts = requestUrl.pathname.split("/").filter(Boolean);
   const pathSecret =
     pathParts.at(-1) === "whats-mend-webhook"
       ? ""
@@ -582,6 +584,17 @@ Deno.serve(async (request) => {
       data.instanceName,
       data.instance,
     );
+    const { instanceName: lookupInstanceName, mismatch } =
+      resolveWebhookInstanceName({
+        urlInstanceName: requestUrl.searchParams.get("instance"),
+        reportedInstanceName,
+      });
+    // Instance names are operator-chosen identifiers, not customer content.
+    if (mismatch)
+      console.warn("Whatsmiau webhook instance mismatch", {
+        registered: lookupInstanceName,
+        reported: reportedInstanceName,
+      });
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const secretKey = serviceRoleKey();
@@ -593,12 +606,12 @@ Deno.serve(async (request) => {
 
     const event = normalizeEventName(payload.event ?? payload.type);
     let bindings: WebhookChannelBinding[] = [];
-    if (reportedInstanceName) {
+    if (lookupInstanceName) {
       const bindingResult = await client
         .from("channel_connections")
         .select("id, workspace_id, provider_instance_name")
         .eq("provider", "whatsmiau")
-        .eq("provider_instance_name", reportedInstanceName)
+        .eq("provider_instance_name", lookupInstanceName)
         .limit(2);
       if (bindingResult.error)
         throw new Error(
@@ -608,14 +621,18 @@ Deno.serve(async (request) => {
     }
     let binding: WebhookChannelBinding | null;
     try {
-      binding = selectExactChannelBinding(bindings, reportedInstanceName);
+      binding = selectExactChannelBinding(bindings, lookupInstanceName);
     } catch {
       return response(409, { error: "channel_ambiguous" });
     }
     if (!binding) {
+      console.warn("Whatsmiau webhook event quarantined", {
+        event,
+        instance: lookupInstanceName ?? "missing",
+      });
       await recordQuarantinedEvent(client, {
         event,
-        reportedInstanceName,
+        reportedInstanceName: lookupInstanceName,
         rawBody,
       });
       return response(202, {

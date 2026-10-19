@@ -603,7 +603,7 @@ describe("Whatsmiau normalization", () => {
       expect(webhookBody).toEqual({
         webhook: {
           enabled: true,
-          url: "https://mend.test/functions/v1/whats-mend-webhook/path-secret",
+          url: "https://mend.test/functions/v1/whats-mend-webhook/path-secret?instance=mend-test",
           events: [
             "messages.upsert",
             "messages.update",

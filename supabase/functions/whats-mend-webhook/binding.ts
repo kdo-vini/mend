@@ -16,3 +16,22 @@ export function selectExactChannelBinding(
   if (exact.length > 1) throw new Error("channel_instance_ambiguous");
   return exact[0] ?? null;
 }
+
+/**
+ * Picks the instance name used to look up the channel binding. Mend registers
+ * each instance's webhook URL with `?instance=<name>`, so that value is the
+ * channel's own name and wins over the payload's `instance` field, which
+ * Whatsmiau may fill with an internal identifier after a reconnect. Both reach
+ * the function only behind the same webhook secret.
+ */
+export function resolveWebhookInstanceName(input: {
+  urlInstanceName?: string | null;
+  reportedInstanceName?: string;
+}): { instanceName?: string; mismatch: boolean } {
+  const fromUrl = input.urlInstanceName?.trim() || undefined;
+  const reported = input.reportedInstanceName?.trim() || undefined;
+  return {
+    instanceName: fromUrl ?? reported,
+    mismatch: Boolean(fromUrl && reported && fromUrl !== reported),
+  };
+}
