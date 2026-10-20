@@ -388,6 +388,55 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
+  it("gives media and audio sends a longer timeout than other calls", async () => {
+    const originalFetch = globalThis.fetch;
+    // Answers after 60 ms unless the caller aborts first.
+    globalThis.fetch = (_input, init) =>
+      new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(
+          () =>
+            resolve(
+              new Response(JSON.stringify({ key: { id: "wamid-slow" } }), {
+                status: 200,
+              }),
+            ),
+          60,
+        );
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(new DOMException("aborted", "AbortError"));
+        });
+      });
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+        20,
+        500,
+      );
+      const target = { instanceName: "mend-test", number: "5511999999999" };
+      await expect(
+        provider.sendText({ ...target, text: "Olá" }),
+      ).rejects.toMatchObject({ name: "AbortError" });
+      await expect(
+        provider.sendMedia({
+          ...target,
+          mediatype: "video",
+          media: "https://storage.test/video.mp4",
+          fileName: "video.mp4",
+        }),
+      ).resolves.toMatchObject({ key: { id: "wamid-slow" } });
+      await expect(
+        provider.sendAudio({
+          ...target,
+          audio: "https://storage.test/voice.ogg",
+        }),
+      ).resolves.toMatchObject({ key: { id: "wamid-slow" } });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("sends contact cards in the provider's vCard shape", async () => {
     const originalFetch = globalThis.fetch;
     let url = "";

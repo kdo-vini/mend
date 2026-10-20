@@ -403,6 +403,12 @@ export class WhatsmiauMessagingProvider {
     private readonly timeoutMs = Number(
       process.env.WHATSMIAU_TIMEOUT_MS ?? 15_000,
     ),
+    // Media sends make Whatsmiau download the file from our signed URL and
+    // upload it to WhatsApp; a 9 MB video took longer than 15 s, and aborting
+    // the call made Whatsmiau drop the send.
+    private readonly mediaTimeoutMs = Number(
+      process.env.WHATSMIAU_MEDIA_TIMEOUT_MS ?? 120_000,
+    ),
   ) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.apiKey = apiKey;
@@ -411,9 +417,10 @@ export class WhatsmiauMessagingProvider {
   private async request<T>(
     path: string,
     init: RequestInitWithBody = {},
+    timeoutMs = this.timeoutMs,
   ): Promise<T> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
@@ -656,6 +663,7 @@ export class WhatsmiauMessagingProvider {
           fileName: input.fileName,
         }),
       },
+      this.mediaTimeoutMs,
     );
   }
   sendAudio(input: SendAudioInput) {
@@ -671,6 +679,7 @@ export class WhatsmiauMessagingProvider {
           audio: input.audio,
         }),
       },
+      this.mediaTimeoutMs,
     );
   }
   sendPresence(
