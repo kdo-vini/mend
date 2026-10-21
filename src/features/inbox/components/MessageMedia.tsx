@@ -28,10 +28,25 @@ export function MessageMedia({
   const { t } = useTranslation("inbox");
   const rootRef = useRef<HTMLDivElement>(null);
   const [url, setUrl] = useState(message.attachment?.url);
+  const messageIdRef = useRef(message.id);
+  const failedUrlRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    setUrl(message.attachment?.url);
+    const sameMessage = messageIdRef.current === message.id;
+    messageIdRef.current = message.id;
+    const next = message.attachment?.url;
+    // Conversation snapshots rebuild messages without the signed URL this
+    // bubble already resolved; dropping it unmounted the audio player in the
+    // middle of playback. Keep it unless the message changed or it failed.
+    setUrl((current) =>
+      sameMessage && !next && current !== failedUrlRef.current ? current : next,
+    );
   }, [message.attachment?.url, message.id]);
+
+  const handleMediaError = () => {
+    failedUrlRef.current = url;
+    onError();
+  };
 
   useEffect(() => {
     if (url || message.type === "document" || !rootRef.current) return;
@@ -91,7 +106,7 @@ export function MessageMedia({
             src={url}
             loading="lazy"
             alt={message.attachment?.name ?? t("ui.media")}
-            onError={onError}
+            onError={handleMediaError}
           />
           {message.text && (
             <span className="media-caption">
@@ -106,7 +121,13 @@ export function MessageMedia({
           aria-label={t("ui.openMediaViewer")}
           onClick={onOpen}
         >
-          <video preload="none" muted playsInline src={url} onError={onError} />
+          <video
+            preload="none"
+            muted
+            playsInline
+            src={url}
+            onError={handleMediaError}
+          />
           {message.text && (
             <span className="media-caption">
               <WhatsAppMessageText text={message.text} links={false} />
@@ -116,7 +137,7 @@ export function MessageMedia({
       ) : message.type === "audio" ? (
         <div className="message-bubble media-bubble">
           {url ? (
-            <AudioWavePlayer key={url} src={url} onError={onError} />
+            <AudioWavePlayer key={url} src={url} onError={handleMediaError} />
           ) : (
             <span className="media-transcript-status">
               {t("ui.processingMedia")}

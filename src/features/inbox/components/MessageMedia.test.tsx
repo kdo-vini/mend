@@ -116,6 +116,87 @@ describe("MessageMedia", () => {
     expect(container.textContent).toContain("Transcrevendo áudio");
   });
 
+  it("keeps the voice note playing when a snapshot drops the resolved url", async () => {
+    const audio: Message = {
+      ...message,
+      type: "audio",
+      text: "",
+      attachment: { name: "voice.ogg", meta: "audio/ogg" },
+    };
+    const resolveUrl = vi.fn(async () => "https://media.test/voice.ogg");
+    const render = (current: Message) =>
+      root.render(
+        <MessageMedia
+          workspaceId="workspace-1"
+          message={current}
+          resolveUrl={resolveUrl}
+          onError={() => undefined}
+          onOpen={() => undefined}
+        />,
+      );
+    await act(async () =>
+      render({
+        ...audio,
+        attachment: { ...audio.attachment!, url: undefined },
+      }),
+    );
+    await act(async () => intersect(true));
+    const player = container.querySelector("audio");
+    expect(player?.getAttribute("src")).toBe("https://media.test/voice.ogg");
+
+    await act(async () =>
+      render({
+        ...audio,
+        attachment: {
+          ...audio.attachment!,
+          url: "https://media.test/voice.ogg",
+        },
+      }),
+    );
+    // Realtime refresh rebuilds the message without the signed url.
+    await act(async () => render({ ...audio }));
+
+    expect(container.querySelector("audio")).toBe(player);
+    expect(resolveUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves a fresh url after the current one failed and a snapshot drops it", async () => {
+    const audio: Message = {
+      ...message,
+      type: "audio",
+      text: "",
+      attachment: { name: "voice.ogg", meta: "audio/ogg" },
+    };
+    const resolveUrl = vi
+      .fn<() => Promise<string>>()
+      .mockResolvedValueOnce("https://media.test/expired.ogg")
+      .mockResolvedValueOnce("https://media.test/fresh.ogg");
+    const onError = vi.fn();
+    const render = (current: Message) =>
+      root.render(
+        <MessageMedia
+          workspaceId="workspace-1"
+          message={current}
+          resolveUrl={resolveUrl}
+          onError={onError}
+          onOpen={() => undefined}
+        />,
+      );
+    await act(async () => render(audio));
+    await act(async () => intersect(true));
+    await act(async () => {
+      container.querySelector("audio")?.dispatchEvent(new Event("error"));
+    });
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    await act(async () => render({ ...audio }));
+    await act(async () => intersect(true));
+
+    expect(container.querySelector("audio")?.getAttribute("src")).toBe(
+      "https://media.test/fresh.ogg",
+    );
+  });
+
   it.each(["document", "image", "video"] as const)(
     "shows the caption of a %s even before its media loads",
     async (type) => {
