@@ -301,6 +301,7 @@ export function InboxPage({
   const [messageActionId, setMessageActionId] = useState<string>();
   const [reactionPendingId, setReactionPendingId] = useState<string>();
   const failedMediaRefreshIdsRef = useRef(new Set<string>());
+  const clearedMediaUrlsRef = useRef(new Set<string>());
   const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null);
   const [conversationDeleting, setConversationDeleting] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -788,13 +789,45 @@ export function InboxPage({
       ),
     }));
   };
+  const setMessageMediaUrl = (
+    conversationId: string,
+    messageId: string,
+    url: string | undefined,
+  ) =>
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id !== conversationId
+          ? conversation
+          : {
+              ...conversation,
+              messages: conversation.messages.map((candidate) =>
+                candidate.id !== messageId || !candidate.attachment
+                  ? candidate
+                  : {
+                      ...candidate,
+                      attachment: { ...candidate.attachment, url },
+                    },
+              ),
+            },
+      ),
+    );
   const refreshFailedMedia = (messageId: string) => {
+    if (!workspaceId || !selected) return;
+    // Snapshot merges keep a resolved URL, so one that failed (an expired
+    // signature) must leave state for the bubble to resolve a fresh one. Once
+    // per URL: a URL that fails again after that is broken, not stale.
+    const failedUrl = selected.messages.find(
+      (candidate) => candidate.id === messageId,
+    )?.attachment?.url;
     if (
-      !workspaceId ||
-      failedMediaRefreshIdsRef.current.has(messageId) ||
-      !selected
-    )
-      return;
+      failedUrl &&
+      !messageId.startsWith("temp:") &&
+      !clearedMediaUrlsRef.current.has(failedUrl)
+    ) {
+      clearedMediaUrlsRef.current.add(failedUrl);
+      setMessageMediaUrl(selected.id, messageId, undefined);
+    }
+    if (failedMediaRefreshIdsRef.current.has(messageId)) return;
     failedMediaRefreshIdsRef.current.add(messageId);
     void loadLiveConversationSnapshot(workspaceId, selected.id)
       .then((snapshot) => {
@@ -2096,29 +2129,7 @@ export function InboxPage({
                         onRetryFailed={() => void retryFailedMessage(message)}
                         onMediaError={() => refreshFailedMedia(message.id)}
                         onMediaResolved={(url) =>
-                          setConversations((current) =>
-                            current.map((conversation) =>
-                              conversation.id !== selected.id
-                                ? conversation
-                                : {
-                                    ...conversation,
-                                    messages: conversation.messages.map(
-                                      (candidate) =>
-                                        candidate.id !== message.id
-                                          ? candidate
-                                          : {
-                                              ...candidate,
-                                              attachment: candidate.attachment
-                                                ? {
-                                                    ...candidate.attachment,
-                                                    url,
-                                                  }
-                                                : candidate.attachment,
-                                            },
-                                    ),
-                                  },
-                            ),
-                          )
+                          setMessageMediaUrl(selected.id, message.id, url)
                         }
                         onOpenMedia={() => openMediaViewer(message.id)}
                         onCopy={async () => {

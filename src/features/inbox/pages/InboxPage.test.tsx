@@ -715,6 +715,70 @@ describe("InboxPage new chat", () => {
     expect(text).not.toContain("Media unavailable");
   });
 
+  it("keeps resolved media across refreshes and replaces it once it fails", async () => {
+    const photo = {
+      id: "m-photo",
+      conversationId: "conv-media-url",
+      direction: "inbound" as const,
+      sender: "Cliente",
+      text: "",
+      time: "09:00",
+      type: "image" as const,
+      mediaAssetId: "asset-photo",
+      attachment: { name: "foto.jpg", meta: "image/jpeg" },
+    };
+    const conversation: Conversation = {
+      ...seedConversations[0],
+      id: "conv-media-url",
+      messages: [
+        {
+          ...photo,
+          attachment: {
+            ...photo.attachment,
+            url: "https://media.example/expired",
+          },
+        },
+      ],
+    };
+    const defaultSnapshot =
+      loadLiveConversationSnapshot.getMockImplementation()!;
+    // Server rows never carry the signed URL resolved in the browser.
+    loadLiveConversationSnapshot.mockImplementation(async () => ({
+      ...conversation,
+      messages: [photo],
+    }));
+    const image = () =>
+      document.body.querySelector<HTMLImageElement>(
+        ".media-preview-trigger img",
+      );
+
+    try {
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[conversation]} />),
+      );
+      await act(async () => undefined);
+      expect(loadLiveConversationSnapshot).toHaveBeenCalled();
+      expect(image()?.getAttribute("src")).toBe(
+        "https://media.example/expired",
+      );
+
+      await act(async () => {
+        image()?.dispatchEvent(new Event("error"));
+      });
+      await act(async () => undefined);
+      expect(image()?.getAttribute("src")).toBe("https://media.example/1");
+
+      // A fresh URL that fails too is broken, not stale: no resolve loop.
+      await act(async () => {
+        image()?.dispatchEvent(new Event("error"));
+      });
+      await act(async () => undefined);
+      expect(image()?.getAttribute("src")).toBe("https://media.example/1");
+    } finally {
+      loadLiveConversationSnapshot.mockImplementation(defaultSnapshot);
+    }
+  });
+
   function clickConversation(name: string) {
     const row = [
       ...document.body.querySelectorAll<HTMLElement>(".conversation-row"),
