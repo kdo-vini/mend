@@ -122,6 +122,39 @@ function withPendingReactions(
   });
 }
 
+/**
+ * Server rows never carry the signed URL a bubble resolved on screen. Dropping
+ * it stopped audio mid-playback and emptied the media viewer on every refresh,
+ * so the local URL stays while the row still points at the same media.
+ */
+function withResolvedMediaUrls(
+  existing: Conversation | undefined,
+  messages: Message[],
+): Message[] {
+  const resolved = new Map(
+    (existing?.messages ?? [])
+      .filter(
+        (message) => !message.id.startsWith("temp:") && message.attachment?.url,
+      )
+      .map((message) => [message.id, message]),
+  );
+  return messages.map((message) => {
+    const local = resolved.get(message.id);
+    if (
+      !local?.attachment?.url ||
+      !message.attachment ||
+      message.attachment.url ||
+      local.mediaAssetId !== message.mediaAssetId ||
+      local.mediaStoragePath !== message.mediaStoragePath
+    )
+      return message;
+    return {
+      ...message,
+      attachment: { ...message.attachment, url: local.attachment.url },
+    };
+  });
+}
+
 function persistedMessages(messages: Message[]): Message[] {
   return messages.filter((message) => !message.id.startsWith("temp:"));
 }
@@ -143,6 +176,10 @@ export function mergeConversationSnapshot(
   const localPersisted = persistedMessages(existing?.messages ?? []);
   const snapshotPersisted = persistedMessages(snapshot.messages);
   const pending = unmatchedOptimisticMessages(existing, snapshot.messages);
+  const incoming = withResolvedMediaUrls(
+    existing,
+    withPendingReactions(existing, snapshot.messages),
+  );
 
   // List refreshes (and any strictly thinner page) must not wipe history that
   // the operator already has on screen — that is what made replies erase the
@@ -158,7 +195,7 @@ export function mergeConversationSnapshot(
     const byId = new Map(
       localPersisted.map((message) => [message.id, message]),
     );
-    for (const message of withPendingReactions(existing, snapshot.messages)) {
+    for (const message of incoming) {
       if (message.id.startsWith("temp:")) continue;
       byId.set(message.id, message);
     }
@@ -170,7 +207,7 @@ export function mergeConversationSnapshot(
     );
     nextMessages = sortConversationMessages([
       ...retainedHistory,
-      ...withPendingReactions(existing, snapshot.messages),
+      ...incoming,
       ...pending,
     ]);
   }

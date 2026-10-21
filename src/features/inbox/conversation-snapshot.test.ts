@@ -335,6 +335,77 @@ describe("conversation-snapshot", () => {
     expect(merged.messages.map((item) => item.id)).toContain("temp:failed");
   });
 
+  it.each([false, true])(
+    "keeps a resolved media url the server row does not carry (partial: %s)",
+    (partialMessages) => {
+      const voice = message({
+        id: "m-voice",
+        direction: "inbound",
+        text: "",
+        type: "audio",
+        mediaAssetId: "asset-1",
+        attachment: { name: "voice.ogg", meta: "audio/ogg" },
+      });
+      const current: Conversation[] = [
+        {
+          ...baseConversation,
+          messages: [
+            {
+              ...voice,
+              attachment: {
+                ...voice.attachment!,
+                url: "https://media.test/voice.ogg",
+              },
+            },
+          ],
+        },
+      ];
+
+      const merged = mergeConversationSnapshot(
+        current,
+        {
+          ...baseConversation,
+          messages: [{ ...voice, transcriptionStatus: "ready" }],
+        },
+        { partialMessages },
+      )[0]!;
+
+      expect(merged.messages[0]?.attachment?.url).toBe(
+        "https://media.test/voice.ogg",
+      );
+      expect(merged.messages[0]?.transcriptionStatus).toBe("ready");
+    },
+  );
+
+  it("drops a resolved url once the row points at different media", () => {
+    const photo = message({
+      id: "m-photo",
+      direction: "inbound",
+      text: "",
+      type: "image",
+      mediaAssetId: "asset-1",
+      attachment: { name: "foto.jpg", meta: "image/jpeg" },
+    });
+    const current: Conversation[] = [
+      {
+        ...baseConversation,
+        messages: [
+          {
+            ...photo,
+            attachment: { ...photo.attachment!, url: "https://media.test/old" },
+          },
+        ],
+      },
+    ];
+
+    const merged = mergeConversationSnapshot(current, {
+      ...baseConversation,
+      messages: [{ ...photo, mediaAssetId: "asset-2" }],
+    })[0]!;
+
+    expect(merged.messages[0]?.attachment?.url).toBeUndefined();
+  });
+
   it("retires an uploading attachment only by its own batch", () => {
     const earlierPhoto = message({
       id: "m-photo-1",
