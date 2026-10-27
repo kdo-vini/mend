@@ -21,6 +21,7 @@ import type {
 import { mergeConversationSnapshot } from "./features/inbox/conversation-snapshot";
 import { supabase } from "./lib/supabase";
 import {
+  disableNativePushOnSignOut,
   enableNativePush,
   dismissWorkspaceNotification,
   dismissWorkspaceNotifications,
@@ -147,6 +148,18 @@ const localOperatorMode =
 interface AssigneeOption {
   value: string;
   label: string;
+}
+
+async function signOutAndReload() {
+  if (!supabase) return;
+  // Remove this device's push subscription while the session is still valid,
+  // but never let a slow cleanup hold up sign-out.
+  await Promise.race([
+    disableNativePushOnSignOut(supabase),
+    new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+  ]);
+  await supabase.auth.signOut();
+  window.location.reload();
 }
 
 function App() {
@@ -1088,7 +1101,7 @@ function App() {
             notify(t("toasts.demoNoSession"));
             return;
           }
-          void supabase?.auth.signOut().then(() => window.location.reload());
+          void signOutAndReload();
         }}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
@@ -1339,7 +1352,7 @@ function App() {
             notify(t("toasts.demoNoSession"));
             return;
           }
-          void supabase?.auth.signOut().then(() => window.location.reload());
+          void signOutAndReload();
         }}
       />
       {inspectorIssueId && (

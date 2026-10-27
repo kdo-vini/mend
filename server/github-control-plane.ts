@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import {
   lstat,
   mkdir,
+  readdir,
   readFile,
   realpath,
   rm,
@@ -15,6 +16,7 @@ import { redactSecrets } from "./codex.js";
 const githubApiVersion = "2026-03-10";
 const maxApiErrorBytes = 4_000;
 const maxRepositoryArchiveBytes = 250_000_000;
+const maxExtractedRepositoryBytes = 1_000_000_000;
 const execFileAsync = promisify(execFile);
 
 export interface GitHubRepositoryRef {
@@ -295,6 +297,82 @@ export function validateGitHubSetupCallback(
   };
 }
 
+export interface GitHubUserAuthorizationConfig {
+  clientId: string;
+  clientSecret: string;
+}
+
+export function readGitHubUserAuthorizationConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): GitHubUserAuthorizationConfig | null {
+  const clientId = env.MEND_GITHUB_APP_CLIENT_ID?.trim();
+  const clientSecret = env.MEND_GITHUB_APP_CLIENT_SECRET?.trim();
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
+}
+
+/**
+ * The setup callback's installation_id is attacker-controllable. Exchange the
+ * user-to-server OAuth code GitHub appends to the callback and require the
+ * installation to be one the authorizing GitHub user can actually access.
+ */
+export async function assertUserCanAccessInstallation(input: {
+  code: string | undefined;
+  installationId: number;
+  config: GitHubUserAuthorizationConfig;
+  apiBaseUrl?: string;
+  fetcher?: GitHubFetch;
+}): Promise<void> {
+  const fetcher = input.fetcher ?? fetch;
+  const denied = () =>
+    new GitHubControlPlaneError(
+      "The GitHub installation does not belong to the authorizing GitHub user",
+      403,
+      "github_installation_not_authorized",
+    );
+  if (!input.code) throw denied();
+  const tokenResponse = await fetcher(
+    "https://github.com/login/oauth/access_token",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: input.config.clientId,
+        client_secret: input.config.clientSecret,
+        code: input.code,
+      }),
+    },
+  );
+  const tokenBody = await githubResponse<{ access_token?: string }>(
+    tokenResponse,
+    [input.config.clientSecret, input.code],
+  );
+  const userToken = tokenBody.access_token;
+  if (!userToken) throw denied();
+  const base = apiBaseUrl(input.apiBaseUrl);
+  for (let page = 1; page <= 20; page += 1) {
+    const response = await fetcher(
+      `${base}/user/installations?per_page=100&page=${page}`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${userToken}`,
+          "X-GitHub-Api-Version": githubApiVersion,
+        },
+      },
+    );
+    const value = await githubResponse<{
+      installations?: Array<{ id: number }>;
+    }>(response, [userToken]);
+    const installations = value.installations ?? [];
+    if (installations.some((item) => item.id === input.installationId)) return;
+    if (installations.length < 100) break;
+  }
+  throw denied();
+}
+
 export function verifyGitHubWebhookSignature(
   rawBody: Buffer,
   signatureHeader: string | undefined,
@@ -463,6 +541,40 @@ function repoPath(repository: GitHubRepositoryRef): string {
   return `/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}`;
 }
 
+/**
+ * Removes every symlink from a freshly extracted archive (a link could point
+ * outside the checkout) and enforces a total extracted-size cap so a small
+ * compressed archive cannot expand to fill the disk.
+ */
+export async function sanitizeExtractedTree(
+  root: string,
+  maxBytes: number,
+): Promise<void> {
+  let total = 0;
+  const walk = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        await rm(target, { force: true });
+      } else if (entry.isDirectory()) {
+        await walk(target);
+      } else if (entry.isFile()) {
+        total += (await lstat(target)).size;
+        if (total > maxBytes) {
+          await rm(root, { recursive: true, force: true }).catch(
+            () => undefined,
+          );
+          throw new GitHubControlPlaneError(
+            "GitHub repository archive expands beyond the runner size limit",
+            413,
+          );
+        }
+      }
+    }
+  };
+  await walk(root);
+}
+
 export class GitHubControlPlane {
   private readonly apiUrl: string;
 
@@ -580,6 +692,7 @@ export class GitHubControlPlane {
         destination,
         "--strip-components=1",
       ]);
+      await sanitizeExtractedTree(destination, maxExtractedRepositoryBytes);
     } finally {
       await rm(archive, { force: true }).catch(() => undefined);
     }

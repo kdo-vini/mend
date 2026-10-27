@@ -16,6 +16,7 @@ import {
   connectionEncryptionKey,
   decryptMcpSecret,
   discoverMcpTools,
+  guardedOAuthFetch,
   encryptMcpSecret,
   McpConnectionError,
   mcpConnectionRecordFromRow,
@@ -278,7 +279,9 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
         "mcp_oauth_mode_required",
         "This connection does not use OAuth.",
       );
-    const info = await discoverOAuthServerInfo(connection.serverUrl);
+    const info = await discoverOAuthServerInfo(connection.serverUrl, {
+      fetchFn: guardedOAuthFetch,
+    });
     const baseUrl =
       process.env.APP_BASE_URL?.trim() || process.env.PUBLIC_APP_URL?.trim();
     if (!baseUrl)
@@ -338,17 +341,18 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
     state: string,
   ): Promise<McpConnectionRecord> {
     const stateHash = crypto.createHash("sha256").update(state).digest("hex");
+    // Consume atomically up front so a replayed or concurrent callback cannot
+    // exchange the same authorization state twice.
     const stateResult = await this.privilegedClient
       .from("mcp_oauth_states")
-      .select("*")
+      .update({ consumed_at: new Date().toISOString() })
       .eq("state_hash", stateHash)
+      .is("consumed_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .select("*")
       .maybeSingle();
-    const stateRow = checked("mcp_oauth_states.get", stateResult);
-    if (
-      !stateRow ||
-      new Date(str(row(stateRow).expires_at)).getTime() < Date.now() ||
-      row(stateRow).consumed_at
-    )
+    const stateRow = checked("mcp_oauth_states.consume", stateResult);
+    if (!stateRow)
       throw new McpConnectionError(
         400,
         "mcp_oauth_state_invalid",
@@ -381,7 +385,9 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
       "/api/mcp/connections/oauth/callback",
       baseUrl,
     ).toString();
-    const info = await discoverOAuthServerInfo(connection.serverUrl);
+    const info = await discoverOAuthServerInfo(connection.serverUrl, {
+      fetchFn: guardedOAuthFetch,
+    });
     const discoveredIssuer =
       info.authorizationServerMetadata?.issuer ??
       String(info.authorizationServerUrl);
@@ -408,12 +414,9 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
       resource: info.resourceMetadata?.resource
         ? new URL(info.resourceMetadata.resource)
         : new URL(connection.serverUrl),
+      fetchFn: guardedOAuthFetch,
     });
     await this.saveOAuthTokens(connection.id, tokens);
-    await this.privilegedClient
-      .from("mcp_oauth_states")
-      .update({ consumed_at: new Date().toISOString() })
-      .eq("state_hash", stateHash);
     const tools = await discoverMcpTools(connection.serverUrl, {
       Authorization: `Bearer ${tokens.access_token}`,
     });
@@ -513,7 +516,9 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
       );
       if (!connectionRow) return {};
       const serverUrl = str(row(connectionRow).server_url);
-      const info = await discoverOAuthServerInfo(serverUrl);
+      const info = await discoverOAuthServerInfo(serverUrl, {
+        fetchFn: guardedOAuthFetch,
+      });
       const baseUrl =
         process.env.APP_BASE_URL?.trim() || process.env.PUBLIC_APP_URL?.trim();
       if (!baseUrl) return {};
@@ -535,6 +540,7 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
         resource: info.resourceMetadata?.resource
           ? new URL(info.resourceMetadata.resource)
           : new URL(serverUrl),
+        fetchFn: guardedOAuthFetch,
       });
       await this.saveOAuthTokens(connectionId, tokens);
       return { Authorization: `Bearer ${tokens.access_token}` };
@@ -606,6 +612,7 @@ export class SupabaseMcpConnectionAdapter implements McpConnectionPort {
             response_types: ["code"],
             token_endpoint_auth_method: "client_secret_basic",
           },
+          fetchFn: guardedOAuthFetch,
         },
       );
       await this.privilegedClient.from("mcp_connection_secrets").upsert({

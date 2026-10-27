@@ -115,6 +115,23 @@ export function acceptWorkspaceInvitation(
   );
 }
 
+/**
+ * Accepts first: the RPC verifies the signed-in user's email against the
+ * invitation and its expiry/revocation atomically. The password is changed
+ * only after that succeeds, so opening someone else's invite link can never
+ * alter the current account's password.
+ */
+export async function acceptInvitationAndSetPassword(
+  invitationId: string,
+  password: string,
+  client?: MendSupabaseClient,
+): Promise<WorkspaceMember> {
+  const member = await acceptWorkspaceInvitation(invitationId, client);
+  const result = await updatePassword(password, client);
+  if (result.error) throw new Error("invite_password_failed");
+  return member;
+}
+
 export function signOut(
   client?: MendSupabaseClient,
 ): Promise<{ error: Error | null }> {

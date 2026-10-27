@@ -424,6 +424,30 @@ describe("Mend API router", () => {
     );
   });
 
+  it("maps last-owner and missing-member database errors", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.workspaces.removeMember = vi.fn(async () => {
+      throw new Error("workspace_requires_owner");
+    });
+    dependencies.workspaces.updateMemberRole = vi.fn(async () => {
+      throw new Error("workspace_member_not_found");
+    });
+    const app = makeApp(dependencies);
+
+    const removed = await request(app)
+      .delete(`/api/workspaces/${workspaceId}/members/${userId}`)
+      .set(scoped(true));
+    expect(removed.status).toBe(409);
+    expect(removed.body.error.code).toBe("workspace_requires_owner");
+
+    const updated = await request(app)
+      .patch(`/api/workspaces/${workspaceId}/members/${userId}`)
+      .set(scoped(true))
+      .send({ role: "viewer" });
+    expect(updated.status).toBe(404);
+    expect(updated.body.error.code).toBe("workspace_member_not_found");
+  });
+
   it("requires an admin for release-changing agent run actions", async () => {
     const dependencies = createFakeDependencies();
     dependencies.membership.getMembership = vi.fn(async () => ({

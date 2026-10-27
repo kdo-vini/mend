@@ -13,13 +13,13 @@ export const mendApiBaseUrl = (
   env.VITE_API_BASE_URL?.trim() ||
   (typeof window !== "undefined" ? window.location.origin : "")
 ).replace(/\/$/, "");
-export const mendApiToken = env.VITE_MEND_API_TOKEN;
 export const isLiveConfigured = isSupabaseConfigured || Boolean(mendApiBaseUrl);
 
 export function isDemoModeRequested() {
   if (env.VITE_MEND_DEMO === "true" || env.VITE_MEND_DEMO_MODE === "1")
     return true;
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined" || !(env as { DEV?: unknown }).DEV)
+    return false;
   return (
     new URLSearchParams(window.location.search).get("demo") === "1" ||
     window.sessionStorage.getItem("mend.demo") === "1"
@@ -71,8 +71,7 @@ export async function apiRequest<T>(
     typeof FormData !== "undefined" && init.body instanceof FormData;
   if (!isFormData && !headers.has("content-type"))
     headers.set("content-type", "application/json");
-  if (mendApiToken) headers.set("authorization", `Bearer ${mendApiToken}`);
-  if (!mendApiToken && supabase) {
+  if (supabase) {
     const session = await supabase.auth.getSession();
     if (session.data.session?.access_token)
       headers.set(

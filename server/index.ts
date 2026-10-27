@@ -635,14 +635,13 @@ app.delete(
   },
 );
 
-app.get("/api/runtime", async (_request, response) =>
+app.get("/api/runtime", (_request, response) =>
   response.json({
     service: "mend-api",
     supabase: hasServerSupabaseConfig(),
     whatsMiau: Boolean(process.env.WHATSMIAU_API_KEY),
     googleOAuth: Boolean(readGoogleOAuthConfig()),
     agentProviders: ["openai", "anthropic", "google", "verboo"],
-    jobs: (await messageJobs.list()).length,
   }),
 );
 

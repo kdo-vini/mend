@@ -248,48 +248,50 @@ export type NetworkLookup = (
   hostname: string,
 ) => Promise<readonly NetworkAddress[]>;
 
-function isNonPublicIpv4(address: string): boolean {
-  const parts = address.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part)))
-    return true;
-  const [first, second, third] = parts;
-  return (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 0 && third === 0) ||
-    (first === 192 && second === 0 && third === 2) ||
-    (first === 192 && second === 168) ||
-    (first === 198 && (second === 18 || second === 19)) ||
-    (first === 198 && second === 51 && third === 100) ||
-    (first === 203 && second === 0 && third === 113) ||
-    first >= 224
-  );
-}
+const nonPublicV4 = new net.BlockList();
+const nonPublicV6 = new net.BlockList();
+for (const [network, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+] as const)
+  nonPublicV4.addSubnet(network, prefix, "ipv4");
+for (const [network, prefix] of [
+  ["::", 96], // unspecified, loopback and deprecated IPv4-compatible
+  ["::ffff:0:0", 96], // IPv4-mapped
+  ["64:ff9b::", 96], // NAT64
+  ["64:ff9b:1::", 48], // local-use NAT64
+  ["100::", 64], // discard-only
+  ["2001::", 32], // Teredo
+  ["2001:db8::", 32], // documentation
+  ["2002::", 16], // 6to4
+  ["fc00::", 7], // unique local
+  ["fe80::", 10], // link local
+  ["ff00::", 8], // multicast
+] as const)
+  nonPublicV6.addSubnet(network, prefix, "ipv6");
 
-function isNonPublicIpv6(address: string): boolean {
-  const normalized = address.toLowerCase().split("%")[0] ?? "";
-  if (normalized === "::" || normalized === "::1") return true;
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(normalized);
-  if (mapped?.[1]) return isNonPublicIpv4(mapped[1]);
-  return (
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    /^fe[89ab]/.test(normalized) ||
-    normalized.startsWith("2001:db8:")
-  );
-}
-
-function isNonPublicAddress(address: string): boolean {
+/** True for any non-public IP literal (brackets and zone ids are tolerated). */
+export function isNonPublicAddress(value: string): boolean {
+  const address = value.replace(/^\[|\]$/g, "").split("%")[0] ?? "";
   const family = net.isIP(address);
+  if (family === 0) return true;
+  // IPv4 is checked against its own list: a v6 list would treat every v4
+  // address as ::ffff:0:0/96 (mapped) and block public targets.
   return family === 4
-    ? isNonPublicIpv4(address)
-    : family === 6
-      ? isNonPublicIpv6(address)
-      : true;
+    ? nonPublicV4.check(address, "ipv4")
+    : nonPublicV6.check(address, "ipv6");
 }
 
 const defaultNetworkLookup: NetworkLookup = async (hostname) => {
@@ -401,6 +403,12 @@ export async function safeExternalFetch(
   );
 }
 
+/** Fetch used for every MCP OAuth discovery, registration and token call. */
+export const guardedOAuthFetch = (
+  url: string | URL,
+  init?: RequestInit,
+): Promise<Response> => safeExternalFetch(url, init);
+
 export function validateMcpServerUrl(
   value: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -422,33 +430,13 @@ export function validateMcpServerUrl(
       "mcp_server_url_insecure",
       "MCP servers must use HTTPS in production.",
     );
-  const hostname = url.hostname.toLowerCase();
-  const ip = net.isIP(hostname.replace(/^\[|\]$/g, ""));
-  const privateIpv4 =
-    ip === 4 &&
-    (hostname.startsWith("10.") ||
-      hostname.startsWith("192.168.") ||
-      /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
-      hostname.startsWith("169.254.") ||
-      hostname === "0.0.0.0");
-  const privateIpv6 =
-    ip === 6 &&
-    (hostname === "::1" ||
-      hostname.startsWith("fc") ||
-      hostname.startsWith("fd") ||
-      hostname.startsWith("fe8") ||
-      hostname.startsWith("fe9") ||
-      hostname.startsWith("fea") ||
-      hostname.startsWith("feb"));
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
     !allowLocal &&
     (hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "[::1]" ||
       hostname.endsWith(".localhost") ||
       hostname.endsWith(".local") ||
-      privateIpv4 ||
-      privateIpv6)
+      (net.isIP(hostname) !== 0 && isNonPublicAddress(hostname)))
   )
     throw new McpConnectionError(
       400,

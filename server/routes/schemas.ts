@@ -568,6 +568,7 @@ export const githubSetupCallbackSchema = z
       .regex(/^\d{1,20}$/),
     setup_action: z.enum(["install", "update"]),
     state: z.string().trim().min(1).max(4_000),
+    code: z.string().trim().min(1).max(512).optional(),
   })
   .strip();
 export const googleCalendarSelectionSchema = z

@@ -1,11 +1,20 @@
 import crypto from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   GitHubAppTokenProvider,
   GitHubControlPlane,
+  assertUserCanAccessInstallation,
+  sanitizeExtractedTree,
   collectGitHubPublishFiles,
   createGitHubSetupState,
   githubInstallationUrl,
@@ -433,5 +442,57 @@ describe("GitHub App control plane", () => {
         fetcher: healthFetcher as GitHubFetch,
       }),
     ).rejects.toThrow("allowlisted");
+  });
+});
+
+describe("GitHub setup hardening", () => {
+  const config = { clientId: "client", clientSecret: "secret" };
+
+  it("requires the installation to belong to the authorizing user", async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes("access_token")
+        ? jsonResponse({ access_token: "user-token" })
+        : jsonResponse({ installations: [{ id: 42 }] }),
+    ) as unknown as GitHubFetch;
+
+    await expect(
+      assertUserCanAccessInstallation({
+        code: "abc",
+        installationId: 42,
+        config,
+        fetcher,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertUserCanAccessInstallation({
+        code: "abc",
+        installationId: 99,
+        config,
+        fetcher,
+      }),
+    ).rejects.toMatchObject({ code: "github_installation_not_authorized" });
+    await expect(
+      assertUserCanAccessInstallation({
+        code: undefined,
+        installationId: 42,
+        config,
+        fetcher,
+      }),
+    ).rejects.toMatchObject({ code: "github_installation_not_authorized" });
+  });
+
+  it("removes symlinks and enforces the extracted size cap", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "mend-extract-"));
+    try {
+      await writeFile(path.join(root, "a.txt"), "12345");
+      await symlink("/etc", path.join(root, "link")).catch(() => undefined);
+      await sanitizeExtractedTree(root, 100);
+      await expect(lstat(path.join(root, "link"))).rejects.toThrow();
+      await expect(sanitizeExtractedTree(root, 2)).rejects.toMatchObject({
+        status: 413,
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

@@ -27,6 +27,14 @@ beforeEach(() => {
 });
 
 describe("API boundary", () => {
+  it("does not expose job counts on the unauthenticated runtime route", async () => {
+    vi.resetModules();
+    const server = await loadApp();
+    const response = await request(server).get("/api/runtime");
+    expect(response.status).toBe(200);
+    expect(response.body).not.toHaveProperty("jobs");
+  });
+
   it("allows Supabase media and local blob previews through CSP", async () => {
     const cspSupabaseUrl = "https://csp.test.supabase.co";
     const previousSupabaseUrl = process.env.SUPABASE_URL;
