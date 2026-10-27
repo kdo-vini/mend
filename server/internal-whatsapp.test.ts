@@ -195,7 +195,30 @@ describe("POST /internal/whatsapp/send-text", () => {
     expect(calls).toEqual(["mark:Oi! Aqui é o Vinicius", "forward"]);
   });
 
-  it("still sends when the automation mark fails", async () => {
+  it("retries the automation mark once and then sends", async () => {
+    const markAutomation = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("blip"))
+      .mockResolvedValueOnce(undefined);
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const response = await request(
+      buildApp({
+        env: configuredEnv,
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        markAutomation,
+      }),
+    )
+      .post(OUTBOUND_WHATSAPP_PATH)
+      .set(OUTBOUND_WHATSAPP_KEY_HEADER, "mend-outbound-test-key")
+      .send({ to: "14991537503", message: "hello" });
+    expect(response.status).toBe(200);
+    expect(markAutomation).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 503 and does not send when the mark keeps failing", async () => {
     const markAutomation = vi.fn(async () => {
       throw new Error("db down");
     });
@@ -212,8 +235,10 @@ describe("POST /internal/whatsapp/send-text", () => {
       .post(OUTBOUND_WHATSAPP_PATH)
       .set(OUTBOUND_WHATSAPP_KEY_HEADER, "mend-outbound-test-key")
       .send({ to: "14991537503", message: "hello" });
-    expect(response.status).toBe(200);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({ error: "automation_mark_unavailable" });
+    expect(markAutomation).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("does not mark automation for a rejected request", async () => {

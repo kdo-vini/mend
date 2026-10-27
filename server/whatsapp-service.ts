@@ -85,6 +85,8 @@ export interface SendTextRequest {
   aiGenerated?: boolean;
   /** Forward a stable retry key to providers that implement deduplication. */
   idempotencyKey?: string;
+  /** Runs with the final provider text right before the provider call. */
+  beforeProviderSend?: (text: string) => Promise<void> | void;
   onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
 }
 
@@ -291,6 +293,7 @@ export class WhatsAppService {
     );
     if (!conversation) throw new Error("conversation_not_found");
     const destination = outboundDestination(conversation);
+    await input.beforeProviderSend?.(text);
     if (this.provider.sendPresence)
       await this.provider
         .sendPresence(conversation.providerInstanceName, destination)

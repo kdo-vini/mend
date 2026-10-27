@@ -322,6 +322,7 @@ interface LooseQuery extends PromiseLike<QueryResult> {
     values: unknown,
     options?: { onConflict?: string; ignoreDuplicates?: boolean },
   ): LooseQuery;
+  update(values: unknown): LooseQuery;
   eq(column: string, value: unknown): LooseQuery;
   gt(column: string, value: unknown): LooseQuery;
   in(column: string, values: readonly unknown[]): LooseQuery;

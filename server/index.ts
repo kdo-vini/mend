@@ -186,20 +186,21 @@ function secretMatches(
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
+const markAutomationOutbound = workerSupabase
+  ? async (text: string) => {
+      const result = await workerSupabase.rpc("register_automation_outbound", {
+        p_text: text,
+      });
+      if (result.error)
+        throw new Error(
+          `supabase:register_automation_outbound:${result.error.message}`,
+        );
+    }
+  : undefined;
+
 registerInternalWhatsAppRoutes(app, {
   logger,
-  markAutomation: workerSupabase
-    ? async (text) => {
-        const result = await workerSupabase.rpc(
-          "register_automation_outbound",
-          { p_text: text },
-        );
-        if (result.error)
-          throw new Error(
-            `supabase:register_automation_outbound:${result.error.message}`,
-          );
-      }
-    : undefined,
+  markAutomation: markAutomationOutbound,
 });
 registerInternalSupportRoutes(app, {
   internalWorkspace: {
@@ -225,6 +226,7 @@ registerInternalSupportSendRoute(app, {
           new InboxService(new SupabaseInboxPort(workerSupabase)),
           new WhatsmiauMessagingProvider(),
         ),
+        markAutomationOutbound,
       )
     : null,
   logger,
