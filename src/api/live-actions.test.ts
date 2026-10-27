@@ -48,6 +48,7 @@ import {
   updateLiveAgentRun,
   hydrateMessageMediaUrls,
   loadOlderLiveConversationMessages,
+  olderMessagesFilter,
   loadLiveWorkspace,
   saveLiveAgentRoutingPolicy,
   uploadLiveMediaAsset,
@@ -90,7 +91,12 @@ function workspaceQueryClient(recorded: RecordedQuery[]): MendSupabaseClient {
           query.filters = { ...query.filters, [`${column}<`]: value };
           return builder;
         },
-        in() {
+        in(column: string, value: unknown) {
+          query.filters = { ...query.filters, [`${column} in`]: value };
+          return builder;
+        },
+        or(value: string) {
+          query.filters = { ...query.filters, or: value };
           return builder;
         },
         order(_column: string, options?: { ascending?: boolean }) {
@@ -224,7 +230,7 @@ describe("live workspace bootstrap", () => {
       workspaceQueryClient(recorded),
       "workspace-1",
       "conversation-1",
-      "2026-09-18T12:00:00.000Z",
+      { createdAt: "2026-09-18T12:00:00.000Z", id: "message-9" },
     );
 
     expect(recorded).toEqual([
@@ -235,10 +241,16 @@ describe("live workspace bootstrap", () => {
         filters: {
           workspace_id: "workspace-1",
           conversation_id: "conversation-1",
-          "created_at<": "2026-09-18T12:00:00.000Z",
+          or: "created_at.lt.2026-09-18T12:00:00.000Z,and(created_at.eq.2026-09-18T12:00:00.000Z,id.lt.message-9)",
         },
       }),
     ]);
+  });
+
+  it("builds a (created_at, id) keyset filter", () => {
+    expect(olderMessagesFilter({ createdAt: "T1", id: "m1" })).toBe(
+      "created_at.lt.T1,and(created_at.eq.T1,id.lt.m1)",
+    );
   });
 });
 

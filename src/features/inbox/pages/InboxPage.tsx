@@ -40,7 +40,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type {
   AiMode,
@@ -156,6 +156,13 @@ import {
   sortConversations,
   stripHumanWhatsAppIntro,
 } from "../conversation-snapshot";
+import {
+  createOlderLoadTracker,
+  parseConversationParam,
+  shouldCorrectOlderScroll,
+  shouldMarkConversationRead,
+  withConversationParam,
+} from "../conversation-selection";
 
 /** Server delivery-failure codes, mapped to the inbox message for each. */
 const sendErrorKeys: Record<string, string> = {
@@ -266,6 +273,7 @@ export function InboxPage({
   const { t } = useTranslation("inbox");
   const messageDayNow = new Date();
   const location = useLocation();
+  const navigate = useNavigate();
   const {
     width: railWidth,
     dragging: railDragging,
@@ -281,6 +289,21 @@ export function InboxPage({
   >(new Set());
   const [bulkPending, setBulkPending] = useState(false);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
+  // Only a thread the operator chose (click, keyboard, link) is marked read;
+  // the layout's own auto-selection never is.
+  const [explicitReadId, setExplicitReadId] = useState<string | null>(null);
+  /** Operator-chosen selection: reads the thread and lands it in the URL. */
+  const openConversation = (conversationId: string) => {
+    setSelectedConversationId(conversationId);
+    setExplicitReadId(conversationId);
+    setMobileConversationOpen(true);
+    if (parseConversationParam(location.search) !== conversationId)
+      // Pushed so phone Back returns from the thread to the list.
+      navigate({
+        pathname: location.pathname,
+        search: withConversationParam(location.search, conversationId),
+      });
+  };
   const [contextOpen, setContextOpen] = useState(false);
   const [draftInsertRequest, setDraftInsertRequest] = useState<{
     text: string;
@@ -354,8 +377,7 @@ export function InboxPage({
           mergeConversationSnapshot(current, snapshot),
         );
       setNewChatOpen(false);
-      setSelectedConversationId(result.conversationId);
-      setMobileConversationOpen(true);
+      openConversation(result.conversationId);
       // Either branch navigates to a conversation the active rail filter or
       // search can exclude — a new one lands at attention_state 'none' — so the
       // rail is cleared before the thread is shown.
@@ -433,7 +455,7 @@ export function InboxPage({
       viewKey: mobileConversationOpen ? "open" : "closed",
     });
   const threadLoaded = selected?.threadLoaded === true;
-  const olderMessagesLoadingRef = useRef(false);
+  const olderLoadsRef = useRef(createOlderLoadTracker());
   const exhaustedConversationIdsRef = useRef(new Set<string>());
 
   // The inbox list only embeds the latest message per conversation. Opening a
@@ -469,12 +491,18 @@ export function InboxPage({
       exhaustedConversationIdsRef.current.delete(selectedConversationId);
   }, [selectedConversationId]);
 
+  const oldestPersisted = selected?.messages.find(
+    (message) => message.createdAt && !message.id.startsWith("temp:"),
+  );
+  const oldestCreatedAt = oldestPersisted?.createdAt;
+  const oldestId = oldestPersisted?.id;
   useEffect(() => {
     const canvas = messageCanvasRef.current;
     const conversationId = selected?.id;
-    const before = selected?.messages.find(
-      (message) => message.createdAt,
-    )?.createdAt;
+    const before =
+      oldestCreatedAt && oldestId
+        ? { createdAt: oldestCreatedAt, id: oldestId }
+        : undefined;
     // Wait for the first full snapshot: paging back from the list preview
     // would race it and fetch rows the snapshot is about to bring.
     if (
@@ -488,13 +516,12 @@ export function InboxPage({
       return;
 
     const loadOlder = () => {
-      if (
-        canvas.scrollTop > 24 ||
-        olderMessagesLoadingRef.current ||
-        exhaustedConversationIdsRef.current.has(conversationId)
-      )
+      if (canvas.scrollTop > 24 || !olderLoadsRef.current.start(conversationId))
         return;
-      olderMessagesLoadingRef.current = true;
+      if (exhaustedConversationIdsRef.current.has(conversationId)) {
+        olderLoadsRef.current.finish(conversationId);
+        return;
+      }
       const previousHeight = canvas.scrollHeight;
       const filledViewport = canvas.scrollHeight <= canvas.clientHeight + 24;
       void loadOlderLiveConversationMessages(
@@ -523,6 +550,14 @@ export function InboxPage({
             }),
           );
           window.requestAnimationFrame(() => {
+            // The response may land after the operator opened another thread.
+            if (
+              !shouldCorrectOlderScroll(
+                conversationId,
+                latestRef.current.selectedId,
+              )
+            )
+              return;
             // Preserve anchor when the user scrolled; when we auto-filled an
             // undersized canvas, keep them at the bottom of the thread.
             if (filledViewport) scrollMessagesToBottom("auto");
@@ -533,7 +568,7 @@ export function InboxPage({
           onToast(localizedError(error, t("errors.loadOlderMessages"))),
         )
         .finally(() => {
-          olderMessagesLoadingRef.current = false;
+          olderLoadsRef.current.finish(conversationId);
         });
     };
 
@@ -549,6 +584,8 @@ export function InboxPage({
     liveMode,
     messageCanvasRef,
     messageSignature,
+    oldestCreatedAt,
+    oldestId,
     onToast,
     scrollMessagesToBottom,
     selected?.id,
@@ -576,32 +613,68 @@ export function InboxPage({
     [conversations, filter, search, selectedConversationId],
   );
 
-  // A `?conversation=` link selects its thread once per navigation. Applying it
-  // on every list change pulled the operator back to it after any click.
+  // The URL is the selection: opening or refreshing `?conversation=<id>`
+  // selects (and reads) that thread, and Back to a URL without it returns a
+  // phone to the list. Applied once per navigation so a list refresh never
+  // pulls the operator back.
   const handledConversationLinkRef = useRef<string | null>(null);
+  const hadConversationParamRef = useRef(false);
+  const conversationParam = parseConversationParam(location.search);
+  const conversationParamKnown = conversations.some(
+    (conversation) => conversation.id === conversationParam,
+  );
   useEffect(() => {
-    const conversationId = new URLSearchParams(location.search).get(
-      "conversation",
-    );
-    if (!conversationId) return;
-    if (handledConversationLinkRef.current === location.key) return;
-    if (
-      !conversations.some((conversation) => conversation.id === conversationId)
-    )
-      return;
-    handledConversationLinkRef.current = location.key;
-    setSelectedConversationId(conversationId);
-    setMobileConversationOpen(true);
-  }, [conversations, location.key, location.search, setSelectedConversationId]);
-
-  useEffect(() => {
-    if (!filtered.length) {
-      setMobileConversationOpen(false);
+    if (!conversationParam) {
+      if (hadConversationParamRef.current) setMobileConversationOpen(false);
+      hadConversationParamRef.current = false;
       return;
     }
-    if (!filtered.some((conversation) => conversation.id === selected?.id))
-      setSelectedConversationId(filtered[0].id);
-  }, [filtered, selected?.id, setSelectedConversationId]);
+    hadConversationParamRef.current = true;
+    if (handledConversationLinkRef.current === location.key) return;
+    if (conversationParamKnown) {
+      handledConversationLinkRef.current = location.key;
+      setSelectedConversationId(conversationParam);
+      setExplicitReadId(conversationParam);
+      setMobileConversationOpen(true);
+      return;
+    }
+    // Not in the loaded page of threads (older than the newest 100): load it
+    // directly so the link does not wait for a list that never includes it.
+    if (!liveMode || !workspaceId) return;
+    handledConversationLinkRef.current = location.key;
+    let cancelled = false;
+    void loadLiveConversationSnapshot(workspaceId, conversationParam)
+      .then((snapshot) => {
+        if (cancelled || !snapshot) return;
+        setConversations((current) =>
+          mergeConversationSnapshot(current, snapshot),
+        );
+        setSelectedConversationId(conversationParam);
+        setExplicitReadId(conversationParam);
+        setMobileConversationOpen(true);
+      })
+      .catch(() => {
+        // Stays on the current thread when the linked one cannot load.
+      });
+    return () => {
+      cancelled = true;
+      // Allow the retry after a re-render that cancelled the load.
+      if (handledConversationLinkRef.current === location.key)
+        handledConversationLinkRef.current = null;
+    };
+  }, [
+    conversationParam,
+    conversationParamKnown,
+    liveMode,
+    location.key,
+    setConversations,
+    setSelectedConversationId,
+    workspaceId,
+  ]);
+
+  useEffect(() => {
+    if (!filtered.length) setMobileConversationOpen(false);
+  }, [filtered.length]);
 
   useEffect(() => {
     setAiDetailsOpen(shouldShowConversationAiDetails());
@@ -713,9 +786,9 @@ export function InboxPage({
     }
   }, [conversations]);
 
-  // Whatever opened the thread (a click, a link, the first load, a filter),
-  // and whenever messages arrive while it is on screen, the operator has read
-  // it. Marking only on click left badges that refreshes kept bringing back.
+  // A thread the operator chose (click, link) is read while it is on screen,
+  // including messages arriving meanwhile. Auto-selected threads (first load,
+  // layout fallback) stay unread until chosen.
   const selectedId = selected?.id;
   const selectedUnread = selected?.unread ?? 0;
   const threadOnScreen =
@@ -723,7 +796,16 @@ export function InboxPage({
     typeof window === "undefined" ||
     !window.matchMedia("(max-width: 650px)").matches;
   useEffect(() => {
-    if (!selectedId || !selectedUnread || !threadOnScreen) return;
+    if (
+      !shouldMarkConversationRead({
+        selectedId,
+        explicitId: explicitReadId,
+        unread: selectedUnread,
+        threadOnScreen,
+      })
+    )
+      return;
+    if (!selectedId) return;
     const markRead = () => {
       if (document.visibilityState !== "visible") return false;
       setConversations((current) =>
@@ -752,6 +834,7 @@ export function InboxPage({
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [
+    explicitReadId,
     liveMode,
     onToast,
     selectedId,
@@ -943,8 +1026,7 @@ export function InboxPage({
   };
 
   const selectConversation = (conversation: Conversation) => {
-    setSelectedConversationId(conversation.id);
-    setMobileConversationOpen(true);
+    openConversation(conversation.id);
     setContextOpen(false);
   };
 
@@ -1060,7 +1142,7 @@ export function InboxPage({
                 ...item,
                 messages: [...item.messages, optimistic],
                 lastMessage: optimistic.text,
-                lastTime: "now",
+                lastTime: t("ui.now"),
                 lastMessageAt: new Date().toISOString(),
                 attention: "waiting_customer",
                 unread: 0,

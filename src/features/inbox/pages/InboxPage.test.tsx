@@ -45,6 +45,13 @@ const startedConversation: Conversation = {
   ],
 };
 
+// Older than the loaded page of threads; only reachable by its own snapshot.
+const farAwayConversation: Conversation = {
+  ...startedConversation,
+  id: "far-away-conversation",
+  name: "Far Away Customer",
+};
+
 const startConversation = vi.fn(async (_input: unknown) => ({
   conversationId: startedConversation.id,
   created: true,
@@ -52,6 +59,7 @@ const startConversation = vi.fn(async (_input: unknown) => ({
 const loadLiveConversationSnapshot = vi.fn(
   async (_workspaceId: string, conversationId: string) => {
     if (conversationId === startedConversation.id) return startedConversation;
+    if (conversationId === farAwayConversation.id) return farAwayConversation;
     return (
       seedConversations.find(
         (conversation) => conversation.id === conversationId,
@@ -60,7 +68,11 @@ const loadLiveConversationSnapshot = vi.fn(
   },
 );
 const loadOlderLiveConversationMessages = vi.fn(
-  async (_workspaceId: string, _conversationId: string, _before: string) => [],
+  async (
+    _workspaceId: string,
+    _conversationId: string,
+    _before: { createdAt: string; id: string },
+  ) => [],
 );
 const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);
@@ -86,7 +98,7 @@ vi.mock("../api", () => ({
   loadOlderLiveConversationMessages: (
     workspaceId: string,
     conversationId: string,
-    before: string,
+    before: { createdAt: string; id: string },
   ) => loadOlderLiveConversationMessages(workspaceId, conversationId, before),
   deleteLiveConversation: (input: unknown) => deleteLiveConversation(input),
   deleteLiveMessage: vi.fn(),
@@ -828,7 +840,7 @@ describe("InboxPage new chat", () => {
     expect(composer().value).toBe("Resposta para o primeiro");
   });
 
-  it("marks the open thread read however it was opened", async () => {
+  it("does not mark an auto-selected thread read", async () => {
     const { markLiveConversationRead } = await import("../api");
     vi.mocked(markLiveConversationRead).mockClear();
     const unreadThread = { ...seedConversations[0], unread: 3 };
@@ -839,10 +851,57 @@ describe("InboxPage new chat", () => {
         />,
       ),
     );
+    expect(markLiveConversationRead).not.toHaveBeenCalled();
+  });
+
+  it("marks a thread read once the operator opens it", async () => {
+    const { markLiveConversationRead } = await import("../api");
+    vi.mocked(markLiveConversationRead).mockClear();
+    const unreadThread = { ...seedConversations[1], unread: 3 };
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          initialConversations={[seedConversations[0], unreadThread]}
+        />,
+      ),
+    );
+    await act(async () => clickConversation(unreadThread.name));
     expect(markLiveConversationRead).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       conversationId: unreadThread.id,
     });
+  });
+
+  it("marks a thread opened from a ?conversation= link read", async () => {
+    const { markLiveConversationRead } = await import("../api");
+    vi.mocked(markLiveConversationRead).mockClear();
+    const unreadThread = { ...seedConversations[1], unread: 3 };
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          initialConversations={[seedConversations[0], unreadThread]}
+          initialPath={`/inbox?conversation=${unreadThread.id}`}
+        />,
+      ),
+    );
+    expect(markLiveConversationRead).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      conversationId: unreadThread.id,
+    });
+  });
+
+  it("loads a linked conversation that is not in the loaded list", async () => {
+    const linked = farAwayConversation;
+    await act(async () =>
+      root.render(
+        <InboxHarness initialPath={`/inbox?conversation=${linked.id}`} />,
+      ),
+    );
+    expect(loadLiveConversationSnapshot).toHaveBeenCalledWith(
+      "workspace-1",
+      linked.id,
+    );
+    expect(openConversationName()).toBe(linked.name);
   });
 
   async function shareContact(name: string, phone: string) {

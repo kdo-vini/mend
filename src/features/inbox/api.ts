@@ -1,4 +1,5 @@
 import {
+  type OlderMessagesCursor,
   deleteLiveConversation,
   deleteLiveMessage,
   listLiveChannels,
@@ -106,7 +107,7 @@ export function loadLiveConversationSnapshot(
 export function loadOlderLiveConversationMessages(
   workspaceId: string,
   conversationId: string,
-  before: string,
+  before: OlderMessagesCursor,
 ) {
   return loadOlderMessages(supabase, workspaceId, conversationId, before);
 }
