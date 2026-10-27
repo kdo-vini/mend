@@ -457,4 +457,77 @@ describe("conversation-snapshot", () => {
       "m-photo-2",
     ]);
   });
+
+  it("ignores a snapshot requested before the one already applied", () => {
+    const newer: Conversation = {
+      ...baseConversation,
+      snapshotSeq: 5,
+      status: "resolved",
+      messages: [message({ id: "m-2", direction: "inbound", text: "newer" })],
+    };
+    const applied = mergeConversationSnapshot([baseConversation], newer);
+    expect(applied[0]?.snapshotSeq).toBe(5);
+
+    const stale: Conversation = {
+      ...baseConversation,
+      snapshotSeq: 4,
+      status: "open",
+      messages: [],
+    };
+    expect(mergeConversationSnapshot(applied, stale)).toBe(applied);
+
+    const latest = mergeConversationSnapshot(applied, {
+      ...stale,
+      snapshotSeq: 6,
+    });
+    expect(latest[0]?.status).toBe("open");
+    expect(latest[0]?.snapshotSeq).toBe(6);
+    // Messages merge stays additive.
+    expect(latest[0]?.messages.map((item) => item.id)).toEqual(["m-2"]);
+  });
+
+  it("marks the thread loaded only for full snapshots", () => {
+    const listed = mergeConversationSnapshot([], baseConversation, {
+      partialMessages: true,
+    });
+    expect(listed[0]?.threadLoaded).toBeUndefined();
+    const full = mergeConversationSnapshot(listed, baseConversation);
+    expect(full[0]?.threadLoaded).toBe(true);
+    const relisted = mergeConversationSnapshot(full, baseConversation, {
+      partialMessages: true,
+    });
+    expect(relisted[0]?.threadLoaded).toBe(true);
+  });
+
+  it("retires an optimistic send by client id before falling back to text", () => {
+    const current: Conversation[] = [
+      {
+        ...baseConversation,
+        messages: [
+          message({
+            id: "temp:client-9",
+            clientId: "client-9",
+            direction: "outbound",
+            text: "olá",
+            status: "sending",
+            createdAt: "2026-09-20T23:00:00.000Z",
+          }),
+        ],
+      },
+    ];
+    // Text differs (provider-normalized), so only the client id can match.
+    const merged = mergeConversationSnapshot(current, {
+      ...baseConversation,
+      messages: [
+        message({
+          id: "m-9",
+          clientId: "client-9",
+          direction: "outbound",
+          text: "Olá!",
+          createdAt: "2026-09-20T23:00:01.000Z",
+        }),
+      ],
+    });
+    expect(merged[0]?.messages.map((item) => item.id)).toEqual(["m-9"]);
+  });
 });

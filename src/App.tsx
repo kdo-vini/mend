@@ -201,6 +201,8 @@ function App() {
   );
   const selectedConversationIdRef = useRef(selectedConversationId);
   selectedConversationIdRef.current = selectedConversationId;
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
   const [operatorIdentity, setOperatorIdentity] = useState({
     id: "",
     name: t("app.currentOperator"),
@@ -436,10 +438,17 @@ function App() {
             );
             if (active) setNotifications(nextNotifications);
           }
+          const contactConversationIds = conversationsRef.current
+            .filter(
+              (conversation) =>
+                conversation.contactId &&
+                batch.contactIds.includes(conversation.contactId),
+            )
+            .map((conversation) => conversation.id);
           await Promise.all(
-            batch.conversationIds.map((id) =>
-              refreshConversation(workspaceId, id),
-            ),
+            [
+              ...new Set([...batch.conversationIds, ...contactConversationIds]),
+            ].map((id) => refreshConversation(workspaceId, id)),
           );
         })
         .catch((error) => {
@@ -573,11 +582,14 @@ function App() {
       },
       () => realtimeHealthy,
     );
-    const liveCatchUp = createLiveCatchUp(() => {
-      if (!active || !workspaceSubscribed) return;
-      scheduleWorkspaceRefresh();
-      setConversationResync((current) => current + 1);
-    });
+    const liveCatchUp = createLiveCatchUp(
+      () => {
+        if (!active || !workspaceSubscribed) return;
+        scheduleWorkspaceRefresh();
+        setConversationResync((current) => current + 1);
+      },
+      { isRealtimeHealthy: () => realtimeHealthy },
+    );
     runStatusTimer = setInterval(() => {
       if (
         !active ||
@@ -598,51 +610,6 @@ function App() {
       refreshBatcher.stop();
     };
   }, [demoMode, liveDataRetry, notify, t]);
-
-  useEffect(() => {
-    if (
-      !inboxRoute ||
-      demoMode ||
-      !supabase ||
-      !workspaceId ||
-      !selectedConversationId
-    )
-      return;
-    let active = true;
-    void loadLiveConversationSnapshot(
-      supabase,
-      workspaceId,
-      selectedConversationId,
-    )
-      .then((snapshot) => {
-        if (!active) return;
-        setConversations((current) =>
-          snapshot
-            ? mergeConversationSnapshot(current, snapshot)
-            : current.filter(
-                (conversation) => conversation.id !== selectedConversationId,
-              ),
-        );
-      })
-      .catch((error) => {
-        if (active)
-          setLiveDataError(
-            error instanceof Error
-              ? error.message
-              : t("errors.liveReconciliation"),
-          );
-      });
-    return () => {
-      active = false;
-    };
-  }, [
-    conversationResync,
-    demoMode,
-    inboxRoute,
-    selectedConversationId,
-    t,
-    workspaceId,
-  ]);
 
   useEffect(() => {
     if (demoMode || !mendApiBaseUrl || !workspaceId) return;
@@ -1195,6 +1162,7 @@ function App() {
                     onToast={notify}
                     onConfirm={requestConfirmation}
                     liveMode={!demoMode}
+                    snapshotResync={conversationResync}
                     senderNames={{
                       ...Object.fromEntries(
                         Object.entries(workspaceMembersByUserId).map(
@@ -1336,6 +1304,7 @@ function App() {
                     onToast={notify}
                     onConfirm={requestConfirmation}
                     liveMode={!demoMode}
+                    snapshotResync={conversationResync}
                     senderNames={{
                       ...Object.fromEntries(
                         Object.entries(workspaceMembersByUserId).map(

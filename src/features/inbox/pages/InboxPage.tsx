@@ -240,6 +240,7 @@ export function InboxPage({
   onToast,
   onConfirm,
   liveMode,
+  snapshotResync = 0,
   senderNames,
   knowledgeArticles,
   assigneeOptions,
@@ -255,6 +256,8 @@ export function InboxPage({
   onToast: (message: string, tone?: ToastTone) => void;
   onConfirm: Confirm;
   liveMode: boolean;
+  /** Bumped by the app's live catch-up to re-read the open thread. */
+  snapshotResync?: number;
   senderNames: Record<string, string>;
   knowledgeArticles: KnowledgeArticle[];
   assigneeOptions: AssigneeOption[];
@@ -429,15 +432,17 @@ export function InboxPage({
       messageSignature,
       viewKey: mobileConversationOpen ? "open" : "closed",
     });
+  const threadLoaded = selected?.threadLoaded === true;
   const olderMessagesLoadingRef = useRef(false);
   const exhaustedConversationIdsRef = useRef(new Set<string>());
 
   // The inbox list only embeds the latest message per conversation. Opening a
   // thread must load the recent history or the canvas stays on a single bubble.
+  // This is the only snapshot loader per selection; the app's live catch-up
+  // re-runs it through `snapshotResync`.
   useEffect(() => {
     if (!liveMode || !workspaceId || !selectedConversationId) return;
     let cancelled = false;
-    exhaustedConversationIdsRef.current.delete(selectedConversationId);
     void loadLiveConversationSnapshot(workspaceId, selectedConversationId)
       .then((snapshot) => {
         if (cancelled || !snapshot) return;
@@ -451,7 +456,18 @@ export function InboxPage({
     return () => {
       cancelled = true;
     };
-  }, [liveMode, selectedConversationId, setConversations, workspaceId]);
+  }, [
+    liveMode,
+    selectedConversationId,
+    setConversations,
+    snapshotResync,
+    workspaceId,
+  ]);
+
+  useEffect(() => {
+    if (selectedConversationId)
+      exhaustedConversationIdsRef.current.delete(selectedConversationId);
+  }, [selectedConversationId]);
 
   useEffect(() => {
     const canvas = messageCanvasRef.current;
@@ -459,7 +475,16 @@ export function InboxPage({
     const before = selected?.messages.find(
       (message) => message.createdAt,
     )?.createdAt;
-    if (!canvas || !liveMode || !workspaceId || !conversationId || !before)
+    // Wait for the first full snapshot: paging back from the list preview
+    // would race it and fetch rows the snapshot is about to bring.
+    if (
+      !canvas ||
+      !liveMode ||
+      !workspaceId ||
+      !conversationId ||
+      !before ||
+      !threadLoaded
+    )
       return;
 
     const loadOlder = () => {
@@ -529,6 +554,7 @@ export function InboxPage({
     selected?.id,
     setConversations,
     t,
+    threadLoaded,
     workspaceId,
   ]);
   const filtered = useMemo(

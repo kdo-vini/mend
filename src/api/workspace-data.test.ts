@@ -65,6 +65,7 @@ describe("workspace realtime subscriptions", () => {
     expect(workspaceRealtimeTables).toContain("agent_runs");
     expect(workspaceRealtimeTables).toContain("knowledge_articles");
     expect(workspaceRealtimeTables).toContain("contacts");
+    expect(workspaceRealtimeTables).not.toContain("channel_connections");
     expect(workspaceRealtimeTables).toContain("issue_messages");
     expect(workspaceRealtimeTables).not.toContain("ai_draft_knowledge");
     expect(registrations.every((item) => !("filter" in item.options))).toBe(
@@ -294,6 +295,46 @@ describe("workspace realtime subscriptions", () => {
     expect(listeners.size).toBe(0);
     vi.advanceTimersByTime(120_000);
     expect(refresh).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("skips the interval tick while realtime is healthy but still catches up on return", () => {
+    vi.useFakeTimers();
+    const listeners = new Map<string, () => void>();
+    vi.stubGlobal("window", {
+      addEventListener: vi.fn((event: string, listener: () => void) =>
+        listeners.set(event, listener),
+      ),
+      removeEventListener: vi.fn((event: string) => listeners.delete(event)),
+    });
+    let healthy = true;
+    const refresh = vi.fn();
+    const catchUp = createLiveCatchUp(refresh, {
+      intervalMs: 30_000,
+      minGapMs: 10_000,
+      isVisible: () => true,
+      isRealtimeHealthy: () => healthy,
+    });
+
+    catchUp.start();
+    vi.advanceTimersByTime(120_000);
+    expect(refresh).not.toHaveBeenCalled();
+
+    // A tab returning from the background may have missed events.
+    listeners.get("visibilitychange")?.();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    // ...but focus noise inside the minimum gap is not another refetch.
+    vi.advanceTimersByTime(5_000);
+    listeners.get("focus")?.();
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    // The interval resumes when realtime is not healthy.
+    healthy = false;
+    vi.advanceTimersByTime(30_000);
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    catchUp.stop();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });

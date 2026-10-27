@@ -23,6 +23,24 @@ describe("workspace refresh planning", () => {
     );
   });
 
+  it("never hydrates the workspace for channel or contact churn", () => {
+    expect(
+      workspaceRefreshTarget({
+        table: "channel_connections",
+        new: { last_event_at: "2026-10-26T10:00:00Z" },
+      }),
+    ).toEqual({ kind: "ignore" });
+    expect(
+      workspaceRefreshTarget({ table: "something_else", new: {} }),
+    ).toEqual({ kind: "ignore" });
+    expect(
+      workspaceRefreshTarget({ table: "contacts", new: { id: "contact-1" } }),
+    ).toEqual({ kind: "contact", id: "contact-1" });
+    expect(workspaceRefreshTarget({ table: "contacts", old: {} })).toEqual({
+      kind: "ignore",
+    });
+  });
+
   it("coalesces the remaining domain tables into a bounded workspace refresh", () => {
     expect(workspaceRefreshTarget({ table: "agent_runs", new: {} })).toEqual({
       kind: "workspace",
@@ -70,6 +88,7 @@ describe("live refresh batching", () => {
       workspace: false,
       notifications: true,
       conversationIds: ["conversation-1", "conversation-2"],
+      contactIds: [],
     });
 
     batcher.add({ kind: "workspace" });
@@ -79,6 +98,26 @@ describe("live refresh batching", () => {
       workspace: true,
       notifications: false,
       conversationIds: [],
+      contactIds: [],
+    });
+  });
+
+  it("collects contact targets and ignores noise without scheduling a flush", () => {
+    vi.useFakeTimers();
+    const flush = vi.fn();
+    const batcher = createLiveRefreshBatcher(flush, 300);
+    batcher.add({ kind: "ignore" });
+    vi.advanceTimersByTime(1_000);
+    expect(flush).not.toHaveBeenCalled();
+
+    batcher.add({ kind: "contact", id: "contact-1" });
+    batcher.add({ kind: "contact", id: "contact-1" });
+    vi.advanceTimersByTime(300);
+    expect(flush).toHaveBeenCalledWith({
+      workspace: false,
+      notifications: false,
+      conversationIds: [],
+      contactIds: ["contact-1"],
     });
   });
 

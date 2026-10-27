@@ -475,6 +475,8 @@ export async function loadLiveWorkspace(
   };
 }
 
+let snapshotRequestSequence = 0;
+
 /** Load only the conversation affected by a realtime event. */
 export async function loadLiveConversationSnapshot(
   client: MendSupabaseClient | null,
@@ -482,6 +484,9 @@ export async function loadLiveConversationSnapshot(
   conversationId: string,
 ): Promise<UiConversation | null> {
   const db = requireClient(client);
+  // Issued before any await so a slow older read cannot overwrite a newer one.
+  snapshotRequestSequence += 1;
+  const snapshotSeq = snapshotRequestSequence;
   const [conversationResult, messagesResult] = await Promise.all([
     db
       .from("conversations")
@@ -565,14 +570,17 @@ export async function loadLiveConversationSnapshot(
       articlesResult.data,
     ).get(conversationId);
   }
-  return toUiConversation(
-    conversationResult.data,
-    contactResult.data ?? undefined,
-    messages,
-    issueResult.data ?? undefined,
-    aiStateResult.data ?? undefined,
-    aiDraft,
-  );
+  return {
+    ...toUiConversation(
+      conversationResult.data,
+      contactResult.data ?? undefined,
+      messages,
+      issueResult.data ?? undefined,
+      aiStateResult.data ?? undefined,
+      aiDraft,
+    ),
+    snapshotSeq,
+  };
 }
 
 export async function loadOlderLiveConversationMessages(

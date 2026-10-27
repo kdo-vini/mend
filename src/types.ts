@@ -123,6 +123,10 @@ export interface Conversation {
   priority?: Priority;
   assignee: string;
   messages: Message[];
+  /** Set once a full thread snapshot (not the list preview) has been merged. */
+  threadLoaded?: boolean;
+  /** Request order of the snapshot last applied; guards stale races. */
+  snapshotSeq?: number;
 }
 
 export interface Issue {

@@ -22,7 +22,6 @@ export const workspaceRealtimeTables = [
   "messages",
   "issues",
   "agent_runs",
-  "channel_connections",
   "conversation_ai_state",
   "ai_drafts",
   "issue_comments",
@@ -95,8 +94,9 @@ export function createRealtimeFallback(
 /**
  * Safety net for a realtime channel that reports SUBSCRIBED but no longer
  * delivers (sleeping tab, expired socket, dropped network). Realtime does not
- * replay missed rows, so while the tab is visible this re-reads on an interval
- * and right after the operator returns to the tab or the network comes back.
+ * replay missed rows, so this re-reads right after the operator returns to the
+ * tab or the network comes back (at most once per `minGapMs`), and on an
+ * interval only while realtime is not healthy.
  */
 export function createLiveCatchUp(
   refresh: () => void,
@@ -104,10 +104,13 @@ export function createLiveCatchUp(
     intervalMs?: number;
     minGapMs?: number;
     isVisible?: () => boolean;
+    /** While realtime is healthy the interval tick does nothing. */
+    isRealtimeHealthy?: () => boolean;
   } = {},
 ) {
   const intervalMs = options.intervalMs ?? 30_000;
-  const minGapMs = options.minGapMs ?? 5_000;
+  const minGapMs = options.minGapMs ?? 10_000;
+  const isRealtimeHealthy = options.isRealtimeHealthy ?? (() => false);
   const isVisible =
     options.isVisible ??
     (() =>
@@ -126,7 +129,10 @@ export function createLiveCatchUp(
     refresh();
   };
   const onReturn = () => run();
-  const onTick = () => run(true);
+  const onTick = () => {
+    if (isRealtimeHealthy()) return;
+    run(true);
+  };
 
   return {
     start() {
