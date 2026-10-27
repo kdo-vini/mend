@@ -12,6 +12,18 @@ drop policy if exists "agents can queue agent runs" on public.agent_runs;
 drop policy if exists "admins can update agent runs" on public.agent_runs;
 drop policy if exists "admins can delete agent runs" on public.agent_runs;
 drop policy if exists "members can read agent events" on public.agent_run_events;
+-- coding_runs was renamed to agent_runs; its policies survived the rename and
+-- (being permissive) would still let the 'agent' role update/delete runs.
+drop policy if exists "workspace members can read coding runs" on public.agent_runs;
+drop policy if exists "workspace agents can write coding runs" on public.agent_runs;
+drop policy if exists "workspace agents can insert coding runs" on public.agent_runs;
+drop policy if exists "workspace agents can update coding runs" on public.agent_runs;
+drop policy if exists "workspace agents can delete coding runs" on public.agent_runs;
+drop policy if exists "workspace members can read coding events" on public.agent_run_events;
+drop policy if exists "workspace agents can write coding events" on public.agent_run_events;
+drop policy if exists "workspace agents can insert coding events" on public.agent_run_events;
+drop policy if exists "workspace agents can update coding events" on public.agent_run_events;
+drop policy if exists "workspace agents can delete coding events" on public.agent_run_events;
 create policy "members can read agent runs" on public.agent_runs
   for select to authenticated using (public.is_workspace_member(workspace_id));
 create policy "agents can queue agent runs" on public.agent_runs
