@@ -348,6 +348,9 @@ function createFakeDependencies(
       findAsset: vi.fn(async () => null),
       listAssets: vi.fn(async () => []),
       signedUrl: vi.fn(async () => ({ url: "https://media.example/signed" })),
+      signedUrls: vi.fn(async (_context, ids: string[]) =>
+        ids.map((id) => ({ id, url: `https://media.example/${id}` })),
+      ),
     },
   };
 }
@@ -419,6 +422,30 @@ describe("Mend API router", () => {
       expect.objectContaining({ workspaceId }),
       expect.objectContaining({ from: "2026-08-01T00:00:00.000Z" }),
     );
+  });
+
+  it("maps last-owner and missing-member database errors", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.workspaces.removeMember = vi.fn(async () => {
+      throw new Error("workspace_requires_owner");
+    });
+    dependencies.workspaces.updateMemberRole = vi.fn(async () => {
+      throw new Error("workspace_member_not_found");
+    });
+    const app = makeApp(dependencies);
+
+    const removed = await request(app)
+      .delete(`/api/workspaces/${workspaceId}/members/${userId}`)
+      .set(scoped(true));
+    expect(removed.status).toBe(409);
+    expect(removed.body.error.code).toBe("workspace_requires_owner");
+
+    const updated = await request(app)
+      .patch(`/api/workspaces/${workspaceId}/members/${userId}`)
+      .set(scoped(true))
+      .send({ role: "viewer" });
+    expect(updated.status).toBe(404);
+    expect(updated.body.error.code).toBe("workspace_member_not_found");
   });
 
   it("requires an admin for release-changing agent run actions", async () => {
@@ -743,6 +770,31 @@ describe("Mend API router", () => {
     expect(complete.status).toBe(202);
   });
 
+  it("batches media URLs through the scoped media port and bounds the request", async () => {
+    const dependencies = createFakeDependencies();
+    const app = makeApp(dependencies);
+    const ids = [
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    ];
+    const ok = await request(app)
+      .post("/api/media/urls")
+      .set(scoped(true))
+      .send({ ids, purpose: "preview" });
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.map((item: { id: string }) => item.id)).toEqual(ids);
+    expect(dependencies.media.signedUrls).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId }),
+      ids,
+      "preview",
+    );
+    const tooMany = await request(app)
+      .post("/api/media/urls")
+      .set(scoped(true))
+      .send({ ids: Array.from({ length: 51 }, (_, i) => `id-${i}`) });
+    expect(tooMany.status).toBe(400);
+  });
+
   it("returns the authenticated user and never exposes sensitive provider fields", async () => {
     const response = await request(makeApp()).get("/api/me");
     expect(response.status).toBe(200);
@@ -1046,7 +1098,8 @@ describe("Mend API router", () => {
   });
 
   it("covers channels, inbox, knowledge, repositories and coding-run action status codes", async () => {
-    const app = makeApp();
+    const readDependencies = createFakeDependencies();
+    const app = makeApp(readDependencies);
     const headers = scoped(true);
     const now = new Date(Date.now() + 60_000).toISOString();
 
@@ -1062,6 +1115,27 @@ describe("Mend API router", () => {
       (await request(app).get(`/api/channels/${channelId}/qr`).set(headers))
         .status,
     ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post(`/api/conversations/${conversationId}/read`)
+          .set(headers)
+          .send({ readUpTo: "2026-08-03T12:00:00.000Z" })
+      ).status,
+    ).toBe(200);
+    expect(readDependencies.conversations.markRead).toHaveBeenLastCalledWith(
+      expect.anything(),
+      conversationId,
+      "2026-08-03T12:00:00.000Z",
+    );
+    expect(
+      (
+        await request(app)
+          .post(`/api/conversations/${conversationId}/read`)
+          .set(headers)
+          .send({ readUpTo: "not-a-date" })
+      ).status,
+    ).toBe(400);
     expect(
       (
         await request(app)

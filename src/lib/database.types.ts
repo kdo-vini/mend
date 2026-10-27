@@ -4365,7 +4365,12 @@ export type Database = {
         Returns: string
       }
       claim_next_job: {
-        Args: { lease_seconds?: number; worker_id: string }
+        Args: {
+          exclude_types?: string[]
+          include_types?: string[]
+          lease_seconds?: number
+          worker_id: string
+        }
         Returns: {
           attempts: number
           available_at: string

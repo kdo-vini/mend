@@ -78,6 +78,8 @@ export interface StoredAudioMessage {
 export interface PersistMessageOptions {
   mediaStoragePath?: string;
   aiGenerated?: boolean;
+  /** History replay: store only; never raise unread/attention. */
+  isHistory?: boolean;
 }
 
 export interface ProviderMessageUpdate {
@@ -114,6 +116,7 @@ export interface InboxIngestPortInput {
   actorUserId?: string;
   timelineKey: string;
   metadata: Record<string, unknown>;
+  isHistory?: boolean;
 }
 
 export interface InboxIngestPortResult {
@@ -208,6 +211,7 @@ export interface InboxPort {
     conversationId: string;
     action: ConversationAction;
     snoozedUntil?: string;
+    readUpTo?: string;
     actorUserId?: string;
     timelineKey: string;
     metadata: Record<string, unknown>;
@@ -444,6 +448,7 @@ export class SupabaseInboxPort implements InboxPort {
         p_actor_user_id: input.actorUserId ?? null,
         p_timeline_key: input.timelineKey,
         p_metadata: redactTimelineMetadata(input.metadata),
+        p_is_history: input.isHistory === true,
       },
     );
     return {
@@ -664,6 +669,7 @@ export class SupabaseInboxPort implements InboxPort {
         p_actor_user_id: input.actorUserId ?? null,
         p_timeline_key: input.timelineKey,
         p_metadata: redactTimelineMetadata(input.metadata),
+        p_read_up_to: input.readUpTo ?? null,
       },
     );
     return {
@@ -1134,6 +1140,7 @@ export class InboxService {
       quotedProviderMessageId: message.quotedProviderMessageId,
       providerTimestamp: message.providerTimestamp,
       aiGenerated,
+      ...(options.isHistory ? { isHistory: true } : {}),
       sentByUserId: actorType === "user" ? context.actorUserId : undefined,
       actorType,
       actorUserId: context.actorUserId,
@@ -1366,6 +1373,7 @@ export class InboxService {
     conversationId: string,
     action: ConversationAction,
     snoozedUntil?: Date,
+    readUpTo?: Date,
   ): Promise<ConversationStateRecord> {
     const context = this.context(contextInput);
     if (
@@ -1378,14 +1386,25 @@ export class InboxService {
       conversationId: safeWorkspacePart(conversationId, "conversation_id"),
       action,
       ...(snoozedUntil ? { snoozedUntil: snoozedUntil.toISOString() } : {}),
+      ...(readUpTo ? { readUpTo: readUpTo.toISOString() } : {}),
       actorUserId: context.actorUserId,
       timelineKey: `conversation:${conversationId}:${action}:${context.actorUserId ?? "system"}`,
       metadata: redactTimelineMetadata({ action }),
     });
   }
 
-  readConversation(context: InboxContext, conversationId: string) {
-    return this.setConversationState(context, conversationId, "read");
+  readConversation(
+    context: InboxContext,
+    conversationId: string,
+    readUpTo?: Date,
+  ) {
+    return this.setConversationState(
+      context,
+      conversationId,
+      "read",
+      undefined,
+      readUpTo,
+    );
   }
   markUnread(context: InboxContext, conversationId: string) {
     return this.setConversationState(context, conversationId, "unread");

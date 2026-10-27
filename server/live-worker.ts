@@ -15,8 +15,14 @@ import {
   type InboxContext,
   type InboxMessageRecord,
 } from "./inbox-service.js";
-import { type JobRecord, type JobStore } from "./jobs.js";
+import { type ClaimOptions, type JobRecord, type JobStore } from "./jobs.js";
 import { SupabaseKnowledgeMetricWriter } from "./knowledge-evals.js";
+import {
+  applyDeferredMessageEvent,
+  isMessageEventPayload,
+  MESSAGE_EVENT_JOB_TYPE,
+  type MessageEventJobPayload,
+} from "./message-events.js";
 import {
   MEDIA_PROCESS_JOB_TYPE,
   SupabaseMediaPipeline,
@@ -152,7 +158,8 @@ export type LiveWorkerJobPayload =
   | AgentRunRequestedJobPayload
   | MediaProcessJobPayload
   | KnowledgeRepositorySyncJobPayload
-  | SupportRepositoryResearchJobPayload;
+  | SupportRepositoryResearchJobPayload
+  | MessageEventJobPayload;
 
 export interface UncheckedSupabaseQuery
   extends PromiseLike<{
@@ -194,6 +201,7 @@ export interface LiveWorkerInbox {
     context: InboxContext,
     channelConnectionId: string,
     message: NormalizedWhatsmiauMessage,
+    options?: { isHistory?: boolean },
   ): Promise<InboxMessageRecord>;
   setContactDisplayName?(
     context: InboxContext,
@@ -299,6 +307,10 @@ export interface LiveWorkerOptions {
   };
   knowledge?: LiveWorkerKnowledge;
   pushNotifier?: InboundPushNotifier;
+  /** Applies a deferred status/edit/delete; throws while the row is missing. */
+  messageEvents?: {
+    apply(workspaceId: string, payload: MessageEventJobPayload): Promise<void>;
+  };
   /** Mend's own Support AI (default off); Support bot reads supportEvents. */
   supportAiEnabled?: boolean;
   supportEvents?: Pick<SupportEventStore, "record">;
@@ -312,6 +324,8 @@ export interface LiveWorkerOptions {
   /** Delay inbound automation so consecutive customer messages can be grouped. */
   inboundDebounceMs?: number;
   workerId?: string;
+  /** Job lane this loop serves: type include/exclude list and lease. */
+  claimOptions?: ClaimOptions;
   logger?: LiveWorkerLogger;
   heartbeat?: {
     beat(input: {
@@ -374,7 +388,11 @@ export class LiveWorker {
   /** Poll once. The job store owns claim, retry/backoff and dead-letter behavior. */
   async poll(): Promise<boolean> {
     await this.writeHeartbeat({ workerId: this.workerId }, "before_claim");
-    const job = await this.options.jobStore.claim(this.workerId);
+    const job = await this.options.jobStore.claim(
+      this.workerId,
+      undefined,
+      this.options.claimOptions,
+    );
     if (!job) return false;
 
     await this.writeHeartbeat(
@@ -532,6 +550,14 @@ export class LiveWorker {
       );
       return;
     }
+    if (job.type === MESSAGE_EVENT_JOB_TYPE) {
+      if (!this.options.messageEvents)
+        throw new Error("message_events_not_configured");
+      if (!job.workspaceId || !isMessageEventPayload(job.payload))
+        throw new Error("invalid_message_event_job");
+      await this.options.messageEvents.apply(job.workspaceId, job.payload);
+      return;
+    }
     if (job.type === PROCESS_INBOUND_MESSAGE_JOB_TYPE) {
       await this.processInboundStage(
         job.payload as ProcessInboundMessageJobPayload,
@@ -642,6 +668,7 @@ export class LiveWorker {
       { workspaceId: binding.workspaceId, actorType: "system" },
       binding.channelConnectionId,
       { ...message, instanceName },
+      isHistoryImportEvent(job.payload?.event) ? { isHistory: true } : {},
     );
 
     const isGroup =
@@ -673,6 +700,7 @@ export class LiveWorker {
     await notifyInboundMessagePush(this.options, binding, message, persisted);
 
     const supportEvent = supportEventFor(binding, message, persisted);
+    // The bot push after record is async inside the store; never awaited here.
     if (supportEvent) await this.options.supportEvents?.record(supportEvent);
     if (
       message.direction !== "inbound" ||
@@ -852,6 +880,7 @@ export interface CreateSupabaseLiveWorkerOptions {
   inboundDebounceMs?: number;
   supportAiEnabled?: boolean;
   workerId?: string;
+  claimOptions?: ClaimOptions;
   logger?: LiveWorkerLogger;
 }
 
@@ -910,6 +939,10 @@ export function createSupabaseLiveWorker(
     ),
     heartbeat: new SupabaseRunnerHeartbeat(options.client),
     pushNotifier: createInboundPushNotifier(options.client),
+    messageEvents: {
+      apply: (workspaceId, payload) =>
+        applyDeferredMessageEvent(options.client, workspaceId, payload),
+    },
     ...(options.logger ? { logger: options.logger } : {}),
     ...(options.onDraftReady ? { onDraftReady: options.onDraftReady } : {}),
     ...(options.onIssueReady ? { onIssueReady: options.onIssueReady } : {}),
@@ -936,6 +969,7 @@ export function createSupabaseLiveWorker(
       ? { inboundDebounceMs: options.inboundDebounceMs }
       : {}),
     ...(options.workerId ? { workerId: options.workerId } : {}),
+    ...(options.claimOptions ? { claimOptions: options.claimOptions } : {}),
   });
 }
 

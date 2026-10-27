@@ -13,6 +13,14 @@ import {
 import type { AnySupabaseClient } from "./types.js";
 import { checked, row, rows, str, type Row } from "../supabase-mappers.js";
 import { SupabaseIssueAdapter } from "./issues.js";
+import {
+  completedAtFor,
+  decodeKeysetCursor,
+  type KeysetCursor,
+} from "../../ordering.js";
+const REBALANCE_PAGE_SIZE = 1000;
+const REBALANCE_UPDATE_CONCURRENCY = 25;
+const POSITION_SCALE = 1_000_000;
 type KanbanTable = "issues" | "personal_tasks";
 function personalTaskRecord(value: Row) {
   return {
@@ -52,23 +60,42 @@ async function rebalanceBoard(
   status: string,
   userId?: string,
 ) {
-  let query = client
-    .from(table as never)
-    .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("status", status)
-    .order("kanban_position", { ascending: true });
-  if (userId) query = query.eq("user_id", userId);
-  const records = rows(checked(`kanban.${table}.rebalance.list`, await query));
-  for (const [index, record] of records.entries()) {
-    const recordId = str((record as Record<string, unknown>).id);
-    let update = client
+  // PostgREST caps a response at 1000 rows, so read the whole column in pages
+  // (stable order: position, then id) before renumbering anything.
+  const ids: string[] = [];
+  for (let from = 0; ; from += REBALANCE_PAGE_SIZE) {
+    let query = client
       .from(table as never)
-      .update({ kanban_position: (index + 1) * 1024 })
-      .eq("id", recordId)
-      .eq("workspace_id", workspaceId);
-    if (userId) update = update.eq("user_id", userId);
-    checked(`kanban.${table}.rebalance.update`, await update);
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("status", status)
+      .order("kanban_position", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + REBALANCE_PAGE_SIZE - 1);
+    if (userId) query = query.eq("user_id", userId);
+    const page = rows(checked(`kanban.${table}.rebalance.list`, await query));
+    for (const record of page) ids.push(str(record.id));
+    if (page.length < REBALANCE_PAGE_SIZE) break;
+  }
+  for (
+    let start = 0;
+    start < ids.length;
+    start += REBALANCE_UPDATE_CONCURRENCY
+  ) {
+    const batch = ids.slice(start, start + REBALANCE_UPDATE_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((recordId, offset) => {
+        let update = client
+          .from(table as never)
+          .update({ kanban_position: (start + offset + 1) * 1024 })
+          .eq("id", recordId)
+          .eq("workspace_id", workspaceId);
+        if (userId) update = update.eq("user_id", userId);
+        return update;
+      }),
+    );
+    for (const result of results)
+      checked(`kanban.${table}.rebalance.update`, result);
   }
 }
 
@@ -113,7 +140,12 @@ async function boardPosition(
   if (before && after) {
     const beforePosition = Number(before.kanban_position);
     const afterPosition = Number(after.kanban_position);
-    if (afterPosition - beforePosition < 0.000001) {
+    const midpoint =
+      Math.round(((beforePosition + afterPosition) / 2) * POSITION_SCALE) /
+      POSITION_SCALE;
+    // numeric(20,6) rounds the midpoint: if it does not land strictly between
+    // the neighbours it would duplicate one of them, so renumber the column.
+    if (!(midpoint > beforePosition && midpoint < afterPosition)) {
       await rebalanceBoard(client, table, workspaceId, status, userId);
       return boardPosition(
         client,
@@ -126,7 +158,7 @@ async function boardPosition(
         userId,
       );
     }
-    return (beforePosition + afterPosition) / 2;
+    return midpoint;
   }
   if (before) return Number(before.kanban_position) + 1024;
   if (after) return Number(after.kanban_position) - 1024;
@@ -157,7 +189,7 @@ export class SupabaseKanbanAdapter implements KanbanIssuePort {
   ) {
     const currentResult = await this.client
       .from("issues")
-      .select("id, status")
+      .select("id, status, completed_at")
       .eq("workspace_id", context.workspaceId)
       .eq("identifier", identifier)
       .maybeSingle();
@@ -172,6 +204,7 @@ export class SupabaseKanbanAdapter implements KanbanIssuePort {
       input.afterId,
       str((current as Record<string, unknown>).id),
     );
+    const now = new Date().toISOString();
     checked(
       "issues.kanban.move",
       await this.client
@@ -179,9 +212,12 @@ export class SupabaseKanbanAdapter implements KanbanIssuePort {
         .update({
           status: input.status,
           kanban_position: position,
-          completed_at:
-            input.status === "done" ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
+          completed_at: completedAtFor(
+            input.status,
+            current as Record<string, unknown>,
+            now,
+          ),
+          updated_at: now,
         })
         .eq("workspace_id", context.workspaceId)
         .eq("id", (current as Record<string, unknown>).id),
@@ -202,11 +238,38 @@ export class SupabasePersonalPlanningAdapter implements PersonalPlanningPort {
     if (query.status) request = request.eq("status", query.status);
     if (query.from) request = request.gte("due_on", query.from);
     if (query.to) request = request.lte("due_on", query.to);
-    if (query.cursor) request = request.gt("id", query.cursor);
+    if (query.cursor) {
+      const position = await this.cursorPosition(context, query.cursor);
+      if (position)
+        request = request.or(
+          `kanban_position.gt.${position.key},and(kanban_position.eq.${position.key},id.gt.${position.id})`,
+        );
+    }
     const result = await request
       .order("kanban_position", { ascending: true })
+      .order("id", { ascending: true })
       .limit(query.limit);
     return rows(checked("personal_tasks.list", result)).map(personalTaskRecord);
+  }
+
+  private async cursorPosition(
+    context: RequestContext,
+    cursor: string,
+  ): Promise<{ key: string | number; id: string } | null> {
+    const decoded: KeysetCursor | null = decodeKeysetCursor(cursor);
+    if (!decoded) throw new Error("invalid_cursor");
+    if (decoded.kind === "keyset") return decoded;
+    const anchor = await this.client
+      .from("personal_tasks")
+      .select("id, kanban_position")
+      .eq("workspace_id", context.workspaceId)
+      .eq("user_id", context.userId)
+      .eq("id", decoded.id)
+      .maybeSingle();
+    const found = checked("personal_tasks.cursor", anchor) as Row | null;
+    return found
+      ? { key: Number(found.kanban_position), id: str(found.id) }
+      : null;
   }
 
   async createTask(context: RequestContext, input: PersonalTaskCreateInput) {
@@ -247,15 +310,24 @@ export class SupabasePersonalPlanningAdapter implements PersonalPlanningPort {
     input: PersonalTaskPatchInput,
   ) {
     const updates: Row = {};
+    const now = new Date().toISOString();
     if (input.title !== undefined) updates.title = input.title;
     if (input.notes !== undefined) updates.notes = input.notes;
     if (input.status !== undefined) {
+      const currentResult = await this.client
+        .from("personal_tasks")
+        .select("status, completed_at")
+        .eq("workspace_id", context.workspaceId)
+        .eq("user_id", context.userId)
+        .eq("id", taskId)
+        .maybeSingle();
+      const current = checked("personal_tasks.status.get", currentResult);
+      if (!current) return null;
       updates.status = input.status;
-      updates.completed_at =
-        input.status === "done" ? new Date().toISOString() : null;
+      updates.completed_at = completedAtFor(input.status, current as Row, now);
     }
     if (input.dueOn !== undefined) updates.due_on = input.dueOn;
-    updates.updated_at = new Date().toISOString();
+    updates.updated_at = now;
     const result = await this.client
       .from("personal_tasks")
       .update(updates)
@@ -275,7 +347,7 @@ export class SupabasePersonalPlanningAdapter implements PersonalPlanningPort {
   ) {
     const currentResult = await this.client
       .from("personal_tasks")
-      .select("id")
+      .select("id, status, completed_at")
       .eq("workspace_id", context.workspaceId)
       .eq("user_id", context.userId)
       .eq("id", taskId)
@@ -292,13 +364,14 @@ export class SupabasePersonalPlanningAdapter implements PersonalPlanningPort {
       taskId,
       context.userId,
     );
+    const now = new Date().toISOString();
     const result = await this.client
       .from("personal_tasks")
       .update({
         status: input.status,
         kanban_position: position,
-        completed_at: input.status === "done" ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
+        completed_at: completedAtFor(input.status, current as Row, now),
+        updated_at: now,
       })
       .eq("workspace_id", context.workspaceId)
       .eq("user_id", context.userId)

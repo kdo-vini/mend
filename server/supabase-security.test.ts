@@ -45,7 +45,38 @@ const architectureHardeningMigrationPath = fileURLToPath(
   ),
 );
 
+const roleChecksMigrationPath = fileURLToPath(
+  new URL(
+    "../supabase/migrations/20261026140000_security_role_checks_and_owner_lock.sql",
+    import.meta.url,
+  ),
+);
+
 describe("Supabase security migration contract", () => {
+  it("replaces member-wide write policies with role-checked ones and locks owners", async () => {
+    const sql = await readFile(roleChecksMigrationPath, "utf8");
+
+    expect(sql).toContain(
+      'drop policy if exists "members can access agent runs" on public.agent_runs;',
+    );
+    expect(sql).toContain(
+      'drop policy if exists "workspace members can access media send requests" on public.media_send_requests;',
+    );
+    expect(sql).toMatch(
+      /create policy "workspace agents can write media send requests"[\s\S]*?workspace_can\(workspace_id, array\['owner', 'admin', 'agent'\]\)/,
+    );
+    expect(sql).not.toMatch(
+      /for all to authenticated\s+using \(public\.is_workspace_member/,
+    );
+    expect(sql).toContain(
+      'drop policy if exists "workspace members can append audit" on public.audit_log;',
+    );
+    expect(sql.match(/for update;/g)).toHaveLength(2);
+    expect(sql).toContain(
+      "revoke all on function private.pause_conversation_for_human(uuid, uuid, uuid, uuid, text) from public, anon, authenticated;",
+    );
+  });
+
   it("keeps privileged implementations private and public RPCs invoker-only", async () => {
     const sql = await readFile(migrationPath, "utf8");
 

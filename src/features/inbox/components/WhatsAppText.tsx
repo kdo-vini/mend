@@ -1,5 +1,5 @@
 // i18n-exempt: renders message text authored by operators and customers, no UI copy.
-import { Fragment, type ReactNode } from "react";
+import { Fragment, memo, useMemo, type ReactNode } from "react";
 import {
   parseWhatsAppBlocks,
   parseWhatsAppInline,
@@ -85,7 +85,7 @@ function renderLines(lines: WaInline[][], mode: InlineMode) {
  * A message body rendered like a WhatsApp bubble. Pass `links={false}` when
  * the text sits inside another interactive element (a media caption button).
  */
-export function WhatsAppMessageText({
+export const WhatsAppMessageText = memo(function WhatsAppMessageText({
   text,
   links = true,
 }: {
@@ -93,7 +93,7 @@ export function WhatsAppMessageText({
   links?: boolean;
 }) {
   const mode: InlineMode = links ? "message" : "plain";
-  const blocks = parseWhatsAppBlocks(text);
+  const blocks = useMemo(() => parseWhatsAppBlocks(text), [text]);
   return (
     <div className="message-wa-markup">
       {blocks.map((block, index) => {
@@ -143,12 +143,16 @@ export function WhatsAppMessageText({
       })}
     </div>
   );
-}
+});
 
 /** Single-line formatted text for the conversation list. */
-export function WhatsAppPreviewText({ text }: { text: string }) {
+export const WhatsAppPreviewText = memo(function WhatsAppPreviewText({
+  text,
+}: {
+  text: string;
+}) {
   return <>{renderInline(parseWhatsAppPreview(text), "plain")}</>;
-}
+});
 
 /**
  * The composer text with its markers kept in place and the formatting

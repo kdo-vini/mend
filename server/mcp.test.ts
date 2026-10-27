@@ -7,6 +7,7 @@ import {
   mcpArgumentsHmac,
   mcpToolRecord,
   parseSupabaseMcpServerUrl,
+  isNonPublicAddress,
   resolvePublicNetworkTarget,
   safeExternalFetch,
   validateMcpHeaders,
@@ -38,6 +39,32 @@ describe("MCP connection security helpers", () => {
         NODE_ENV: "development",
       }),
     ).toContain("localhost");
+  });
+
+  it("blocks mapped, NAT64, 6to4 and bracketed non-public literals", () => {
+    const production = { NODE_ENV: "production" };
+    for (const host of [
+      "[::ffff:127.0.0.1]",
+      "[::ffff:10.0.0.5]",
+      "[::1]",
+      "[::]",
+      "[64:ff9b::7f00:1]",
+      "[2002:7f00:1::1]",
+      "[fe80::1]",
+      "[fd00::1]",
+      "100.64.0.1",
+      "127.1",
+      "0.0.0.0",
+    ])
+      expect(
+        () => validateMcpServerUrl(`https://${host}/mcp`, production),
+        host,
+      ).toThrow();
+    expect(
+      validateMcpServerUrl("https://[2606:4700:4700::1111]/mcp", production),
+    ).toContain("2606:4700");
+    expect(isNonPublicAddress("::ffff:7f00:1")).toBe(true);
+    expect(isNonPublicAddress("8.8.8.8")).toBe(false);
   });
 
   it("classifies only explicit readOnlyHint tools as reads", () => {

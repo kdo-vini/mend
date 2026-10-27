@@ -101,6 +101,32 @@ function isStandaloneDisplay(): boolean {
   );
 }
 
+/**
+ * Best effort: drop this browser's push subscription so a signed-out device
+ * stops receiving the previous user's notifications. Never blocks sign-out.
+ */
+export async function disableNativePushOnSignOut(
+  client: MendSupabaseClient,
+): Promise<void> {
+  try {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator))
+      return;
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager?.getSubscription();
+    if (!subscription) return;
+    const user = await client.auth.getUser();
+    if (user.data.user)
+      await client
+        .from("push_subscriptions")
+        .delete()
+        .eq("user_id", user.data.user.id)
+        .eq("endpoint", subscription.endpoint);
+    await subscription.unsubscribe();
+  } catch {
+    // Sign-out must proceed even when push cleanup fails.
+  }
+}
+
 export async function enableNativePush(
   client: MendSupabaseClient,
   workspaceId: string,

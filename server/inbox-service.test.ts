@@ -404,6 +404,39 @@ function inbound(providerMessageId = "wamid-in-1") {
 }
 
 describe("InboxService and WhatsAppService", () => {
+  it("flags history imports and bounds mark-read at the port", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    const ingest = vi.spyOn(port, "ingestMessage");
+    const setState = vi.spyOn(port, "setConversationState");
+
+    await inbox.persistNormalizedMessage(
+      { workspaceId },
+      channelId,
+      inbound("wamid-history"),
+      { isHistory: true },
+    );
+    await inbox.persistNormalizedMessage(
+      { workspaceId },
+      channelId,
+      inbound("wamid-live"),
+    );
+    expect(ingest.mock.calls[0]?.[0].isHistory).toBe(true);
+    expect(ingest.mock.calls[1]?.[0].isHistory).toBeUndefined();
+
+    await inbox.readConversation(
+      { workspaceId },
+      conversationId,
+      new Date("2026-08-03T12:00:00.000Z"),
+    );
+    await inbox.readConversation({ workspaceId }, conversationId);
+    expect(setState.mock.calls[0]?.[0]).toMatchObject({
+      action: "read",
+      readUpTo: "2026-08-03T12:00:00.000Z",
+    });
+    expect(setState.mock.calls[1]?.[0]).not.toHaveProperty("readUpTo");
+  });
+
   it("pauses AI after human WhatsApp outbound and skips pause for AI sends", async () => {
     const port = new FakeInboxPort();
     const inbox = new InboxService(port);
@@ -1134,5 +1167,27 @@ describe("InboxService and WhatsAppService", () => {
       "120363426966918405@g.us",
       "group-in-1",
     );
+  });
+
+  it("marks read in the database even when the provider read receipt throws", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, inbound());
+    const provider: WhatsAppProvider = {
+      sendText: vi.fn(async () => ({ key: { id: "x" } })),
+      markAsRead: vi.fn(async () => {
+        throw new Error("provider down");
+      }),
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const readSpy = vi.spyOn(inbox, "readConversation");
+    const whatsapp = new WhatsAppService(inbox, provider);
+    await expect(
+      whatsapp.markRead({ workspaceId }, conversationId),
+    ).resolves.toBeUndefined();
+    expect(readSpy).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(provider.markAsRead).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

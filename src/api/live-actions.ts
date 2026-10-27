@@ -27,6 +27,7 @@ import {
   mendApiBaseUrl,
   requireClient,
   unwrap,
+  unwrapPages,
 } from "./transport";
 
 export {
@@ -291,86 +292,88 @@ export async function loadLiveWorkspace(
       channels: [],
     };
 
-  const [
-    contacts,
-    channels,
-    conversations,
-    issues,
-    runs,
-    knowledge,
-    aiStates,
-    aiDrafts,
-    bugCases,
-  ] = await Promise.all([
-    unwrap(
-      db
-        .from("contacts")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .limit(100),
-    ),
-    unwrap(
-      db
-        .from("channel_connections")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .order("name")
-        .limit(20),
-    ),
-    unwrap(
-      db
-        .from("conversations")
-        .select("*, messages!messages_conversation_id_fkey(*)")
-        .eq("workspace_id", workspace.id)
-        .order("last_message_at", { ascending: false, nullsFirst: false })
-        .order("created_at", {
-          referencedTable: "messages",
-          ascending: false,
-        })
-        .limit(1, { referencedTable: "messages" })
-        .limit(100),
-    ),
-    unwrap(
-      db
-        .from("issues")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .order("updated_at", { ascending: false })
-        .limit(100),
-    ),
-    unwrap(
-      db
-        .from("agent_runs")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .order("created_at", { ascending: false })
-        .limit(50),
-    ),
-    loadWorkspaceKnowledge(db, workspace.id),
-    unwrap(
-      db
-        .from("conversation_ai_state")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .limit(100),
-    ),
-    unwrap(
-      db
-        .from("ai_drafts")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .in("status", ["pending_review"])
-        .order("created_at", { ascending: false })
-        .limit(100),
-    ),
-    unwrap(
-      db
-        .from("bug_cases")
-        .select("*")
-        .eq("workspace_id", workspace.id)
-        .order("updated_at", { ascending: false })
-        .limit(50),
-    ),
+  const [channels, conversations, issues, runs, knowledge, aiDrafts, bugCases] =
+    await Promise.all([
+      unwrap(
+        db
+          .from("channel_connections")
+          .select("*")
+          .eq("workspace_id", workspace.id)
+          .order("name")
+          .limit(20),
+      ),
+      unwrap(
+        db
+          .from("conversations")
+          .select("*, messages!messages_conversation_id_fkey(*)")
+          .eq("workspace_id", workspace.id)
+          .order("last_message_at", { ascending: false, nullsFirst: false })
+          .order("created_at", {
+            referencedTable: "messages",
+            ascending: false,
+          })
+          .limit(1, { referencedTable: "messages" })
+          .limit(100),
+      ),
+      unwrapPages((from, to) =>
+        db
+          .from("issues")
+          .select("*")
+          .eq("workspace_id", workspace.id)
+          .order("updated_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to),
+      ),
+      unwrap(
+        db
+          .from("agent_runs")
+          .select("*")
+          .eq("workspace_id", workspace.id)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ),
+      loadWorkspaceKnowledge(db, workspace.id),
+      unwrap(
+        db
+          .from("ai_drafts")
+          .select("*")
+          .eq("workspace_id", workspace.id)
+          .in("status", ["pending_review"])
+          .order("created_at", { ascending: false })
+          .limit(100),
+      ),
+      unwrap(
+        db
+          .from("bug_cases")
+          .select("*")
+          .eq("workspace_id", workspace.id)
+          .order("updated_at", { ascending: false })
+          .limit(50),
+      ),
+    ]);
+  // Keyed by the loaded conversations: an unordered limit(100) over the whole
+  // workspace drops names and AI state once there are more than 100 rows.
+  const contactIds = [
+    ...new Set([
+      ...conversations.map((conversation) => conversation.contact_id),
+      ...issues.flatMap((issue) =>
+        issue.contact_id ? [issue.contact_id] : [],
+      ),
+    ]),
+  ];
+  const conversationIds = conversations.map((conversation) => conversation.id);
+  const [contacts, aiStates] = await Promise.all([
+    contactIds.length
+      ? unwrap(db.from("contacts").select("*").in("id", contactIds))
+      : Promise.resolve([]),
+    conversationIds.length
+      ? unwrap(
+          db
+            .from("conversation_ai_state")
+            .select("*")
+            .in("conversation_id", conversationIds),
+        )
+      : Promise.resolve([]),
   ]);
   const aiDraftLinks = aiDrafts.length
     ? await unwrap(
@@ -475,6 +478,8 @@ export async function loadLiveWorkspace(
   };
 }
 
+let snapshotRequestSequence = 0;
+
 /** Load only the conversation affected by a realtime event. */
 export async function loadLiveConversationSnapshot(
   client: MendSupabaseClient | null,
@@ -482,6 +487,9 @@ export async function loadLiveConversationSnapshot(
   conversationId: string,
 ): Promise<UiConversation | null> {
   const db = requireClient(client);
+  // Issued before any await so a slow older read cannot overwrite a newer one.
+  snapshotRequestSequence += 1;
+  const snapshotSeq = snapshotRequestSequence;
   const [conversationResult, messagesResult] = await Promise.all([
     db
       .from("conversations")
@@ -565,21 +573,34 @@ export async function loadLiveConversationSnapshot(
       articlesResult.data,
     ).get(conversationId);
   }
-  return toUiConversation(
-    conversationResult.data,
-    contactResult.data ?? undefined,
-    messages,
-    issueResult.data ?? undefined,
-    aiStateResult.data ?? undefined,
-    aiDraft,
-  );
+  return {
+    ...toUiConversation(
+      conversationResult.data,
+      contactResult.data ?? undefined,
+      messages,
+      issueResult.data ?? undefined,
+      aiStateResult.data ?? undefined,
+      aiDraft,
+    ),
+    snapshotSeq,
+  };
+}
+
+/** Keyset cursor: WhatsApp timestamps are whole seconds, so id breaks ties. */
+export interface OlderMessagesCursor {
+  createdAt: string;
+  id: string;
+}
+
+export function olderMessagesFilter(cursor: OlderMessagesCursor): string {
+  return `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`;
 }
 
 export async function loadOlderLiveConversationMessages(
   client: MendSupabaseClient | null,
   workspaceId: string,
   conversationId: string,
-  before: string,
+  before: OlderMessagesCursor,
   limit = 50,
 ): Promise<UiMessage[]> {
   const db = requireClient(client);
@@ -589,8 +610,9 @@ export async function loadOlderLiveConversationMessages(
       .select("*")
       .eq("workspace_id", workspaceId)
       .eq("conversation_id", conversationId)
-      .lt("created_at", before)
+      .or(olderMessagesFilter(before))
       .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(Math.min(50, Math.max(1, limit))),
   );
   const ordered = [...records].reverse();
@@ -1254,15 +1276,23 @@ export async function resumeLiveConversationAi(input: {
 export async function markLiveConversationRead(input: {
   workspaceId: string;
   conversationId: string;
+  /** created_at of the newest message the operator has seen. */
+  readUpTo?: string;
 }) {
   if (mendApiBaseUrl)
     return apiRequest(
       `/api/conversations/${encodeURIComponent(input.conversationId)}/read`,
-      { method: "POST", body: JSON.stringify({}) },
+      {
+        method: "POST",
+        body: JSON.stringify(
+          input.readUpTo ? { readUpTo: input.readUpTo } : {},
+        ),
+      },
       input.workspaceId,
     );
   return updateLiveConversation({
-    ...input,
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
     updates: { unread_count: 0 },
   });
 }

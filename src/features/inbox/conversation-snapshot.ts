@@ -79,6 +79,13 @@ function unmatchedOptimisticMessages(
         persistedAt >= sentAt - OPTIMISTIC_MATCH_SKEW_MS
       );
     };
+    // The client id (sent as idempotencyKey) is the preferred link whenever
+    // the persisted row carries it; text matching is the fallback.
+    if (
+      message.clientId &&
+      claim(persisted, (candidate) => candidate.clientId === message.clientId)
+    )
+      return false;
     const key = messageMatchKey(message);
     // Uploaded attachments carry their batch onto the persisted row, so they
     // match by batch alone: a caption-less key would match any earlier photo.
@@ -173,6 +180,13 @@ export function mergeConversationSnapshot(
   options?: { partialMessages?: boolean },
 ): Conversation[] {
   const existing = current.find((item) => item.id === snapshot.id);
+  // A read issued before the one already applied carries older data.
+  if (
+    existing?.snapshotSeq !== undefined &&
+    snapshot.snapshotSeq !== undefined &&
+    snapshot.snapshotSeq < existing.snapshotSeq
+  )
+    return current;
   const localPersisted = persistedMessages(existing?.messages ?? []);
   const snapshotPersisted = persistedMessages(snapshot.messages);
   const pending = unmatchedOptimisticMessages(existing, snapshot.messages);
@@ -214,6 +228,8 @@ export function mergeConversationSnapshot(
 
   const merged: Conversation = {
     ...snapshot,
+    snapshotSeq: snapshot.snapshotSeq ?? existing?.snapshotSeq,
+    threadLoaded: options?.partialMessages ? existing?.threadLoaded : true,
     messages: nextMessages,
     lastMessage: conversationPreviewText(nextMessages.at(-1)),
   };

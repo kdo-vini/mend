@@ -15,6 +15,8 @@ export const SUPPORT_WEBHOOK_AUTHORIZATION_ENV =
   "MEND_SUPPORT_WEBHOOK_AUTHORIZATION";
 
 const DEFAULT_TIMEOUT_MS = 4_000;
+const DEFAULT_ATTEMPTS = 3;
+const DEFAULT_RETRY_DELAY_MS = 500;
 
 export interface SupportWebhookConfig {
   url: string;
@@ -22,7 +24,7 @@ export interface SupportWebhookConfig {
 }
 
 export interface SupportWebhookNotifier {
-  /** Never throws: WhatsApp ingest must continue when the webhook fails. */
+  /** Never throws: WhatsApp ingest must continue when the webhook fails. Retries with backoff. */
   notify(row: StoredSupportEvent): Promise<void>;
 }
 
@@ -60,7 +62,7 @@ export function resolveSupportWebhookConfig(
   return { url, ...(authorization ? { authorization } : {}) };
 }
 
-/** POST one event; throws on non-2xx or timeout. At-most-once, no retries. */
+/** POST one event; throws on non-2xx or timeout. Single attempt. */
 export async function postSupportEvent(
   config: SupportWebhookConfig,
   event: SupportEvent,
@@ -85,6 +87,10 @@ export interface SupportWebhookNotifierOptions {
   env?: NodeJS.ProcessEnv;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  /** Total POST attempts per event (default 3). */
+  attempts?: number;
+  /** Base delay before a retry; doubles each time (default 500ms). */
+  retryDelayMs?: number;
   logger?: SupportWebhookLogger;
 }
 
@@ -96,17 +102,30 @@ export function createSupportWebhookNotifier(
   if (!config) return null;
   return {
     async notify(row) {
+      const attempts = Math.max(1, options.attempts ?? DEFAULT_ATTEMPTS);
+      const baseDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
       try {
         const [event] = await options.store.hydrate([row]);
         if (!event) return;
-        await postSupportEvent(config, event, {
-          ...(options.fetch ? { fetch: options.fetch } : {}),
-          ...(options.timeoutMs !== undefined
-            ? { timeoutMs: options.timeoutMs }
-            : {}),
-        });
+        for (let attempt = 1; ; attempt += 1) {
+          try {
+            await postSupportEvent(config, event, {
+              ...(options.fetch ? { fetch: options.fetch } : {}),
+              ...(options.timeoutMs !== undefined
+                ? { timeoutMs: options.timeoutMs }
+                : {}),
+            });
+            return;
+          } catch (error) {
+            if (attempt >= attempts) throw error;
+            await new Promise((resolve) =>
+              setTimeout(resolve, baseDelayMs * 2 ** (attempt - 1)),
+            );
+          }
+        }
       } catch (error) {
-        // Log ids only: never the URL, token or message text.
+        // Log ids only: never the URL, token or message text. The bot can
+        // still backfill from GET /internal/support/events.
         options.logger?.warn(
           {
             err: error instanceof Error ? error.message : String(error),
@@ -121,7 +140,7 @@ export function createSupportWebhookNotifier(
 }
 
 /**
- * Wrap a store so each newly recorded event is pushed once; duplicate records
+ * Wrap a store so each newly recorded event is pushed (async, retried); duplicate records
  * (null) never push. Record errors still throw so the ingest job retries.
  */
 export function withSupportWebhook(
@@ -133,7 +152,9 @@ export function withSupportWebhook(
   return {
     async record(input) {
       const recorded = await store.record(input);
-      if (recorded) await notifier.notify(recorded);
+      // Fire-and-forget: the push (with retries) must not block ingestion.
+      // notify() never rejects; the void keeps lint happy.
+      if (recorded) void notifier.notify(recorded);
       return recorded;
     },
   };

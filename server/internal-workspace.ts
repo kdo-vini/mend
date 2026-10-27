@@ -16,9 +16,19 @@ export class InternalWorkspaceError extends Error {
 }
 
 export class SupabaseInternalWorkspaceAdapter implements InternalWorkspacePort {
-  constructor(private readonly client: AnySupabaseClient) {}
+  /** The singleton workspace id never changes at runtime; cache it in-process. */
+  private cached: { id: string; expiresAt: number } | null = null;
+
+  constructor(
+    private readonly client: AnySupabaseClient,
+    private readonly cacheMs = 5 * 60_000,
+    private readonly now: () => number = Date.now,
+  ) {}
 
   async resolve(): Promise<string | null> {
+    if (this.cached && this.cached.expiresAt > this.now())
+      return this.cached.id;
+    this.cached = null;
     const result = await this.client
       .from("internal_workspace")
       .select("workspace_id")
@@ -26,7 +36,9 @@ export class SupabaseInternalWorkspaceAdapter implements InternalWorkspacePort {
       .maybeSingle();
     if (result.error)
       throw new InternalWorkspaceError("internal_workspace_unconfigured");
-    return result.data?.workspace_id ?? null;
+    const id: string | null = result.data?.workspace_id ?? null;
+    if (id) this.cached = { id, expiresAt: this.now() + this.cacheMs };
+    return id;
   }
 }
 

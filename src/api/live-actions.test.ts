@@ -48,7 +48,9 @@ import {
   updateLiveAgentRun,
   hydrateMessageMediaUrls,
   loadOlderLiveConversationMessages,
+  olderMessagesFilter,
   loadLiveWorkspace,
+  markLiveConversationRead,
   saveLiveAgentRoutingPolicy,
   uploadLiveMediaAsset,
   type LiveStageRoutingPolicy,
@@ -59,6 +61,7 @@ type RecordedQuery = {
   table: string;
   columns?: string;
   limit?: number;
+  range?: [number, number];
   filters?: Record<string, unknown>;
   descending?: boolean;
 };
@@ -90,7 +93,12 @@ function workspaceQueryClient(recorded: RecordedQuery[]): MendSupabaseClient {
           query.filters = { ...query.filters, [`${column}<`]: value };
           return builder;
         },
-        in() {
+        in(column: string, value: unknown) {
+          query.filters = { ...query.filters, [`${column} in`]: value };
+          return builder;
+        },
+        or(value: string) {
+          query.filters = { ...query.filters, or: value };
           return builder;
         },
         order(_column: string, options?: { ascending?: boolean }) {
@@ -99,6 +107,10 @@ function workspaceQueryClient(recorded: RecordedQuery[]): MendSupabaseClient {
         },
         limit(value: number) {
           query.limit = value;
+          return builder;
+        },
+        range(from: number, to: number) {
+          query.range = [from, to];
           return builder;
         },
         then(resolve: (value: unknown) => unknown) {
@@ -111,6 +123,36 @@ function workspaceQueryClient(recorded: RecordedQuery[]): MendSupabaseClient {
     },
   } as unknown as MendSupabaseClient;
 }
+
+describe("live conversation read", () => {
+  it("sends the newest seen message time only when known", async () => {
+    apiRequest.mockClear();
+    await markLiveConversationRead({
+      workspaceId: "workspace-1",
+      conversationId: "c-1",
+      readUpTo: "2026-08-03T12:00:00.000Z",
+    });
+    await markLiveConversationRead({
+      workspaceId: "workspace-1",
+      conversationId: "c-1",
+    });
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      1,
+      "/api/conversations/c-1/read",
+      {
+        method: "POST",
+        body: JSON.stringify({ readUpTo: "2026-08-03T12:00:00.000Z" }),
+      },
+      "workspace-1",
+    );
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      2,
+      "/api/conversations/c-1/read",
+      { method: "POST", body: JSON.stringify({}) },
+      "workspace-1",
+    );
+  });
+});
 
 describe("live Agent run actions", () => {
   it("links a continuation to its parent run and research artifact", async () => {
@@ -211,7 +253,10 @@ describe("live workspace bootstrap", () => {
     expect(
       recorded.find((query) => query.table === "conversations")?.limit,
     ).toBe(100);
-    expect(recorded.find((query) => query.table === "issues")?.limit).toBe(100);
+    // Issues are read in pages up to a hard cap rather than a single 100 rows.
+    expect(recorded.find((query) => query.table === "issues")?.range).toEqual([
+      0, 499,
+    ]);
     expect(recorded.find((query) => query.table === "agent_runs")?.limit).toBe(
       50,
     );
@@ -224,7 +269,7 @@ describe("live workspace bootstrap", () => {
       workspaceQueryClient(recorded),
       "workspace-1",
       "conversation-1",
-      "2026-09-18T12:00:00.000Z",
+      { createdAt: "2026-09-18T12:00:00.000Z", id: "message-9" },
     );
 
     expect(recorded).toEqual([
@@ -235,10 +280,16 @@ describe("live workspace bootstrap", () => {
         filters: {
           workspace_id: "workspace-1",
           conversation_id: "conversation-1",
-          "created_at<": "2026-09-18T12:00:00.000Z",
+          or: "created_at.lt.2026-09-18T12:00:00.000Z,and(created_at.eq.2026-09-18T12:00:00.000Z,id.lt.message-9)",
         },
       }),
     ]);
+  });
+
+  it("builds a (created_at, id) keyset filter", () => {
+    expect(olderMessagesFilter({ createdAt: "T1", id: "m1" })).toBe(
+      "created_at.lt.T1,and(created_at.eq.T1,id.lt.m1)",
+    );
   });
 });
 

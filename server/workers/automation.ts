@@ -1025,68 +1025,86 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       await this.markDraftStatus(input, "sent");
       return;
     }
+    const ledgerId = String(row.id);
+    // Only the provider call may mark the ledger failed: once the provider
+    // accepted the text, nothing downgrades 'sent' (a retry would send again).
+    let providerMessageId: string | undefined;
+    const markLedgerSent = async (id: string) => {
+      const update = () =>
+        this.metadataClient
+          .from("ai_outbound_messages")
+          .update({
+            provider_message_id: id,
+            status: "sent",
+            sent_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", ledgerId)
+          .select("id")
+          .maybeSingle();
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const updated = await update().then(
+          (result) => result,
+          (error: unknown) => ({ error: { message: String(error) } }),
+        );
+        if (!updated.error) return;
+        if (attempt === 1)
+          console.error(
+            "ai_outbound_messages sent bookkeeping failed",
+            updated.error.message,
+          );
+      }
+    };
+    const onProviderMessageId = async (id: string) => {
+      providerMessageId = id;
+      await markLedgerSent(id);
+    };
     try {
       const choices = input.choices ?? [];
       if (choices.length >= 2) {
         await this.whatsapp.sendReplyChoices(
-          {
-            workspaceId: input.binding.workspaceId,
-            actorType: "ai",
-          },
+          { workspaceId: input.binding.workspaceId, actorType: "ai" },
           input.conversationId,
           {
             text: input.body,
             choices,
             aiGenerated: true,
-            onProviderMessageId: async (providerMessageId) => {
-              const updated = await this.metadataClient
-                .from("ai_outbound_messages")
-                .update({
-                  provider_message_id: providerMessageId,
-                  status: "sent",
-                  sent_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", String(row.id))
-                .select("id")
-                .maybeSingle();
-              if (updated.error)
-                throw new Error(
-                  `supabase:ai_outbound_messages:${updated.error.message}`,
-                );
-            },
+            idempotencyKey: ledgerId,
+            onProviderMessageId,
           },
         );
       } else {
         await this.whatsapp.sendText(
-          {
-            workspaceId: input.binding.workspaceId,
-            actorType: "ai",
-          },
+          { workspaceId: input.binding.workspaceId, actorType: "ai" },
           input.conversationId,
           {
             text: input.body,
             aiGenerated: true,
-            onProviderMessageId: async (providerMessageId) => {
-              const updated = await this.metadataClient
-                .from("ai_outbound_messages")
-                .update({
-                  provider_message_id: providerMessageId,
-                  status: "sent",
-                  sent_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", String(row.id))
-                .select("id")
-                .maybeSingle();
-              if (updated.error)
-                throw new Error(
-                  `supabase:ai_outbound_messages:${updated.error.message}`,
-                );
-            },
+            idempotencyKey: ledgerId,
+            onProviderMessageId,
           },
         );
       }
+    } catch (error) {
+      if (!providerMessageId) {
+        await this.metadataClient
+          .from("ai_outbound_messages")
+          .update({
+            status: "failed",
+            error_code: safeOperationalError(error),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", ledgerId);
+        await this.markDraftStatus(input, "pending_review");
+        throw error;
+      }
+      // Delivered but not recorded locally: the provider echo will record it.
+      console.error(
+        "ai reply delivered but local recording failed",
+        safeOperationalError(error),
+      );
+    }
+    try {
       await this.markDraftStatus(input, "sent");
       await this.auditDecision(input, input.triage, "ai.auto_reply.sent", {
         sourceMessageId: input.sourceMessageId,
@@ -1114,27 +1132,28 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
           "policy_required_touch",
           input.pauseAfterSendReason,
         );
-        const takeover = await this.client.rpc("pause_conversation_ai", {
+        let takeover = await this.client.rpc("pause_conversation_ai", {
           p_workspace_id: input.binding.workspaceId,
           p_conversation_id: input.conversationId,
           p_reason: input.pauseAfterSendReason,
         });
+        if (takeover.error)
+          takeover = await this.client.rpc("pause_conversation_ai", {
+            p_workspace_id: input.binding.workspaceId,
+            p_conversation_id: input.conversationId,
+            p_reason: input.pauseAfterSendReason,
+          });
         if (takeover.error)
           throw new Error(
             `supabase:conversation_ai.pause:${takeover.error.message}`,
           );
       }
     } catch (error) {
-      await this.metadataClient
-        .from("ai_outbound_messages")
-        .update({
-          status: "failed",
-          error_code: safeOperationalError(error),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", String(row.id));
-      await this.markDraftStatus(input, "pending_review");
-      throw error;
+      // Already sent: never mark the ledger failed or rethrow into a resend.
+      console.error(
+        "ai reply post-send bookkeeping failed",
+        safeOperationalError(error),
+      );
     }
   }
 
@@ -2352,6 +2371,8 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     connections: readonly McpRuntimeConnection[],
     approval: McpApprovalInput,
   ): Promise<boolean> {
+    // Draft mode only proposes: a write tool never runs without a human.
+    if (mode === "draft") return false;
     const connection = connections.find(
       (item) => item.id === approval.connectionId,
     );

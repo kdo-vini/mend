@@ -27,6 +27,14 @@ beforeEach(() => {
 });
 
 describe("API boundary", () => {
+  it("does not expose job counts on the unauthenticated runtime route", async () => {
+    vi.resetModules();
+    const server = await loadApp();
+    const response = await request(server).get("/api/runtime");
+    expect(response.status).toBe(200);
+    expect(response.body).not.toHaveProperty("jobs");
+  });
+
   it("allows Supabase media and local blob previews through CSP", async () => {
     const cspSupabaseUrl = "https://csp.test.supabase.co";
     const previousSupabaseUrl = process.env.SUPABASE_URL;
@@ -89,6 +97,24 @@ describe("API boundary", () => {
       .send({ event: "messages.upsert", instance: "mend-test", data: {} });
     expect(response.status).toBe(202);
     expect(response.body.accepted).toBe(true);
+  });
+
+  it("returns 503 so Whatsmiau retries when enqueueing fails", async () => {
+    vi.resetModules();
+    vi.doMock("./worker.js", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("./worker.js")>()),
+      enqueueWhatsmiauEvent: vi.fn().mockRejectedValue(new Error("db down")),
+    }));
+    try {
+      const response = await request(await loadApp())
+        .post("/webhooks/whatsmiau")
+        .set("Authorization", "Bearer test-secret")
+        .send({ event: "messages.upsert", instance: "mend-test", data: {} });
+      expect(response.status).toBe(503);
+    } finally {
+      vi.doUnmock("./worker.js");
+      vi.resetModules();
+    }
   });
 
   it("does not expose paid AI endpoints without a Supabase bearer token", async () => {

@@ -87,16 +87,18 @@ describe("ProviderBalancesService", () => {
         if (address.pathname === "/v1/balance") return response(stripeBalance);
         expect(address.pathname).toBe("/v1/payouts");
         expect(address.searchParams.get("limit")).toBe("100");
+        // Settled history is filtered server-side: one query per open status.
         return response({
-          data: [
-            stripePayout(),
-            stripePayout({
-              id: "po_live_2",
-              status: "in_transit",
-              arrival_date: null,
-            }),
-            stripePayout({ id: "po_paid", status: "paid" }),
-          ],
+          data:
+            address.searchParams.get("status") === "pending"
+              ? [stripePayout()]
+              : [
+                  stripePayout({
+                    id: "po_live_2",
+                    status: "in_transit",
+                    arrival_date: null,
+                  }),
+                ],
           has_more: false,
         });
       },
@@ -105,7 +107,7 @@ describe("ProviderBalancesService", () => {
       { MEND_ZELO_STRIPE_READ_KEY: "rk_live_secret" },
       fetcher as typeof fetch,
     ).load();
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
     expect(result.providers.stripe).toEqual({
       status: "ok",
       scope: "provider_account",
@@ -137,6 +139,28 @@ describe("ProviderBalancesService", () => {
         },
       ],
     });
+  });
+
+  it("stays ok past five pages of settled payouts and flags an exhausted open status", async () => {
+    const statuses: string[] = [];
+    const fetcher = vi.fn(async (url: string | URL | Request) => {
+      const address = new URL(String(url));
+      if (address.pathname === "/v1/balance") return response(stripeBalance);
+      const status = address.searchParams.get("status") ?? "";
+      statuses.push(status);
+      return response({
+        data: [stripePayout({ id: `po_${statuses.length}`, status })],
+        // in_transit never ends, so the page budget is exhausted for it only.
+        has_more: status === "in_transit",
+      });
+    });
+    const result = await createProviderBalancesService(
+      { MEND_ZELO_STRIPE_READ_KEY: "rk_live_secret" },
+      fetcher as typeof fetch,
+    ).load();
+    expect(statuses.filter((value) => value === "pending")).toHaveLength(1);
+    expect(statuses.filter((value) => value === "in_transit")).toHaveLength(5);
+    expect(result.providers.stripe.status).toBe("partial");
   });
 
   it("rejects test keys and rejects Stripe test-mode payloads", async () => {

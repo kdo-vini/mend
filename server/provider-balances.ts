@@ -226,25 +226,34 @@ export function createProviderBalancesService(
     }
     const rows: z.infer<typeof stripePayoutSchema>[] = [];
     try {
-      let cursor: string | null = null;
-      let complete = false;
-      for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex++) {
-        const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
-        if (cursor) query.set("starting_after", cursor);
-        const raw = await get(
-          `https://api.stripe.com/v1/payouts?${query}`,
-          headers,
-          signal,
-        );
-        const page = stripePayoutPageSchema.parse(raw);
-        rows.push(...page.data);
-        if (!page.has_more) {
-          complete = true;
-          break;
+      // Only unsettled payouts matter and Stripe filters by a single status,
+      // so settled history never exhausts the page budget.
+      let complete = true;
+      for (const payoutStatus of ["pending", "in_transit"]) {
+        let cursor: string | null = null;
+        let statusComplete = false;
+        for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex++) {
+          const query = new URLSearchParams({
+            limit: String(PAGE_SIZE),
+            status: payoutStatus,
+          });
+          if (cursor) query.set("starting_after", cursor);
+          const raw = await get(
+            `https://api.stripe.com/v1/payouts?${query}`,
+            headers,
+            signal,
+          );
+          const page = stripePayoutPageSchema.parse(raw);
+          rows.push(...page.data);
+          if (!page.has_more) {
+            statusComplete = true;
+            break;
+          }
+          const lastId = page.data.at(-1)?.id;
+          if (!lastId) throw new Error("provider_invalid_cursor");
+          cursor = lastId;
         }
-        const lastId = page.data.at(-1)?.id;
-        if (!lastId) throw new Error("provider_invalid_cursor");
-        cursor = lastId;
+        complete = complete && statusComplete;
       }
       payoutsOk = complete;
     } catch {

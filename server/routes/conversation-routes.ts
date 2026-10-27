@@ -5,6 +5,7 @@ import {
   conversationAiPauseSchema,
   conversationListQuerySchema,
   conversationPatchSchema,
+  conversationReadSchema,
   conversationSnoozeSchema,
   conversationStartSchema,
   messageReactionSchema,
@@ -265,7 +266,11 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
         response,
         200,
         requireFound(
-          await dependencies.conversations.markRead(context, pathId(request)),
+          await dependencies.conversations.markRead(
+            context,
+            pathId(request),
+            parse(conversationReadSchema, request.body ?? {}).readUpTo,
+          ),
           "conversation",
         ),
       );

@@ -1,7 +1,11 @@
 import type { Request } from "express";
 import type { IssuePort } from "../issue-service.js";
 import type { KnowledgePort } from "../knowledge-service.js";
-import type { MediaAssetInput, MediaAssetRecord } from "../media-pipeline.js";
+import type {
+  MediaAssetInput,
+  MediaAssetRecord,
+  MediaSignedUrlResult,
+} from "../media-pipeline.js";
 import type {
   KanbanIssuePort,
   PersonalPlanningPort,
@@ -289,6 +293,7 @@ export interface ConversationPort {
   markRead(
     context: RequestContext,
     conversationId: string,
+    readUpTo?: string,
   ): Promise<unknown | null>;
   snooze(
     context: RequestContext,
@@ -342,6 +347,11 @@ export interface MediaPort {
     assetId: string,
     purpose?: "original" | "browser" | "provider" | "preview",
   ): Promise<{ url: string; mimeType?: string }>;
+  signedUrls(
+    context: RequestContext,
+    assetIds: string[],
+    purpose?: "original" | "browser" | "provider" | "preview",
+  ): Promise<MediaSignedUrlResult[]>;
 }
 
 export interface RepositoryListQuery {

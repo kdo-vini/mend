@@ -19,6 +19,23 @@ import type { Conversation } from "../../../types";
 import { conversationMatchesInboxFilter } from "../inbox-filters";
 import { InboxPage } from "./InboxPage";
 
+// Each render of a row paints its preview, so this log shows which rows rendered.
+const previewRenders: string[] = [];
+vi.mock("../components/WhatsAppText", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("../components/WhatsAppText")>();
+  return {
+    ...original,
+    WhatsAppPreviewText: ({ text }: { text: string }) => {
+      previewRenders.push(text);
+      return <>{text}</>;
+    },
+  };
+});
+let updateConversations:
+  | ((update: (current: Conversation[]) => Conversation[]) => void)
+  | undefined;
+
 const startedConversation: Conversation = {
   ...seedConversations[0],
   id: "conv-new-number",
@@ -45,6 +62,13 @@ const startedConversation: Conversation = {
   ],
 };
 
+// Older than the loaded page of threads; only reachable by its own snapshot.
+const farAwayConversation: Conversation = {
+  ...startedConversation,
+  id: "far-away-conversation",
+  name: "Far Away Customer",
+};
+
 const startConversation = vi.fn(async (_input: unknown) => ({
   conversationId: startedConversation.id,
   created: true,
@@ -52,6 +76,7 @@ const startConversation = vi.fn(async (_input: unknown) => ({
 const loadLiveConversationSnapshot = vi.fn(
   async (_workspaceId: string, conversationId: string) => {
     if (conversationId === startedConversation.id) return startedConversation;
+    if (conversationId === farAwayConversation.id) return farAwayConversation;
     return (
       seedConversations.find(
         (conversation) => conversation.id === conversationId,
@@ -60,7 +85,11 @@ const loadLiveConversationSnapshot = vi.fn(
   },
 );
 const loadOlderLiveConversationMessages = vi.fn(
-  async (_workspaceId: string, _conversationId: string, _before: string) => [],
+  async (
+    _workspaceId: string,
+    _conversationId: string,
+    _before: { createdAt: string; id: string },
+  ) => [],
 );
 const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);
@@ -86,7 +115,7 @@ vi.mock("../api", () => ({
   loadOlderLiveConversationMessages: (
     workspaceId: string,
     conversationId: string,
-    before: string,
+    before: { createdAt: string; id: string },
   ) => loadOlderLiveConversationMessages(workspaceId, conversationId, before),
   deleteLiveConversation: (input: unknown) => deleteLiveConversation(input),
   deleteLiveMessage: vi.fn(),
@@ -127,6 +156,7 @@ function InboxHarness({
   const [selectedConversationId, setSelectedConversationId] = useState(
     initialConversations[0].id,
   );
+  updateConversations = setConversations;
   return (
     <MemoryRouter initialEntries={[initialPath]}>
       <InboxPage
@@ -828,7 +858,7 @@ describe("InboxPage new chat", () => {
     expect(composer().value).toBe("Resposta para o primeiro");
   });
 
-  it("marks the open thread read however it was opened", async () => {
+  it("does not mark an auto-selected thread read", async () => {
     const { markLiveConversationRead } = await import("../api");
     vi.mocked(markLiveConversationRead).mockClear();
     const unreadThread = { ...seedConversations[0], unread: 3 };
@@ -839,10 +869,93 @@ describe("InboxPage new chat", () => {
         />,
       ),
     );
+    expect(markLiveConversationRead).not.toHaveBeenCalled();
+  });
+
+  it("marks a thread read once the operator opens it", async () => {
+    const { markLiveConversationRead } = await import("../api");
+    vi.mocked(markLiveConversationRead).mockClear();
+    const unreadThread = { ...seedConversations[1], unread: 3 };
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          initialConversations={[seedConversations[0], unreadThread]}
+        />,
+      ),
+    );
+    await act(async () => clickConversation(unreadThread.name));
     expect(markLiveConversationRead).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       conversationId: unreadThread.id,
     });
+  });
+
+  it("bounds mark-read at the newest inbound message shown", async () => {
+    const { markLiveConversationRead } = await import("../api");
+    vi.mocked(markLiveConversationRead).mockClear();
+    const base = seedConversations[1];
+    const unreadThread = {
+      ...base,
+      unread: 2,
+      messages: [
+        {
+          ...base.messages[0],
+          direction: "inbound" as const,
+          createdAt: "2026-09-20T22:00:00.000Z",
+        },
+        {
+          ...base.messages[0],
+          id: "m-newer",
+          direction: "inbound" as const,
+          createdAt: "2026-09-20T23:10:00.000Z",
+        },
+      ],
+    };
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          initialConversations={[seedConversations[0], unreadThread]}
+        />,
+      ),
+    );
+    await act(async () => clickConversation(unreadThread.name));
+    expect(markLiveConversationRead).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      conversationId: unreadThread.id,
+      readUpTo: "2026-09-20T23:10:00.000Z",
+    });
+  });
+
+  it("marks a thread opened from a ?conversation= link read", async () => {
+    const { markLiveConversationRead } = await import("../api");
+    vi.mocked(markLiveConversationRead).mockClear();
+    const unreadThread = { ...seedConversations[1], unread: 3 };
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          initialConversations={[seedConversations[0], unreadThread]}
+          initialPath={`/inbox?conversation=${unreadThread.id}`}
+        />,
+      ),
+    );
+    expect(markLiveConversationRead).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      conversationId: unreadThread.id,
+    });
+  });
+
+  it("loads a linked conversation that is not in the loaded list", async () => {
+    const linked = farAwayConversation;
+    await act(async () =>
+      root.render(
+        <InboxHarness initialPath={`/inbox?conversation=${linked.id}`} />,
+      ),
+    );
+    expect(loadLiveConversationSnapshot).toHaveBeenCalledWith(
+      "workspace-1",
+      linked.id,
+    );
+    expect(openConversationName()).toBe(linked.name);
   });
 
   async function shareContact(name: string, phone: string) {
@@ -1063,5 +1176,34 @@ describe("InboxPage new chat", () => {
       expect(updateLiveConversation).toHaveBeenCalledTimes(2);
       expect(onConfirm).not.toHaveBeenCalled();
     });
+  });
+
+  it("re-renders only the conversation row that changed", async () => {
+    const [first, second, third] = [
+      { ...seedConversations[0], lastMessage: "row-one" },
+      { ...seedConversations[1], lastMessage: "row-two" },
+      { ...seedConversations[2], lastMessage: "row-three" },
+    ];
+    await act(async () =>
+      root.render(
+        <InboxHarness initialConversations={[first, second, third]} />,
+      ),
+    );
+    expect(previewRenders).toEqual(
+      expect.arrayContaining(["row-one", "row-two", "row-three"]),
+    );
+    previewRenders.length = 0;
+    await act(async () =>
+      updateConversations?.((current) =>
+        current.map((item) =>
+          item.id === second.id
+            ? { ...item, lastMessage: "row-two-new" }
+            : item,
+        ),
+      ),
+    );
+    expect(previewRenders).toContain("row-two-new");
+    expect(previewRenders).not.toContain("row-one");
+    expect(previewRenders).not.toContain("row-three");
   });
 });

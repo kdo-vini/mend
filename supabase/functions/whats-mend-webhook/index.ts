@@ -8,7 +8,11 @@ import {
   publicProviderMediaUrl,
   readProviderMessageContent,
 } from "./message-content.ts";
-import { extractProviderMessageEdit } from "./message-edit.ts";
+import {
+  applyProviderMessageEvent,
+  buildMessageEventJob,
+  extractProviderMessageEvents,
+} from "./message-events.ts";
 
 type JsonRecord = Record<string, unknown>;
 type MessageType =
@@ -127,108 +131,38 @@ async function stableMessageId(
   return `generated-${digest.slice(0, 32)}`;
 }
 
-function normalizeProviderStatus(value: unknown): string | undefined {
-  const status =
-    typeof value === "string"
-      ? value.trim().toLowerCase().replaceAll("-", "_")
-      : "";
-  if (["error", "failed", "failure"].includes(status)) return "failed";
-  if (["server_ack", "sent", "ack"].includes(status)) return "sent";
-  if (["delivery_ack", "delivered"].includes(status)) return "delivered";
-  if (["read", "played"].includes(status)) return "read";
-  return undefined;
-}
-
-async function updateProviderMessageStatus(
+async function handleProviderMessageEvents(
   client: ReturnType<typeof createClient>,
   binding: { id: string; workspace_id: string },
+  event: "messages.update" | "messages.delete" | "messages.edited",
   payload: JsonRecord,
-): Promise<{ updated: boolean; status?: string }> {
-  const data = asRecord(payload.data);
-  const key = asRecord(data.key);
-  const providerMessageId = stringValue(
-    data.messageId,
-    data.keyId,
-    key.id,
-    data.id,
-  );
-  const status = normalizeProviderStatus(
-    data.status ?? data.statusCode ?? payload.status,
-  );
-  if (!providerMessageId || !status) return { updated: false };
-  const now = new Date().toISOString();
-  const { data: rows, error } = await client
-    .from("messages")
-    .update({ provider_status: status, updated_at: now })
-    .eq("workspace_id", binding.workspace_id)
-    .eq("channel_connection_id", binding.id)
-    .eq("provider_message_id", providerMessageId)
-    .select("id");
-  if (error)
-    throw new Error(`message_status_update_failed:${error.code ?? "database"}`);
-  return { updated: Boolean(rows?.length), status };
-}
-
-async function markProviderMessageDeleted(
-  client: ReturnType<typeof createClient>,
-  binding: { id: string; workspace_id: string },
-  payload: JsonRecord,
-): Promise<{ updated: boolean }> {
-  const data = asRecord(payload.data);
-  const providerMessageId = stringValue(data.id, asRecord(data.key).id);
-  if (!providerMessageId) return { updated: false };
-  const { data: rows, error } = await client
-    .from("messages")
-    .update({
-      is_deleted: true,
-      provider_status: "deleted",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("workspace_id", binding.workspace_id)
-    .eq("channel_connection_id", binding.id)
-    .eq("provider_message_id", providerMessageId)
-    .select("id");
-  if (error)
-    throw new Error(`message_delete_update_failed:${error.code ?? "database"}`);
-  return { updated: Boolean(rows?.length) };
-}
-
-async function applyProviderMessageEdit(
-  client: ReturnType<typeof createClient>,
-  binding: { id: string; workspace_id: string },
-  payload: JsonRecord,
-): Promise<{ updated: boolean }> {
-  const edit = extractProviderMessageEdit(payload);
-  if (!edit) return { updated: false };
-  const { data: existing, error: lookupError } = await client
-    .from("messages")
-    .select("id, message_type")
-    .eq("workspace_id", binding.workspace_id)
-    .eq("channel_connection_id", binding.id)
-    .eq("provider_message_id", edit.providerMessageId)
-    .eq("is_deleted", false)
-    .maybeSingle();
-  if (lookupError)
-    throw new Error(
-      `message_edit_lookup_failed:${lookupError.code ?? "database"}`,
+): Promise<{ processed: number; deferred: number; status?: string }> {
+  const events = extractProviderMessageEvents(event, payload);
+  let processed = 0;
+  let deferred = 0;
+  for (const providerEvent of events) {
+    const result = await applyProviderMessageEvent(
+      client,
+      binding,
+      providerEvent,
     );
-  // An edit for a message we never stored (e.g. sent before the channel was
-  // connected) is not worth creating a bubble for.
-  if (!existing) return { updated: false };
-  const now = new Date().toISOString();
-  const { error } = await client
-    .from("messages")
-    .update({
-      text: edit.text,
-      ...(existing.message_type !== "text" ? { caption: edit.text } : {}),
-      edited_at: now,
-      updated_at: now,
-    })
-    .eq("workspace_id", binding.workspace_id)
-    .eq("id", existing.id);
-  if (error)
-    throw new Error(`message_edit_update_failed:${error.code ?? "database"}`);
-  return { updated: true };
+    if (result.updated) processed += 1;
+    if (result.found) continue;
+    // The message row does not exist yet (its ingest job is still queued):
+    // hand the event to the worker, which retries until the row appears.
+    const { error } = await client
+      .from("jobs")
+      .insert(await buildMessageEventJob(binding, providerEvent, sha256));
+    if (error && error.code !== "23505")
+      throw new Error(`message_event_defer_failed:${error.code ?? "database"}`);
+    deferred += 1;
+  }
+  const first = events[0];
+  return {
+    processed,
+    deferred,
+    ...(first?.kind === "status" ? { status: first.status } : {}),
+  };
 }
 
 async function upsertProviderContacts(
@@ -666,9 +600,10 @@ Deno.serve(async (request) => {
     }
 
     if (event === "messages.update") {
-      const result = await updateProviderMessageStatus(
+      const result = await handleProviderMessageEvents(
         client,
         binding,
+        event,
         payload,
       );
       await client
@@ -682,13 +617,19 @@ Deno.serve(async (request) => {
       return response(202, {
         accepted: true,
         event,
-        processed: result.updated ? 1 : 0,
+        processed: result.processed,
+        deferred: result.deferred,
         ...(result.status ? { status: result.status } : {}),
       });
     }
 
     if (event === "messages.edited") {
-      const result = await applyProviderMessageEdit(client, binding, payload);
+      const result = await handleProviderMessageEvents(
+        client,
+        binding,
+        event,
+        payload,
+      );
       await client
         .from("channel_connections")
         .update({
@@ -700,12 +641,18 @@ Deno.serve(async (request) => {
       return response(202, {
         accepted: true,
         event,
-        processed: result.updated ? 1 : 0,
+        processed: result.processed,
+        deferred: result.deferred,
       });
     }
 
     if (event === "messages.delete") {
-      const result = await markProviderMessageDeleted(client, binding, payload);
+      const result = await handleProviderMessageEvents(
+        client,
+        binding,
+        event,
+        payload,
+      );
       await client
         .from("channel_connections")
         .update({
@@ -717,7 +664,8 @@ Deno.serve(async (request) => {
       return response(202, {
         accepted: true,
         event,
-        processed: result.updated ? 1 : 0,
+        processed: result.processed,
+        deferred: result.deferred,
       });
     }
 

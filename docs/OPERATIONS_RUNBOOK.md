@@ -74,9 +74,11 @@ Configure the Whatsmiau webhook to the public `/webhooks/whatsmiau` endpoint and
 
 1. Aplicar a migração `20261017120000_message_edited_at.sql` (`supabase db push`).
 2. Fazer deploy da Edge Function `whats-mend-webhook` (traz o handler).
-3. Definir `WHATSMIAU_WEBHOOK_MESSAGES_EDITED=true` no servidor e re-registrar o webhook (conectar/atualizar o canal em Settings). Verificar editando uma mensagem pelo celular: o balão muda de texto e mostra "Editada".
+3. A assinatura de `messages.edited` agora é o padrão (nenhuma variável necessária); re-registrar o webhook (conectar/atualizar o canal em Settings). Verificar editando uma mensagem pelo celular: o balão muda de texto e mostra "Editada".
 
-Rollback: remover a variável e re-registrar o webhook volta ao formato legado até o prazo.
+Rollback: definir `WHATSMIAU_WEBHOOK_MESSAGES_EDITED=false` e re-registrar o webhook volta ao formato legado até o prazo.
+
+Status (`messages.update`), edições e exclusões que chegam antes da mensagem ser gravada viram jobs `whatsmiau.message.event` (lane de mensagens, até 8 tentativas com backoff) e são reaplicados quando a linha existe; status só avança (pending < sent < delivered < read).
 
 Repository-backed support knowledge uses the separate signed GitHub endpoint,
 exact-commit activation and release gates documented in

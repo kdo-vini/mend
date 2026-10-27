@@ -571,10 +571,11 @@ export class WhatsmiauMessagingProvider {
     url.searchParams.set("instance", input.instanceName);
     // Subscribing to `messages.edited` makes Whatsmiau deliver edits ONLY
     // through it (the legacy `messages.upsert` editedMessage form stops, and is
-    // removed on 2026-11-04). Opt in once the Edge Function handler and the
-    // `messages.edited_at` migration are deployed.
+    // removed on 2026-11-04), so this is on by default; set the variable to
+    // "false" only to fall back to the legacy form until then.
     const editedEvents =
-      process.env.WHATSMIAU_WEBHOOK_MESSAGES_EDITED === "true"
+      process.env.WHATSMIAU_WEBHOOK_MESSAGES_EDITED?.trim().toLowerCase() !==
+      "false"
         ? ["messages.edited"]
         : [];
     return this.request<void>(

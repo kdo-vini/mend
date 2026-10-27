@@ -85,6 +85,8 @@ export interface SendTextRequest {
   aiGenerated?: boolean;
   /** Forward a stable retry key to providers that implement deduplication. */
   idempotencyKey?: string;
+  /** Runs with the final provider text right before the provider call. */
+  beforeProviderSend?: (text: string) => Promise<void> | void;
   onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
 }
 
@@ -291,6 +293,7 @@ export class WhatsAppService {
     );
     if (!conversation) throw new Error("conversation_not_found");
     const destination = outboundDestination(conversation);
+    await input.beforeProviderSend?.(text);
     if (this.provider.sendPresence)
       await this.provider
         .sendPresence(conversation.providerInstanceName, destination)
@@ -597,20 +600,37 @@ export class WhatsAppService {
     };
   }
 
-  async markRead(context: InboxContext, conversationId: string): Promise<void> {
+  async markRead(
+    context: InboxContext,
+    conversationId: string,
+    readUpTo?: Date,
+  ): Promise<void> {
     const conversation = await this.inbox.getConversation(
       context,
       conversationId,
     );
     if (!conversation) throw new Error("conversation_not_found");
+    // The DB is the source of truth for the unread badge: update it first so a
+    // slow or failing provider never keeps the thread unread.
+    await this.inbox.readConversation(context, conversationId, readUpTo);
     const latest = await this.inbox.latestInbound(context, conversationId);
     if (latest)
-      await this.provider.markAsRead(
-        conversation.providerInstanceName,
-        latest.remoteJid,
-        latest.providerMessageId,
-      );
-    await this.inbox.readConversation(context, conversationId);
+      // Best-effort read receipt, deliberately not awaited. The async wrapper
+      // starts the provider call synchronously and contains its failure.
+      void (async () => {
+        try {
+          await this.provider.markAsRead(
+            conversation.providerInstanceName,
+            latest.remoteJid,
+            latest.providerMessageId,
+          );
+        } catch (error) {
+          console.warn("[mend-whatsapp] provider read receipt failed", {
+            conversationId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })();
   }
 
   async sendReaction(

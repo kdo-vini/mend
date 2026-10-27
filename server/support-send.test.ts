@@ -236,6 +236,7 @@ describe("SupabaseSupportSendPort", () => {
       }),
     ).resolves.toEqual({
       workspaceId: WORKSPACE,
+      isGroup: false,
       aiMode: "off",
       humanPaused: false,
     });
@@ -257,6 +258,8 @@ describe("SupabaseSupportSendPort", () => {
       port.findConversation({ conversationId: CONVERSATION }),
     ).resolves.toEqual({
       workspaceId: WORKSPACE,
+      isGroup: false,
+      humanTakeoverAt: undefined,
       aiMode: "safe_auto",
       humanPaused: true,
     });
@@ -288,8 +291,123 @@ describe("SupabaseSupportSendPort", () => {
     expect(sendText).toHaveBeenCalledWith(
       { workspaceId: WORKSPACE, actorType: "ai" },
       CONVERSATION,
-      { text: "Oi", aiGenerated: true, idempotencyKey: "k" },
+      {
+        text: "Oi",
+        aiGenerated: true,
+        idempotencyKey: "k",
+        onProviderMessageId: expect.any(Function),
+      },
     );
+  });
+
+  it("registers the automation mark before the provider call", async () => {
+    const order: string[] = [];
+    const sendText = vi.fn(
+      async (
+        _ctx: unknown,
+        _id: string,
+        req: {
+          text: string;
+          beforeProviderSend?: (t: string) => Promise<void>;
+          onProviderMessageId?: (id: string) => void;
+        },
+      ) => {
+        await req.beforeProviderSend?.(req.text);
+        order.push("provider");
+        req.onProviderMessageId?.("provider-1");
+        return {
+          message: { id: "m1", aiGenerated: true },
+          providerMessageId: "provider-1",
+        };
+      },
+    );
+    const mark = vi.fn(async (t: string) => {
+      order.push(`mark:${t}`);
+    });
+    const port = new SupabaseSupportSendPort(
+      client([]).client,
+      { sendText } as never,
+      mark,
+    );
+    await port.sendText({
+      workspaceId: WORKSPACE,
+      conversationId: CONVERSATION,
+      text: "Oi",
+    });
+    expect(order).toEqual(["mark:Oi", "provider"]);
+  });
+
+  it("does not send when the mark keeps failing", async () => {
+    const sendText = vi.fn(
+      async (
+        _c: unknown,
+        _i: string,
+        req: { beforeProviderSend?: (t: string) => Promise<void> },
+      ) => {
+        await req.beforeProviderSend?.("Oi");
+      },
+    );
+    const mark = vi.fn(async () => {
+      throw new Error("db");
+    });
+    const port = new SupabaseSupportSendPort(
+      client([]).client,
+      { sendText } as never,
+      mark,
+    );
+    await expect(
+      port.sendText({
+        workspaceId: WORKSPACE,
+        conversationId: CONVERSATION,
+        text: "Oi",
+      }),
+    ).rejects.toThrow("automation_mark_failed");
+    expect(mark).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports recorded:false when recording fails after a provider send", async () => {
+    const sendText = vi.fn(
+      async (
+        _c: unknown,
+        _i: string,
+        req: { onProviderMessageId?: (id: string) => void },
+      ) => {
+        req.onProviderMessageId?.("provider-9");
+        throw new Error("supabase:record failed");
+      },
+    );
+    const port = new SupabaseSupportSendPort(client([]).client, {
+      sendText,
+    } as never);
+    await expect(
+      port.sendText({
+        workspaceId: WORKSPACE,
+        conversationId: CONVERSATION,
+        text: "Oi",
+      }),
+    ).resolves.toEqual({
+      messageId: null,
+      providerMessageId: "provider-9",
+      recorded: false,
+    });
+  });
+
+  it("detects a group conversation from the contact jid", async () => {
+    const fake = client([
+      {
+        id: CONVERSATION,
+        workspace_id: WORKSPACE,
+        ai_mode: "safe_auto",
+        contact_id: "c1",
+        provider_contact_id: "1203@g.us",
+      },
+    ]);
+    const port = new SupabaseSupportSendPort(fake.client, {
+      sendText: vi.fn(),
+    });
+    await expect(
+      port.findConversation({ conversationId: CONVERSATION }),
+    ).resolves.toMatchObject({ isGroup: true });
   });
 });
 

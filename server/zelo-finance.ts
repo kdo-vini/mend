@@ -168,7 +168,7 @@ export interface ZeloFinanceSources {
     signal: AbortSignal,
   ) => Promise<unknown>;
   customers?: () => Promise<Set<string>>;
-  stripe?: (end: string) => Promise<SourcePage<Invoice>>;
+  stripe?: (start: string, end: string) => Promise<SourcePage<Invoice>>;
 }
 
 /** Payment calendar, not accrual accounting. Resolve historical Brazilian DST too. */
@@ -192,6 +192,7 @@ export function zeloMonthBounds(period: string) {
   };
   return { start: midnight(month - 1), end: midnight(month) };
 }
+const STRIPE_CREATED_LOOKBACK_SECONDS = 90 * 24 * 60 * 60;
 const inRange = (value: string | null, start: string, end: string) =>
   value !== null &&
   Date.parse(value) >= Date.parse(start) &&
@@ -296,7 +297,7 @@ export class ZeloFinanceService {
           try {
             const [customers, page] = await Promise.all([
               this.sources.customers!(),
-              this.sources.stripe!(end),
+              this.sources.stripe!(start, end),
             ]);
             providers.stripe = page.complete ? "ok" : "partial";
             for (const raw of page.rows) {
@@ -717,12 +718,19 @@ export function createZeloFinanceService(
     };
   }
   if (stripeKey)
-    sources.stripe = async (end) => {
+    sources.stripe = async (start, end) => {
       if (/^(sk|rk)_test_/.test(stripeKey))
         throw new Error("zelo_live_key_required");
       const signal = AbortSignal.timeout(12000);
+      // Invoices count when created or paid inside the month, and paid ones
+      // are created shortly before: bound the scan instead of paging the
+      // whole account history.
       const query = new URLSearchParams({
         limit: "100",
+        "created[gte]": String(
+          Math.floor(Date.parse(start) / 1000) -
+            STRIPE_CREATED_LOOKBACK_SECONDS,
+        ),
         "created[lt]": String(Date.parse(end) / 1000),
       });
       const rows: Invoice[] = [];

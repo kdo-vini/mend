@@ -107,6 +107,7 @@ class FakeInbox implements LiveWorkerInbox {
     displayName: string;
   }> = [];
   private index = 0;
+  readonly optionCalls: Array<{ isHistory?: boolean } | undefined> = [];
 
   constructor(private readonly failures: Error[] = []) {}
 
@@ -114,7 +115,9 @@ class FakeInbox implements LiveWorkerInbox {
     context: InboxContext,
     channelConnectionId: string,
     incoming: NormalizedWhatsmiauMessage,
+    options?: { isHistory?: boolean },
   ): Promise<InboxMessageRecord> {
+    this.optionCalls.push(options);
     this.calls.push({ context, channelConnectionId, message: incoming });
     const failure = this.failures[this.index++];
     if (failure) throw failure;
@@ -1585,6 +1588,7 @@ describe("Support AI kill-switch (Fase A)", () => {
     expect(await worker.poll()).toBe(true);
     expect(await worker.poll()).toBe(false);
     expect(inbox.calls).toHaveLength(1);
+    expect(inbox.optionCalls[0]).toEqual({ isHistory: true });
     expect(events.rows).toHaveLength(0);
     expect(automation.sent).toHaveLength(0);
     const jobs = await store.list();
@@ -1650,7 +1654,7 @@ describe("Support AI kill-switch (Fase A)", () => {
     await worker.poll();
 
     expect(events.rows).toHaveLength(1);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
       cursor: "1",
       messageId: "message-1",
@@ -1670,6 +1674,7 @@ describe("Support AI kill-switch (Fase A)", () => {
       supportEvents: withSupportWebhook(events, {
         env: { MEND_SUPPORT_WEBHOOK_URL: "https://hooks.example.test/s" },
         fetch: vi.fn(async () => new Response(null, { status: 500 })),
+        retryDelayMs: 0,
         logger: { warn },
       }),
     });
@@ -1679,7 +1684,7 @@ describe("Support AI kill-switch (Fase A)", () => {
     const [job] = await store.list();
     expect(job?.status).toBe("completed");
     expect(events.rows).toHaveLength(1);
-    expect(warn).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
   });
 
   it("retries the ingest job when the support event write fails", async () => {

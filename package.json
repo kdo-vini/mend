@@ -22,7 +22,8 @@
     "transcribe:audio": "node --env-file=.env --import tsx/esm server/transcribe-audio-backfill.ts",
     "test:finance-db": "node scripts/test-finance-db.mjs",
     "test:projects-db": "node scripts/test-projects-db.mjs",
-    "test:automation-db": "node scripts/test-automation-outbound-db.mjs"
+    "test:automation-db": "node scripts/test-automation-outbound-db.mjs",
+    "test:inbox-db": "node scripts/test-inbox-migrations-db.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -43,7 +44,6 @@
     "react-dom": "19.1.1",
     "react-i18next": "^17.0.11",
     "react-router-dom": "7.18.2",
-    "shadcn": "^4.16.2",
     "sharp": "^0.35.3",
     "tailwind-merge": "3.6.0",
     "tailwindcss": "4.3.3",
@@ -70,6 +70,7 @@
     "i18next-cli": "^1.67.7",
     "jsdom": "26.1.0",
     "prettier": "3.6.2",
+    "shadcn": "^4.16.2",
     "supertest": "7.1.0",
     "tsx": "4.20.5",
     "typescript": "5.9.2",

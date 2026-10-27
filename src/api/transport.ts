@@ -13,13 +13,13 @@ export const mendApiBaseUrl = (
   env.VITE_API_BASE_URL?.trim() ||
   (typeof window !== "undefined" ? window.location.origin : "")
 ).replace(/\/$/, "");
-export const mendApiToken = env.VITE_MEND_API_TOKEN;
 export const isLiveConfigured = isSupabaseConfigured || Boolean(mendApiBaseUrl);
 
 export function isDemoModeRequested() {
   if (env.VITE_MEND_DEMO === "true" || env.VITE_MEND_DEMO_MODE === "1")
     return true;
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined" || !(env as { DEV?: unknown }).DEV)
+    return false;
   return (
     new URLSearchParams(window.location.search).get("demo") === "1" ||
     window.sessionStorage.getItem("mend.demo") === "1"
@@ -47,6 +47,32 @@ export async function unwrap<T>(
   return data;
 }
 
+/** Hard ceiling for list loaders that read every page of a collection. */
+export const MAX_LIST_ROWS = 1000;
+
+/**
+ * Reads consecutive ranges until a short page or the row cap. The query must
+ * have a stable total order so pages never overlap or skip rows.
+ */
+export async function unwrapPages<T>(
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  { pageSize = 500, cap = MAX_LIST_ROWS } = {},
+): Promise<T[]> {
+  const collected: T[] = [];
+  while (collected.length < cap) {
+    const size = Math.min(pageSize, cap - collected.length);
+    const rows = await unwrap(
+      page(collected.length, collected.length + size - 1),
+    );
+    collected.push(...rows);
+    if (rows.length < size) break;
+  }
+  return collected;
+}
+
 export function requireClient(
   client: MendSupabaseClient | null,
 ): MendSupabaseClient {
@@ -71,8 +97,7 @@ export async function apiRequest<T>(
     typeof FormData !== "undefined" && init.body instanceof FormData;
   if (!isFormData && !headers.has("content-type"))
     headers.set("content-type", "application/json");
-  if (mendApiToken) headers.set("authorization", `Bearer ${mendApiToken}`);
-  if (!mendApiToken && supabase) {
+  if (supabase) {
     const session = await supabase.auth.getSession();
     if (session.data.session?.access_token)
       headers.set(

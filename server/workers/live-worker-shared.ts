@@ -3,6 +3,7 @@ import type {
   LiveWorkerChannelResolver,
 } from "../live-worker.js";
 import { redactJobError } from "../jobs.js";
+import { MESSAGE_EVENT_JOB_TYPE } from "../message-events.js";
 export const WHATSAPP_INGEST_JOB_TYPE = "whatsmiau.message.received";
 export const PROCESS_INBOUND_MESSAGE_JOB_TYPE = "mend.process_inbound_message";
 export const SEND_AI_REPLY_JOB_TYPE = "mend.send_ai_reply";
@@ -11,6 +12,17 @@ export const KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE =
   "mend.knowledge.repository_sync";
 export const SUPPORT_REPOSITORY_RESEARCH_JOB_TYPE =
   "mend.support.repository_research";
+/**
+ * Short, latency-sensitive jobs that must never wait behind agent runs,
+ * knowledge sync, research or media/transcription work.
+ */
+export const MESSAGE_LANE_JOB_TYPES: readonly string[] = [
+  WHATSAPP_INGEST_JOB_TYPE,
+  PROCESS_INBOUND_MESSAGE_JOB_TYPE,
+  SEND_AI_REPLY_JOB_TYPE,
+  // Deferred status/edit/delete for a message whose ingest is still queued.
+  MESSAGE_EVENT_JOB_TYPE,
+];
 export const SUPPORT_AI_ENABLED_ENV = "MEND_SUPPORT_AI_ENABLED";
 
 /** Jobs that run Mend's own Support AI or can message customers on its behalf. */

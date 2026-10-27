@@ -14,8 +14,8 @@ export interface InternalWhatsAppRouteOptions {
   fetchImpl?: typeof fetch;
   /**
    * Registers the text as Zelo automation before it is sent, so the fromMe
-   * echo does not trip the human-takeover pause. Failure only logs: the send
-   * still goes out and the echo pauses the AI, as before.
+   * echo does not trip the human-takeover pause. Retried once; if it still
+   * fails nothing is sent (503) rather than sending an unmarked message.
    */
   markAutomation?: (text: string) => Promise<void>;
   logger?: Pick<Logger, "error" | "warn">;
@@ -32,6 +32,23 @@ const outboundWhatsAppLimiter = rateLimit({
 function requestKey(request: Request): string | undefined {
   const header = request.get(OUTBOUND_WHATSAPP_KEY_HEADER);
   return header?.trim() || undefined;
+}
+
+/** Registers an automation mark, retrying once. Throws if both attempts fail. */
+export async function registerAutomationMark(
+  mark: (text: string) => Promise<void>,
+  text: string,
+  logger?: Pick<Logger, "warn">,
+): Promise<void> {
+  try {
+    await mark(text);
+  } catch (firstError) {
+    logger?.warn(
+      { err: firstError },
+      "Automation outbound mark failed; retrying",
+    );
+    await mark(text);
+  }
 }
 
 /**
@@ -71,12 +88,19 @@ export function registerInternalWhatsAppRoutes(
 
       if (options.markAutomation) {
         try {
-          await options.markAutomation(parsed.data.message);
-        } catch (error) {
-          options.logger?.warn(
-            { err: error },
-            "Automation outbound mark failed; echo will pause the AI",
+          await registerAutomationMark(
+            options.markAutomation,
+            parsed.data.message,
+            options.logger,
           );
+        } catch (error) {
+          options.logger?.error(
+            { err: error },
+            "Automation outbound mark failed; not sending unmarked",
+          );
+          return response
+            .status(503)
+            .json({ error: "automation_mark_unavailable" });
         }
       }
 

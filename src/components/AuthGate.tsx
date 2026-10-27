@@ -10,10 +10,9 @@ import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import {
-  acceptWorkspaceInvitation,
+  acceptInvitationAndSetPassword,
   sendMagicLink as sendMagicLinkRequest,
   signInWithGoogle as startGoogleSignIn,
-  updatePassword,
 } from "../api/auth";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { Button } from "../components/ui/button";
@@ -38,6 +37,7 @@ const localOperatorMode = Boolean(
     browserEnv.VITE_MEND_LOCAL_OPERATOR_MODE === "1",
 );
 const explicitDemoMode =
+  Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV) &&
   typeof window !== "undefined" &&
   (new URLSearchParams(window.location.search).get("demo") === "1" ||
     window.sessionStorage.getItem("mend.demo") === "1");
@@ -477,14 +477,14 @@ function InviteAcceptance({ invitationId }: { invitationId: string | null }) {
     setAction(true);
     setError(null);
     try {
-      const passwordResult = await updatePassword(password, supabase);
-      if (passwordResult.error) throw new Error(passwordResult.error.message);
-      await acceptWorkspaceInvitation(invitationId, supabase);
+      await acceptInvitationAndSetPassword(invitationId, password, supabase);
       window.location.replace("/dashboard");
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "";
       const normalized = message.toLowerCase();
-      if (normalized.includes("expired")) setError(t("inviteExpired"));
+      if (normalized === "invite_password_failed")
+        setError(t("invitePasswordSetError"));
+      else if (normalized.includes("expired")) setError(t("inviteExpired"));
       else if (normalized.includes("revoked")) setError(t("inviteRevoked"));
       else if (normalized.includes("accepted"))
         setError(t("inviteAlreadyAccepted"));

@@ -442,6 +442,16 @@ function workspaceApiError(error: unknown): ApiHttpError | null {
       "invalid_invitation_email",
       "The invitation email is invalid.",
     ],
+    workspace_requires_owner: [
+      409,
+      "workspace_requires_owner",
+      "A workspace must keep at least one owner.",
+    ],
+    workspace_member_not_found: [
+      404,
+      "workspace_member_not_found",
+      "The workspace member was not found.",
+    ],
     invalid_workspace_role: [
       400,
       "invalid_workspace_role",

@@ -52,6 +52,15 @@ export interface MediaAssetInput {
   checksum?: string;
 }
 
+export type MediaUrlPurpose = "original" | "browser" | "provider" | "preview";
+
+export interface MediaSignedUrlResult {
+  id: string;
+  url?: string;
+  mimeType?: string;
+  error?: string;
+}
+
 export interface MediaAssetRecord {
   id: string;
   workspaceId: string;
@@ -361,19 +370,22 @@ export class SupabaseMediaPipeline {
     context: RequestContext,
     assetId: string,
   ): Promise<MediaAssetRecord | null> {
-    const result = await this.client
-      .from("media_assets")
-      .select("*")
-      .eq("id", assetId)
-      .eq("workspace_id", context.workspaceId)
-      .maybeSingle();
+    // Independent lookups, both scoped to the workspace: run them together.
+    const [result, variants] = await Promise.all([
+      this.client
+        .from("media_assets")
+        .select("*")
+        .eq("id", assetId)
+        .eq("workspace_id", context.workspaceId)
+        .maybeSingle(),
+      this.client
+        .from("media_variants")
+        .select("*")
+        .eq("asset_id", assetId)
+        .eq("workspace_id", context.workspaceId),
+    ]);
     if (result.error) throw new Error(`media_asset:${result.error.message}`);
     if (!result.data) return null;
-    const variants = await this.client
-      .from("media_variants")
-      .select("*")
-      .eq("asset_id", assetId)
-      .eq("workspace_id", context.workspaceId);
     if (variants.error)
       throw new Error(`media_variants:${variants.error.message}`);
     return rowToAsset(result.data, (variants.data ?? []).map(rowToVariant));
@@ -407,30 +419,86 @@ export class SupabaseMediaPipeline {
     );
   }
 
-  async signedUrl(
-    context: RequestContext,
-    assetId: string,
-    purpose: "original" | "browser" | "provider" | "preview" = "browser",
+  private static pickVariant(
+    asset: MediaAssetRecord,
+    purpose: MediaUrlPurpose,
   ) {
-    const asset = await this.findAsset(context, assetId);
-    if (!asset) throw new Error("media_asset_not_found");
     const variant =
       asset.variants.find((item) => item.purpose === purpose) ??
       asset.variants.find((item) => item.purpose === "browser") ??
       asset.variants.find((item) => item.purpose === "original");
-    const storagePath = variant?.storagePath ?? asset.originalStoragePath;
+    return {
+      storagePath: variant?.storagePath ?? asset.originalStoragePath,
+      mimeType:
+        variant?.mimeType ?? asset.detectedMimeType ?? asset.declaredMimeType,
+    };
+  }
+
+  async signedUrl(
+    context: RequestContext,
+    assetId: string,
+    purpose: MediaUrlPurpose = "browser",
+  ) {
+    const asset = await this.findAsset(context, assetId);
+    if (!asset) throw new Error("media_asset_not_found");
+    const picked = SupabaseMediaPipeline.pickVariant(asset, purpose);
     const result = await this.client.storage
       .from(BUCKET)
-      .createSignedUrl(storagePath, 900);
+      .createSignedUrl(picked.storagePath, 900);
     if (result.error || !result.data?.signedUrl)
       throw new Error(
         `media_signed_url:${result.error?.message ?? "missing_url"}`,
       );
-    return {
-      url: result.data.signedUrl,
-      mimeType:
-        variant?.mimeType ?? asset.detectedMimeType ?? asset.declaredMimeType,
-    };
+    return { url: result.data.signedUrl, mimeType: picked.mimeType };
+  }
+
+  /**
+   * Batch form of signedUrl: one asset query, one variant query and one
+   * storage call for up to 50 ids. Ids outside the workspace (or unknown) are
+   * reported as media_asset_not_found, like the single endpoint.
+   */
+  async signedUrls(
+    context: RequestContext,
+    assetIds: string[],
+    purpose: MediaUrlPurpose = "browser",
+  ): Promise<MediaSignedUrlResult[]> {
+    const ids = [...new Set(assetIds)].slice(0, 50);
+    const assets = await this.listAssets(context, ids);
+    const byId = new Map(assets.map((asset) => [asset.id, asset]));
+    const picked = new Map<
+      string,
+      { storagePath: string; mimeType?: string }
+    >();
+    for (const id of ids) {
+      const asset = byId.get(id);
+      if (asset)
+        picked.set(id, SupabaseMediaPipeline.pickVariant(asset, purpose));
+    }
+    const paths = [
+      ...new Set([...picked.values()].map((item) => item.storagePath)),
+    ];
+    const signedByPath = new Map<string, string>();
+    if (paths.length) {
+      const result = await this.client.storage
+        .from(BUCKET)
+        .createSignedUrls(paths, 900);
+      if (result.error)
+        throw new Error(`media_signed_url:${result.error.message}`);
+      for (const item of result.data ?? [])
+        if (item.path && item.signedUrl && !item.error)
+          signedByPath.set(item.path, item.signedUrl);
+    }
+    return ids.map((id): MediaSignedUrlResult => {
+      const item = picked.get(id);
+      if (!item) return { id, error: "media_asset_not_found" };
+      const url = signedByPath.get(item.storagePath);
+      if (!url) return { id, error: "media_signed_url_missing" };
+      return {
+        id,
+        url,
+        ...(item.mimeType ? { mimeType: item.mimeType } : {}),
+      };
+    });
   }
 
   async processAsset(input: MediaProcessJobPayload): Promise<void> {

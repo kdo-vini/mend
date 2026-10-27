@@ -8,11 +8,13 @@ import {
   type RequestContext,
 } from "../../contracts/api-ports.js";
 import {
+  assertUserCanAccessInstallation,
   createGitHubControlPlaneFromEnv,
   createGitHubSetupState,
   GitHubControlPlaneError,
   githubInstallationUrl,
   hashGitHubSetupState,
+  readGitHubUserAuthorizationConfig,
   validateGitHubSetupCallback,
 } from "../../github-control-plane.js";
 import type { AnySupabaseClient } from "./types.js";
@@ -282,6 +284,18 @@ export class SupabaseGitHubConnectionAdapter implements GitHubConnectionPort {
     const { secret } = this.setupConfig();
     const callback = validateGitHubSetupCallback(query, secret);
     const state = String(query.state ?? "");
+    const userAuthorization = readGitHubUserAuthorizationConfig();
+    if (userAuthorization)
+      await assertUserCanAccessInstallation({
+        code: typeof query.code === "string" ? query.code : undefined,
+        installationId: callback.installationId,
+        config: userAuthorization,
+        apiBaseUrl: process.env.MEND_GITHUB_API_URL?.trim() || undefined,
+      });
+    else
+      console.warn(
+        "[github-setup] MEND_GITHUB_APP_CLIENT_ID/SECRET are not set; the installation_id is not bound to the authorizing GitHub user",
+      );
     const controlPlane = this.controlPlane();
     const available = await controlPlane.listInstallationRepositories(
       callback.installationId,
