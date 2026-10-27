@@ -19,6 +19,23 @@ import type { Conversation } from "../../../types";
 import { conversationMatchesInboxFilter } from "../inbox-filters";
 import { InboxPage } from "./InboxPage";
 
+// Each render of a row paints its preview, so this log shows which rows rendered.
+const previewRenders: string[] = [];
+vi.mock("../components/WhatsAppText", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("../components/WhatsAppText")>();
+  return {
+    ...original,
+    WhatsAppPreviewText: ({ text }: { text: string }) => {
+      previewRenders.push(text);
+      return <>{text}</>;
+    },
+  };
+});
+let updateConversations:
+  | ((update: (current: Conversation[]) => Conversation[]) => void)
+  | undefined;
+
 const startedConversation: Conversation = {
   ...seedConversations[0],
   id: "conv-new-number",
@@ -139,6 +156,7 @@ function InboxHarness({
   const [selectedConversationId, setSelectedConversationId] = useState(
     initialConversations[0].id,
   );
+  updateConversations = setConversations;
   return (
     <MemoryRouter initialEntries={[initialPath]}>
       <InboxPage
@@ -1158,5 +1176,34 @@ describe("InboxPage new chat", () => {
       expect(updateLiveConversation).toHaveBeenCalledTimes(2);
       expect(onConfirm).not.toHaveBeenCalled();
     });
+  });
+
+  it("re-renders only the conversation row that changed", async () => {
+    const [first, second, third] = [
+      { ...seedConversations[0], lastMessage: "row-one" },
+      { ...seedConversations[1], lastMessage: "row-two" },
+      { ...seedConversations[2], lastMessage: "row-three" },
+    ];
+    await act(async () =>
+      root.render(
+        <InboxHarness initialConversations={[first, second, third]} />,
+      ),
+    );
+    expect(previewRenders).toEqual(
+      expect.arrayContaining(["row-one", "row-two", "row-three"]),
+    );
+    previewRenders.length = 0;
+    await act(async () =>
+      updateConversations?.((current) =>
+        current.map((item) =>
+          item.id === second.id
+            ? { ...item, lastMessage: "row-two-new" }
+            : item,
+        ),
+      ),
+    );
+    expect(previewRenders).toContain("row-two-new");
+    expect(previewRenders).not.toContain("row-one");
+    expect(previewRenders).not.toContain("row-three");
   });
 });

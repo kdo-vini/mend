@@ -7,8 +7,6 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorState, LoadingState } from "./shared/ui/ResourceState";
 import { useConfirmation } from "./shared/ui/useConfirmation";
 import type { Toast, ToastTone } from "./shared/ui/toast";
-import { ProfileWorkspacePage } from "./components/ProfileWorkspacePage";
-import { seedConversations, seedIssues, seedKnowledge, seedRuns } from "./data";
 import type {
   Conversation,
   Issue,
@@ -54,7 +52,6 @@ import {
   setLiveWorkspaceAvailability,
   type WhatsAppInstance,
 } from "./api/live-actions";
-import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { WorkspaceRoutes } from "./app/routes/WorkspaceRoutes";
 import { useAppShortcuts } from "./app/shortcuts/useAppShortcuts";
 import { notificationDestination } from "./app/shell/notification-destination";
@@ -68,19 +65,49 @@ import {
   Sidebar as ShellSidebar,
 } from "./app/shell/WorkspaceShell";
 import {
-  CommandPalette as FeatureCommandPalette,
-  CreateIssueDialog as FeatureCreateIssueDialog,
-  EditIssueDialog as FeatureEditIssueDialog,
-  RunAgentDialog as FeatureRunAgentDialog,
-} from "./features/issues/components/IssueDialogs";
-import {
-  IssueDetailPage as FeatureIssueDetailPage,
-  IssueInspector as FeatureIssueInspector,
-} from "./features/issues/components/IssueOverlays";
-import {
   canDispatchRunAction,
   type RunUpdateAction,
 } from "./features/runs/run-actions";
+const ProfileWorkspacePage = lazy(() =>
+  import("./components/ProfileWorkspacePage").then(
+    ({ ProfileWorkspacePage }) => ({ default: ProfileWorkspacePage }),
+  ),
+);
+const DashboardPage = lazy(() =>
+  import("./features/dashboard/DashboardPage").then(({ DashboardPage }) => ({
+    default: DashboardPage,
+  })),
+);
+const FeatureCommandPalette = lazy(() =>
+  import("./features/issues/components/IssueDialogs").then(
+    ({ CommandPalette }) => ({ default: CommandPalette }),
+  ),
+);
+const FeatureCreateIssueDialog = lazy(() =>
+  import("./features/issues/components/IssueDialogs").then(
+    ({ CreateIssueDialog }) => ({ default: CreateIssueDialog }),
+  ),
+);
+const FeatureEditIssueDialog = lazy(() =>
+  import("./features/issues/components/IssueDialogs").then(
+    ({ EditIssueDialog }) => ({ default: EditIssueDialog }),
+  ),
+);
+const FeatureRunAgentDialog = lazy(() =>
+  import("./features/issues/components/IssueDialogs").then(
+    ({ RunAgentDialog }) => ({ default: RunAgentDialog }),
+  ),
+);
+const FeatureIssueDetailPage = lazy(() =>
+  import("./features/issues/components/IssueOverlays").then(
+    ({ IssueDetailPage }) => ({ default: IssueDetailPage }),
+  ),
+);
+const FeatureIssueInspector = lazy(() =>
+  import("./features/issues/components/IssueOverlays").then(
+    ({ IssueInspector }) => ({ default: IssueInspector }),
+  ),
+);
 const FeatureInboxPage = lazy(() =>
   import("./features/inbox/pages/InboxPage").then(({ InboxPage }) => ({
     default: InboxPage,
@@ -167,18 +194,16 @@ function App() {
   const inboxRoute = location.pathname === "/inbox";
   const { t } = useTranslation(["common", "issues"]);
   const [demoMode] = useState(() => isDemoModeRequested() || !isLiveConfigured);
-  const [conversations, setConversations] = useState<Conversation[]>(
-    demoMode ? seedConversations : [],
-  );
-  const [issues, setIssues] = useState<Issue[]>(demoMode ? seedIssues : []);
-  const [runs, setRuns] = useState<CodingRun[]>(demoMode ? seedRuns : []);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [runs, setRuns] = useState<CodingRun[]>([]);
   const runsRef = useRef(runs);
   runsRef.current = runs;
   // Bumped by the live catch-up so the open thread is re-read with the list.
   const [conversationResync, setConversationResync] = useState(0);
   const [knowledgeArticles, setKnowledgeArticles] = useState<
     KnowledgeArticle[]
-  >(demoMode ? seedKnowledge : []);
+  >([]);
   const [notifications, setNotifications] = useState<WorkspaceNotification[]>(
     [],
   );
@@ -209,13 +234,28 @@ function App() {
   const [pendingRunIds, setPendingRunIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [selectedConversationId, setSelectedConversationId] = useState(
-    demoMode ? (seedConversations[0]?.id ?? "") : "",
-  );
+  const [selectedConversationId, setSelectedConversationId] = useState("");
   const selectedConversationIdRef = useRef(selectedConversationId);
   selectedConversationIdRef.current = selectedConversationId;
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
+  // The demo data stays out of the startup bundle: it is only fetched when
+  // demo mode is on.
+  useEffect(() => {
+    if (!demoMode) return;
+    let cancelled = false;
+    void import("./data").then((seed) => {
+      if (cancelled) return;
+      setConversations(seed.seedConversations);
+      setIssues(seed.seedIssues);
+      setRuns(seed.seedRuns);
+      setKnowledgeArticles(seed.seedKnowledge);
+      setSelectedConversationId(seed.seedConversations[0]?.id ?? "");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode]);
   const [operatorIdentity, setOperatorIdentity] = useState({
     id: "",
     name: t("app.currentOperator"),
@@ -1151,11 +1191,13 @@ function App() {
                 </FeatureBoundary>
               }
               dashboard={
-                <DashboardPage
-                  operator={operatorIdentity}
-                  issues={issues}
-                  onOpenIssue={setInspectorIssueId}
-                />
+                <Suspense fallback={null}>
+                  <DashboardPage
+                    operator={operatorIdentity}
+                    issues={issues}
+                    onOpenIssue={setInspectorIssueId}
+                  />
+                </Suspense>
               }
               finance={
                 <FeatureBoundary label={t("finance.loading")}>
@@ -1238,29 +1280,31 @@ function App() {
                 </FeatureBoundary>
               }
               issueDetail={
-                <FeatureIssueDetailPage
-                  issues={issues}
-                  runs={runs}
-                  workspaceId={workspaceId}
-                  liveMode={!demoMode}
-                  assigneeOptions={assigneeOptions}
-                  assigneeLabel={assigneeLabel}
-                  onToast={notify}
-                  onOpenConversation={(conversationId) => {
-                    setSelectedConversationId(conversationId);
-                    window.history.pushState(
-                      {},
-                      "",
-                      `/inbox?conversation=${encodeURIComponent(conversationId)}`,
-                    );
-                    window.dispatchEvent(new PopStateEvent("popstate"));
-                  }}
-                  onStartRun={openRunDialog}
-                  onEditIssue={setEditIssueId}
-                  onDeleteIssue={(issueId) => void deleteIssue(issueId)}
-                  onUpdateIssue={updateIssue}
-                  onResolveAndNotify={resolveIssueAndNotify}
-                />
+                <FeatureBoundary label={t("states.loadingIssues")}>
+                  <FeatureIssueDetailPage
+                    issues={issues}
+                    runs={runs}
+                    workspaceId={workspaceId}
+                    liveMode={!demoMode}
+                    assigneeOptions={assigneeOptions}
+                    assigneeLabel={assigneeLabel}
+                    onToast={notify}
+                    onOpenConversation={(conversationId) => {
+                      setSelectedConversationId(conversationId);
+                      window.history.pushState(
+                        {},
+                        "",
+                        `/inbox?conversation=${encodeURIComponent(conversationId)}`,
+                      );
+                      window.dispatchEvent(new PopStateEvent("popstate"));
+                    }}
+                    onStartRun={openRunDialog}
+                    onEditIssue={setEditIssueId}
+                    onDeleteIssue={(issueId) => void deleteIssue(issueId)}
+                    onUpdateIssue={updateIssue}
+                    onResolveAndNotify={resolveIssueAndNotify}
+                  />
+                </FeatureBoundary>
               }
               runs={
                 <FeatureBoundary label={t("states.loadingAgentRuns")}>
@@ -1297,12 +1341,14 @@ function App() {
                 </FeatureBoundary>
               }
               profile={
-                <ProfileWorkspacePage
-                  workspaceId={workspaceId}
-                  onToast={notify}
-                  onWorkspaceUpdated={handleProfileWorkspaceUpdated}
-                  onIdentityUpdated={handleProfileIdentityUpdated}
-                />
+                <FeatureBoundary label={t("states.loadingSettings")}>
+                  <ProfileWorkspacePage
+                    workspaceId={workspaceId}
+                    onToast={notify}
+                    onWorkspaceUpdated={handleProfileWorkspaceUpdated}
+                    onIdentityUpdated={handleProfileIdentityUpdated}
+                  />
+                </FeatureBoundary>
               }
               fallback={
                 <FeatureBoundary label={t("states.loadingInbox")}>
@@ -1355,81 +1401,83 @@ function App() {
           void signOutAndReload();
         }}
       />
-      {inspectorIssueId && (
-        <FeatureIssueInspector
-          issue={issues.find((item) => item.id === inspectorIssueId)}
-          assigneeOptions={assigneeOptions}
-          assigneeLabel={assigneeLabel}
-          onClose={() => setInspectorIssueId(null)}
-          onOpenFull={(identifier) => {
-            setInspectorIssueId(null);
-            window.history.pushState({}, "", `/issues/${identifier}`);
-            window.dispatchEvent(new PopStateEvent("popstate"));
-          }}
-          onStartRun={openRunDialog}
-          onUpdateIssue={updateIssue}
-        />
-      )}
-      {commandOpen && (
-        <FeatureCommandPalette
-          conversations={conversations}
-          issues={issues}
-          workspaces={[]}
-          currentWorkspaceId={workspaceId ?? (demoMode ? "demo" : "")}
-          onClose={() => setCommandOpen(false)}
-          onNewIssue={() => {
-            setCommandOpen(false);
-            setCreateIssueOpen(true);
-          }}
-          onOpenConversation={(conversationId) => {
-            setSelectedConversationId(conversationId);
-            window.history.pushState(
-              {},
-              "",
-              `/inbox?conversation=${encodeURIComponent(conversationId)}`,
-            );
-            window.dispatchEvent(new PopStateEvent("popstate"));
-          }}
-          onOpenIssue={(identifier) => {
-            window.history.pushState({}, "", `/issues/${identifier}`);
-            window.dispatchEvent(new PopStateEvent("popstate"));
-          }}
-          onStartRun={openRunDialog}
-          onSwitchWorkspace={() => undefined}
-        />
-      )}
-      {createIssueOpen && (
-        <FeatureCreateIssueDialog
-          conversations={conversations}
-          onClose={() => setCreateIssueOpen(false)}
-          onCreate={createIssue}
-        />
-      )}
-      {editIssueId && (
-        <FeatureEditIssueDialog
-          issue={issues.find((item) => item.id === editIssueId)}
-          assigneeOptions={assigneeOptions}
-          onClose={() => setEditIssueId(null)}
-          onSave={(patch) => {
-            updateIssue(editIssueId, patch);
-            setEditIssueId(null);
-          }}
-        />
-      )}
-      {runDialogIssueId && (
-        <FeatureRunAgentDialog
-          issue={issues.find((item) => item.id === runDialogIssueId)}
-          workspaceId={workspaceId}
-          liveMode={!demoMode}
-          initialMode={runDialogInitialMode}
-          initialRepositoryId={runDialogRepositoryId}
-          initialStage={runDialogStage}
-          initialParentRunId={runDialogParentRunId}
-          initialResearchArtifactId={runDialogResearchArtifactId}
-          onClose={() => setRunDialogIssueId(null)}
-          onStart={startRun}
-        />
-      )}
+      <Suspense fallback={null}>
+        {inspectorIssueId && (
+          <FeatureIssueInspector
+            issue={issues.find((item) => item.id === inspectorIssueId)}
+            assigneeOptions={assigneeOptions}
+            assigneeLabel={assigneeLabel}
+            onClose={() => setInspectorIssueId(null)}
+            onOpenFull={(identifier) => {
+              setInspectorIssueId(null);
+              window.history.pushState({}, "", `/issues/${identifier}`);
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+            onStartRun={openRunDialog}
+            onUpdateIssue={updateIssue}
+          />
+        )}
+        {commandOpen && (
+          <FeatureCommandPalette
+            conversations={conversations}
+            issues={issues}
+            workspaces={[]}
+            currentWorkspaceId={workspaceId ?? (demoMode ? "demo" : "")}
+            onClose={() => setCommandOpen(false)}
+            onNewIssue={() => {
+              setCommandOpen(false);
+              setCreateIssueOpen(true);
+            }}
+            onOpenConversation={(conversationId) => {
+              setSelectedConversationId(conversationId);
+              window.history.pushState(
+                {},
+                "",
+                `/inbox?conversation=${encodeURIComponent(conversationId)}`,
+              );
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+            onOpenIssue={(identifier) => {
+              window.history.pushState({}, "", `/issues/${identifier}`);
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+            onStartRun={openRunDialog}
+            onSwitchWorkspace={() => undefined}
+          />
+        )}
+        {createIssueOpen && (
+          <FeatureCreateIssueDialog
+            conversations={conversations}
+            onClose={() => setCreateIssueOpen(false)}
+            onCreate={createIssue}
+          />
+        )}
+        {editIssueId && (
+          <FeatureEditIssueDialog
+            issue={issues.find((item) => item.id === editIssueId)}
+            assigneeOptions={assigneeOptions}
+            onClose={() => setEditIssueId(null)}
+            onSave={(patch) => {
+              updateIssue(editIssueId, patch);
+              setEditIssueId(null);
+            }}
+          />
+        )}
+        {runDialogIssueId && (
+          <FeatureRunAgentDialog
+            issue={issues.find((item) => item.id === runDialogIssueId)}
+            workspaceId={workspaceId}
+            liveMode={!demoMode}
+            initialMode={runDialogInitialMode}
+            initialRepositoryId={runDialogRepositoryId}
+            initialStage={runDialogStage}
+            initialParentRunId={runDialogParentRunId}
+            initialResearchArtifactId={runDialogResearchArtifactId}
+            onClose={() => setRunDialogIssueId(null)}
+            onStart={startRun}
+          />
+        )}
+      </Suspense>
       {toast && (
         <div
           className={`toast toast-${toast.tone}`}

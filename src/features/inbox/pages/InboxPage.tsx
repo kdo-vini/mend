@@ -1,8 +1,10 @@
 import {
   Fragment,
+  memo,
   type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
   type WheelEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -42,6 +44,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type {
   AiMode,
   AiDraft,
@@ -252,6 +255,28 @@ function aiDraftDismissalSignature(draft: AiDraft) {
   return JSON.stringify([draft.id, draft.updatedAt, draft.status, draft.body]);
 }
 
+type RowHandlers = {
+  toggleConversationSelection: (id: string, shiftKey: boolean) => void;
+  selectConversation: (conversation: Conversation) => void;
+  deleteConversation: (id?: string) => Promise<void>;
+  selectionMode: boolean;
+  deleteMessage: (message: Message) => Promise<void>;
+  editFailedMessage: (message: Message) => void;
+  cancelFailedMessage: (message: Message) => void;
+  retryFailedMessage: (message: Message) => Promise<void>;
+  refreshFailedMedia: (messageId: string) => void;
+  setMessageMediaUrl: (
+    conversationId: string,
+    messageId: string,
+    url: string | undefined,
+  ) => void;
+  openMediaViewer: (messageId: string) => void;
+  reactToMessage: (message: Message, reaction: string) => Promise<void>;
+  selectedId: string | undefined;
+  onToast: (message: string, tone?: ToastTone) => void;
+  t: TFunction<"inbox">;
+};
+
 export function InboxPage({
   workspaceId,
   conversations,
@@ -287,7 +312,16 @@ export function InboxPage({
   assigneeLabel: (value: string) => string;
 }) {
   const { t } = useTranslation("inbox");
-  const messageDayNow = new Date();
+  // Ticks once a minute so day dividers stay correct without a fresh Date on
+  // every render.
+  const [messageDayNow, setMessageDayNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setMessageDayNow(new Date()),
+      60_000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
   const location = useLocation();
   const navigate = useNavigate();
   const {
@@ -865,6 +899,82 @@ export function InboxPage({
     threadOnScreen,
     workspaceId,
   ]);
+
+  // Row and bubble handlers take the id as an argument and read the latest
+  // closures through a ref, so their identity never changes and memoized rows
+  // and bubbles skip renders when only another conversation changed.
+  const rowHandlersRef = useRef<RowHandlers | null>(null);
+  const onRowSelectionChange = useCallback(
+    (id: string, shiftKey: boolean) =>
+      rowHandlersRef.current?.toggleConversationSelection(id, shiftKey),
+    [],
+  );
+  const onRowClick = useCallback(
+    (conversation: Conversation, shiftKey: boolean) => {
+      const handlers = rowHandlersRef.current;
+      if (!handlers) return;
+      if (handlers.selectionMode)
+        handlers.toggleConversationSelection(conversation.id, shiftKey);
+      else handlers.selectConversation(conversation);
+    },
+    [],
+  );
+  const onRowDelete = useCallback(
+    (id: string) => void rowHandlersRef.current?.deleteConversation(id),
+    [],
+  );
+  const onBubbleDelete = useCallback(
+    (message: Message) => void rowHandlersRef.current?.deleteMessage(message),
+    [],
+  );
+  const onBubbleEditFailed = useCallback(
+    (message: Message) => rowHandlersRef.current?.editFailedMessage(message),
+    [],
+  );
+  const onBubbleCancelFailed = useCallback(
+    (message: Message) => rowHandlersRef.current?.cancelFailedMessage(message),
+    [],
+  );
+  const onBubbleRetryFailed = useCallback(
+    (message: Message) =>
+      void rowHandlersRef.current?.retryFailedMessage(message),
+    [],
+  );
+  const onBubbleMediaError = useCallback(
+    (messageId: string) =>
+      rowHandlersRef.current?.refreshFailedMedia(messageId),
+    [],
+  );
+  const onBubbleMediaResolved = useCallback(
+    (messageId: string, url: string) => {
+      const handlers = rowHandlersRef.current;
+      if (!handlers) return;
+      if (handlers.selectedId)
+        handlers.setMessageMediaUrl(handlers.selectedId, messageId, url);
+    },
+    [],
+  );
+  const onBubbleOpenMedia = useCallback(
+    (messageId: string) => rowHandlersRef.current?.openMediaViewer(messageId),
+    [],
+  );
+  const onBubbleCopy = useCallback(async (message: Message) => {
+    if (!message.text) return;
+    const handlers = rowHandlersRef.current;
+    if (!handlers) return;
+    const { onToast: toast, t: translate } = handlers;
+    try {
+      await navigator.clipboard.writeText(message.text);
+      toast(translate("toasts.messageCopied"));
+    } catch {
+      toast(translate("errors.copyMessage"));
+    }
+  }, []);
+  const onBubbleReact = useCallback(
+    (message: Message, reaction: string) =>
+      void rowHandlersRef.current?.reactToMessage(message, reaction),
+    [],
+  );
 
   if (!selected) {
     return (
@@ -1963,6 +2073,24 @@ export function InboxPage({
     }
   };
 
+  rowHandlersRef.current = {
+    toggleConversationSelection,
+    selectConversation,
+    deleteConversation,
+    selectionMode,
+    deleteMessage,
+    editFailedMessage,
+    cancelFailedMessage,
+    retryFailedMessage,
+    refreshFailedMedia,
+    setMessageMediaUrl,
+    openMediaViewer,
+    reactToMessage,
+    selectedId: selected?.id,
+    onToast,
+    t,
+  };
+
   return (
     <div
       className={`inbox-page ${mobileConversationOpen ? "mobile-detail-open" : ""}`}
@@ -2134,21 +2262,9 @@ export function InboxPage({
                 selectionMode={selectionMode}
                 checked={selectedConversationIds.has(conversation.id)}
                 selectionDisabled={bulkPending}
-                onSelectionChange={(event) =>
-                  toggleConversationSelection(
-                    conversation.id,
-                    (event.nativeEvent as MouseEvent).shiftKey,
-                  )
-                }
-                onClick={(event) =>
-                  selectionMode
-                    ? toggleConversationSelection(
-                        conversation.id,
-                        event.shiftKey,
-                      )
-                    : selectConversation(conversation)
-                }
-                onDelete={() => void deleteConversation(conversation.id)}
+                onSelectionChange={onRowSelectionChange}
+                onClick={onRowClick}
+                onDelete={onRowDelete}
               />
             ))}
             {filtered.length === 0 && (
@@ -2252,27 +2368,15 @@ export function InboxPage({
                         }
                         actionPending={messageActionId === message.id}
                         reactionPending={reactionPendingId === message.id}
-                        onDelete={() => void deleteMessage(message)}
-                        onEditFailed={() => editFailedMessage(message)}
-                        onCancelFailed={() => cancelFailedMessage(message)}
-                        onRetryFailed={() => void retryFailedMessage(message)}
-                        onMediaError={() => refreshFailedMedia(message.id)}
-                        onMediaResolved={(url) =>
-                          setMessageMediaUrl(selected.id, message.id, url)
-                        }
-                        onOpenMedia={() => openMediaViewer(message.id)}
-                        onCopy={async () => {
-                          if (!message.text) return;
-                          try {
-                            await navigator.clipboard.writeText(message.text);
-                            onToast(t("toasts.messageCopied"));
-                          } catch {
-                            onToast(t("errors.copyMessage"));
-                          }
-                        }}
-                        onReact={(reaction) =>
-                          void reactToMessage(message, reaction)
-                        }
+                        onDelete={onBubbleDelete}
+                        onEditFailed={onBubbleEditFailed}
+                        onCancelFailed={onBubbleCancelFailed}
+                        onRetryFailed={onBubbleRetryFailed}
+                        onMediaError={onBubbleMediaError}
+                        onMediaResolved={onBubbleMediaResolved}
+                        onOpenMedia={onBubbleOpenMedia}
+                        onCopy={onBubbleCopy}
+                        onReact={onBubbleReact}
                       />
                     </Fragment>
                   );
@@ -2612,7 +2716,7 @@ function MediaLightbox({
   );
 }
 
-function ConversationRow({
+const ConversationRow = memo(function ConversationRow({
   conversation,
   selected,
   selectionMode,
@@ -2627,9 +2731,9 @@ function ConversationRow({
   selectionMode: boolean;
   checked: boolean;
   selectionDisabled: boolean;
-  onSelectionChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
-  onDelete: () => void;
+  onSelectionChange: (id: string, shiftKey: boolean) => void;
+  onClick: (conversation: Conversation, shiftKey: boolean) => void;
+  onDelete: (id: string) => void;
 }) {
   const { t } = useTranslation("inbox");
   return (
@@ -2648,7 +2752,12 @@ function ConversationRow({
             type="checkbox"
             checked={checked}
             disabled={selectionDisabled}
-            onChange={onSelectionChange}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onSelectionChange(
+                conversation.id,
+                (event.nativeEvent as MouseEvent).shiftKey,
+              )
+            }
           />
         </label>
       )}
@@ -2661,7 +2770,9 @@ function ConversationRow({
             ? t("bulk.toggleConversation", { name: conversation.name })
             : t("ui.openConversation", { name: conversation.name })
         }
-        onClick={onClick}
+        onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+          onClick(conversation, event.shiftKey)
+        }
       >
         <div
           className="conversation-avatar"
@@ -2711,7 +2822,7 @@ function ConversationRow({
               className="danger"
               type="button"
               role="menuitem"
-              onClick={onDelete}
+              onClick={() => onDelete(conversation.id)}
             >
               <Trash2 size={14} /> {t("ui.deleteConversation")}
             </button>
@@ -2721,7 +2832,7 @@ function ConversationRow({
       <div className={`attention-marker ${conversation.attention}`} />
     </div>
   );
-}
+});
 
 function AiDecisionSummary({
   conversation,
@@ -3148,7 +3259,7 @@ function ConversationHeader({
   );
 }
 
-function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
   message,
   messageWorkspaceId,
   senderName,
@@ -3169,15 +3280,15 @@ function MessageBubble({
   senderName?: string;
   actionPending: boolean;
   reactionPending: boolean;
-  onDelete: () => void;
-  onEditFailed: () => void;
-  onCancelFailed: () => void;
-  onRetryFailed: () => void;
-  onMediaError: () => void;
-  onMediaResolved: (url: string) => void;
-  onOpenMedia: () => void;
-  onCopy: () => void;
-  onReact: (reaction: string) => void;
+  onDelete: (message: Message) => void;
+  onEditFailed: (message: Message) => void;
+  onCancelFailed: (message: Message) => void;
+  onRetryFailed: (message: Message) => void;
+  onMediaError: (messageId: string) => void;
+  onMediaResolved: (messageId: string, url: string) => void;
+  onOpenMedia: (messageId: string) => void;
+  onCopy: (message: Message) => void;
+  onReact: (message: Message, reaction: string) => void;
 }) {
   const { t } = useTranslation("inbox");
   const visibleText = stripHumanWhatsAppIntro(message.text);
@@ -3262,9 +3373,9 @@ function MessageBubble({
             <MessageMedia
               workspaceId={messageWorkspaceId}
               message={message}
-              onError={onMediaError}
-              onOpen={onOpenMedia}
-              onResolved={onMediaResolved}
+              onError={() => onMediaError(message.id)}
+              onOpen={() => onOpenMedia(message.id)}
+              onResolved={(url) => onMediaResolved(message.id, url)}
             />
           )}
         </div>
@@ -3284,7 +3395,7 @@ function MessageBubble({
                   aria-label={t("ui.removeReactionWithEmoji", {
                     emoji: reaction.emoji,
                   })}
-                  onClick={() => onReact("")}
+                  onClick={() => onReact(message, "")}
                 >
                   {reaction.emoji}
                 </button>
@@ -3301,7 +3412,7 @@ function MessageBubble({
                 type="button"
                 role="menuitem"
                 disabled={actionPending}
-                onClick={onEditFailed}
+                onClick={() => onEditFailed(message)}
               >
                 <PenLine size={14} /> {t("ui.editMessage")}
               </button>
@@ -3309,7 +3420,7 @@ function MessageBubble({
                 type="button"
                 role="menuitem"
                 disabled={actionPending}
-                onClick={onCancelFailed}
+                onClick={() => onCancelFailed(message)}
               >
                 <X size={14} /> {t("ui.cancelMessage")}
               </button>
@@ -3317,7 +3428,7 @@ function MessageBubble({
                 type="button"
                 role="menuitem"
                 disabled={actionPending}
-                onClick={onRetryFailed}
+                onClick={() => onRetryFailed(message)}
               >
                 <Send size={14} />
                 {actionPending ? t("ui.retrying") : t("ui.retryMessage")}
@@ -3327,7 +3438,11 @@ function MessageBubble({
           {!failedOutbound && (
             <>
               {!message.deleted && message.text && (
-                <button type="button" role="menuitem" onClick={onCopy}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => onCopy(message)}
+                >
                   <Copy size={14} /> {t("ui.copyMessage")}
                 </button>
               )}
@@ -3337,7 +3452,7 @@ function MessageBubble({
                   type="button"
                   role="menuitem"
                   disabled={actionPending}
-                  onClick={onDelete}
+                  onClick={() => onDelete(message)}
                 >
                   <Trash2 size={14} />
                   {actionPending ? t("ui.deleting") : t("ui.deleteForEveryone")}
@@ -3352,7 +3467,7 @@ function MessageBubble({
                       type="button"
                       role="menuitem"
                       disabled={reactionPending}
-                      onClick={() => onReact(reaction)}
+                      onClick={() => onReact(message, reaction)}
                     >
                       {reaction}{" "}
                       {reactionPending ? t("ui.sending") : t("ui.react")}
@@ -3387,7 +3502,7 @@ function MessageBubble({
       )}
     </div>
   );
-}
+});
 
 /** WhatsApp Web formatting shortcuts: Ctrl/⌘+B, I, Shift+X and Shift+M. */
 function formatShortcutMarker(
