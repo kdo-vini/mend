@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SupabaseJobStore } from "./persistence.js";
+import { createMessageJobStore, SupabaseJobStore } from "./persistence.js";
 import type { MendServerSupabaseClient } from "./supabase.js";
 
 type Result = { data: unknown; error: { message: string } | null };
@@ -54,6 +54,8 @@ class JobClientFake {
 
   rpc(name: string, args: Record<string, unknown>) {
     this.rpcCalls.push({ name, args });
+    if (name === "claim_next_job")
+      return Promise.resolve({ data: [], error: null });
     if (name === "complete_job")
       return Promise.resolve({ data: { id: jobId }, error: null });
     return Promise.resolve({
@@ -102,6 +104,33 @@ describe("Supabase job lease ownership", () => {
     expect(client.rpcCalls[0]).toMatchObject({
       name: "fail_job",
       args: { p_job_id: jobId, p_worker_id: "worker-b" },
+    });
+  });
+});
+
+describe("createMessageJobStore", () => {
+  it("refuses the in-memory fallback in production", () => {
+    expect(() =>
+      createMessageJobStore(null, {
+        NODE_ENV: "production",
+      } as NodeJS.ProcessEnv),
+    ).toThrow("durable_job_store_required");
+    expect(
+      createMessageJobStore(null, {
+        NODE_ENV: "development",
+      } as NodeJS.ProcessEnv),
+    ).toBeDefined();
+  });
+
+  it("passes the lane filter and lease to the claim RPC", async () => {
+    const client = new JobClientFake([{ data: [], error: null }]);
+    const store = new SupabaseJobStore(
+      client as unknown as MendServerSupabaseClient,
+    );
+    await store.claim("w", undefined, { types: ["a"], leaseMs: 90_000 });
+    expect(client.rpcCalls[0]).toMatchObject({
+      name: "claim_next_job",
+      args: { worker_id: "w", lease_seconds: 90, include_types: ["a"] },
     });
   });
 });

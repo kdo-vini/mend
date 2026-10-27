@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { InMemoryJobStore } from "./jobs.js";
 import {
   enqueueWhatsmiauEvent,
+  messageDedupeKey,
   type WhatsmiauMessageJobPayload,
   WhatsmiauWorker,
 } from "./worker.js";
@@ -29,5 +30,17 @@ describe("Whatsmiau worker contracts", () => {
     expect(await worker.runOnce()).toBe(true);
     expect(await worker.runOnce()).toBe(false);
     expect(seen).toEqual(["wamid-1"]);
+  });
+});
+
+describe("messageDedupeKey event type", () => {
+  it("does not collide across event types for the same provider id", () => {
+    const message = {
+      instanceName: "i",
+      providerMessageId: "p",
+    } as Parameters<typeof messageDedupeKey>[0];
+    expect(messageDedupeKey(message, "messages.upsert")).not.toBe(
+      messageDedupeKey(message, "messages.update"),
+    );
   });
 });

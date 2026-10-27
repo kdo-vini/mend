@@ -15,7 +15,7 @@ import {
   type InboxContext,
   type InboxMessageRecord,
 } from "./inbox-service.js";
-import { type JobRecord, type JobStore } from "./jobs.js";
+import { type ClaimOptions, type JobRecord, type JobStore } from "./jobs.js";
 import { SupabaseKnowledgeMetricWriter } from "./knowledge-evals.js";
 import {
   MEDIA_PROCESS_JOB_TYPE,
@@ -313,6 +313,8 @@ export interface LiveWorkerOptions {
   /** Delay inbound automation so consecutive customer messages can be grouped. */
   inboundDebounceMs?: number;
   workerId?: string;
+  /** Job lane this loop serves: type include/exclude list and lease. */
+  claimOptions?: ClaimOptions;
   logger?: LiveWorkerLogger;
   heartbeat?: {
     beat(input: {
@@ -375,7 +377,11 @@ export class LiveWorker {
   /** Poll once. The job store owns claim, retry/backoff and dead-letter behavior. */
   async poll(): Promise<boolean> {
     await this.writeHeartbeat({ workerId: this.workerId }, "before_claim");
-    const job = await this.options.jobStore.claim(this.workerId);
+    const job = await this.options.jobStore.claim(
+      this.workerId,
+      undefined,
+      this.options.claimOptions,
+    );
     if (!job) return false;
 
     await this.writeHeartbeat(
@@ -854,6 +860,7 @@ export interface CreateSupabaseLiveWorkerOptions {
   inboundDebounceMs?: number;
   supportAiEnabled?: boolean;
   workerId?: string;
+  claimOptions?: ClaimOptions;
   logger?: LiveWorkerLogger;
 }
 
@@ -938,6 +945,7 @@ export function createSupabaseLiveWorker(
       ? { inboundDebounceMs: options.inboundDebounceMs }
       : {}),
     ...(options.workerId ? { workerId: options.workerId } : {}),
+    ...(options.claimOptions ? { claimOptions: options.claimOptions } : {}),
   });
 }
 

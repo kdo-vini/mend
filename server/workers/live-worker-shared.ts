@@ -11,6 +11,15 @@ export const KNOWLEDGE_REPOSITORY_SYNC_JOB_TYPE =
   "mend.knowledge.repository_sync";
 export const SUPPORT_REPOSITORY_RESEARCH_JOB_TYPE =
   "mend.support.repository_research";
+/**
+ * Short, latency-sensitive jobs that must never wait behind agent runs,
+ * knowledge sync, research or media/transcription work.
+ */
+export const MESSAGE_LANE_JOB_TYPES: readonly string[] = [
+  WHATSAPP_INGEST_JOB_TYPE,
+  PROCESS_INBOUND_MESSAGE_JOB_TYPE,
+  SEND_AI_REPLY_JOB_TYPE,
+];
 export const SUPPORT_AI_ENABLED_ENV = "MEND_SUPPORT_AI_ENABLED";
 
 /** Jobs that run Mend's own Support AI or can message customers on its behalf. */

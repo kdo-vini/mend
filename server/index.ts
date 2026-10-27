@@ -6,7 +6,6 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import pino from "pino";
 import { z } from "zod";
-import { InMemoryJobStore } from "./jobs.js";
 import {
   enqueueWhatsmiauEvent,
   type WhatsmiauMessageJobPayload,
@@ -16,7 +15,8 @@ import {
   createServerSupabaseClient,
   hasServerSupabaseConfig,
 } from "./supabase.js";
-import { SupabaseJobStore } from "./persistence.js";
+import { createMessageJobStore } from "./persistence.js";
+import { MESSAGE_LANE_JOB_TYPES } from "./workers/live-worker-shared.js";
 import { createZeloFinanceService } from "./zelo-finance.js";
 import { createProviderBalancesService } from "./provider-balances.js";
 import { authenticateRequest } from "./auth.js";
@@ -159,9 +159,8 @@ const workerSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
   ? serverSupabase
   : null;
 const processRole = process.env.MEND_PROCESS_ROLE?.trim() || "control";
-const messageJobs = workerSupabase
-  ? new SupabaseJobStore<WhatsmiauMessageJobPayload>(workerSupabase)
-  : new InMemoryJobStore<WhatsmiauMessageJobPayload>();
+const messageJobs =
+  createMessageJobStore<WhatsmiauMessageJobPayload>(workerSupabase);
 
 if (workerSupabase && process.env.MEND_GITHUB_WEBHOOK_SECRET) {
   app.post(
@@ -360,7 +359,7 @@ app.get("/api/ready", async (_request, response) => {
   return response.status(ready ? 200 : 503).json({ ready, checks });
 });
 
-app.post("/webhooks/whatsmiau", (request, response) => {
+app.post("/webhooks/whatsmiau", async (request, response) => {
   const authorization = request.get("authorization");
   const expected = process.env.WHATSMIAU_WEBHOOK_SECRET;
   if (
@@ -391,21 +390,28 @@ app.post("/webhooks/whatsmiau", (request, response) => {
   const workspaceHeader = WorkspaceHeader.safeParse(
     request.get("x-mend-workspace-id"),
   );
-  void enqueueWhatsmiauEvent(messageJobs, parsed.data, instanceName, {
-    ...(workspaceHeader.success && workspaceHeader.data
-      ? { workspaceId: workspaceHeader.data }
-      : {}),
-  })
-    .then((jobs) =>
-      logger.info(
-        { event: parsed.data.event ?? "unknown", queued: jobs.length },
-        "Whatsmiau webhook accepted",
-      ),
-    )
-    .catch((error) =>
-      logger.error({ err: error }, "Whatsmiau webhook queueing failed"),
+  try {
+    // Ack only after the event is durable; a 5xx makes Whatsmiau retry and
+    // the dedupe key makes the retry idempotent.
+    const jobs = await enqueueWhatsmiauEvent(
+      messageJobs,
+      parsed.data,
+      instanceName,
+      {
+        ...(workspaceHeader.success && workspaceHeader.data
+          ? { workspaceId: workspaceHeader.data }
+          : {}),
+      },
     );
-  // Acknowledge first; persistence, media fetching and AI triage remain worker work.
+    logger.info(
+      { event: parsed.data.event ?? "unknown", queued: jobs.length },
+      "Whatsmiau webhook accepted",
+    );
+  } catch (error) {
+    logger.error({ err: error }, "Whatsmiau webhook queueing failed");
+    return response.status(503).json({ error: "Webhook queueing failed" });
+  }
+  // Persistence beyond the queue, media fetching and AI triage stay worker work.
   return response.status(202).json({ accepted: true });
 });
 
@@ -706,118 +712,137 @@ if (existsSync(frontendIndex)) {
   });
 }
 
-let liveWorker: LiveWorker | undefined;
+const liveWorkers: LiveWorker[] = [];
 if (workerSupabase && processRole === "runner") {
   const agentCredentials = new SupabaseAgentCredentialAdapter(workerSupabase);
   const knowledgeGitHub = createGitHubControlPlaneFromEnv();
-  liveWorker = createSupabaseLiveWorker({
-    client: workerSupabase,
-    jobStore: messageJobs,
-    whatsappProvider: new WhatsmiauMessagingProvider(),
-    logger: logger as LiveWorkerLogger,
-    agentRunRunner: async (payload: AgentRunRequestedJobPayload) => {
-      const repositories = new SupabaseRepositoryAdapter(workerSupabase);
-      const store = new SupabaseCodexRunStore(workerSupabase);
-      const codingControlPlane = new SupabaseCodingControlPlaneAdapter(
-        workerSupabase,
-      );
-      const existing = await store.getRun(payload.runId);
-      if (
-        existing &&
-        ["completed", "approved", "rejected", "failed", "canceled"].includes(
-          existing.status,
+  // Two loops: inbound messages get a short-lease lane of their own so they
+  // never wait behind (or are reclaimed after) a 20 minute agent run.
+  const messageLaneLeaseMs =
+    Math.max(
+      30,
+      Number(process.env.MEND_MESSAGE_LANE_LEASE_SECONDS ?? 180) || 180,
+    ) * 1_000;
+  const createLane = (lane: "messages" | "slow"): LiveWorker =>
+    createSupabaseLiveWorker({
+      workerId: `mend-worker-${process.pid}-${lane}`,
+      claimOptions:
+        lane === "messages"
+          ? { types: MESSAGE_LANE_JOB_TYPES, leaseMs: messageLaneLeaseMs }
+          : { excludeTypes: MESSAGE_LANE_JOB_TYPES },
+      client: workerSupabase,
+      jobStore: messageJobs,
+      whatsappProvider: new WhatsmiauMessagingProvider(),
+      logger: logger as LiveWorkerLogger,
+      agentRunRunner: async (payload: AgentRunRequestedJobPayload) => {
+        const repositories = new SupabaseRepositoryAdapter(workerSupabase);
+        const store = new SupabaseCodexRunStore(workerSupabase);
+        const codingControlPlane = new SupabaseCodingControlPlaneAdapter(
+          workerSupabase,
+        );
+        const existing = await store.getRun(payload.runId);
+        if (
+          existing &&
+          ["completed", "approved", "rejected", "failed", "canceled"].includes(
+            existing.status,
+          )
         )
-      )
-        return;
-      const service = new CodexService({
-        repositories,
-        runs: store,
-        agentCredentialResolver: async (workspaceId, provider) =>
-          (await agentCredentials.resolve(workspaceId, "agent", provider))
-            ?.apiKey ?? null,
-        agentConnectionSecretResolver:
-          codingControlPlane.resolveConnectionSecret.bind(codingControlPlane),
-      });
-      try {
-        const handle = await service.start({
-          runId: payload.runId,
-          workspaceId: payload.workspaceId,
-          issueId: payload.issueId,
-          repositoryId: payload.repositoryId,
-          issueIdentifier: payload.issueIdentifier,
-          issueTitle: payload.issueTitle,
-          mode: payload.mode,
-          ...(payload.codingStage ? { stage: payload.codingStage } : {}),
-          ...(payload.researchArtifactId
-            ? { researchArtifactId: payload.researchArtifactId }
-            : {}),
-          ...(payload.researchArtifact
-            ? { researchArtifact: payload.researchArtifact }
-            : {}),
-          ...(payload.requestedConfig
-            ? { requestedConfig: payload.requestedConfig }
-            : {}),
-          ...(payload.effectiveConfig
-            ? { effectiveConfig: payload.effectiveConfig }
-            : {}),
-          ...(payload.caseId ? { caseId: payload.caseId } : {}),
-          ...(payload.ticketRevision
-            ? { ticketRevision: payload.ticketRevision }
-            : {}),
-          context: payload.context,
-          tools: payload.tools,
-          ...(payload.createdByUserId
-            ? { createdByUserId: payload.createdByUserId }
-            : {}),
-          maxRuntimeMs: payload.maxRuntimeMs ?? agentMaxRuntimeMs(),
-          ...(payload.commandTimeoutMs
-            ? { commandTimeoutMs: payload.commandTimeoutMs }
-            : {}),
+          return;
+        const service = new CodexService({
+          repositories,
+          runs: store,
+          agentCredentialResolver: async (workspaceId, provider) =>
+            (await agentCredentials.resolve(workspaceId, "agent", provider))
+              ?.apiKey ?? null,
+          agentConnectionSecretResolver:
+            codingControlPlane.resolveConnectionSecret.bind(codingControlPlane),
         });
-        await handle.completion;
-      } catch (error) {
-        const current = await store.getRun(payload.runId);
-        if (current && ["queued", "running"].includes(current.status)) {
-          await store.updateRun(payload.runId, {
-            status: "failed",
-            finishedAt: new Date().toISOString(),
-            result: {
-              ...(current.result && typeof current.result === "object"
-                ? current.result
-                : {}),
-              error: redactSecrets(
-                error instanceof Error ? error.message : String(error),
-              ).slice(0, 2_000),
-            },
+        try {
+          const handle = await service.start({
+            runId: payload.runId,
+            workspaceId: payload.workspaceId,
+            issueId: payload.issueId,
+            repositoryId: payload.repositoryId,
+            issueIdentifier: payload.issueIdentifier,
+            issueTitle: payload.issueTitle,
+            mode: payload.mode,
+            ...(payload.codingStage ? { stage: payload.codingStage } : {}),
+            ...(payload.researchArtifactId
+              ? { researchArtifactId: payload.researchArtifactId }
+              : {}),
+            ...(payload.researchArtifact
+              ? { researchArtifact: payload.researchArtifact }
+              : {}),
+            ...(payload.requestedConfig
+              ? { requestedConfig: payload.requestedConfig }
+              : {}),
+            ...(payload.effectiveConfig
+              ? { effectiveConfig: payload.effectiveConfig }
+              : {}),
+            ...(payload.caseId ? { caseId: payload.caseId } : {}),
+            ...(payload.ticketRevision
+              ? { ticketRevision: payload.ticketRevision }
+              : {}),
+            context: payload.context,
+            tools: payload.tools,
+            ...(payload.createdByUserId
+              ? { createdByUserId: payload.createdByUserId }
+              : {}),
+            maxRuntimeMs: payload.maxRuntimeMs ?? agentMaxRuntimeMs(),
+            ...(payload.commandTimeoutMs
+              ? { commandTimeoutMs: payload.commandTimeoutMs }
+              : {}),
           });
+          await handle.completion;
+        } catch (error) {
+          const current = await store.getRun(payload.runId);
+          if (current && ["queued", "running"].includes(current.status)) {
+            await store.updateRun(payload.runId, {
+              status: "failed",
+              finishedAt: new Date().toISOString(),
+              result: {
+                ...(current.result && typeof current.result === "object"
+                  ? current.result
+                  : {}),
+                error: redactSecrets(
+                  error instanceof Error ? error.message : String(error),
+                ).slice(0, 2_000),
+              },
+            });
+          }
+          throw error;
         }
-        throw error;
-      }
-    },
-    agentCredentials,
-    ...(knowledgeGitHub
-      ? {
-          knowledgeSync: new SupabaseKnowledgeSyncProcessor(
-            workerSupabase,
-            knowledgeGitHub,
-            agentCredentials,
-            new SupabaseKnowledgeMetricWriter(workerSupabase as never),
-          ),
-        }
-      : {}),
-    pollIntervalMs: Number(process.env.MEND_WORKER_POLL_MS ?? 2_000),
-    maxIdlePollIntervalMs: Number(
-      process.env.MEND_WORKER_MAX_IDLE_POLL_MS ?? 4_000,
-    ),
-    heartbeatIntervalMs: Number(process.env.MEND_RUNNER_HEARTBEAT_MS ?? 60_000),
-    inboundDebounceMs: resolveInboundDebounceMs(process.env),
-    onUnmappedMessage: (input) =>
-      logger.warn(
-        { instanceName: input.instanceName, jobId: input.jobId },
-        "Whatsmiau message ignored because no channel is mapped",
+      },
+      agentCredentials,
+      ...(knowledgeGitHub
+        ? {
+            knowledgeSync: new SupabaseKnowledgeSyncProcessor(
+              workerSupabase,
+              knowledgeGitHub,
+              agentCredentials,
+              new SupabaseKnowledgeMetricWriter(workerSupabase as never),
+            ),
+          }
+        : {}),
+      pollIntervalMs: Number(process.env.MEND_WORKER_POLL_MS ?? 2_000),
+      maxIdlePollIntervalMs: Number(
+        process.env.MEND_WORKER_MAX_IDLE_POLL_MS ?? 4_000,
       ),
-  });
-  liveWorker.start();
+      heartbeatIntervalMs: Number(
+        process.env.MEND_RUNNER_HEARTBEAT_MS ?? 60_000,
+      ),
+      inboundDebounceMs: resolveInboundDebounceMs(process.env),
+      onUnmappedMessage: (input) =>
+        logger.warn(
+          { instanceName: input.instanceName, jobId: input.jobId },
+          "Whatsmiau message ignored because no channel is mapped",
+        ),
+    });
+  for (const lane of ["messages", "slow"] as const) {
+    const worker = createLane(lane);
+    liveWorkers.push(worker);
+    worker.start();
+  }
 }
 
 if (process.env.NODE_ENV !== "test") {
@@ -827,13 +852,15 @@ if (process.env.NODE_ENV !== "test") {
       {
         port,
         apiRouter: Boolean(serverSupabase),
-        liveWorker: Boolean(liveWorker),
+        liveWorker: liveWorkers.length > 0,
       },
       "Mend API listening",
     ),
   );
   const shutdown = () => {
-    void liveWorker?.stop().finally(() => server.close());
+    void Promise.all(liveWorkers.map((worker) => worker.stop())).finally(() =>
+      server.close(),
+    );
   };
   process.once("SIGTERM", shutdown);
   process.once("SIGINT", shutdown);

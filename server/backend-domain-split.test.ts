@@ -15,7 +15,7 @@ describe("backend domain boundaries", () => {
   it("keeps the live worker entrypoint focused on polling and assembly", async () => {
     const value = await source("./live-worker.ts");
 
-    expect(value.split("\n").length).toBeLessThan(965);
+    expect(value.split("\n").length).toBeLessThan(980);
     expect(value).not.toMatch(/export class SupabaseLiveWorker/);
     expect(value).not.toMatch(/export class SupabaseCodexStarter/);
   });

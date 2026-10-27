@@ -28,9 +28,27 @@ export interface EnqueueJobInput<TPayload = Record<string, unknown>> {
   availableAt?: Date;
 }
 
+/** Restrict a claim to a job lane and optionally shorten its lease. */
+export interface ClaimOptions {
+  /** Only claim these job types. */
+  types?: readonly string[];
+  /** Never claim these job types. */
+  excludeTypes?: readonly string[];
+  /** Lease length for this claim; defaults to the store's agent-run lease. */
+  leaseMs?: number;
+}
+
+export const jobMatchesClaimOptions = (type: string, options?: ClaimOptions) =>
+  (!options?.types || options.types.includes(type)) &&
+  !options?.excludeTypes?.includes(type);
+
 export interface JobStore<TPayload = Record<string, unknown>> {
   enqueue(input: EnqueueJobInput<TPayload>): Promise<JobRecord<TPayload>>;
-  claim(workerId: string, now?: Date): Promise<JobRecord<TPayload> | null>;
+  claim(
+    workerId: string,
+    now?: Date,
+    options?: ClaimOptions,
+  ): Promise<JobRecord<TPayload> | null>;
   complete(jobId: string, workerId?: string, now?: Date): Promise<void>;
   fail(
     jobId: string,
@@ -125,10 +143,12 @@ export class InMemoryJobStore<TPayload = Record<string, unknown>>
   async claim(
     workerId: string,
     now = new Date(),
+    options?: ClaimOptions,
   ): Promise<JobRecord<TPayload> | null> {
-    const staleBefore = now.getTime() - this.leaseMs;
+    const staleBefore = now.getTime() - (options?.leaseMs ?? this.leaseMs);
     for (const job of this.jobs.values()) {
       if (
+        jobMatchesClaimOptions(job.type, options) &&
         job.status === "running" &&
         job.lockedAt &&
         job.lockedAt.getTime() < staleBefore
@@ -148,7 +168,9 @@ export class InMemoryJobStore<TPayload = Record<string, unknown>>
     const candidate = [...this.jobs.values()]
       .filter(
         (job) =>
-          job.status === "queued" && job.availableAt.getTime() <= now.getTime(),
+          jobMatchesClaimOptions(job.type, options) &&
+          job.status === "queued" &&
+          job.availableAt.getTime() <= now.getTime(),
       )
       .sort((a, b) => a.availableAt.getTime() - b.availableAt.getTime())[0];
     if (!candidate) return null;

@@ -143,3 +143,21 @@ describe("job queue", () => {
     vi.useRealTimers();
   });
 });
+
+describe("job lanes", () => {
+  it("claims only the lane's job types and honors the lane lease", async () => {
+    const store = new InMemoryJobStore();
+    await store.enqueue({ type: "slow", payload: {} });
+    const msg = await store.enqueue({ type: "msg", payload: {} });
+    const lane = { types: ["msg"], leaseMs: 60_000 };
+
+    expect((await store.claim("m", undefined, lane))?.id).toBe(msg.id);
+    expect(await store.claim("m", undefined, lane)).toBeNull();
+    expect(
+      (await store.claim("s", undefined, { excludeTypes: ["msg"] }))?.type,
+    ).toBe("slow");
+    // A crashed message job is reclaimed after the short lane lease, not 21 min.
+    const later = new Date(Date.now() + 61_000);
+    expect((await store.claim("m2", later, lane))?.id).toBe(msg.id);
+  });
+});

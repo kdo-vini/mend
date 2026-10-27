@@ -14,8 +14,11 @@ export interface WhatsmiauJobOptions {
   maxAttempts?: number;
 }
 
-export function messageDedupeKey(message: NormalizedWhatsmiauMessage) {
-  return `whatsmiau:${message.instanceName.trim()}:${message.providerMessageId.trim()}`;
+export function messageDedupeKey(
+  message: NormalizedWhatsmiauMessage,
+  event = "messages.upsert",
+) {
+  return `whatsmiau:${event}:${message.instanceName.trim()}:${message.providerMessageId.trim()}`;
 }
 
 export async function enqueueWhatsmiauEvent(
@@ -38,7 +41,7 @@ export async function enqueueWhatsmiauEvent(
       ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
       type: "whatsmiau.message.received",
       payload: { event, message },
-      dedupeKey: messageDedupeKey(message),
+      dedupeKey: messageDedupeKey(message, event),
       maxAttempts: options.maxAttempts,
     };
     jobs.push(await queue.enqueue(input));

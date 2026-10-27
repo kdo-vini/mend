@@ -1,8 +1,10 @@
 import type { Database } from "../src/lib/database.types.js";
 import {
+  InMemoryJobStore,
   JobLeaseLostError,
   jobLeaseMs,
   redactJobError,
+  type ClaimOptions,
   type EnqueueJobInput,
   type JobRecord,
   type JobStore,
@@ -38,6 +40,19 @@ function toJob<TPayload>(row: JobRow): JobRecord<TPayload> {
     updatedAt: new Date(row.updated_at),
     ...(row.dedupe_key ? { dedupeKey: row.dedupe_key } : {}),
   };
+}
+
+/** In-memory fallback is only for local dev/tests; production must be durable. */
+export function createMessageJobStore<TPayload = Record<string, unknown>>(
+  client: MendServerSupabaseClient | null,
+  env: NodeJS.ProcessEnv = process.env,
+): SupabaseJobStore<TPayload> | InMemoryJobStore<TPayload> {
+  if (client) return new SupabaseJobStore<TPayload>(client);
+  if (env.NODE_ENV === "production")
+    throw new Error(
+      "durable_job_store_required: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (in-memory jobs would lose messages)",
+    );
+  return new InMemoryJobStore<TPayload>();
 }
 
 export class SupabaseJobStore<TPayload = Record<string, unknown>>
@@ -84,14 +99,22 @@ export class SupabaseJobStore<TPayload = Record<string, unknown>>
     );
   }
 
-  async claim(workerId: string): Promise<JobRecord<TPayload> | null> {
+  async claim(
+    workerId: string,
+    _now?: Date,
+    options?: ClaimOptions,
+  ): Promise<JobRecord<TPayload> | null> {
     const rpc = this.client.rpc as unknown as (
       name: string,
       args: Record<string, unknown>,
     ) => Promise<{ data: unknown; error: { message: string } | null }>;
     const result = await rpc.call(this.client, "claim_next_job", {
       worker_id: workerId,
-      lease_seconds: Math.ceil(jobLeaseMs() / 1_000),
+      lease_seconds: Math.ceil((options?.leaseMs ?? jobLeaseMs()) / 1_000),
+      ...(options?.types ? { include_types: [...options.types] } : {}),
+      ...(options?.excludeTypes
+        ? { exclude_types: [...options.excludeTypes] }
+        : {}),
     });
     if (result.error) throw new Error(result.error.message);
     const rows = Array.isArray(result.data) ? result.data : [];
