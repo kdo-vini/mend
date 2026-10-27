@@ -1,0 +1,11 @@
+-- 20261026140000 revoked EXECUTE on private.pause_conversation_for_human from
+-- authenticated, but public.pause_conversation_ai is SECURITY INVOKER
+-- (20260806174147): it checks workspace membership as the caller and then
+-- calls this helper as that same caller. Every human send therefore failed
+-- with "permission denied for function pause_conversation_for_human" and the
+-- AI was no longer paused when an operator replied.
+--
+-- Restore the grant. The private schema is not exposed through PostgREST
+-- (config.toml api.schemas = public, graphql_public), so authenticated still
+-- reaches the helper only through the membership-checked public wrapper.
+grant execute on function private.pause_conversation_for_human(uuid, uuid, uuid, uuid, text) to authenticated;
