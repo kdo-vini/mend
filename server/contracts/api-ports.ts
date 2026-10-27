@@ -289,6 +289,7 @@ export interface ConversationPort {
   markRead(
     context: RequestContext,
     conversationId: string,
+    readUpTo?: string,
   ): Promise<unknown | null>;
   snooze(
     context: RequestContext,

@@ -1274,15 +1274,23 @@ export async function resumeLiveConversationAi(input: {
 export async function markLiveConversationRead(input: {
   workspaceId: string;
   conversationId: string;
+  /** created_at of the newest message the operator has seen. */
+  readUpTo?: string;
 }) {
   if (mendApiBaseUrl)
     return apiRequest(
       `/api/conversations/${encodeURIComponent(input.conversationId)}/read`,
-      { method: "POST", body: JSON.stringify({}) },
+      {
+        method: "POST",
+        body: JSON.stringify(
+          input.readUpTo ? { readUpTo: input.readUpTo } : {},
+        ),
+      },
       input.workspaceId,
     );
   return updateLiveConversation({
-    ...input,
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
     updates: { unread_count: 0 },
   });
 }

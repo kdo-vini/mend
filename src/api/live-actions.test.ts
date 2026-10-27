@@ -50,6 +50,7 @@ import {
   loadOlderLiveConversationMessages,
   olderMessagesFilter,
   loadLiveWorkspace,
+  markLiveConversationRead,
   saveLiveAgentRoutingPolicy,
   uploadLiveMediaAsset,
   type LiveStageRoutingPolicy,
@@ -117,6 +118,36 @@ function workspaceQueryClient(recorded: RecordedQuery[]): MendSupabaseClient {
     },
   } as unknown as MendSupabaseClient;
 }
+
+describe("live conversation read", () => {
+  it("sends the newest seen message time only when known", async () => {
+    apiRequest.mockClear();
+    await markLiveConversationRead({
+      workspaceId: "workspace-1",
+      conversationId: "c-1",
+      readUpTo: "2026-08-03T12:00:00.000Z",
+    });
+    await markLiveConversationRead({
+      workspaceId: "workspace-1",
+      conversationId: "c-1",
+    });
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      1,
+      "/api/conversations/c-1/read",
+      {
+        method: "POST",
+        body: JSON.stringify({ readUpTo: "2026-08-03T12:00:00.000Z" }),
+      },
+      "workspace-1",
+    );
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      2,
+      "/api/conversations/c-1/read",
+      { method: "POST", body: JSON.stringify({}) },
+      "workspace-1",
+    );
+  });
+});
 
 describe("live Agent run actions", () => {
   it("links a continuation to its parent run and research artifact", async () => {

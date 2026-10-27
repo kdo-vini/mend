@@ -107,6 +107,7 @@ class FakeInbox implements LiveWorkerInbox {
     displayName: string;
   }> = [];
   private index = 0;
+  readonly optionCalls: Array<{ isHistory?: boolean } | undefined> = [];
 
   constructor(private readonly failures: Error[] = []) {}
 
@@ -114,7 +115,9 @@ class FakeInbox implements LiveWorkerInbox {
     context: InboxContext,
     channelConnectionId: string,
     incoming: NormalizedWhatsmiauMessage,
+    options?: { isHistory?: boolean },
   ): Promise<InboxMessageRecord> {
+    this.optionCalls.push(options);
     this.calls.push({ context, channelConnectionId, message: incoming });
     const failure = this.failures[this.index++];
     if (failure) throw failure;
@@ -1585,6 +1588,7 @@ describe("Support AI kill-switch (Fase A)", () => {
     expect(await worker.poll()).toBe(true);
     expect(await worker.poll()).toBe(false);
     expect(inbox.calls).toHaveLength(1);
+    expect(inbox.optionCalls[0]).toEqual({ isHistory: true });
     expect(events.rows).toHaveLength(0);
     expect(automation.sent).toHaveLength(0);
     const jobs = await store.list();

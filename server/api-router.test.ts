@@ -1046,7 +1046,8 @@ describe("Mend API router", () => {
   });
 
   it("covers channels, inbox, knowledge, repositories and coding-run action status codes", async () => {
-    const app = makeApp();
+    const readDependencies = createFakeDependencies();
+    const app = makeApp(readDependencies);
     const headers = scoped(true);
     const now = new Date(Date.now() + 60_000).toISOString();
 
@@ -1062,6 +1063,27 @@ describe("Mend API router", () => {
       (await request(app).get(`/api/channels/${channelId}/qr`).set(headers))
         .status,
     ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post(`/api/conversations/${conversationId}/read`)
+          .set(headers)
+          .send({ readUpTo: "2026-08-03T12:00:00.000Z" })
+      ).status,
+    ).toBe(200);
+    expect(readDependencies.conversations.markRead).toHaveBeenLastCalledWith(
+      expect.anything(),
+      conversationId,
+      "2026-08-03T12:00:00.000Z",
+    );
+    expect(
+      (
+        await request(app)
+          .post(`/api/conversations/${conversationId}/read`)
+          .set(headers)
+          .send({ readUpTo: "not-a-date" })
+      ).status,
+    ).toBe(400);
     expect(
       (
         await request(app)

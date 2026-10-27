@@ -141,6 +141,9 @@ export const conversationStartSchema = z
     message: z.string().trim().min(1).max(4_000),
   })
   .strict();
+export const conversationReadSchema = z
+  .object({ readUpTo: z.string().datetime({ offset: true }).optional() })
+  .strict();
 export const conversationSnoozeSchema = z
   .object({ until: z.string().datetime({ offset: true }) })
   .strict();

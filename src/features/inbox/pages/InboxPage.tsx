@@ -208,6 +208,22 @@ const failedContactRetryInputs = new Map<string, ShareContactInput>();
 const outboundPreviewUrls = new Map<string, string>();
 const markReadInFlight = new Set<string>();
 
+function latestInboundCreatedAt(
+  messages:
+    | ReadonlyArray<{ direction: string; createdAt?: string }>
+    | undefined,
+): string | undefined {
+  let latest: { time: number; iso: string } | undefined;
+  for (const message of messages ?? []) {
+    if (message.direction !== "inbound" || !message.createdAt) continue;
+    const time = Date.parse(message.createdAt);
+    if (Number.isNaN(time)) continue;
+    if (!latest || time > latest.time)
+      latest = { time, iso: new Date(time).toISOString() };
+  }
+  return latest?.iso;
+}
+
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -791,6 +807,9 @@ export function InboxPage({
   // layout fallback) stay unread until chosen.
   const selectedId = selected?.id;
   const selectedUnread = selected?.unread ?? 0;
+  // Newest inbound message the operator can see: a bounded mark-read leaves
+  // anything that arrives after it unread.
+  const selectedReadUpTo = latestInboundCreatedAt(selected?.messages);
   const threadOnScreen =
     mobileConversationOpen ||
     typeof window === "undefined" ||
@@ -818,6 +837,7 @@ export function InboxPage({
         void markLiveConversationRead({
           workspaceId,
           conversationId: selectedId,
+          ...(selectedReadUpTo ? { readUpTo: selectedReadUpTo } : {}),
         })
           .catch((error) =>
             onToast(localizedError(error, t("errors.markRead"))),
@@ -838,6 +858,7 @@ export function InboxPage({
     liveMode,
     onToast,
     selectedId,
+    selectedReadUpTo,
     selectedUnread,
     setConversations,
     t,

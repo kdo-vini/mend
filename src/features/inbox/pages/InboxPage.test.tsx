@@ -872,6 +872,42 @@ describe("InboxPage new chat", () => {
     });
   });
 
+  it("bounds mark-read at the newest inbound message shown", async () => {
+    const { markLiveConversationRead } = await import("../api");
+    vi.mocked(markLiveConversationRead).mockClear();
+    const base = seedConversations[1];
+    const unreadThread = {
+      ...base,
+      unread: 2,
+      messages: [
+        {
+          ...base.messages[0],
+          direction: "inbound" as const,
+          createdAt: "2026-09-20T22:00:00.000Z",
+        },
+        {
+          ...base.messages[0],
+          id: "m-newer",
+          direction: "inbound" as const,
+          createdAt: "2026-09-20T23:10:00.000Z",
+        },
+      ],
+    };
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          initialConversations={[seedConversations[0], unreadThread]}
+        />,
+      ),
+    );
+    await act(async () => clickConversation(unreadThread.name));
+    expect(markLiveConversationRead).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      conversationId: unreadThread.id,
+      readUpTo: "2026-09-20T23:10:00.000Z",
+    });
+  });
+
   it("marks a thread opened from a ?conversation= link read", async () => {
     const { markLiveConversationRead } = await import("../api");
     vi.mocked(markLiveConversationRead).mockClear();

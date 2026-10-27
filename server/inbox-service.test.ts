@@ -404,6 +404,39 @@ function inbound(providerMessageId = "wamid-in-1") {
 }
 
 describe("InboxService and WhatsAppService", () => {
+  it("flags history imports and bounds mark-read at the port", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    const ingest = vi.spyOn(port, "ingestMessage");
+    const setState = vi.spyOn(port, "setConversationState");
+
+    await inbox.persistNormalizedMessage(
+      { workspaceId },
+      channelId,
+      inbound("wamid-history"),
+      { isHistory: true },
+    );
+    await inbox.persistNormalizedMessage(
+      { workspaceId },
+      channelId,
+      inbound("wamid-live"),
+    );
+    expect(ingest.mock.calls[0]?.[0].isHistory).toBe(true);
+    expect(ingest.mock.calls[1]?.[0].isHistory).toBeUndefined();
+
+    await inbox.readConversation(
+      { workspaceId },
+      conversationId,
+      new Date("2026-08-03T12:00:00.000Z"),
+    );
+    await inbox.readConversation({ workspaceId }, conversationId);
+    expect(setState.mock.calls[0]?.[0]).toMatchObject({
+      action: "read",
+      readUpTo: "2026-08-03T12:00:00.000Z",
+    });
+    expect(setState.mock.calls[1]?.[0]).not.toHaveProperty("readUpTo");
+  });
+
   it("pauses AI after human WhatsApp outbound and skips pause for AI sends", async () => {
     const port = new FakeInboxPort();
     const inbox = new InboxService(port);

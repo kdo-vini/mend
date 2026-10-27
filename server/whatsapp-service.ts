@@ -597,7 +597,11 @@ export class WhatsAppService {
     };
   }
 
-  async markRead(context: InboxContext, conversationId: string): Promise<void> {
+  async markRead(
+    context: InboxContext,
+    conversationId: string,
+    readUpTo?: Date,
+  ): Promise<void> {
     const conversation = await this.inbox.getConversation(
       context,
       conversationId,
@@ -610,7 +614,7 @@ export class WhatsAppService {
         latest.remoteJid,
         latest.providerMessageId,
       );
-    await this.inbox.readConversation(context, conversationId);
+    await this.inbox.readConversation(context, conversationId, readUpTo);
   }
 
   async sendReaction(

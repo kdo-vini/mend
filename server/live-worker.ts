@@ -194,6 +194,7 @@ export interface LiveWorkerInbox {
     context: InboxContext,
     channelConnectionId: string,
     message: NormalizedWhatsmiauMessage,
+    options?: { isHistory?: boolean },
   ): Promise<InboxMessageRecord>;
   setContactDisplayName?(
     context: InboxContext,
@@ -642,6 +643,7 @@ export class LiveWorker {
       { workspaceId: binding.workspaceId, actorType: "system" },
       binding.channelConnectionId,
       { ...message, instanceName },
+      isHistoryImportEvent(job.payload?.event) ? { isHistory: true } : {},
     );
 
     const isGroup =

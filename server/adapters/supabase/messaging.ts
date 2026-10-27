@@ -885,7 +885,11 @@ export class SupabaseConversationAdapter implements ConversationPort {
     return (await this.get(context, conversationId)) ?? result;
   }
 
-  async markRead(context: RequestContext, conversationId: string) {
+  async markRead(
+    context: RequestContext,
+    conversationId: string,
+    readUpTo?: string,
+  ) {
     await this.whatsapp.markRead(
       {
         workspaceId: context.workspaceId,
@@ -893,6 +897,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
         actorType: "user",
       },
       conversationId,
+      readUpTo ? new Date(readUpTo) : undefined,
     );
     return this.get(context, conversationId);
   }
