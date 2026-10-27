@@ -12,6 +12,7 @@ import {
   type ResolveAndNotifyInput,
 } from "../../issue-service.js";
 import { SupabaseMediaStorage } from "../../media.js";
+import { completedAtFor, decodeKeysetCursor } from "../../ordering.js";
 import type { AnySupabaseClient } from "./types.js";
 import {
   WhatsAppService,
@@ -100,10 +101,21 @@ export class SupabaseIssueAdapter implements IssuePort {
 
   async list(context: IssueRequestContext, query: IssueListQuery) {
     const value = query as unknown as Row;
+    // The agent_runs relation is embedded (hinted by its composite FK, since
+    // there are two paths to issues) so "has/has no agent" is a join, not an
+    // id list that breaks past 1000 rows or the URL length limit.
+    const agentRuns = "agent_runs!agent_runs_issue_workspace_fkey";
     let request = this.client
       .from("issues")
-      .select("*")
+      .select(
+        value.hasAgent === true
+          ? `*, ${agentRuns}!inner(id)`
+          : value.hasAgent === false
+            ? `*, ${agentRuns}!left(id)`
+            : "*",
+      )
       .eq("workspace_id", context.workspaceId);
+    if (value.hasAgent === false) request = request.is("agent_runs", null);
     if (value.status) request = request.eq("status", value.status);
     if (value.priority) request = request.eq("priority", value.priority);
     if (value.assignedUserId)
@@ -135,43 +147,39 @@ export class SupabaseIssueAdapter implements IssuePort {
         .map((item) => str(item.issue_id))
         .filter(Boolean);
     }
-    if (value.hasAgent !== undefined) {
-      const runs = await this.client
-        .from("agent_runs")
-        .select("issue_id")
-        .eq("workspace_id", context.workspaceId);
-      const runIds = new Set(
-        rows(checked("agent_runs.filter", runs))
-          .map((item) => str(item.issue_id))
-          .filter(Boolean),
-      );
-      if (value.hasAgent === true)
-        relationIssueIds = relationIssueIds
-          ? relationIssueIds.filter((id) => runIds.has(id))
-          : [...runIds];
-      else {
-        const allIssues = await this.client
-          .from("issues")
-          .select("id")
-          .eq("workspace_id", context.workspaceId);
-        const allIds = rows(checked("issues.filter_all", allIssues))
-          .map((item) => str(item.id))
-          .filter(Boolean);
-        const withoutAgent = allIds.filter((id) => !runIds.has(id));
-        relationIssueIds = relationIssueIds
-          ? relationIssueIds.filter((id) => withoutAgent.includes(id))
-          : withoutAgent;
-      }
-    }
     if (relationIssueIds !== undefined) {
       if (!relationIssueIds.length) return [];
       request = request.in("id", relationIssueIds);
     }
-    if (value.cursor) request = request.gt("id", value.cursor);
+    if (value.cursor) {
+      const position = await this.cursorPosition(context, String(value.cursor));
+      if (position)
+        request = request.or(
+          `created_at.lt.${position.key},and(created_at.eq.${position.key},id.lt.${position.id})`,
+        );
+    }
     const result = await request
       .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(Number(value.limit ?? 50));
     return rows(checked("issues.list", result)).map(issue);
+  }
+
+  private async cursorPosition(
+    context: IssueRequestContext,
+    cursor: string,
+  ): Promise<{ key: string | number; id: string } | null> {
+    const decoded = decodeKeysetCursor(cursor);
+    if (!decoded) throw new Error("invalid_cursor");
+    if (decoded.kind === "keyset") return decoded;
+    const anchor = await this.client
+      .from("issues")
+      .select("id, created_at")
+      .eq("workspace_id", context.workspaceId)
+      .eq("id", decoded.id)
+      .maybeSingle();
+    const found = checked("issues.cursor", anchor) as Row | null;
+    return found ? { key: str(found.created_at), id: str(found.id) } : null;
   }
 
   async create(context: IssueRequestContext, input: IssueCreateInput) {
@@ -232,7 +240,7 @@ export class SupabaseIssueAdapter implements IssuePort {
       .update({
         ...issueDbPayload(input),
         ...(status !== undefined
-          ? { completed_at: status === "done" ? now : null }
+          ? { completed_at: completedAtFor(String(status), current, now) }
           : {}),
         updated_at: now,
       })
@@ -409,6 +417,7 @@ export class SupabaseIssueAdapter implements IssuePort {
         `bug_loop_not_ready_for_customer_response:${bugCaseStage}`,
       );
     }
+    const resolvedAt = new Date().toISOString();
     let notifiedAt: string | undefined =
       typeof current.customer_notified_at === "string"
         ? current.customer_notified_at
@@ -437,7 +446,8 @@ export class SupabaseIssueAdapter implements IssuePort {
       .from("issues")
       .update({
         status: "done",
-        resolved_at: new Date().toISOString(),
+        completed_at: completedAtFor("done", current, resolvedAt),
+        resolved_at: resolvedAt,
         ...(notifiedAt ? { customer_notified_at: notifiedAt } : {}),
         updated_at: new Date().toISOString(),
       })

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { decodeKeysetCursor } from "./ordering.js";
 
 export const issueStatusSchema = z.enum([
   "triage",
@@ -76,7 +77,12 @@ export const issueListQuerySchema = z
     assignedUserId: z.string().uuid().optional(),
     search: z.string().trim().max(240).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
-    cursor: z.string().trim().max(200).optional(),
+    cursor: z
+      .string()
+      .trim()
+      .max(200)
+      .refine((value) => decodeKeysetCursor(value) !== null, "Invalid cursor")
+      .optional(),
   })
   .strict();
 

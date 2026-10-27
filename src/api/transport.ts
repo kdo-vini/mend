@@ -47,6 +47,32 @@ export async function unwrap<T>(
   return data;
 }
 
+/** Hard ceiling for list loaders that read every page of a collection. */
+export const MAX_LIST_ROWS = 1000;
+
+/**
+ * Reads consecutive ranges until a short page or the row cap. The query must
+ * have a stable total order so pages never overlap or skip rows.
+ */
+export async function unwrapPages<T>(
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  { pageSize = 500, cap = MAX_LIST_ROWS } = {},
+): Promise<T[]> {
+  const collected: T[] = [];
+  while (collected.length < cap) {
+    const size = Math.min(pageSize, cap - collected.length);
+    const rows = await unwrap(
+      page(collected.length, collected.length + size - 1),
+    );
+    collected.push(...rows);
+    if (rows.length < size) break;
+  }
+  return collected;
+}
+
 export function requireClient(
   client: MendSupabaseClient | null,
 ): MendSupabaseClient {

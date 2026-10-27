@@ -16,6 +16,7 @@ import { encryptConnectionSecret } from "./connection-crypto.js";
 import { issueCreateSchema } from "./issue-service.js";
 import { decryptMcpSecret } from "./mcp.js";
 import { WhatsmiauApiError } from "./whatsmiau.js";
+import { encodeKeysetCursor } from "./ordering.js";
 import {
   SupabaseConversationAdapter,
   decodeConversationCursor,
@@ -1000,6 +1001,128 @@ describe("Supabase API adapters", () => {
       ),
     ).rejects.toThrow("bug_loop_health_required:health_check:unhealthy");
     expect(client.rows.get("issues")?.[0]?.status).toBe("in_progress");
+  });
+
+  it("stamps completed_at only when an issue enters done", async () => {
+    const context = { userId, workspaceId, role: "agent" as const };
+    const client = new FakeClient({
+      issues: [
+        {
+          id: "issue-a",
+          workspace_id: workspaceId,
+          identifier: "MEND-A",
+          status: "in_progress",
+          completed_at: null,
+        },
+        {
+          id: "issue-b",
+          workspace_id: workspaceId,
+          identifier: "MEND-B",
+          status: "done",
+          completed_at: "2026-02-02T00:00:00.000Z",
+        },
+        {
+          id: "issue-c",
+          workspace_id: workspaceId,
+          identifier: "MEND-C",
+          status: "in_progress",
+          completed_at: null,
+          conversation_id: null,
+          customer_notified_at: null,
+        },
+        {
+          id: "issue-d",
+          workspace_id: workspaceId,
+          identifier: "MEND-D",
+          status: "done",
+          completed_at: "2026-03-03T00:00:00.000Z",
+          conversation_id: null,
+          customer_notified_at: null,
+        },
+      ],
+    });
+    const { issues } = adapters(client);
+    const completedAt = (id: string) =>
+      client.rows.get("issues")?.find((row) => row.id === id)?.completed_at;
+
+    await issues.update(context, "MEND-A", { status: "done" } as never);
+    expect(completedAt("issue-a")).toEqual(expect.any(String));
+    await issues.update(context, "MEND-B", { status: "done" } as never);
+    expect(completedAt("issue-b")).toBe("2026-02-02T00:00:00.000Z");
+    await issues.update(context, "MEND-B", { status: "todo" } as never);
+    expect(completedAt("issue-b")).toBeNull();
+
+    await issues.resolveAndNotify(context, "MEND-C", {
+      notifyCustomer: false,
+    } as never);
+    expect(completedAt("issue-c")).toEqual(expect.any(String));
+    await issues.resolveAndNotify(context, "MEND-D", {
+      notifyCustomer: false,
+    } as never);
+    expect(completedAt("issue-d")).toBe("2026-03-03T00:00:00.000Z");
+  });
+
+  it("filters issues without an agent run through an embedded join, not an id list", async () => {
+    const client = new FakeClient({
+      issues: [{ id: "issue-1", workspace_id: workspaceId, identifier: "A-1" }],
+    });
+    await adapters(client).issues.list({ userId, workspaceId, role: "agent" }, {
+      limit: 20,
+      hasAgent: false,
+    } as never);
+    expect(client.calls.map((call) => call.table)).toEqual(["issues"]);
+    const call = client.calls[0];
+    expect(call?.columns).toBe(
+      "*, agent_runs!agent_runs_issue_workspace_fkey!left(id)",
+    );
+    expect(call?.filters).toContainEqual({
+      kind: "is",
+      column: "agent_runs",
+      value: null,
+    });
+
+    const withAgent = new FakeClient({ issues: [] });
+    await adapters(withAgent).issues.list(
+      { userId, workspaceId, role: "agent" },
+      { limit: 20, hasAgent: true } as never,
+    );
+    expect(withAgent.calls[0]?.columns).toBe(
+      "*, agent_runs!agent_runs_issue_workspace_fkey!inner(id)",
+    );
+  });
+
+  it("pages issues with a (created_at, id) keyset cursor", async () => {
+    const id = "55555555-5555-4555-8555-555555555555";
+    const client = new FakeClient({ issues: [] });
+    await adapters(client).issues.list({ userId, workspaceId, role: "agent" }, {
+      limit: 20,
+      cursor: encodeKeysetCursor("2026-05-05T10:00:00.000Z", id),
+    } as never);
+    expect(client.orFilters).toEqual([
+      `created_at.lt.2026-05-05T10:00:00.000Z,and(created_at.eq.2026-05-05T10:00:00.000Z,id.lt.${id})`,
+    ]);
+    expect(client.orderCalls).toEqual([
+      { column: "created_at", ascending: false },
+      { column: "id", ascending: false },
+    ]);
+
+    // A legacy bare-id cursor resolves its created_at from the anchor row.
+    const legacy = new FakeClient({
+      issues: [
+        {
+          id,
+          workspace_id: workspaceId,
+          created_at: "2026-06-06T10:00:00.000Z",
+        },
+      ],
+    });
+    await adapters(legacy).issues.list({ userId, workspaceId, role: "agent" }, {
+      limit: 20,
+      cursor: id,
+    } as never);
+    expect(legacy.orFilters[0]).toContain(
+      "created_at.lt.2026-06-06T10:00:00.000Z",
+    );
   });
 
   it("does not delete inbound messages for everyone", async () => {

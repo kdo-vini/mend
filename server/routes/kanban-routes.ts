@@ -8,6 +8,7 @@ import {
   personalTaskListSchema,
   personalTaskPatchSchema,
 } from "../kanban-service.js";
+import { nextKeysetCursor } from "../ordering.js";
 import type { ApiRouteModuleContext } from "../api-router.js";
 
 async function preserveKanbanErrors<T>(
@@ -69,10 +70,15 @@ export function registerKanbanRoutes(context: ApiRouteModuleContext) {
     "/api/personal-tasks",
     asyncRoute(async (request, response) => {
       const requestContext = await scoped(request, response);
+      const query = parse(personalTaskListSchema, request.query);
+      const data = await dependencies.personalPlanning.listTasks(
+        requestContext,
+        query,
+      );
       send(response, 200, {
-        data: await dependencies.personalPlanning.listTasks(
-          requestContext,
-          parse(personalTaskListSchema, request.query),
+        data,
+        nextCursor: nextKeysetCursor(data, query.limit, (item) =>
+          typeof item.kanbanPosition === "number" ? item.kanbanPosition : null,
         ),
       });
     }),

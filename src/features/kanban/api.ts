@@ -4,9 +4,11 @@ import { supabase, type MendSupabaseClient } from "../../lib/supabase";
 import {
   apiRequest,
   LiveActionError,
+  MAX_LIST_ROWS,
   mendApiBaseUrl,
   requireClient,
   unwrap,
+  unwrapPages,
 } from "../../api/transport";
 
 type Tables = Database["public"]["Tables"];
@@ -198,14 +200,23 @@ export async function listPersonalTasks(
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
   if (filters.status) params.set("status", filters.status);
-  const path = `/api/personal-tasks${params.size ? `?${params}` : ""}`;
   if (mendApiBaseUrl) {
-    const result = await apiRequest<{ data: Array<Record<string, unknown>> }>(
-      path,
-      {},
-      workspaceId,
-    );
-    return (result.data ?? []).map(taskFromApi);
+    // Page through the keyset cursor (the server caps a page at 200 rows).
+    const tasks: Array<Record<string, unknown>> = [];
+    let cursor: string | undefined;
+    while (tasks.length < MAX_LIST_ROWS) {
+      const pageParams = new URLSearchParams(params);
+      pageParams.set("limit", "200");
+      if (cursor) pageParams.set("cursor", cursor);
+      const result = await apiRequest<{
+        data: Array<Record<string, unknown>>;
+        nextCursor?: string;
+      }>(`/api/personal-tasks?${pageParams}`, {}, workspaceId);
+      tasks.push(...(result.data ?? []));
+      cursor = result.nextCursor;
+      if (!cursor) break;
+    }
+    return tasks.slice(0, MAX_LIST_ROWS).map(taskFromApi);
   }
   let query = requireClient(client)
     .from("personal_tasks")
@@ -214,9 +225,11 @@ export async function listPersonalTasks(
   if (filters.from) query = query.gte("due_on", filters.from);
   if (filters.to) query = query.lte("due_on", filters.to);
   if (filters.status) query = query.eq("status", filters.status);
-  return (await unwrap(query.order("kanban_position").limit(100))).map(
-    taskFromRow,
-  );
+  return (
+    await unwrapPages((from, to) =>
+      query.order("kanban_position").order("id").range(from, to),
+    )
+  ).map(taskFromRow);
 }
 
 export async function createPersonalTask(input: {

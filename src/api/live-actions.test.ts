@@ -61,6 +61,7 @@ type RecordedQuery = {
   table: string;
   columns?: string;
   limit?: number;
+  range?: [number, number];
   filters?: Record<string, unknown>;
   descending?: boolean;
 };
@@ -106,6 +107,10 @@ function workspaceQueryClient(recorded: RecordedQuery[]): MendSupabaseClient {
         },
         limit(value: number) {
           query.limit = value;
+          return builder;
+        },
+        range(from: number, to: number) {
+          query.range = [from, to];
           return builder;
         },
         then(resolve: (value: unknown) => unknown) {
@@ -248,7 +253,10 @@ describe("live workspace bootstrap", () => {
     expect(
       recorded.find((query) => query.table === "conversations")?.limit,
     ).toBe(100);
-    expect(recorded.find((query) => query.table === "issues")?.limit).toBe(100);
+    // Issues are read in pages up to a hard cap rather than a single 100 rows.
+    expect(recorded.find((query) => query.table === "issues")?.range).toEqual([
+      0, 499,
+    ]);
     expect(recorded.find((query) => query.table === "agent_runs")?.limit).toBe(
       50,
     );

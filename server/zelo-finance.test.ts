@@ -487,6 +487,14 @@ describe("Zelo read-only finance", () => {
             "data.charge.balance_transaction",
           ]);
           stripeCalls++;
+          // Bounded window: never page the whole account history.
+          const { start, end } = zeloMonthBounds("2026-10-01");
+          expect(address.searchParams.get("created[gte]")).toBe(
+            String(Date.parse(start) / 1000 - 90 * 24 * 60 * 60),
+          );
+          expect(address.searchParams.get("created[lt]")).toBe(
+            String(Date.parse(end) / 1000),
+          );
           if (stripeCalls === 2)
             expect(address.searchParams.get("starting_after")).toBe("in_1");
           result = {

@@ -27,6 +27,7 @@ import {
   mendApiBaseUrl,
   requireClient,
   unwrap,
+  unwrapPages,
 } from "./transport";
 
 export {
@@ -314,13 +315,14 @@ export async function loadLiveWorkspace(
           .limit(1, { referencedTable: "messages" })
           .limit(100),
       ),
-      unwrap(
+      unwrapPages((from, to) =>
         db
           .from("issues")
           .select("*")
           .eq("workspace_id", workspace.id)
           .order("updated_at", { ascending: false })
-          .limit(100),
+          .order("id", { ascending: false })
+          .range(from, to),
       ),
       unwrap(
         db

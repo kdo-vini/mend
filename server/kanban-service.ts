@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { RequestContext } from "./contracts/api-ports.js";
+import { decodeKeysetCursor } from "./ordering.js";
 
 export const personalTaskStatusSchema = z.enum(["todo", "in_progress", "done"]);
 
@@ -54,7 +55,12 @@ export const personalTaskListSchema = z
     to: dateSchema.optional(),
     status: personalTaskStatusSchema.optional(),
     limit: z.coerce.number().int().min(1).max(200).default(100),
-    cursor: z.string().uuid().optional(),
+    cursor: z
+      .string()
+      .trim()
+      .max(200)
+      .refine((value) => decodeKeysetCursor(value) !== null, "Invalid cursor")
+      .optional(),
   })
   .strict();
 

@@ -8,6 +8,7 @@ import {
   resolveAndNotifySchema,
   type IssueRequestContext,
 } from "../issue-service.js";
+import { nextKeysetCursor } from "../ordering.js";
 import { issueListApiQuerySchema } from "./schemas.js";
 
 export function registerIssueRoutes(context: ApiRouteModuleContext) {
@@ -28,10 +29,15 @@ export function registerIssueRoutes(context: ApiRouteModuleContext) {
     "/api/issues",
     asyncRoute(async (request, response) => {
       const context = await scoped(request, response);
+      const query = parse(issueListApiQuerySchema, request.query);
+      const data = await dependencies.issues.list(
+        context as IssueRequestContext,
+        query,
+      );
       send(response, 200, {
-        data: await dependencies.issues.list(
-          context as IssueRequestContext,
-          parse(issueListApiQuerySchema, request.query),
+        data,
+        nextCursor: nextKeysetCursor(data, query.limit, (item) =>
+          typeof item.createdAt === "string" ? item.createdAt : null,
         ),
       });
     }),
