@@ -348,6 +348,9 @@ function createFakeDependencies(
       findAsset: vi.fn(async () => null),
       listAssets: vi.fn(async () => []),
       signedUrl: vi.fn(async () => ({ url: "https://media.example/signed" })),
+      signedUrls: vi.fn(async (_context, ids: string[]) =>
+        ids.map((id) => ({ id, url: `https://media.example/${id}` })),
+      ),
     },
   };
 }
@@ -741,6 +744,31 @@ describe("Mend API router", () => {
       .set(scoped(true))
       .send({});
     expect(complete.status).toBe(202);
+  });
+
+  it("batches media URLs through the scoped media port and bounds the request", async () => {
+    const dependencies = createFakeDependencies();
+    const app = makeApp(dependencies);
+    const ids = [
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    ];
+    const ok = await request(app)
+      .post("/api/media/urls")
+      .set(scoped(true))
+      .send({ ids, purpose: "preview" });
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.map((item: { id: string }) => item.id)).toEqual(ids);
+    expect(dependencies.media.signedUrls).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId }),
+      ids,
+      "preview",
+    );
+    const tooMany = await request(app)
+      .post("/api/media/urls")
+      .set(scoped(true))
+      .send({ ids: Array.from({ length: 51 }, (_, i) => `id-${i}`) });
+    expect(tooMany.status).toBe(400);
   });
 
   it("returns the authenticated user and never exposes sensitive provider fields", async () => {

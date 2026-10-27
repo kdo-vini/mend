@@ -3,6 +3,7 @@ import {
   idParamSchema,
   mediaAssetIdsQuerySchema,
   mediaPurposeSchema,
+  mediaUrlsBatchSchema,
   mediaUploadSchema,
 } from "./schemas.js";
 
@@ -74,6 +75,19 @@ export function registerMediaRoutes(context: ApiRouteModuleContext) {
         request.query.purpose ?? "browser",
       );
       send(response, 200, await media().signedUrl(actor, id, purpose));
+    }),
+  );
+
+  // Batch form of the single-asset endpoint: same auth and workspace scope,
+  // one result per id (unknown or foreign ids come back as errors, no URL).
+  router.post(
+    "/api/media/urls",
+    asyncRoute(async (request, response) => {
+      const actor = await scoped(request, response);
+      const input = parse(mediaUrlsBatchSchema, request.body);
+      send(response, 200, {
+        data: await media().signedUrls(actor, input.ids, input.purpose),
+      });
     }),
   );
 }

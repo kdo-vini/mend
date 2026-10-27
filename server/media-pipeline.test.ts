@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  SupabaseMediaPipeline,
   MEDIA_BATCH_MAX_BYTES,
   MEDIA_BATCH_MAX_COUNT,
   mediaKindForMime,
@@ -61,5 +62,80 @@ describe("media pipeline boundaries", () => {
   it("keeps the batch contract explicit", () => {
     expect(MEDIA_BATCH_MAX_COUNT).toBe(10);
     expect(MEDIA_BATCH_MAX_BYTES).toBe(200 * 1024 * 1024);
+  });
+});
+
+describe("batched media signed URLs", () => {
+  const workspaceId = "11111111-1111-4111-8111-111111111111";
+  const mine = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const foreign = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+  it("only signs assets of the caller workspace and reports the rest as not found", async () => {
+    const assetRows = [
+      {
+        id: mine,
+        workspace_id: workspaceId,
+        original_storage_path: `${workspaceId}/original.png`,
+        declared_mime_type: "image/png",
+      },
+      {
+        id: foreign,
+        workspace_id: "22222222-2222-4222-8222-222222222222",
+        original_storage_path: "other/original.png",
+        declared_mime_type: "image/png",
+      },
+    ];
+    const scopedWorkspaces: unknown[] = [];
+    const query = (table: string) => {
+      const chain = {
+        select: () => chain,
+        eq: (column: string, value: unknown) => {
+          if (column === "workspace_id") scopedWorkspaces.push(value);
+          return chain;
+        },
+        in: (_column: string, ids: string[]) =>
+          Promise.resolve({
+            data:
+              table === "media_assets"
+                ? assetRows.filter(
+                    (row) =>
+                      row.workspace_id === workspaceId && ids.includes(row.id),
+                  )
+                : [],
+            error: null,
+          }),
+      };
+      return chain;
+    };
+    const createSignedUrls = vi.fn(async (paths: string[]) => ({
+      data: paths.map((path) => ({
+        path,
+        signedUrl: `https://signed.test/${path}`,
+        error: null,
+      })),
+      error: null,
+    }));
+    const pipeline = new SupabaseMediaPipeline({
+      from: query,
+      storage: { from: () => ({ createSignedUrls }) },
+    } as never);
+    const result = await pipeline.signedUrls(
+      { userId: "u", workspaceId, role: "agent" },
+      [mine, foreign, mine],
+      "browser",
+    );
+    expect(result).toEqual([
+      {
+        id: mine,
+        url: `https://signed.test/${workspaceId}/original.png`,
+        mimeType: "image/png",
+      },
+      { id: foreign, error: "media_asset_not_found" },
+    ]);
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls.mock.calls[0]?.[0]).toEqual([
+      `${workspaceId}/original.png`,
+    ]);
+    expect(scopedWorkspaces.every((value) => value === workspaceId)).toBe(true);
   });
 });

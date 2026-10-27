@@ -16,6 +16,11 @@ import { encryptConnectionSecret } from "./connection-crypto.js";
 import { issueCreateSchema } from "./issue-service.js";
 import { decryptMcpSecret } from "./mcp.js";
 import { WhatsmiauApiError } from "./whatsmiau.js";
+import {
+  SupabaseConversationAdapter,
+  decodeConversationCursor,
+  encodeConversationCursor,
+} from "./adapters/supabase/messaging.js";
 
 type Row = Record<string, unknown>;
 type Result = { data: unknown; error: { message: string } | null };
@@ -35,8 +40,7 @@ class FakeQuery implements PromiseLike<Result> {
   private singleResult = false;
   private selectedColumns = "*";
   private limitValue?: number;
-  private orderColumn?: string;
-  private ascending = true;
+  private orders: Array<{ column: string; ascending: boolean }> = [];
 
   constructor(
     private readonly client: FakeClient,
@@ -67,12 +71,20 @@ class FakeQuery implements PromiseLike<Result> {
     this.filters.push({ kind: "ilike", column, value });
     return this;
   }
-  or(_value: string) {
+  or(value: string) {
+    this.client.orFilters.push(value);
     return this;
   }
-  order(column: string, options: { ascending?: boolean } = {}) {
-    this.orderColumn = column;
-    this.ascending = options.ascending ?? true;
+  is(column: string, value: unknown) {
+    this.filters.push({ kind: "is", column, value });
+    return this;
+  }
+  order(
+    column: string,
+    options: { ascending?: boolean; nullsFirst?: boolean } = {},
+  ) {
+    this.client.orderCalls.push({ column, ...options });
+    this.orders.push({ column, ascending: options.ascending ?? true });
     return this;
   }
   limit(value: number) {
@@ -124,6 +136,7 @@ class FakeQuery implements PromiseLike<Result> {
         return String(actual ?? "") < String(filter.value ?? "");
       if (filter.kind === "gt")
         return String(actual ?? "") > String(filter.value ?? "");
+      if (filter.kind === "is") return (actual ?? null) === filter.value;
       if (filter.kind === "ilike")
         return String(actual ?? "")
           .toLowerCase()
@@ -169,11 +182,15 @@ class FakeQuery implements PromiseLike<Result> {
       );
       selected = deleted;
     }
-    if (this.orderColumn)
+    if (this.orders.length)
       selected.sort((left, right) => {
-        const a = String(left[this.orderColumn ?? ""] ?? "");
-        const b = String(right[this.orderColumn ?? ""] ?? "");
-        return a.localeCompare(b) * (this.ascending ? 1 : -1);
+        for (const order of this.orders) {
+          const a = String(left[order.column] ?? "");
+          const b = String(right[order.column] ?? "");
+          const compared = a.localeCompare(b) * (order.ascending ? 1 : -1);
+          if (compared) return compared;
+        }
+        return 0;
       });
     if (this.limitValue !== undefined)
       selected = selected.slice(0, this.limitValue);
@@ -193,6 +210,12 @@ class FakeClient {
     filters: Array<{ kind: string; column?: string; value?: unknown }>;
   }> = [];
   readonly rpcCalls: Array<{ name: string; args: Row }> = [];
+  readonly orFilters: string[] = [];
+  readonly orderCalls: Array<{
+    column: string;
+    ascending?: boolean;
+    nullsFirst?: boolean;
+  }> = [];
   readonly uploads: Array<{
     path: string;
     data: Uint8Array;
@@ -1352,7 +1375,7 @@ describe("Supabase API adapters", () => {
         (call) => call.table === "conversations" && call.operation === "select",
       )?.columns,
     ).toBe(
-      "*, contact:contacts!conversations_contact_workspace_fkey(id, phone_number, display_name), channel:channel_connections!conversations_channel_workspace_fkey(*), ai_state:conversation_ai_state!conversation_ai_state_conversation_workspace_fkey(*)",
+      "*, contact:contacts!conversations_contact_workspace_fkey(id, phone_number, display_name), channel:channel_connections!conversations_channel_workspace_fkey(id, workspace_id, provider, name, provider_instance_name, phone_number, profile_name, status, connected_at, last_event_at, history_sync_progress, history_sync_complete, history_sync_updated_at, created_at, updated_at), ai_state:conversation_ai_state!conversation_ai_state_conversation_workspace_fkey(*)",
     );
   });
 
@@ -1991,5 +2014,75 @@ describe("Supabase API adapters", () => {
       }),
     );
     expect(sendMedia.mock.calls[0]?.[0].media).not.toContain("data:image/png");
+  });
+
+  it("returns the newest 50 messages in ascending order", async () => {
+    const messages = Array.from({ length: 60 }, (_, index) => ({
+      id: `message-${String(index).padStart(3, "0")}`,
+      workspace_id: workspaceId,
+      conversation_id: conversationId,
+      created_at: `2026-01-01T00:00:${String(index).padStart(2, "0")}.000Z`,
+      direction: "inbound",
+    }));
+    const client = new FakeClient({
+      conversations: [
+        { id: conversationId, workspace_id: workspaceId, status: "open" },
+      ],
+      messages,
+    });
+    const result = (await adapters(client).conversations.get(
+      { userId, workspaceId, role: "agent" },
+      conversationId,
+    )) as { messages: Array<{ id: string }> };
+    expect(result.messages).toHaveLength(50);
+    expect(result.messages[0]?.id).toBe("message-010");
+    expect(result.messages.at(-1)?.id).toBe("message-059");
+  });
+
+  it("keysets conversation pages on last_message_at and id with nulls last", async () => {
+    const client = new FakeClient({ conversations: [] });
+    const dependencies = adapters(client);
+    const context = { userId, workspaceId, role: "agent" as const };
+    const cursor = encodeConversationCursor(
+      "2026-01-01T00:00:00+00:00",
+      conversationId,
+    );
+    expect(decodeConversationCursor(cursor)).toEqual({
+      lastMessageAt: "2026-01-01T00:00:00+00:00",
+      id: conversationId,
+    });
+    expect(
+      decodeConversationCursor(encodeConversationCursor(null, conversationId)),
+    ).toEqual({ lastMessageAt: null, id: conversationId });
+    expect(decodeConversationCursor(conversationId)).toBeNull();
+
+    await dependencies.conversations.list(context, { limit: 20, cursor });
+    expect(client.orFilters[0]).toBe(
+      `last_message_at.lt.2026-01-01T00:00:00+00:00,and(last_message_at.eq.2026-01-01T00:00:00+00:00,id.lt.${conversationId}),last_message_at.is.null`,
+    );
+    expect(client.orderCalls).toEqual([
+      { column: "last_message_at", ascending: false, nullsFirst: false },
+      { column: "id", ascending: false },
+    ]);
+  });
+
+  it("does not write workflow facts for ids that are not conversations", async () => {
+    const client = new FakeClient({ conversations: [] });
+    const metrics = new FakeClient({ workflow_facts: [] });
+    const dependencies = new SupabaseConversationAdapter(
+      client as unknown as SupabaseClient,
+      fakeProvider() as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      metrics as unknown as SupabaseClient,
+    );
+    await dependencies.pauseAi(
+      { userId, workspaceId, role: "owner" },
+      "99999999-9999-4999-8999-999999999999",
+      "reason",
+    );
+    expect(metrics.rows.get("workflow_facts")).toHaveLength(0);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   resolveInternalWorkspace,
+  SupabaseInternalWorkspaceAdapter,
   internalWorkspaceSession,
 } from "./internal-workspace.js";
 
@@ -52,4 +53,48 @@ describe("internal workspace boundary", () => {
       });
     },
   );
+});
+
+describe("SupabaseInternalWorkspaceAdapter cache", () => {
+  const client = (results: Array<{ data: unknown; error: unknown }>) => {
+    const maybeSingle = vi.fn(
+      async () => results.shift() ?? { data: null, error: null },
+    );
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    return {
+      client: { from: vi.fn(() => ({ select })) } as never,
+      maybeSingle,
+    };
+  };
+
+  it("resolves once, then serves the id from memory until the TTL passes", async () => {
+    let now = 0;
+    const { client: fake, maybeSingle } = client([
+      { data: { workspace_id: "ws" }, error: null },
+      { data: { workspace_id: "ws" }, error: null },
+    ]);
+    const adapter = new SupabaseInternalWorkspaceAdapter(fake, 1000, () => now);
+    expect(await adapter.resolve()).toBe("ws");
+    expect(await adapter.resolve()).toBe("ws");
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+    now = 1001;
+    expect(await adapter.resolve()).toBe("ws");
+    expect(maybeSingle).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache failures or a missing workspace", async () => {
+    const { client: fake, maybeSingle } = client([
+      { data: null, error: { message: "down" } },
+      { data: null, error: null },
+      { data: { workspace_id: "ws" }, error: null },
+    ]);
+    const adapter = new SupabaseInternalWorkspaceAdapter(fake);
+    await expect(adapter.resolve()).rejects.toMatchObject({
+      code: "internal_workspace_unconfigured",
+    });
+    expect(await adapter.resolve()).toBeNull();
+    expect(await adapter.resolve()).toBe("ws");
+    expect(maybeSingle).toHaveBeenCalledTimes(3);
+  });
 });

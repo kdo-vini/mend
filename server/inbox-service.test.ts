@@ -1168,4 +1168,26 @@ describe("InboxService and WhatsAppService", () => {
       "group-in-1",
     );
   });
+
+  it("marks read in the database even when the provider read receipt throws", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, inbound());
+    const provider: WhatsAppProvider = {
+      sendText: vi.fn(async () => ({ key: { id: "x" } })),
+      markAsRead: vi.fn(async () => {
+        throw new Error("provider down");
+      }),
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const readSpy = vi.spyOn(inbox, "readConversation");
+    const whatsapp = new WhatsAppService(inbox, provider);
+    await expect(
+      whatsapp.markRead({ workspaceId }, conversationId),
+    ).resolves.toBeUndefined();
+    expect(readSpy).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(provider.markAsRead).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
 });

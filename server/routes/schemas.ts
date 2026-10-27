@@ -293,6 +293,12 @@ export const mediaPurposeSchema = z.enum([
   "provider",
   "preview",
 ]);
+export const mediaUrlsBatchSchema = z
+  .object({
+    ids: z.array(z.string().trim().min(1).max(64)).min(1).max(50),
+    purpose: mediaPurposeSchema.default("browser"),
+  })
+  .strict();
 export const aiDraftSchema = z
   .object({ instruction: z.string().trim().max(4_000).optional() })
   .strict();

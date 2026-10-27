@@ -607,14 +607,27 @@ export class WhatsAppService {
       conversationId,
     );
     if (!conversation) throw new Error("conversation_not_found");
+    // The DB is the source of truth for the unread badge: update it first so a
+    // slow or failing provider never keeps the thread unread.
+    await this.inbox.readConversation(context, conversationId, readUpTo);
     const latest = await this.inbox.latestInbound(context, conversationId);
     if (latest)
-      await this.provider.markAsRead(
-        conversation.providerInstanceName,
-        latest.remoteJid,
-        latest.providerMessageId,
-      );
-    await this.inbox.readConversation(context, conversationId, readUpTo);
+      // Best-effort read receipt, deliberately not awaited. The async wrapper
+      // starts the provider call synchronously and contains its failure.
+      void (async () => {
+        try {
+          await this.provider.markAsRead(
+            conversation.providerInstanceName,
+            latest.remoteJid,
+            latest.providerMessageId,
+          );
+        } catch (error) {
+          console.warn("[mend-whatsapp] provider read receipt failed", {
+            conversationId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })();
   }
 
   async sendReaction(

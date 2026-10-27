@@ -33,6 +33,81 @@ export type MessageMediaPurpose = "preview" | "browser" | "original";
 const mediaUrlCache = new Map<string, { url: string; expiresAt: number }>();
 const mediaUrlInFlight = new Map<string, Promise<string>>();
 
+const MEDIA_URL_BATCH_WINDOW_MS = 20;
+const MEDIA_URL_BATCH_MAX = 50;
+
+interface PendingMediaUrl {
+  resolve: (url: string) => void;
+  reject: (error: unknown) => void;
+}
+interface MediaUrlBatch {
+  timer: ReturnType<typeof setTimeout>;
+  waiters: Map<string, PendingMediaUrl[]>;
+}
+const mediaUrlBatches = new Map<string, MediaUrlBatch>();
+
+async function flushMediaUrlBatch(
+  batchKey: string,
+  workspaceId: string,
+  purpose: MessageMediaPurpose,
+) {
+  const batch = mediaUrlBatches.get(batchKey);
+  if (!batch) return;
+  mediaUrlBatches.delete(batchKey);
+  clearTimeout(batch.timer);
+  const ids = [...batch.waiters.keys()];
+  try {
+    const result = await apiRequest<{
+      data: { id: string; url?: string; error?: string }[];
+    }>(
+      "/api/media/urls",
+      { method: "POST", body: JSON.stringify({ ids, purpose }) },
+      workspaceId,
+    );
+    const byId = new Map(result.data.map((item) => [item.id, item]));
+    for (const [id, waiters] of batch.waiters) {
+      const item = byId.get(id);
+      for (const waiter of waiters)
+        if (item?.url) waiter.resolve(item.url);
+        else
+          waiter.reject(
+            new LiveActionError(item?.error ?? "media_signed_url_missing"),
+          );
+    }
+  } catch (error) {
+    for (const waiters of batch.waiters.values())
+      for (const waiter of waiters) waiter.reject(error);
+  }
+}
+
+/** Coalesces per-bubble requests made within a tick into one batch call. */
+function requestMediaAssetUrl(
+  workspaceId: string,
+  assetId: string,
+  purpose: MessageMediaPurpose,
+): Promise<string> {
+  const batchKey = `${workspaceId}:${purpose}`;
+  return new Promise<string>((resolve, reject) => {
+    let batch = mediaUrlBatches.get(batchKey);
+    if (!batch) {
+      batch = {
+        waiters: new Map(),
+        timer: setTimeout(
+          () => void flushMediaUrlBatch(batchKey, workspaceId, purpose),
+          MEDIA_URL_BATCH_WINDOW_MS,
+        ),
+      };
+      mediaUrlBatches.set(batchKey, batch);
+    }
+    batch.waiters.set(assetId, [
+      ...(batch.waiters.get(assetId) ?? []),
+      { resolve, reject },
+    ]);
+    if (batch.waiters.size >= MEDIA_URL_BATCH_MAX)
+      void flushMediaUrlBatch(batchKey, workspaceId, purpose);
+  });
+}
+
 export async function getMessageMediaUrl(
   workspaceId: string,
   message: Message,
@@ -48,11 +123,7 @@ export async function getMessageMediaUrl(
   if (existing) return existing;
 
   const request = message.mediaAssetId
-    ? apiRequest<{ url: string }>(
-        `/api/media/assets/${encodeURIComponent(message.mediaAssetId)}/url?purpose=${purpose}`,
-        {},
-        workspaceId,
-      ).then((result) => result.url)
+    ? requestMediaAssetUrl(workspaceId, message.mediaAssetId, purpose)
     : (() => {
         if (!supabase || !message.mediaStoragePath)
           throw new LiveActionError("media_storage_unavailable");

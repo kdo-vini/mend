@@ -44,6 +44,43 @@ import {
   type Row,
 } from "../supabase-mappers.js";
 
+const CONVERSATION_SELECT =
+  "*, contact:contacts!conversations_contact_workspace_fkey(id, phone_number, display_name), channel:channel_connections!conversations_channel_workspace_fkey(id, workspace_id, provider, name, provider_instance_name, phone_number, profile_name, status, connected_at, last_event_at, history_sync_progress, history_sync_complete, history_sync_updated_at, created_at, updated_at), ai_state:conversation_ai_state!conversation_ai_state_conversation_workspace_fkey(*)";
+
+/** Newest messages returned with a conversation; the thread view pages older ones. */
+const THREAD_MESSAGE_LIMIT = 50;
+/** AI drafts get more context than the thread view needs. */
+const AI_DRAFT_MESSAGE_LIMIT = 100;
+
+/** Opaque keyset cursor over (last_message_at desc nulls last, id desc). */
+export function encodeConversationCursor(
+  lastMessageAt: string | null,
+  id: string,
+): string {
+  return Buffer.from(JSON.stringify([lastMessageAt, id])).toString("base64url");
+}
+
+export function decodeConversationCursor(
+  cursor: string,
+): { lastMessageAt: string | null; id: string } | null {
+  try {
+    const value: unknown = JSON.parse(
+      Buffer.from(cursor, "base64url").toString("utf8"),
+    );
+    if (
+      Array.isArray(value) &&
+      value.length === 2 &&
+      (value[0] === null || typeof value[0] === "string") &&
+      typeof value[1] === "string" &&
+      /^[0-9a-f-]{36}$/i.test(value[1])
+    )
+      return { lastMessageAt: value[0], id: value[1] };
+  } catch {
+    // Not an encoded cursor: caller treats it as a legacy plain id.
+  }
+  return null;
+}
+
 function isMissingProviderInstance(error: unknown): boolean {
   return error instanceof WhatsmiauApiError && error.status === 404;
 }
@@ -558,6 +595,14 @@ export class SupabaseConversationAdapter implements ConversationPort {
     suffix: string,
   ): Promise<void> {
     if (!this.metricsClient) return;
+    // Never write facts for ids that are not a conversation of this workspace.
+    const exists = await this.client
+      .from("conversations")
+      .select("id")
+      .eq("id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    if (!checked("conversations.fact_exists", exists)) return;
     const result = await this.metricsClient.from("workflow_facts").upsert(
       {
         workspace_id: context.workspaceId,
@@ -571,6 +616,29 @@ export class SupabaseConversationAdapter implements ConversationPort {
     checked(`workflow_facts.${factType}`, result);
   }
 
+  /** Fact writes are best-effort: they must not fail a send that already went out. */
+  private async recordConversationFactSafely(
+    context: RequestContext,
+    conversationId: string,
+    factType: "founder_intervention" | "policy_required_touch",
+    suffix: string,
+  ): Promise<void> {
+    try {
+      await this.recordConversationFact(
+        context,
+        conversationId,
+        factType,
+        suffix,
+      );
+    } catch (error) {
+      console.warn("[mend-messaging] workflow fact write failed", {
+        conversationId,
+        factType,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   /**
    * Resolves the operator label used to introduce the
    * human agent on WhatsApp ("_*Lucas está te atendendo*_"). The intro is
@@ -581,21 +649,23 @@ export class SupabaseConversationAdapter implements ConversationPort {
     body: string,
     options?: { conversationId?: string },
   ): Promise<string> {
-    const memberResult = await this.client
-      .from("workspace_members")
-      .select("display_name")
-      .eq("workspace_id", context.workspaceId)
-      .eq("user_id", context.userId)
-      .maybeSingle();
+    const [memberResult, priorHumanOutbound] = await Promise.all([
+      this.client
+        .from("workspace_members")
+        .select("display_name")
+        .eq("workspace_id", context.workspaceId)
+        .eq("user_id", context.userId)
+        .maybeSingle(),
+      options?.conversationId
+        ? this.hasPriorHumanOutbound(context, options.conversationId)
+        : Promise.resolve(false),
+    ]);
     const member = checked("workspace_members.agent_intro", memberResult) as {
       display_name?: unknown;
     } | null;
     const displayName = str(member?.display_name).trim() || "Suporte";
-    const includeIntro = options?.conversationId
-      ? !(await this.hasPriorHumanOutbound(context, options.conversationId))
-      : true;
     return formatHumanWhatsAppText(displayName, body, {
-      includeIntro,
+      includeIntro: !priorHumanOutbound,
     });
   }
 
@@ -619,9 +689,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
   async list(context: RequestContext, query: ConversationListQuery) {
     let request = this.client
       .from("conversations")
-      .select(
-        "*, contact:contacts!conversations_contact_workspace_fkey(id, phone_number, display_name), channel:channel_connections!conversations_channel_workspace_fkey(*), ai_state:conversation_ai_state!conversation_ai_state_conversation_workspace_fkey(*)",
-      )
+      .select(CONVERSATION_SELECT)
       .eq("workspace_id", context.workspaceId);
     if (query.status) request = request.eq("status", query.status);
     if (query.attentionState)
@@ -629,34 +697,68 @@ export class SupabaseConversationAdapter implements ConversationPort {
     if (query.aiMode) request = request.eq("ai_mode", query.aiMode);
     if (query.assignedUserId)
       request = request.eq("assigned_user_id", query.assignedUserId);
-    if (query.cursor) request = request.gt("id", query.cursor);
+    if (query.cursor) {
+      let position = decodeConversationCursor(query.cursor);
+      if (!position) {
+        // Legacy cursor: a bare conversation id. Resolve its position.
+        const anchor = await this.client
+          .from("conversations")
+          .select("id, last_message_at")
+          .eq("id", query.cursor)
+          .eq("workspace_id", context.workspaceId)
+          .maybeSingle();
+        const found = checked("conversations.cursor", anchor) as Row | null;
+        if (found)
+          position = {
+            lastMessageAt: found.last_message_at
+              ? str(found.last_message_at)
+              : null,
+            id: str(found.id),
+          };
+      }
+      if (position) {
+        // Order is (last_message_at desc nulls last, id desc): rows after the
+        // cursor are older, tie-broken by a smaller id, or have no date at all.
+        request = position.lastMessageAt
+          ? request.or(
+              `last_message_at.lt.${position.lastMessageAt},and(last_message_at.eq.${position.lastMessageAt},id.lt.${position.id}),last_message_at.is.null`,
+            )
+          : request.is("last_message_at", null).lt("id", position.id);
+      }
+    }
     const result = await request
-      .order("last_message_at", { ascending: false })
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .order("id", { ascending: false })
       .limit(query.limit);
     return rows(checked("conversations.list", result)).map(conversation);
   }
 
-  async get(context: RequestContext, conversationId: string) {
+  async get(
+    context: RequestContext,
+    conversationId: string,
+    messageLimit = THREAD_MESSAGE_LIMIT,
+  ) {
     const result = await this.client
       .from("conversations")
-      .select(
-        "*, contact:contacts!conversations_contact_workspace_fkey(id, phone_number, display_name), channel:channel_connections!conversations_channel_workspace_fkey(*), ai_state:conversation_ai_state!conversation_ai_state_conversation_workspace_fkey(*)",
-      )
+      .select(CONVERSATION_SELECT)
       .eq("id", conversationId)
       .eq("workspace_id", context.workspaceId)
       .maybeSingle();
     const data = checked("conversations.get", result);
     if (!data) return null;
+    // Newest first so the limit keeps the latest messages; reversed below to
+    // keep the ascending order callers expect.
     const messages = await this.client
       .from("messages")
       .select("*")
       .eq("conversation_id", conversationId)
       .eq("workspace_id", context.workspaceId)
-      .order("created_at", { ascending: true })
-      .limit(200);
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(messageLimit);
     return conversation({
       ...row(data),
-      messages: rows(checked("messages.list", messages)),
+      messages: rows(checked("messages.list", messages)).reverse(),
     });
   }
 
@@ -924,14 +1026,18 @@ export class SupabaseConversationAdapter implements ConversationPort {
       p_reason: reason,
     });
     checked("conversation_ai.pause", result);
-    if (context.role === "owner")
-      await this.recordConversationFact(
-        context,
-        conversationId,
-        "founder_intervention",
-        reason,
-      );
-    return this.get(context, conversationId);
+    const [updated] = await Promise.all([
+      this.get(context, conversationId),
+      context.role === "owner"
+        ? this.recordConversationFactSafely(
+            context,
+            conversationId,
+            "founder_intervention",
+            reason,
+          )
+        : Promise.resolve(),
+    ]);
+    return updated;
   }
 
   async resumeAi(context: RequestContext, conversationId: string) {
@@ -948,13 +1054,6 @@ export class SupabaseConversationAdapter implements ConversationPort {
     conversationId: string,
     input: SendMessageInput,
   ) {
-    if (context.role === "owner")
-      await this.recordConversationFact(
-        context,
-        conversationId,
-        "founder_intervention",
-        "human-message",
-      );
     const actor = {
       workspaceId: context.workspaceId,
       actorUserId: context.userId,
@@ -1089,7 +1188,20 @@ export class SupabaseConversationAdapter implements ConversationPort {
           | "audio"
           | "document",
       });
-    return this.get(context, conversationId);
+    // The provider already accepted the message: the fact write and the
+    // reload are independent and a fact failure must not fail the send.
+    const [updated] = await Promise.all([
+      this.get(context, conversationId),
+      context.role === "owner"
+        ? this.recordConversationFactSafely(
+            context,
+            conversationId,
+            "founder_intervention",
+            "human-message",
+          )
+        : Promise.resolve(),
+    ]);
+    return updated;
   }
 
   async aiDraft(
@@ -1097,7 +1209,11 @@ export class SupabaseConversationAdapter implements ConversationPort {
     conversationId: string,
     input: AiDraftInput,
   ) {
-    const current = await this.get(context, conversationId);
+    const current = await this.get(
+      context,
+      conversationId,
+      AI_DRAFT_MESSAGE_LIMIT,
+    );
     if (!current) return null;
     const values = conversationReplyInput(
       rows((current as Row).messages).map((item) => ({
