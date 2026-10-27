@@ -33,13 +33,15 @@ test("workspace bootstrap does not restart when its resolved ID is published", a
     { user },
   );
   await page.route("**/auth/v1/user", (route) => route.fulfill({ json: user }));
-  let contactLoads = 0;
-  let lastContactAt = 0;
+  // Conversations are the first workspace-scoped read of the inbox bootstrap;
+  // contacts are only fetched for the ids those conversations reference.
+  let conversationLoads = 0;
+  let lastConversationAt = 0;
   await page.route("**/rest/v1/**", async (route) => {
     const table = new URL(route.request().url()).pathname.split("/").pop();
-    if (table === "contacts") {
-      contactLoads++;
-      lastContactAt = Date.now();
+    if (table === "conversations") {
+      conversationLoads++;
+      lastConversationAt = Date.now();
     }
     const rows =
       table === "internal_workspace"
@@ -60,10 +62,10 @@ test("workspace bootstrap does not restart when its resolved ID is published", a
     (route) => route.fulfill({ json: { data: [] } }),
   );
   await page.goto("/inbox");
-  await expect.poll(() => contactLoads).toBeGreaterThan(0);
+  await expect.poll(() => conversationLoads).toBeGreaterThan(0);
   // Let the initial async hydration finish; no realtime or polling events are delivered.
-  await expect.poll(() => Date.now() - lastContactAt).toBeGreaterThan(500);
-  expect(contactLoads).toBe(1);
+  await expect.poll(() => Date.now() - lastConversationAt).toBeGreaterThan(500);
+  expect(conversationLoads).toBe(1);
 });
 
 test("switching finance views preserves totals and does not reload the summary", async ({
