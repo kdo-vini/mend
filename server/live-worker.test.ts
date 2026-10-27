@@ -1654,7 +1654,7 @@ describe("Support AI kill-switch (Fase A)", () => {
     await worker.poll();
 
     expect(events.rows).toHaveLength(1);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
       cursor: "1",
       messageId: "message-1",
@@ -1674,6 +1674,7 @@ describe("Support AI kill-switch (Fase A)", () => {
       supportEvents: withSupportWebhook(events, {
         env: { MEND_SUPPORT_WEBHOOK_URL: "https://hooks.example.test/s" },
         fetch: vi.fn(async () => new Response(null, { status: 500 })),
+        retryDelayMs: 0,
         logger: { warn },
       }),
     });
@@ -1683,7 +1684,7 @@ describe("Support AI kill-switch (Fase A)", () => {
     const [job] = await store.list();
     expect(job?.status).toBe("completed");
     expect(events.rows).toHaveLength(1);
-    expect(warn).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
   });
 
   it("retries the ingest job when the support event write fails", async () => {

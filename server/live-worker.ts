@@ -18,6 +18,12 @@ import {
 import { type ClaimOptions, type JobRecord, type JobStore } from "./jobs.js";
 import { SupabaseKnowledgeMetricWriter } from "./knowledge-evals.js";
 import {
+  applyDeferredMessageEvent,
+  isMessageEventPayload,
+  MESSAGE_EVENT_JOB_TYPE,
+  type MessageEventJobPayload,
+} from "./message-events.js";
+import {
   MEDIA_PROCESS_JOB_TYPE,
   SupabaseMediaPipeline,
   type MediaProcessJobPayload,
@@ -152,7 +158,8 @@ export type LiveWorkerJobPayload =
   | AgentRunRequestedJobPayload
   | MediaProcessJobPayload
   | KnowledgeRepositorySyncJobPayload
-  | SupportRepositoryResearchJobPayload;
+  | SupportRepositoryResearchJobPayload
+  | MessageEventJobPayload;
 
 export interface UncheckedSupabaseQuery
   extends PromiseLike<{
@@ -300,6 +307,10 @@ export interface LiveWorkerOptions {
   };
   knowledge?: LiveWorkerKnowledge;
   pushNotifier?: InboundPushNotifier;
+  /** Applies a deferred status/edit/delete; throws while the row is missing. */
+  messageEvents?: {
+    apply(workspaceId: string, payload: MessageEventJobPayload): Promise<void>;
+  };
   /** Mend's own Support AI (default off); Support bot reads supportEvents. */
   supportAiEnabled?: boolean;
   supportEvents?: Pick<SupportEventStore, "record">;
@@ -539,6 +550,14 @@ export class LiveWorker {
       );
       return;
     }
+    if (job.type === MESSAGE_EVENT_JOB_TYPE) {
+      if (!this.options.messageEvents)
+        throw new Error("message_events_not_configured");
+      if (!job.workspaceId || !isMessageEventPayload(job.payload))
+        throw new Error("invalid_message_event_job");
+      await this.options.messageEvents.apply(job.workspaceId, job.payload);
+      return;
+    }
     if (job.type === PROCESS_INBOUND_MESSAGE_JOB_TYPE) {
       await this.processInboundStage(
         job.payload as ProcessInboundMessageJobPayload,
@@ -681,6 +700,7 @@ export class LiveWorker {
     await notifyInboundMessagePush(this.options, binding, message, persisted);
 
     const supportEvent = supportEventFor(binding, message, persisted);
+    // The bot push after record is async inside the store; never awaited here.
     if (supportEvent) await this.options.supportEvents?.record(supportEvent);
     if (
       message.direction !== "inbound" ||
@@ -919,6 +939,10 @@ export function createSupabaseLiveWorker(
     ),
     heartbeat: new SupabaseRunnerHeartbeat(options.client),
     pushNotifier: createInboundPushNotifier(options.client),
+    messageEvents: {
+      apply: (workspaceId, payload) =>
+        applyDeferredMessageEvent(options.client, workspaceId, payload),
+    },
     ...(options.logger ? { logger: options.logger } : {}),
     ...(options.onDraftReady ? { onDraftReady: options.onDraftReady } : {}),
     ...(options.onIssueReady ? { onIssueReady: options.onIssueReady } : {}),

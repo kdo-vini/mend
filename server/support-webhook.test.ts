@@ -144,10 +144,11 @@ describe("createSupportWebhookNotifier", () => {
         store,
         env,
         fetch,
+        retryDelayMs: 0,
         logger: { warn },
       })!.notify(row),
     ).resolves.toBeUndefined();
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(warn).toHaveBeenCalledWith(
       {
         err: "support_webhook_status_503",
@@ -161,7 +162,7 @@ describe("createSupportWebhookNotifier", () => {
     expect(logged).not.toContain("hooks.example.test");
   });
 
-  it("aborts on timeout and resolves without retrying", async () => {
+  it("aborts on timeout, retries, then resolves", async () => {
     const { store, row } = await recordedStore();
     const warn = vi.fn();
     const fetch = vi.fn(
@@ -177,10 +178,29 @@ describe("createSupportWebhookNotifier", () => {
       env,
       fetch,
       timeoutMs: 10,
+      retryDelayMs: 0,
       logger: { warn },
     })!.notify(row);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries after a transient failure and stops on success", async () => {
+    const { store, row } = await recordedStore();
+    const warn = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("down", { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await createSupportWebhookNotifier({
+      store,
+      env,
+      fetch,
+      retryDelayMs: 0,
+      logger: { warn },
+    })!.notify(row);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("swallows hydration failures", async () => {
@@ -221,7 +241,23 @@ describe("withSupportWebhook", () => {
     const wrapped = withSupportWebhook(store, { env, fetch });
     expect(await wrapped.record(input)).toMatchObject({ messageId: "m1" });
     expect(await wrapped.record(input)).toBeNull();
-    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not wait for the push before returning the record", async () => {
+    const store = new InMemorySupportEventStore();
+    let release!: () => void;
+    const fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(new Response(null, { status: 200 }));
+        }),
+    );
+    const wrapped = withSupportWebhook(store, { env, fetch });
+    // Resolves even though the POST is still pending.
+    expect(await wrapped.record(input)).toMatchObject({ messageId: "m1" });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    release();
   });
 
   it("does not push when the record write fails", async () => {

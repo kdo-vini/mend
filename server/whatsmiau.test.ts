@@ -655,6 +655,7 @@ describe("Whatsmiau normalization", () => {
           url: "https://mend.test/functions/v1/whats-mend-webhook/path-secret?instance=mend-test",
           events: [
             "messages.upsert",
+            "messages.edited",
             "messages.update",
             "messages.delete",
             "messages.set",
@@ -671,7 +672,7 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
-  it("subscribes to messages.edited only when explicitly enabled", async () => {
+  it("subscribes to messages.edited by default and opts out only with false", async () => {
     const originalFetch = globalThis.fetch;
     const subscribed: string[][] = [];
     globalThis.fetch = async (_input, init) => {
@@ -694,11 +695,11 @@ describe("Whatsmiau normalization", () => {
     try {
       vi.stubEnv("WHATSMIAU_WEBHOOK_MESSAGES_EDITED", "");
       await configure();
-      vi.stubEnv("WHATSMIAU_WEBHOOK_MESSAGES_EDITED", "true");
+      vi.stubEnv("WHATSMIAU_WEBHOOK_MESSAGES_EDITED", "false");
       await configure();
-      expect(subscribed[0]).not.toContain("messages.edited");
-      expect(subscribed[1]).toContain("messages.edited");
-      expect(subscribed[1]).toContain("messages.upsert");
+      expect(subscribed[0]).toContain("messages.edited");
+      expect(subscribed[1]).not.toContain("messages.edited");
+      expect(subscribed[0]).toContain("messages.upsert");
     } finally {
       vi.unstubAllEnvs();
       globalThis.fetch = originalFetch;
