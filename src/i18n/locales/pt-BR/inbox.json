@@ -48,7 +48,9 @@
     "followIssue": "Acompanhe o chamado vinculado até um resultado verificado",
     "reviewTriage": "Revise a conversa e escolha o próximo passo seguro",
     "human": "Atendimento humano · IA pausada",
-    "ai": "IA ativa nesta conversa"
+    "ai": "IA ativa nesta conversa",
+    "expand": "Mostrar painel do cliente",
+    "collapse": "Recolher painel do cliente"
   },
   "newChat": {
     "eyebrow": "Iniciar uma conversa",
@@ -201,7 +203,9 @@
     "editingMessage": "Editando mensagem",
     "cancelEdit": "Cancelar edição",
     "quotedMessageUnavailable": "Mensagem original não carregada",
-    "goToQuoted": "Ir para a mensagem citada"
+    "goToQuoted": "Ir para a mensagem citada",
+    "discardRecording": "Descartar gravação",
+    "recordingFor": "Tempo de gravação"
   },
   "toasts": {
     "chatStarted": "Conversa iniciada",
@@ -264,5 +268,88 @@
     "deleteMessageTitle": "Excluir mensagem para todos?",
     "deleteMessageDescription": "Esta mensagem será excluída para todos no WhatsApp.",
     "deleteMessageConfirm": "Excluir mensagem"
+  },
+  "customer": {
+    "title": "Cliente no Zelo",
+    "loading": "Buscando a loja no Zelo…",
+    "unavailable": "Não foi possível consultar o Zelo agora.",
+    "notFound": "Nenhuma loja do Zelo usa este telefone.",
+    "manyStores": "Mais de uma loja usa este telefone:",
+    "unnamedStore": "Loja sem nome",
+    "openAdmin": "Abrir no Admin do Zelo",
+    "since": "Cliente desde {{date}}",
+    "matchedBy": {
+      "store": "Telefone de contato da loja",
+      "whatsapp": "WhatsApp da loja no Zelo",
+      "manager": "Telefone do gerente"
+    },
+    "sections": {
+      "subscription": "Assinatura",
+      "products": "Produtos",
+      "health": "Saúde agora",
+      "history": "Chamados desta conversa"
+    },
+    "plans": {
+      "pdv": "ZeloPDV",
+      "bundle": "Pacote (PDV + Atendimento)",
+      "chat": "Atendimento",
+      "none": "Sem assinatura"
+    },
+    "billing": {
+      "PIX": "Pix",
+      "CREDIT_CARD": "Cartão",
+      "INTERNAL": "Interna"
+    },
+    "payment": "Pagamento",
+    "monthlyValue": "Valor mensal",
+    "accessUntil": "Acesso até",
+    "nextCharge": "Próxima cobrança",
+    "status": {
+      "none": "Sem assinatura",
+      "canceled": "Cancelada",
+      "trialExpired": "Teste encerrado",
+      "expired_one": "Vencida há {{count}} dia",
+      "expired_other": "Vencida há {{count}} dias",
+      "trialing": "Em teste até {{date}}",
+      "cancelsOn": "Cancela em {{date}}",
+      "renewsSoon_one": "Vence em {{count}} dia",
+      "renewsSoon_other": "Vence em {{count}} dias",
+      "active": "Ativa até {{date}}",
+      "pending": "Pagamento pendente"
+    },
+    "products": {
+      "pdv": "PDV",
+      "menu": "Cardápio",
+      "chat": "Atendimento",
+      "tables": "Mesas",
+      "accesses": "Acessos",
+      "fiscal": "NFC-e",
+      "fiscalOff": "NFC-e desligada"
+    },
+    "health": {
+      "pdv": "Último uso do PDV",
+      "whatsapp": "WhatsApp da loja",
+      "printer": "Impressora",
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "noPrinter": "Nenhuma configurada"
+    },
+    "noHistory": "Nenhum chamado ligado a esta conversa.",
+    "copyId": "Copiar ID da loja",
+    "idCopied": "ID da loja copiado",
+    "alerts": {
+      "whatsappDisconnected": "WhatsApp da loja desconectado",
+      "deletionScheduled": "Conta com exclusão agendada"
+    },
+    "ago": {
+      "never": "Sem registro",
+      "now": "agora",
+      "minutes_one": "há {{count}} min",
+      "minutes_other": "há {{count}} min",
+      "hours_one": "há {{count}} h",
+      "hours_other": "há {{count}} h",
+      "days_one": "há {{count}} dia",
+      "days_other": "há {{count}} dias"
+    }
   }
 }

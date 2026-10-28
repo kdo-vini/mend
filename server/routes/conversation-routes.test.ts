@@ -571,3 +571,59 @@ describe("POST /api/conversations", () => {
     expect(client.rpcCalls).toEqual([]);
   });
 });
+
+describe("GET /api/conversations/:id/zelo-customer", () => {
+  const conversationId = existingConversationId;
+  const summary = {
+    ownerUserId: "owner-1",
+    storeName: "Lanchonete do Zé",
+    subscription: { planTier: "bundle", monthlyValueCents: 19800 },
+  };
+
+  function harness(financeAllowed: boolean) {
+    const workspaceId = randomUUID();
+    const lookupByPhone = vi.fn(async () => [summary]);
+    const app = express();
+    app.use(express.json());
+    app.use((request, response, next) =>
+      createApiRouter({
+        internalWorkspace: { resolve: async () => workspaceId },
+        auth: { authenticate: async () => user },
+        membership: {
+          getMembership: async () => ({ workspaceId, role: "agent" as const }),
+        },
+        conversations: {
+          get: async () => ({
+            id: conversationId,
+            contact: { phoneNumber: "5514998360854" },
+          }),
+        },
+        finance: { allowed: async () => financeAllowed },
+        zeloCustomers: { lookupByPhone },
+      } as unknown as ApiRouterDependencies)(request, response, next),
+    );
+    const get = () =>
+      request(app)
+        .get(`/api/conversations/${conversationId}/zelo-customer`)
+        .set("x-mend-workspace-id", workspaceId);
+    return { get, lookupByPhone };
+  }
+
+  it("looks the store up by the thread's own phone", async () => {
+    const { get, lookupByPhone } = harness(true);
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(lookupByPhone).toHaveBeenCalledWith("5514998360854");
+    expect(response.body.data[0].subscription.monthlyValueCents).toBe(19800);
+  });
+
+  it("keeps what the store pays behind the finance grant", async () => {
+    const { get } = harness(false);
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(response.body.data[0].subscription).toEqual({
+      planTier: "bundle",
+      monthlyValueCents: null,
+    });
+  });
+});

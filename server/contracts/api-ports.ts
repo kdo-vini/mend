@@ -623,6 +623,7 @@ export interface ApiRouterDependencies {
     load(): Promise<import("../provider-balances.js").ProviderBalances>;
   };
   zeloFinance?: Pick<import("../zelo-finance.js").ZeloFinanceService, "month">;
+  zeloCustomers?: import("../zelo-customer.js").ZeloCustomerService;
   finance?: import("../finance-service.js").FinancePort;
   internalWorkspace: import("../internal-workspace.js").InternalWorkspacePort;
   auth: AuthAdapter;

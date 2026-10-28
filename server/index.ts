@@ -18,6 +18,7 @@ import {
 import { createMessageJobStore } from "./persistence.js";
 import { MESSAGE_LANE_JOB_TYPES } from "./workers/live-worker-shared.js";
 import { createZeloFinanceService } from "./zelo-finance.js";
+import { createZeloCustomerService } from "./zelo-customer.js";
 import { createProviderBalancesService } from "./provider-balances.js";
 import { authenticateRequest } from "./auth.js";
 import { createApiRouter } from "./api-router.js";
@@ -154,6 +155,7 @@ const CreateInstanceSchema = z
 
 const serverSupabase = createServerSupabaseClient();
 const zeloFinance = createZeloFinanceService();
+const zeloCustomers = createZeloCustomerService();
 const providerBalances = createProviderBalancesService();
 const workerSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
   ? serverSupabase
@@ -666,6 +668,7 @@ if (serverSupabase) {
         auth: apiAuth,
         ...apiAdapters,
         zeloFinance,
+        zeloCustomers,
         providerBalances,
       })(request, response, next);
     } catch (error) {

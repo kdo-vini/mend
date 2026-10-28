@@ -81,6 +81,15 @@ import {
 import { ActionMenu } from "../../../shared/ui/ActionMenu";
 import { createComposerDrafts } from "../composer-drafts";
 import { firstUnreadMessageId } from "../unread-divider";
+import { continuesGroup } from "../message-groups";
+import { useZeloCustomer } from "../hooks/useZeloCustomer";
+import { customerAlerts, type CustomerLabel } from "../zelo-customer";
+import { ZeloCustomerPanel } from "../components/ZeloCustomerPanel";
+import { RecordingIndicator } from "../components/RecordingIndicator";
+import {
+  useInboxShortcuts,
+  type InboxShortcutHandlers,
+} from "../hooks/useInboxShortcuts";
 import {
   canEditMessage,
   canReplyToMessage,
@@ -215,6 +224,19 @@ interface LightboxMedia {
  * or the local previews of bubbles that are still on screen.
  */
 const composerDrafts = createComposerDrafts();
+const CONTEXT_COLLAPSED_STORAGE_KEY = "mend.inbox-context-collapsed";
+const CONTEXT_DRAWER_QUERY = "(max-width: 1279px)";
+
+function readContextCollapsed() {
+  try {
+    return (
+      typeof window !== "undefined" &&
+      window.localStorage.getItem(CONTEXT_COLLAPSED_STORAGE_KEY) === "1"
+    );
+  } catch {
+    return false;
+  }
+}
 const deliveryQueues = new Map<string, Promise<void>>();
 const failedMediaRetryInputs = new Map<string, ComposerMediaInput>();
 const failedContactRetryInputs = new Map<string, ShareContactInput>();
@@ -543,6 +565,42 @@ export function InboxPage({
         unreadOnOpen.conversationId === selected.id ? unreadOnOpen.count : 0,
       )
     : undefined;
+  const zeloCustomer = useZeloCustomer(workspaceId, selected?.id, liveMode);
+  const headerAlerts: CustomerLabel[] =
+    zeloCustomer?.status === "ready" && zeloCustomer.customers.length === 1
+      ? customerAlerts(zeloCustomer.customers[0])
+      : [];
+  const [contextCollapsed, setContextCollapsed] =
+    useState(readContextCollapsed);
+  const [contextIsDrawer, setContextIsDrawer] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia(CONTEXT_DRAWER_QUERY).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(CONTEXT_DRAWER_QUERY);
+    const sync = () => setContextIsDrawer(media.matches);
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+  const toggleContext = () => {
+    // Below the desktop breakpoint the panel is a drawer that opens on top.
+    if (window.matchMedia(CONTEXT_DRAWER_QUERY).matches) {
+      setContextOpen(true);
+      return;
+    }
+    setContextCollapsed((current) => {
+      try {
+        window.localStorage.setItem(
+          CONTEXT_COLLAPSED_STORAGE_KEY,
+          current ? "0" : "1",
+        );
+      } catch {
+        // Blocked storage only forgets the choice after a reload.
+      }
+      return !current;
+    });
+  };
   const messagesById = useMemo(
     () => new Map(selected?.messages.map((message) => [message.id, message])),
     [selected?.messages],
@@ -1044,6 +1102,15 @@ export function InboxPage({
     void row.offsetWidth;
     row.classList.add("message-row-flash");
   }, []);
+  // Filled in once the handlers below exist; the hook reads it on each key.
+  const shortcutHandlersRef = useRef<InboxShortcutHandlers | null>(null);
+  useInboxShortcuts({
+    onNext: () => shortcutHandlersRef.current?.onNext(),
+    onPrevious: () => shortcutHandlersRef.current?.onPrevious(),
+    onReply: () => shortcutHandlersRef.current?.onReply(),
+    onResolve: () => shortcutHandlersRef.current?.onResolve(),
+    onToggleContext: () => shortcutHandlersRef.current?.onToggleContext(),
+  });
 
   if (!selected) {
     return (
@@ -2232,6 +2299,21 @@ export function InboxPage({
     onToast,
     t,
   };
+  const stepConversation = (step: 1 | -1) => {
+    const index = filtered.findIndex((item) => item.id === selected.id);
+    const next = filtered[index + step];
+    if (next) selectConversation(next);
+  };
+  shortcutHandlersRef.current = {
+    onNext: () => stepConversation(1),
+    onPrevious: () => stepConversation(-1),
+    onReply: () =>
+      document
+        .querySelector<HTMLTextAreaElement>(".composer textarea")
+        ?.focus(),
+    onResolve: () => void setConversationState("resolved"),
+    onToggleContext: toggleContext,
+  };
 
   return (
     <div
@@ -2293,7 +2375,7 @@ export function InboxPage({
         </div>
       </div>
       <div
-        className={`inbox-layout ${mobileConversationOpen ? "mobile-conversation-open" : ""} ${filtered.length === 0 ? "no-visible-conversation" : ""} ${railDragging ? "is-resizing-rail" : ""}`}
+        className={`inbox-layout ${contextCollapsed ? "context-collapsed" : ""} ${mobileConversationOpen ? "mobile-conversation-open" : ""} ${filtered.length === 0 ? "no-visible-conversation" : ""} ${railDragging ? "is-resizing-rail" : ""}`}
         style={railLayoutStyle}
       >
         <section className="conversation-rail">
@@ -2463,8 +2545,10 @@ export function InboxPage({
             assigneeOptions={assigneeOptions}
             aiDetailsOpen={aiDetailsOpen}
             onToggleAiDetails={() => setAiDetailsOpen((current) => !current)}
-            contextOpen={contextOpen}
-            onOpenContext={() => setContextOpen(true)}
+            contextExpanded={contextIsDrawer ? contextOpen : !contextCollapsed}
+            contextIsDrawer={contextIsDrawer}
+            onOpenContext={toggleContext}
+            customerAlerts={headerAlerts}
           />
           <div className="message-canvas-shell">
             <ScrollArea
@@ -2486,6 +2570,10 @@ export function InboxPage({
                   const showDayDivider = dayKey
                     ? dayKey !== previousDayKey
                     : index === 0;
+                  const continued =
+                    !showDayDivider &&
+                    message.id !== firstUnreadId &&
+                    continuesGroup(selected.messages[index - 1], message);
                   const dayText =
                     dayLabel?.kind === "today"
                       ? t("ui.today")
@@ -2511,6 +2599,7 @@ export function InboxPage({
                       )}
                       <MessageBubble
                         message={message}
+                        continued={continued}
                         messageWorkspaceId={workspaceId ?? ""}
                         senderName={
                           message.senderUserId
@@ -2646,11 +2735,32 @@ export function InboxPage({
           conversation={selected}
           issue={activeIssue}
           open={contextOpen}
-          onClose={() => setContextOpen(false)}
+          onClose={() => {
+            if (window.matchMedia(CONTEXT_DRAWER_QUERY).matches)
+              setContextOpen(false);
+            else toggleContext();
+          }}
           onOpenIssue={(issueId) => {
             setContextOpen(false);
             onOpenIssue(issueId);
           }}
+          customer={
+            liveMode ? (
+              <ZeloCustomerPanel
+                key={selected.id}
+                state={zeloCustomer}
+                issues={issues
+                  .filter((issue) => issue.conversationId === selected.id)
+                  .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+                  .slice(0, 5)}
+                onOpenIssue={(issueId) => {
+                  setContextOpen(false);
+                  onOpenIssue(issueId);
+                }}
+                onCopied={() => onToast(t("customer.idCopied"))}
+              />
+            ) : null
+          }
         >
           <div
             className={
@@ -3154,8 +3264,10 @@ function ConversationHeader({
   assigneeOptions,
   aiDetailsOpen,
   onToggleAiDetails,
-  contextOpen,
+  contextExpanded,
+  contextIsDrawer,
   onOpenContext,
+  customerAlerts: alerts,
 }: {
   conversation: Conversation;
   onMobileBack: () => void;
@@ -3170,8 +3282,12 @@ function ConversationHeader({
   assigneeOptions: AssigneeOption[];
   aiDetailsOpen: boolean;
   onToggleAiDetails: () => void;
-  contextOpen: boolean;
+  /** The drawer is open, or the desktop column is showing. */
+  contextExpanded: boolean;
+  contextIsDrawer: boolean;
   onOpenContext: () => void;
+  /** What the Zelo panel flags, kept in sight when the panel is folded. */
+  customerAlerts: CustomerLabel[];
 }) {
   const { t } = useTranslation("inbox");
   const conversationAssigneeOptions = assigneeOptions.map((option) =>
@@ -3250,6 +3366,14 @@ function ConversationHeader({
                 {conversation.chatType === "group" && (
                   <span className="group-badge">{t("ui.group")}</span>
                 )}
+                {alerts.map((alert) => (
+                  <span
+                    key={alert.key}
+                    className={`customer-chip ${alert.tone}`}
+                  >
+                    {t(`customer.${alert.key}`, alert.values)}
+                  </span>
+                ))}
               </>
             )}
           </div>
@@ -3301,8 +3425,14 @@ function ConversationHeader({
         <button
           className="icon-button inbox-context-trigger"
           type="button"
-          aria-label={t("context.open")}
-          aria-expanded={contextOpen}
+          aria-label={
+            contextIsDrawer
+              ? t("context.open")
+              : contextExpanded
+                ? t("context.collapse")
+                : t("context.expand")
+          }
+          aria-expanded={contextExpanded}
           aria-controls={INBOX_CASE_CONTEXT_ID}
           onClick={onOpenContext}
         >
@@ -3493,8 +3623,11 @@ const MessageBubble = memo(function MessageBubble({
   onQuoteOpen,
   quoted,
   quotedSenderName,
+  continued = false,
 }: {
   message: Message;
+  /** Follows a bubble from the same sender a moment earlier. */
+  continued?: boolean;
   messageWorkspaceId: string;
   senderName?: string;
   actionPending: boolean;
@@ -3542,16 +3675,18 @@ const MessageBubble = memo(function MessageBubble({
       : (message.reactions ?? []);
   return (
     <div
-      className={`message-row ${message.direction}${pendingOutbound ? " optimistic-pending" : ""}`}
+      className={`message-row ${message.direction}${pendingOutbound ? " optimistic-pending" : ""}${continued ? " continued" : ""}`}
       data-message-id={message.id}
     >
       <div className="message-meta">
-        {message.direction === "outbound" && message.aiGenerated && (
-          <span className="ai-tag">
-            <Sparkles size={11} /> {t("ui.aiGenerated")}
-          </span>
-        )}
-        {senderName || message.sender} ·{" "}
+        {!continued &&
+          message.direction === "outbound" &&
+          message.aiGenerated && (
+            <span className="ai-tag">
+              <Sparkles size={11} /> {t("ui.aiGenerated")}
+            </span>
+          )}
+        {!continued && <>{senderName || message.sender} · </>}
         {formatMessageTime(message.createdAt, message.time)}
         {message.editedAt && !message.deleted && (
           <> · {t("ui.messageEdited")}</>
@@ -3746,7 +3881,9 @@ const MessageBubble = memo(function MessageBubble({
             )
           ) : message.status === "failed" ? (
             t("ui.failed")
-          ) : message.status === "read" || message.status === "delivered" ? (
+          ) : message.status === "read" ? (
+            <CheckCheck className="read" size={13} />
+          ) : message.status === "delivered" ? (
             <CheckCheck size={13} />
           ) : (
             <Check size={13} />
@@ -3835,6 +3972,10 @@ function MediaComposer({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
+  const discardRecordingRef = useRef(false);
+  const [recordingStream, setRecordingStream] = useState<MediaStream | null>(
+    null,
+  );
   const accepted =
     "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.heic,.heif,.tiff,.mov,.avi,.mkv";
 
@@ -3961,7 +4102,9 @@ function MediaComposer({
         : "audio/webm";
       const recorder = new MediaRecorder(stream, { mimeType });
       recordingChunksRef.current = [];
+      discardRecordingRef.current = false;
       recordingStreamRef.current = stream;
+      setRecordingStream(stream);
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => {
         if (event.data.size) recordingChunksRef.current.push(event.data);
@@ -3975,8 +4118,9 @@ function MediaComposer({
         stream.getTracks().forEach((track) => track.stop());
         recorderRef.current = null;
         recordingStreamRef.current = null;
+        setRecordingStream(null);
         setRecording(false);
-        if (!audio.size) return;
+        if (!audio.size || discardRecordingRef.current) return;
         // Stopping only ends the recording: the clip waits in the preview bar,
         // where the operator listens back and then sends or removes it.
         setPendingFiles((current) =>
@@ -4003,6 +4147,15 @@ function MediaComposer({
     } catch {
       setRecording(false);
     }
+  };
+
+  /** Ends the recording; a discarded clip never reaches the preview bar. */
+  const stopRecording = (discard = false) => {
+    const recorder = recorderRef.current;
+    if (recorder?.state !== "recording") return;
+    discardRecordingRef.current = discard;
+    if (!discard) recorder.requestData();
+    recorder.stop();
   };
 
   const submit = async () => {
@@ -4133,13 +4286,8 @@ function MediaComposer({
           aria-label={recording ? t("ui.stopRecording") : t("ui.recordAudio")}
           aria-pressed={recording}
           onClick={() => {
-            if (recording) {
-              const recorder = recorderRef.current;
-              if (recorder?.state === "recording") {
-                recorder.requestData();
-                recorder.stop();
-              }
-            } else void startRecording();
+            if (recording) stopRecording();
+            else void startRecording();
           }}
         >
           {recording ? <Square size={14} /> : <Mic size={15} />}{" "}
@@ -4225,6 +4373,13 @@ function MediaComposer({
           </div>
         </div>
       )}
+      {recording && (
+        <RecordingIndicator
+          stream={recordingStream}
+          onStop={() => stopRecording()}
+          onDiscard={() => stopRecording(true)}
+        />
+      )}
       {mode && (
         <div className={`composer-context-bar ${mode.kind}`}>
           {mode.kind === "edit" ? (
@@ -4304,6 +4459,11 @@ function MediaComposer({
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
                 void submit();
+                return;
+              }
+              if (event.key === "Escape" && recording) {
+                event.preventDefault();
+                stopRecording(true);
                 return;
               }
               if (event.key === "Escape" && mode) {

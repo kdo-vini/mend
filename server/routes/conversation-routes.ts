@@ -211,6 +211,47 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
       noContent(response);
     }),
   );
+  router.get(
+    "/api/conversations/:id/zelo-customer",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response);
+      if (!dependencies.zeloCustomers)
+        throw new ApiHttpError(
+          503,
+          "zelo_customer_unavailable",
+          "Zelo customer data is unavailable.",
+        );
+      const conversation = requireFound(
+        (await dependencies.conversations.get(context, pathId(request))) as {
+          contact?: { phoneNumber?: string };
+        } | null,
+        "conversation",
+      );
+      // The phone comes from the thread, never from the caller, so this
+      // route cannot be used to look up an arbitrary store.
+      const phone = conversation.contact?.phoneNumber ?? "";
+      const [customers, financeAllowed] = await Promise.all([
+        dependencies.zeloCustomers.lookupByPhone(phone),
+        dependencies.finance
+          ? dependencies.finance.allowed(context.workspaceId)
+          : Promise.resolve(false),
+      ]);
+      response.setHeader("Cache-Control", "no-store");
+      send(response, 200, {
+        // Plan and status are support context; what the store pays stays
+        // behind the same finance grant as the Zelo finance view.
+        data: financeAllowed
+          ? customers
+          : customers.map((customer) => ({
+              ...customer,
+              subscription: customer.subscription && {
+                ...customer.subscription,
+                monthlyValueCents: null,
+              },
+            })),
+      });
+    }),
+  );
   router.post(
     "/api/conversations/:id/messages/:messageId/reaction",
     asyncRoute(async (request, response) => {

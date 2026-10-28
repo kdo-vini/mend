@@ -121,6 +121,7 @@ vi.mock("../api", () => ({
   deleteLiveConversation: (input: unknown) => deleteLiveConversation(input),
   deleteLiveMessage: vi.fn(),
   editLiveMessage: (input: unknown) => editLiveMessage(input),
+  loadLiveZeloCustomer: vi.fn(async () => []),
   getMessageMediaUrl: vi.fn(async () => "https://media.example/1"),
   markLiveConversationRead: vi.fn(async () => undefined),
   reactToLiveMessage: vi.fn(),
@@ -543,6 +544,25 @@ describe("InboxPage new chat", () => {
         );
       await act(async () => voice()?.click());
       expect(voice()?.getAttribute("aria-pressed")).toBe("true");
+      // The operator sees it is recording, and for how long.
+      expect(
+        document.body.querySelector(".recording-indicator")?.textContent,
+      ).toContain("0:00");
+
+      // Discarding drops the clip instead of staging it.
+      await act(async () =>
+        document.body
+          .querySelector<HTMLButtonElement>(
+            ".recording-indicator [aria-label='Descartar gravação']",
+          )
+          ?.click(),
+      );
+      expect(document.body.querySelector(".recording-indicator")).toBeNull();
+      expect(
+        document.body.querySelector(".attachment-preview-card audio"),
+      ).toBeNull();
+
+      await act(async () => voice()?.click());
       await act(async () => voice()?.click());
 
       expect(voice()?.getAttribute("aria-pressed")).toBe("false");

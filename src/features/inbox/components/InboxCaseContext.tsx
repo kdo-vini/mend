@@ -22,6 +22,7 @@ export function InboxCaseContext({
   open,
   onClose,
   onOpenIssue,
+  customer,
   children,
 }: {
   conversation: Conversation;
@@ -29,6 +30,8 @@ export function InboxCaseContext({
   open: boolean;
   onClose: () => void;
   onOpenIssue: (issueId: string) => void;
+  /** Who the contact is in Zelo; shown first, it answers most questions. */
+  customer?: ReactNode;
   children: ReactNode;
 }) {
   const { t } = useTranslation("inbox");
@@ -64,6 +67,7 @@ export function InboxCaseContext({
           <X size={16} />
         </button>
       </header>
+      {customer}
       <section className="inbox-case-next-action">
         <span>{t("context.nextAction")}</span>
         <strong>

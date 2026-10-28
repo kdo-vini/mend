@@ -8,6 +8,7 @@ import type {
   IssueType,
   Priority,
   Message as UiMessage,
+  ZeloCustomer,
 } from "../types";
 import type { SupportFlow } from "../shared/support-flow";
 import {
@@ -823,6 +824,19 @@ export async function sendLiveMessage(input: {
     },
     input.workspaceId,
   );
+}
+
+/** The Zelo store(s) behind a support contact, matched by phone on the server. */
+export async function loadLiveZeloCustomer(input: {
+  workspaceId: string;
+  conversationId: string;
+}) {
+  const response = await apiRequest<{ data?: ZeloCustomer[] }>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/zelo-customer`,
+    {},
+    input.workspaceId,
+  );
+  return response.data ?? [];
 }
 
 /** Rewrites the text of a message this workspace sent. */
