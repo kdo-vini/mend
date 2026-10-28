@@ -78,6 +78,13 @@ export interface WhatsAppProvider {
     fromMe: boolean;
     participant?: string;
   }): Promise<unknown>;
+  updateMessage?(input: {
+    instanceName: string;
+    number: string;
+    remoteJid: string;
+    id: string;
+    text: string;
+  }): Promise<unknown>;
 }
 
 export interface SendTextRequest {
@@ -85,6 +92,8 @@ export interface SendTextRequest {
   aiGenerated?: boolean;
   /** Forward a stable retry key to providers that implement deduplication. */
   idempotencyKey?: string;
+  /** Message this text replies to, quoted above it on WhatsApp. */
+  quoted?: { providerMessageId: string; fromMe: boolean; previewText?: string };
   /** Runs with the final provider text right before the provider call. */
   beforeProviderSend?: (text: string) => Promise<void> | void;
   onProviderMessageId?: (providerMessageId: string) => Promise<void> | void;
@@ -308,6 +317,14 @@ export class WhatsAppService {
           ...(input.idempotencyKey
             ? { idempotencyKey: input.idempotencyKey }
             : {}),
+          ...(input.quoted
+            ? {
+                quoted: {
+                  ...input.quoted,
+                  remoteJid: conversation.remoteJid,
+                },
+              }
+            : {}),
         }),
     );
     const id = providerMessageId(response);
@@ -317,6 +334,9 @@ export class WhatsAppService {
       messageType: "text",
       text,
       aiGenerated: input.aiGenerated,
+      ...(input.quoted
+        ? { quotedProviderMessageId: input.quoted.providerMessageId }
+        : {}),
     });
     return { message, providerMessageId: id };
   }
@@ -747,6 +767,34 @@ export class WhatsAppService {
       messageType: "text",
       text: visibleText,
     });
+  }
+
+  /** Rewrites a sent text message on WhatsApp; returns the text it sent. */
+  async editMessage(
+    context: InboxContext,
+    conversationId: string,
+    input: { id: string; text: string },
+  ): Promise<string> {
+    const text = markdownToWhatsApp(input.text.trim());
+    if (!text || text.length > 20_000) throw new Error("message_text_invalid");
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    if (!this.provider.updateMessage)
+      throw new Error("whatsmiau_message_edit_not_supported");
+    const updateMessage = this.provider.updateMessage.bind(this.provider);
+    await this.delivering(conversation.providerInstanceName, () =>
+      updateMessage({
+        instanceName: conversation.providerInstanceName,
+        number: outboundDestination(conversation),
+        remoteJid: conversation.remoteJid,
+        id: input.id,
+        text,
+      }),
+    );
+    return text;
   }
 
   async deleteMessageForEveryone(

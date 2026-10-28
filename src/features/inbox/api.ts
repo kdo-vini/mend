@@ -2,6 +2,7 @@ import {
   type OlderMessagesCursor,
   deleteLiveConversation,
   deleteLiveMessage,
+  editLiveMessage,
   listLiveChannels,
   loadLiveConversationSnapshot as loadSnapshot,
   loadOlderLiveConversationMessages as loadOlderMessages,
@@ -151,6 +152,7 @@ export async function getMessageMediaUrl(
 export {
   deleteLiveConversation,
   deleteLiveMessage,
+  editLiveMessage,
   markLiveConversationRead,
   pauseLiveConversationAi,
   requestAiDraft,

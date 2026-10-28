@@ -67,3 +67,19 @@ export function formatHumanWhatsAppText(
   if (text.startsWith(intro)) return text;
   return `${intro}\n\n${text}`;
 }
+
+const introPrefixPattern =
+  /^(?:_\*[^*\n]+?\*_|\*[^*\n]+?\*\s+(?:está te atendendo|is assisting you))\s*\n+/i;
+
+/**
+ * The text an edit should send: the operator rewrites only the body they see,
+ * while the attending intro the customer already saw on this message stays.
+ */
+export function replaceHumanWhatsAppBody(
+  original: string,
+  body: string,
+): string {
+  const intro = original.trim().match(introPrefixPattern)?.[0];
+  const text = body.trim();
+  return intro ? `${intro}${text}` : text;
+}

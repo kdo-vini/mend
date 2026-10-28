@@ -224,4 +224,33 @@ describe("MessageMedia", () => {
       expect(container.textContent).toContain("Relatorio.pdf");
     },
   );
+
+  it("labels a voice note's transcript and lets it fold away", async () => {
+    const voiceNote: Message = {
+      ...message,
+      type: "audio",
+      text: "Oi, o caixa não fecha desde ontem",
+      attachment: { name: "audio.ogg", meta: "audio/ogg" },
+    };
+    await act(async () => {
+      root.render(
+        <MessageMedia
+          workspaceId="workspace-1"
+          message={voiceNote}
+          resolveUrl={vi.fn(async () => "https://media.test/voice.ogg")}
+          onError={() => undefined}
+          onOpen={() => undefined}
+        />,
+      );
+    });
+
+    const transcript = container.querySelector("details.media-transcript");
+    expect(transcript?.hasAttribute("open")).toBe(true);
+    expect(transcript?.querySelector("summary")?.textContent).toBe(
+      "Transcrição",
+    );
+    expect(transcript?.querySelector(".media-caption")?.textContent).toBe(
+      "Oi, o caixa não fecha desde ontem",
+    );
+  });
 });

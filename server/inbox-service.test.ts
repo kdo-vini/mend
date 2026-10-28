@@ -981,6 +981,65 @@ describe("InboxService and WhatsAppService", () => {
     ).toBe(true);
   });
 
+  it("quotes the message a reply answers and edits a sent text", async () => {
+    const port = new FakeInboxPort();
+    const inbox = new InboxService(port);
+    await inbox.persistNormalizedMessage({ workspaceId }, channelId, inbound());
+    const provider: WhatsAppProvider = {
+      sendText: vi.fn(async () => ({ key: { id: "wamid-out-reply" } })),
+      sendMedia: vi.fn(async () => ({ key: { id: "unused" } })),
+      sendAudio: vi.fn(async () => ({ key: { id: "unused" } })),
+      markAsRead: vi.fn(async () => undefined),
+      updateMessage: vi.fn(async () => undefined),
+    };
+    const recordOutbound = vi.spyOn(inbox, "recordOutbound");
+    const whatsapp = new WhatsAppService(inbox, provider);
+    const context = {
+      workspaceId,
+      actorUserId: "user-1",
+      actorType: "user" as const,
+    };
+
+    await whatsapp.sendText(context, conversationId, {
+      text: "Já vou verificar",
+      quoted: {
+        providerMessageId: "wamid-in-1",
+        fromMe: false,
+        previewText: "O caixa não fecha",
+      },
+    });
+    expect(provider.sendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quoted: {
+          providerMessageId: "wamid-in-1",
+          fromMe: false,
+          previewText: "O caixa não fecha",
+          remoteJid: "5511999999999@s.whatsapp.net",
+        },
+      }),
+    );
+    // The database resolves the provider id to the quoted row.
+    expect(recordOutbound).toHaveBeenCalledWith(
+      context,
+      conversationId,
+      expect.objectContaining({ quotedProviderMessageId: "wamid-in-1" }),
+    );
+
+    await expect(
+      whatsapp.editMessage(context, conversationId, {
+        id: "wamid-out-reply",
+        text: "Já verifiquei, **pode tentar de novo**",
+      }),
+    ).resolves.toBe("Já verifiquei, *pode tentar de novo*");
+    expect(provider.updateMessage).toHaveBeenCalledWith({
+      instanceName: "mend-demo",
+      number: "5511999999999",
+      remoteJid: "5511999999999@s.whatsapp.net",
+      id: "wamid-out-reply",
+      text: "Já verifiquei, *pode tentar de novo*",
+    });
+  });
+
   it("sends contact cards and records them with a readable body", async () => {
     const port = new FakeInboxPort();
     const inbox = new InboxService(port);

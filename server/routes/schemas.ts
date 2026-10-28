@@ -163,6 +163,9 @@ export const conversationAiPauseSchema = z
 export const messageReactionSchema = z
   .object({ reaction: z.string().trim().max(16) })
   .strict();
+export const messageEditSchema = z
+  .object({ text: z.string().trim().min(1).max(20_000) })
+  .strict();
 export const messagePresenceSchema = z
   .object({
     presence: z.enum(["composing", "recording", "paused"]).default("composing"),
@@ -215,6 +218,7 @@ export const sendMessageSchema = z
     fileName: z.string().trim().max(240).optional(),
     mimeType: z.string().trim().max(160).optional(),
     idempotencyKey: z.string().trim().min(8).max(200).optional(),
+    quotedMessageId: uuid.optional(),
     mediaBatchId: uuid.optional(),
     assetId: uuid.optional(),
     attachments: z

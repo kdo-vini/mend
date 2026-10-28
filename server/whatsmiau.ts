@@ -47,11 +47,19 @@ export interface CreateInstanceInput {
   webhookUrl?: string;
   webhookSecret?: string;
 }
+export interface QuotedMessageReference {
+  providerMessageId: string;
+  fromMe: boolean;
+  remoteJid: string;
+  /** Shown by WhatsApp when the quoted message is not on the phone. */
+  previewText?: string;
+}
 export interface SendTextInput {
   instanceName: string;
   number: string;
   text: string;
   delay?: number;
+  quoted?: QuotedMessageReference;
   /** Stable key for providers that support retry-safe outbound delivery. */
   idempotencyKey?: string;
 }
@@ -87,6 +95,13 @@ export interface DeleteMessageInput {
   remoteJid: string;
   fromMe: boolean;
   participant?: string;
+}
+export interface UpdateMessageInput {
+  instanceName: string;
+  number: string;
+  remoteJid: string;
+  id: string;
+  text: string;
 }
 export interface SendReactionInput {
   instanceName: string;
@@ -618,6 +633,18 @@ export class WhatsmiauMessagingProvider {
           }),
           text: input.text,
           delay: input.delay,
+          ...(input.quoted
+            ? {
+                quoted: {
+                  key: {
+                    id: input.quoted.providerMessageId,
+                    fromMe: input.quoted.fromMe,
+                    remoteJid: input.quoted.remoteJid,
+                  },
+                  message: { conversation: input.quoted.previewText ?? "" },
+                },
+              }
+            : {}),
         }),
       },
     );
@@ -724,6 +751,20 @@ export class WhatsmiauMessagingProvider {
           remoteJid: input.remoteJid,
           fromMe: input.fromMe,
           ...(input.participant ? { participant: input.participant } : {}),
+        }),
+      },
+    );
+  }
+  /** Edits the text of a message this instance sent. */
+  updateMessage(input: UpdateMessageInput) {
+    return this.request<unknown>(
+      `/chat/updateMessage/${encodeURIComponent(input.instanceName)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          number: input.number,
+          text: input.text,
+          key: { remoteJid: input.remoteJid, id: input.id, fromMe: true },
         }),
       },
     );

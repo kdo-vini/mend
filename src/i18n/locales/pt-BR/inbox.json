@@ -134,6 +134,7 @@
     "stop": "Parar",
     "voice": "Voz",
     "transcriptionProcessing": "Transcrevendo áudio…",
+    "transcription": "Transcrição",
     "transcriptionUnavailable": "Transcrição indisponível",
     "generating": "Gerando…",
     "insertAiDraft": "Inserir rascunho de IA",
@@ -143,6 +144,8 @@
     "issueLinked": "Chamado vinculado",
     "scrollLatest": "Rolar até as mensagens mais recentes",
     "newMessages": "Novas mensagens",
+    "unreadMessages_one": "{{count}} mensagem não lida",
+    "unreadMessages_other": "{{count}} mensagens não lidas",
     "intent": "Intenção: {{intent}}",
     "sources": "Fontes: {{sources}}",
     "humanTakeoverReason": "Motivo da transferência para humano",
@@ -191,7 +194,14 @@
     "you": "Você",
     "now": "agora",
     "openConversation": "Abrir conversa com {{name}}",
-    "sent": "enviada"
+    "sent": "enviada",
+    "reply": "Responder",
+    "replyingTo": "Respondendo a {{name}}",
+    "cancelReply": "Cancelar resposta",
+    "editingMessage": "Editando mensagem",
+    "cancelEdit": "Cancelar edição",
+    "quotedMessageUnavailable": "Mensagem original não carregada",
+    "goToQuoted": "Ir para a mensagem citada"
   },
   "toasts": {
     "chatStarted": "Conversa iniciada",
@@ -214,7 +224,8 @@
     "messageCanceled": "Mensagem cancelada",
     "draftFallback": "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um próximo passo.",
     "aiTurnedOn": "IA ativada nesta conversa",
-    "aiTurnedOff": "IA desativada nesta conversa"
+    "aiTurnedOff": "IA desativada nesta conversa",
+    "messageEdited": "Mensagem editada"
   },
   "errors": {
     "assignment": "Não foi possível salvar a atribuição.",
@@ -241,7 +252,10 @@
     "sendTimeout": "O WhatsApp não respondeu a tempo. Confirme se a mensagem chegou antes de reenviar.",
     "sendUnavailable": "O WhatsApp está indisponível no momento. Toque em Reenviar em instantes.",
     "startChat": "Não foi possível iniciar a conversa.",
-    "syncingMessage": "Esta mensagem ainda está sincronizando com o WhatsApp."
+    "syncingMessage": "Esta mensagem ainda está sincronizando com o WhatsApp.",
+    "editSentMessage": "Não foi possível editar a mensagem.",
+    "editWindowClosed": "O WhatsApp só permite editar até 15 minutos depois do envio.",
+    "quotedMessageMissing": "A mensagem respondida não está mais disponível. Envie sem citar."
   },
   "confirmations": {
     "deleteConversationTitle": "Excluir conversa?",

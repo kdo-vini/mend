@@ -801,6 +801,8 @@ export async function sendLiveMessage(input: {
   text: string;
   instanceName?: string;
   idempotencyKey?: string;
+  /** Message this text replies to; WhatsApp quotes it above the reply. */
+  quotedMessageId?: string;
 }) {
   if (!input.text.trim())
     throw new LiveActionError("Message text is required.");
@@ -814,8 +816,27 @@ export async function sendLiveMessage(input: {
         ...(input.idempotencyKey
           ? { idempotencyKey: input.idempotencyKey }
           : {}),
+        ...(input.quotedMessageId
+          ? { quotedMessageId: input.quotedMessageId }
+          : {}),
       }),
     },
+    input.workspaceId,
+  );
+}
+
+/** Rewrites the text of a message this workspace sent. */
+export async function editLiveMessage(input: {
+  workspaceId: string;
+  conversationId: string;
+  messageId: string;
+  text: string;
+}) {
+  if (!input.text.trim())
+    throw new LiveActionError("Message text is required.");
+  return apiRequest<unknown>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/messages/${encodeURIComponent(input.messageId)}`,
+    { method: "PATCH", body: JSON.stringify({ text: input.text.trim() }) },
     input.workspaceId,
   );
 }

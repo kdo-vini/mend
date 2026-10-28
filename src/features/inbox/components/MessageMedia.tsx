@@ -144,9 +144,14 @@ export function MessageMedia({
             </span>
           )}
           {message.text && (
-            <span className="media-caption">
-              <WhatsAppMessageText text={message.text} links={false} />
-            </span>
+            // Open by default: reading is faster than listening, but a long
+            // transcript can fold away when the operator prefers the audio.
+            <details className="media-transcript" open>
+              <summary>{t("ui.transcription")}</summary>
+              <span className="media-caption">
+                <WhatsAppMessageText text={message.text} links={false} />
+              </span>
+            </details>
           )}
           {!message.text && message.transcriptionStatus === "processing" && (
             <span className="media-transcript-status">

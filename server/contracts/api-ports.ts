@@ -235,6 +235,8 @@ export interface SendMessageInput {
   fileName?: string;
   mimeType?: string;
   idempotencyKey?: string;
+  /** Message this text replies to; WhatsApp shows it quoted above the reply. */
+  quotedMessageId?: string;
   mediaBatchId?: string;
   assetId?: string;
   attachments?: Array<{
@@ -279,6 +281,12 @@ export interface ConversationPort {
     conversationId: string,
     messageId: string,
     reaction: string,
+  ): Promise<unknown | null>;
+  editMessage(
+    context: RequestContext,
+    conversationId: string,
+    messageId: string,
+    text: string,
   ): Promise<unknown | null>;
   sendPresence(
     context: RequestContext,

@@ -8,6 +8,7 @@ import {
   conversationReadSchema,
   conversationSnoozeSchema,
   conversationStartSchema,
+  messageEditSchema,
   messageReactionSchema,
   messagePresenceSchema,
   sendMessageSchema,
@@ -242,6 +243,46 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
       noContent(response);
     }),
   );
+  router.patch(
+    "/api/conversations/:id/messages/:messageId",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "agent");
+      const messageId = parse(uuid, request.params.messageId);
+      const { text } = parse(messageEditSchema, request.body);
+      try {
+        send(
+          response,
+          200,
+          requireFound(
+            await dependencies.conversations.editMessage(
+              context,
+              pathId(request),
+              messageId,
+              text,
+            ),
+            "message",
+          ),
+        );
+      } catch (error) {
+        if (error instanceof Error && error.message === "message_not_editable")
+          throw new ApiHttpError(
+            422,
+            "message_not_editable",
+            "Only text messages sent from this workspace can be edited.",
+          );
+        if (
+          error instanceof Error &&
+          error.message === "message_edit_window_closed"
+        )
+          throw new ApiHttpError(
+            409,
+            "message_edit_window_closed",
+            "WhatsApp only allows editing a message for 15 minutes after it is sent.",
+          );
+        throw error;
+      }
+    }),
+  );
   router.delete(
     "/api/conversations/:id/messages/:messageId",
     asyncRoute(async (request, response) => {
@@ -359,6 +400,15 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
           ),
         );
       } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "quoted_message_not_found"
+        )
+          throw new ApiHttpError(
+            422,
+            "quoted_message_not_found",
+            "The message being replied to is not in this conversation.",
+          );
         throw mediaApiError(error) ?? error;
       }
     }),
