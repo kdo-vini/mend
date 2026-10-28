@@ -1166,10 +1166,13 @@ export function InboxPage({
    * operator can do about it, instead of the same "could not send" for a
    * dropped WhatsApp session, a refused message and a provider outage.
    */
-  const sendFailureMessage = (error: unknown): string => {
+  const sendFailureMessage = (
+    error: unknown,
+    fallbackKey = "errors.sendMessage",
+  ): string => {
     const code = error instanceof LiveActionError ? error.code : undefined;
     const key = code ? sendErrorKeys[code] : undefined;
-    return localizedError(error, t(key ?? "errors.sendMessage"));
+    return localizedError(error, t(key ?? fallbackKey));
   };
 
   /**
@@ -1470,7 +1473,7 @@ export function InboxPage({
           status: "failed",
           uploadProgress: undefined,
         });
-        onToast(localizedError(error, t("errors.sendAttachment")), "error");
+        onToast(sendFailureMessage(error, "errors.sendAttachment"), "error");
         return;
       }
       pending.forEach((item) =>

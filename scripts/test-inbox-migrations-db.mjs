@@ -415,7 +415,9 @@ await rejects(
   "audit insert",
 );
 
-// pause_conversation_for_human is not executable by PUBLIC/anon/authenticated.
+// pause_conversation_for_human: never PUBLIC/anon. authenticated keeps EXECUTE
+// because the SECURITY INVOKER public.pause_conversation_ai calls it as the
+// caller; private is not exposed through PostgREST.
 await asSuper();
 const acl = await q(
   `select
@@ -430,10 +432,28 @@ const acl = await q(
 assert.equal(acl.length, 1);
 assert.deepEqual(acl[0], {
   anon: false,
-  authed: false,
+  authed: true,
   svc: true,
   public_exec: false,
 });
+
+// A member's human send pauses the AI; a non-member is refused.
+await asRole("authenticated", agentUser);
+const [paused] = await q(
+  "select (public.pause_conversation_ai($1, $2, 'human_reply')).automation_state as state",
+  [W, convId],
+);
+assert.equal(paused.state, "human_paused");
+await asRole("authenticated", owner2);
+await rejects(
+  () =>
+    db.query("select public.pause_conversation_ai($1, $2, 'human_reply')", [
+      W,
+      convId,
+    ]),
+  /workspace_access_denied/,
+  "non-member pause",
+);
 
 // last-owner guard.
 await asRole("authenticated", owner);

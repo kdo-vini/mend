@@ -52,7 +52,29 @@ const roleChecksMigrationPath = fileURLToPath(
   ),
 );
 
+const pauseHelperGrantMigrationPath = fileURLToPath(
+  new URL(
+    "../supabase/migrations/20261027120000_restore_pause_helper_grant.sql",
+    import.meta.url,
+  ),
+);
+
 describe("Supabase security migration contract", () => {
+  it("lets the invoker pause wrapper reach its private helper again", async () => {
+    // public.pause_conversation_ai is SECURITY INVOKER, so its caller needs
+    // EXECUTE on the helper or every human send stops pausing the AI.
+    const sql = await readFile(pauseHelperGrantMigrationPath, "utf8");
+    expect(sql).toContain(
+      "grant execute on function private.pause_conversation_for_human(uuid, uuid, uuid, uuid, text) to authenticated;",
+    );
+    expect(sql).not.toMatch(/to (public|anon)\b/);
+    const config = await readFile(
+      fileURLToPath(new URL("../supabase/config.toml", import.meta.url)),
+      "utf8",
+    );
+    expect(config).toMatch(/^schemas = \["public", "graphql_public"\]/m);
+  });
+
   it("replaces member-wide write policies with role-checked ones and locks owners", async () => {
     const sql = await readFile(roleChecksMigrationPath, "utf8");
 
