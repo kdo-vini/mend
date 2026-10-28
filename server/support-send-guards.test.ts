@@ -73,11 +73,11 @@ describe("support send guards", () => {
     expect(port.sendText).not.toHaveBeenCalled();
   });
 
-  it("rejects with human_replied when a human wrote last", async () => {
-    const { port, post } = setup(ready, { reject: "human_replied" });
+  it("refuses with 409 reply_not_allowed only when ai_mode is off", async () => {
+    const { port, post } = setup({ ...ready, aiMode: "off" });
     const response = await post({ conversationId: CONVERSATION, text: "Oi" });
     expect(response.status).toBe(409);
-    expect(response.body).toEqual({ error: "human_replied" });
+    expect(response.body).toEqual({ error: "reply_not_allowed" });
     expect(port.sendText).not.toHaveBeenCalled();
   });
 
@@ -147,19 +147,38 @@ describe("evaluateReplyGuard", () => {
     ).toEqual({ latestInboundId: "in1" });
   });
 
-  it("is superseded by a later human outbound or inbound", () => {
-    expect(
-      evaluateReplyGuard({
-        sourceMessageId: "in1",
-        messages: [msg("in1", "inbound", 1), msg("h", "outbound", 2)],
-      }).reject,
-    ).toBe("superseded");
+  it("is superseded only by a newer inbound", () => {
     expect(
       evaluateReplyGuard({
         sourceMessageId: "in1",
         messages: [msg("in1", "inbound", 1), msg("in2", "inbound", 2)],
       }).reject,
     ).toBe("superseded");
+  });
+
+  it("is not superseded by a later human text or reaction", () => {
+    expect(
+      evaluateReplyGuard({
+        sourceMessageId: "in1",
+        messages: [
+          msg("in1", "inbound", 1),
+          msg("h", "outbound", 2),
+          msg("r", "outbound", 3),
+        ],
+      }),
+    ).toEqual({ latestInboundId: "in1" });
+  });
+
+  it("is not superseded by a customer reaction", () => {
+    expect(
+      evaluateReplyGuard({
+        sourceMessageId: "in1",
+        messages: [
+          msg("in1", "inbound", 1),
+          { ...msg("r", "inbound", 2), messageType: "reaction" },
+        ],
+      }),
+    ).toEqual({ latestInboundId: "in1" });
   });
 
   it("ignores a later AI outbound for the source check", () => {
@@ -171,25 +190,20 @@ describe("evaluateReplyGuard", () => {
     ).toBeUndefined();
   });
 
-  it("without a source, rejects only when a human wrote last", () => {
+  it("is superseded when the source is outside the recent window", () => {
+    expect(
+      evaluateReplyGuard({
+        sourceMessageId: "gone",
+        messages: [msg("in1", "inbound", 1)],
+      }).reject,
+    ).toBe("superseded");
+  });
+
+  it("without a source, allows a reply after a human wrote last", () => {
     expect(
       evaluateReplyGuard({
         messages: [msg("in1", "inbound", 1), msg("h", "outbound", 2)],
-      }).reject,
-    ).toBe("human_replied");
-    expect(
-      evaluateReplyGuard({
-        messages: [msg("h", "outbound", 1), msg("in1", "inbound", 2)],
-      }).reject,
-    ).toBeUndefined();
-  });
-
-  it("honours a takeover newer than the latest inbound", () => {
-    expect(
-      evaluateReplyGuard({
-        humanTakeoverAt: "2026-10-26T10:05:00Z",
-        messages: [msg("in1", "inbound", 1)],
-      }).reject,
-    ).toBe("human_replied");
+      }),
+    ).toEqual({ latestInboundId: "in1" });
   });
 });

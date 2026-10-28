@@ -10,7 +10,6 @@ import {
   registerInternalSupportSendRoute,
   SUPPORT_SEND_PATH,
   SupabaseSupportSendPort,
-  supportHumanPaused,
   type SupportSendConversation,
   type SupportSendPort,
 } from "./support-send.js";
@@ -129,19 +128,15 @@ describe("POST /internal/support/send", () => {
     expect(port.sendText).not.toHaveBeenCalled();
   });
 
-  it("refuses with 409 while a human has taken over", async () => {
-    const port = fakePort({
-      workspaceId: WORKSPACE,
-      aiMode: "safe_auto",
-      humanPaused: true,
-    });
+  it("sends while a human has taken over, as long as the AI is on", async () => {
+    // human_paused lives in conversation_ai_state; the port no longer reads it.
+    const port = fakePort({ workspaceId: WORKSPACE, aiMode: "safe_auto" });
     const response = await post(buildApp(port), {
       conversationId: CONVERSATION,
       text: "Oi",
     });
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual({ error: "human_paused" });
-    expect(port.sendText).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(port.sendText).toHaveBeenCalledOnce();
   });
 
   it("sends through the conversation's workspace with the retry key", async () => {
@@ -190,14 +185,6 @@ describe("POST /internal/support/send", () => {
   });
 });
 
-describe("supportHumanPaused", () => {
-  it("blocks only a human takeover, even with an expired paused_until", () => {
-    expect(supportHumanPaused({ automationState: "human_paused" })).toBe(true);
-    expect(supportHumanPaused({ automationState: "ai_active" })).toBe(false);
-    expect(supportHumanPaused(undefined)).toBe(false);
-  });
-});
-
 describe("SupabaseSupportSendPort", () => {
   function client(data: unknown[], state: unknown[] = []) {
     const calls: Array<{ op: string; args: unknown[] }> = [];
@@ -238,7 +225,6 @@ describe("SupabaseSupportSendPort", () => {
       workspaceId: WORKSPACE,
       isGroup: false,
       aiMode: "off",
-      humanPaused: false,
     });
     expect(fake.calls).toContainEqual({
       op: "eq",
@@ -246,7 +232,7 @@ describe("SupabaseSupportSendPort", () => {
     });
   });
 
-  it("reports a human takeover from conversation_ai_state", async () => {
+  it("does not let human_paused block a conversation with the AI on", async () => {
     const fake = client(
       [{ id: CONVERSATION, workspace_id: WORKSPACE, ai_mode: "safe_auto" }],
       [{ automation_state: "human_paused", paused_until: null }],
@@ -259,13 +245,7 @@ describe("SupabaseSupportSendPort", () => {
     ).resolves.toEqual({
       workspaceId: WORKSPACE,
       isGroup: false,
-      humanTakeoverAt: undefined,
       aiMode: "safe_auto",
-      humanPaused: true,
-    });
-    expect(fake.calls).toContainEqual({
-      op: "eq",
-      args: ["conversation_id", CONVERSATION],
     });
   });
 
