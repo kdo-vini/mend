@@ -25,12 +25,8 @@ const MAX_SUPPORT_TEXT_LENGTH = 4_096;
 export interface SupportSendConversation {
   workspaceId: string;
   aiMode: string;
-  /** A human took over; Support must not answer while this holds. */
-  humanPaused?: boolean;
   /** WhatsApp group chat: Support never replies there. */
   isGroup?: boolean;
-  /** When the last human takeover started (ISO). */
-  humanTakeoverAt?: string;
 }
 
 export interface SupportReplyMessage {
@@ -38,9 +34,10 @@ export interface SupportReplyMessage {
   direction: string;
   aiGenerated: boolean;
   createdAt: string;
+  messageType?: string;
 }
 
-export type SupportReplyRejection = "superseded" | "human_replied";
+export type SupportReplyRejection = "superseded";
 
 export interface SupportReplyGuard {
   reject?: SupportReplyRejection;
@@ -49,43 +46,30 @@ export interface SupportReplyGuard {
 }
 
 /**
- * Decides whether the bot's reply is still wanted. With a sourceMessageId the
- * reply is stale when anything human or any newer inbound arrived after it;
- * without one, it is refused when a human wrote last (after the last inbound).
+ * Decides whether the bot's reply is still wanted. Only ai_mode=off blocks
+ * Support (checked by the caller); a human reply, reaction or human_paused
+ * does not. With a sourceMessageId the reply is stale only when a newer
+ * inbound arrived after it, so one burst never gets two answers.
  */
 export function evaluateReplyGuard(input: {
   messages: readonly SupportReplyMessage[];
   sourceMessageId?: string;
-  humanTakeoverAt?: string;
 }): SupportReplyGuard {
   const time = (message: { createdAt: string }) =>
     Date.parse(message.createdAt);
-  const ordered = [...input.messages].sort((a, b) => time(b) - time(a));
+  // A reaction (either side) is not a new turn in the conversation.
+  const ordered = input.messages
+    .filter((m) => m.messageType !== "reaction")
+    .sort((a, b) => time(b) - time(a));
   const latestInbound = ordered.find((m) => m.direction === "inbound");
   const base = latestInbound ? { latestInboundId: latestInbound.id } : {};
-  const takeover = input.humanTakeoverAt
-    ? Date.parse(input.humanTakeoverAt)
-    : Number.NaN;
-  const isHuman = (m: SupportReplyMessage) =>
-    m.direction === "outbound" && !m.aiGenerated;
   if (input.sourceMessageId) {
     const source = ordered.find((m) => m.id === input.sourceMessageId);
     // Not in the recent window (or unknown): too much has happened since.
     if (!source) return { ...base, reject: "superseded" };
-    const newer = ordered.filter((m) => time(m) > time(source));
-    if (
-      newer.some((m) => m.direction === "inbound" || isHuman(m)) ||
-      takeover > time(source)
-    )
+    if (latestInbound && time(latestInbound) > time(source))
       return { ...base, reject: "superseded" };
-    return base;
   }
-  const latest = ordered[0];
-  if (
-    (latest && isHuman(latest)) ||
-    (latestInbound && takeover > time(latestInbound))
-  )
-    return { ...base, reject: "human_replied" };
   return base;
 }
 
@@ -105,16 +89,6 @@ export function deriveSupportIdempotencyKey(input: {
     )
     .digest("hex");
   return `support-send:${digest}`;
-}
-
-/**
- * Same rule as Mend's own automation worker: human_paused blocks until a human
- * resumes the AI, regardless of paused_until.
- */
-export function supportHumanPaused(
-  state: { automationState?: unknown } | undefined,
-): boolean {
-  return state?.automationState === "human_paused";
 }
 
 export interface SupportSendInput {
@@ -141,7 +115,6 @@ export interface SupportSendPort {
     workspaceId: string;
     conversationId: string;
     sourceMessageId?: string;
-    humanTakeoverAt?: string;
   }): Promise<SupportReplyGuard>;
   sendText(input: SupportSendInput): Promise<SupportSendResult>;
 }
@@ -190,18 +163,6 @@ export class SupabaseSupportSendPort implements SupportSendPort {
       | Record<string, unknown>
       | undefined;
     if (!row || typeof row.workspace_id !== "string") return null;
-    const stateResult = await this.client
-      .from("conversation_ai_state")
-      .select("automation_state, human_takeover_at")
-      .eq("conversation_id", input.conversationId)
-      .limit(1);
-    if (stateResult.error)
-      throw new Error(
-        `supabase:conversation_ai_state:${stateResult.error.message}`,
-      );
-    const state = (
-      Array.isArray(stateResult.data) ? stateResult.data[0] : undefined
-    ) as Record<string, unknown> | undefined;
     let isGroup = false;
     if (typeof row.contact_id === "string") {
       const contact = await this.client
@@ -221,14 +182,8 @@ export class SupabaseSupportSendPort implements SupportSendPort {
     return {
       workspaceId: row.workspace_id,
       isGroup,
-      ...(typeof state?.human_takeover_at === "string"
-        ? { humanTakeoverAt: state.human_takeover_at }
-        : {}),
       // Fail closed: a conversation without a mode is treated as off.
       aiMode: typeof row.ai_mode === "string" ? row.ai_mode : "off",
-      humanPaused: supportHumanPaused({
-        automationState: state?.automation_state,
-      }),
     };
   }
 
@@ -236,11 +191,10 @@ export class SupabaseSupportSendPort implements SupportSendPort {
     workspaceId: string;
     conversationId: string;
     sourceMessageId?: string;
-    humanTakeoverAt?: string;
   }): Promise<SupportReplyGuard> {
     const result = await this.client
       .from("messages")
-      .select("id, direction, ai_generated, created_at")
+      .select("id, direction, ai_generated, created_at, message_type")
       .eq("workspace_id", input.workspaceId)
       .eq("conversation_id", input.conversationId)
       .order("created_at", { ascending: false })
@@ -259,6 +213,9 @@ export class SupabaseSupportSendPort implements SupportSendPort {
               direction: String(row.direction),
               aiGenerated: row.ai_generated === true,
               createdAt: row.created_at,
+              ...(typeof row.message_type === "string"
+                ? { messageType: row.message_type }
+                : {}),
             },
           ]
         : [],
@@ -267,9 +224,6 @@ export class SupabaseSupportSendPort implements SupportSendPort {
       messages,
       ...(input.sourceMessageId
         ? { sourceMessageId: input.sourceMessageId }
-        : {}),
-      ...(input.humanTakeoverAt
-        ? { humanTakeoverAt: input.humanTakeoverAt }
         : {}),
     });
   }
@@ -409,8 +363,6 @@ export function registerInternalSupportSendRoute(
           return response.status(404).json({ error: "conversation_not_found" });
         if (!supportReplyAllowed({ aiMode: conversation.aiMode }))
           return response.status(409).json({ error: "reply_not_allowed" });
-        if (conversation.humanPaused)
-          return response.status(409).json({ error: "human_paused" });
         if (conversation.isGroup)
           return response.status(409).json({ error: "group_conversation" });
         const guard = options.port.checkReplyGuard
@@ -418,9 +370,6 @@ export function registerInternalSupportSendRoute(
               workspaceId: conversation.workspaceId,
               conversationId,
               ...(sourceMessageId ? { sourceMessageId } : {}),
-              ...(conversation.humanTakeoverAt
-                ? { humanTakeoverAt: conversation.humanTakeoverAt }
-                : {}),
             })
           : {};
         if (guard.reject)

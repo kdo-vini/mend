@@ -145,7 +145,7 @@ describe("GET /internal/support/events", () => {
         conversationId: "conversation-paused",
         automationState: "human_paused",
         pausedUntil: "2026-10-01T12:00:00.000Z",
-        replyAllowed: false,
+        replyAllowed: true,
       }),
       expect.objectContaining({
         conversationId: "conversation-off",
@@ -307,33 +307,16 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
 }
 
 describe("supportReplyAllowed", () => {
-  it("blocks inbound when ai_mode=off or automation_state=human_paused", () => {
+  it("blocks inbound only when ai_mode=off", () => {
     expect(supportReplyAllowed({ aiMode: "off" })).toBe(false);
+    expect(
+      supportReplyAllowed({ aiMode: "off", direction: "inbound" }),
+    ).toBe(false);
     expect(supportReplyAllowed({ aiMode: "draft" })).toBe(true);
     expect(supportReplyAllowed({ aiMode: "safe_auto" })).toBe(true);
     expect(
       supportReplyAllowed({ aiMode: "safe_auto", direction: "inbound" }),
     ).toBe(true);
-    expect(
-      supportReplyAllowed({
-        aiMode: "safe_auto",
-        automationState: "ai_active",
-        direction: "inbound",
-      }),
-    ).toBe(true);
-    expect(
-      supportReplyAllowed({
-        aiMode: "safe_auto",
-        automationState: "human_paused",
-        direction: "inbound",
-      }),
-    ).toBe(false);
-    expect(
-      supportReplyAllowed({ aiMode: "draft", automationState: "human_paused" }),
-    ).toBe(false);
-    expect(
-      supportReplyAllowed({ aiMode: "off", automationState: "ai_active" }),
-    ).toBe(false);
   });
 
   it("never allows a reply to an outbound human message", () => {
@@ -544,7 +527,7 @@ describe("SupabaseSupportEventStore", () => {
           transcription: { status: "ready", text: "transcrição do áudio" },
           aiMode: "safe_auto",
           automationState: "human_paused",
-          replyAllowed: false,
+          replyAllowed: true,
           createdAt: "2026-10-01T10:00:00Z",
         },
         {
@@ -593,7 +576,7 @@ describe("internal workspace event scope", () => {
         }) => [event.workspaceId, event.cursor, event.replyAllowed],
       ),
     ).toEqual([
-      [canonical, "2", false],
+      [canonical, "2", true],
       [canonical, "3", false],
     ]);
     expect(response.body.nextCursor).toBe("3");

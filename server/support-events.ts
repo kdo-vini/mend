@@ -66,8 +66,8 @@ export interface SupportEvent {
   pausedUntil?: string;
   /**
    * Always false for outbound: Support reads the human message as context and
-   * must never reply on top of it. For inbound, false when ai_mode=off or
-   * automation_state=human_paused, matching the 409s on /internal/support/send.
+   * must never reply on top of it. For inbound, false only when ai_mode=off,
+   * matching the 409 on /internal/support/send; human_paused does not block.
    */
   replyAllowed: boolean;
   createdAt: string;
@@ -157,20 +157,16 @@ export function supportEventFor(
 }
 
 /**
- * Support may reply to inbound unless the conversation's AI mode is off or a
- * human has taken over (human_paused); it never replies to an outbound human
- * message. Mirrors the send gate so the feed never invites a refused reply.
+ * Support may reply to inbound unless the conversation's AI mode is off; a
+ * human reply, reaction or human_paused does not block it. It never replies
+ * to an outbound human message. Mirrors the send gate so the feed never
+ * invites a refused reply.
  */
 export function supportReplyAllowed(flags: {
   aiMode: string;
-  automationState?: string;
   direction?: SupportEventDirection;
 }): boolean {
-  return (
-    flags.direction !== "outbound" &&
-    flags.aiMode !== "off" &&
-    flags.automationState !== "human_paused"
-  );
+  return flags.direction !== "outbound" && flags.aiMode !== "off";
 }
 
 function present(value: string | null | undefined): string | undefined {
@@ -252,7 +248,7 @@ export function buildSupportEvent(
     aiMode,
     automationState,
     ...(flags?.pausedUntil ? { pausedUntil: flags.pausedUntil } : {}),
-    replyAllowed: supportReplyAllowed({ aiMode, automationState, direction }),
+    replyAllowed: supportReplyAllowed({ aiMode, direction }),
     createdAt: row.createdAt,
   };
 }
