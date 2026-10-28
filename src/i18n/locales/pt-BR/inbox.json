@@ -93,6 +93,7 @@
     "audioPause": "Pausar áudio",
     "audioSeek": "Avançar ou retroceder no áudio",
     "audioLoading": "Carregando áudio",
+    "audioSpeed": "Velocidade do áudio: {{rate}}. Toque para mudar",
     "previewImage": "Imagem",
     "previewVideo": "Vídeo",
     "previewDocument": "Documento",

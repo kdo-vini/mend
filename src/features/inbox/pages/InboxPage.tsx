@@ -498,12 +498,16 @@ export function InboxPage({
   const messageSignature = selected?.messages
     .map((message) => message.id)
     .join("|");
-  const { messageCanvasRef, showScrollDown, scrollMessagesToBottom } =
-    useConversationScroll({
-      conversationId: selected?.id,
-      messageSignature,
-      viewKey: mobileConversationOpen ? "open" : "closed",
-    });
+  const {
+    messageCanvasRef,
+    showScrollDown,
+    scrollMessagesToBottom,
+    isBottomScrollPending,
+  } = useConversationScroll({
+    conversationId: selected?.id,
+    messageSignature,
+    viewKey: mobileConversationOpen ? "open" : "closed",
+  });
   const threadLoaded = selected?.threadLoaded === true;
   const olderLoadsRef = useRef(createOlderLoadTracker());
   const exhaustedConversationIdsRef = useRef(new Set<string>());
@@ -566,7 +570,11 @@ export function InboxPage({
       return;
 
     const loadOlder = () => {
-      if (canvas.scrollTop > 24 || !olderLoadsRef.current.start(conversationId))
+      if (
+        canvas.scrollTop > 24 ||
+        isBottomScrollPending() ||
+        !olderLoadsRef.current.start(conversationId)
+      )
         return;
       if (exhaustedConversationIdsRef.current.has(conversationId)) {
         olderLoadsRef.current.finish(conversationId);
@@ -625,12 +633,16 @@ export function InboxPage({
     canvas.addEventListener("scroll", loadOlder, { passive: true });
     // When the preview (or a short page) does not overflow, scroll never
     // fires — pull older messages until the canvas fills or history ends.
-    const fillTimer = window.setTimeout(loadOlder, 0);
+    // A thread that already overflows waits for the operator to scroll up.
+    const fillTimer = window.setTimeout(() => {
+      if (canvas.scrollHeight <= canvas.clientHeight + 24) loadOlder();
+    }, 0);
     return () => {
       canvas.removeEventListener("scroll", loadOlder);
       window.clearTimeout(fillTimer);
     };
   }, [
+    isBottomScrollPending,
     liveMode,
     messageCanvasRef,
     messageSignature,

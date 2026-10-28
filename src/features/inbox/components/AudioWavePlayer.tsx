@@ -1,11 +1,22 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import {
+  applyAudioPlaybackRate,
+  formatAudioPlaybackRate,
+  nextAudioPlaybackRate,
+  readStoredAudioPlaybackRate,
+  storeAudioPlaybackRate,
+  type AudioPlaybackRate,
+} from "../audio-playback-rate";
 
 const WAVEFORM = [
   12, 19, 15, 27, 21, 34, 18, 24, 39, 29, 17, 31, 22, 40, 26, 18, 35, 23, 30,
   15, 37, 25, 19, 33, 22, 41, 28, 17, 31, 20, 36, 24, 14, 29, 39, 21, 32, 18,
 ];
+
+// One voice note plays at a time, like WhatsApp.
+let playingNow: HTMLAudioElement | null = null;
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -26,15 +37,40 @@ export function AudioWavePlayer({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [ready, setReady] = useState(false);
+  const [rate, setRate] = useState<AudioPlaybackRate>(1);
+
+  useEffect(() => {
+    setRate(readStoredAudioPlaybackRate());
+    const audio = audioRef.current;
+    return () => {
+      if (audio && playingNow === audio) {
+        audio.pause();
+        playingNow = null;
+      }
+    };
+  }, []);
 
   const togglePlayback = () => {
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
+      // Another player may have changed the shared speed since this mounted.
+      const storedRate = readStoredAudioPlaybackRate();
+      setRate(storedRate);
+      applyAudioPlaybackRate(audio, storedRate);
+      if (playingNow && playingNow !== audio) playingNow.pause();
+      playingNow = audio;
       void audio.play().catch(onError);
     } else {
       audio.pause();
     }
+  };
+
+  const cycleRate = () => {
+    const next = nextAudioPlaybackRate(rate);
+    setRate(next);
+    storeAudioPlaybackRate(next);
+    if (audioRef.current) applyAudioPlaybackRate(audioRef.current, next);
   };
 
   const seek = (value: number) => {
@@ -67,9 +103,10 @@ export function AudioWavePlayer({
         }
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onEnded={() => {
+        onEnded={(event) => {
           setPlaying(false);
           setCurrentTime(0);
+          if (playingNow === event.currentTarget) playingNow = null;
         }}
         onError={onError}
       />
@@ -116,6 +153,15 @@ export function AudioWavePlayer({
           <span>{ready ? formatTime(duration) : t("ui.audioLoading")}</span>
         </div>
       </div>
+      <button
+        className="audio-wave-player__rate"
+        type="button"
+        aria-label={t("ui.audioSpeed", { rate: formatAudioPlaybackRate(rate) })}
+        data-active={rate !== 1 ? "true" : undefined}
+        onClick={cycleRate}
+      >
+        {formatAudioPlaybackRate(rate)}
+      </button>
     </div>
   );
 }
