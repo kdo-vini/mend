@@ -309,9 +309,9 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
 describe("supportReplyAllowed", () => {
   it("blocks inbound only when ai_mode=off", () => {
     expect(supportReplyAllowed({ aiMode: "off" })).toBe(false);
-    expect(
-      supportReplyAllowed({ aiMode: "off", direction: "inbound" }),
-    ).toBe(false);
+    expect(supportReplyAllowed({ aiMode: "off", direction: "inbound" })).toBe(
+      false,
+    );
     expect(supportReplyAllowed({ aiMode: "draft" })).toBe(true);
     expect(supportReplyAllowed({ aiMode: "safe_auto" })).toBe(true);
     expect(
