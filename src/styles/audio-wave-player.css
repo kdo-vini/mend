@@ -119,6 +119,35 @@
   font-variant-numeric: tabular-nums;
 }
 
+.audio-wave-player__rate {
+  flex: 0 0 auto;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.audio-wave-player__rate:hover {
+  background: var(--surface-selected);
+}
+
+.audio-wave-player__rate[data-active="true"] {
+  background: var(--action-wash);
+  color: var(--action-strong);
+}
+
+.audio-wave-player__rate:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
 @media (max-width: 420px) {
   .audio-wave-player {
     min-width: 0;

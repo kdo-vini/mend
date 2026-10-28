@@ -48,6 +48,13 @@ importa dados no ledger Diagium nem altera cobranças. Valores por moeda, datas 
 criação/pagamento, cobertura parcial e credenciais server-only estão documentados
 em [Zelo finance connection](ZELO_FINANCE_CONNECTION.md).
 
+`server/zelo-customer.ts` lê, com a mesma chave server-only, a loja Zelo por trás
+de um contato do inbox (`GET /api/conversations/:id/zelo-customer`): o telefone
+vem da conversa, nunca do cliente, e casa por DDD + 8 últimos dígitos com
+`contato`, `whatsmiau_phone` ou `manager_phone` de `empresa_perfil`. Devolve
+plano, situação, produtos e saúde (último uso do PDV, WhatsApp, impressora). O
+valor mensal só sai para quem tem o grant financeiro. Só GET, tabelas fixas.
+
 No frontend, `features/finance/model.ts` mantém drafts compatíveis com os schemas,
 e `useFinanceEditor` preserva edição local durante conflitos de versão.
 `useFinanceData` separa resumo mensal das listas: mudar a aba não refaz o resumo.

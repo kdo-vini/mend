@@ -330,3 +330,37 @@ export interface KnowledgeSourceSummary {
   lastSyncAt?: string;
   errorCode?: string;
 }
+
+/** The Zelo store behind a support contact, as the server summarizes it. */
+export interface ZeloCustomer {
+  ownerUserId: string;
+  storeName: string;
+  city: string | null;
+  customerSince: string | null;
+  /** Which phone of the store matched the contact. */
+  matchedBy: "store" | "whatsapp" | "manager";
+  deletionScheduledAt: string | null;
+  subscription: {
+    planTier: string | null;
+    status: string | null;
+    accessUntil: string | null;
+    cancelAtPeriodEnd: boolean;
+    billingType: string | null;
+    paymentProvider: string | null;
+    monthlyValueCents: number | null;
+    nextChargeAt: string | null;
+  } | null;
+  products: {
+    pdv: boolean;
+    menu: boolean;
+    chat: boolean;
+    tables: boolean;
+    accesses: boolean;
+    fiscal: boolean;
+  };
+  health: {
+    pdvLastSeenAt: string | null;
+    whatsappConnected: boolean | null;
+    printerLastSeenAt: string | null;
+  };
+}

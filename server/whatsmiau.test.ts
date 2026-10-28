@@ -388,6 +388,66 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
+  it("sends a quoted reply and edits a sent text in the provider's format", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    globalThis.fetch = async (input, init) => {
+      calls.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      });
+      return new Response(JSON.stringify({ key: { id: "wamid-out" } }), {
+        status: 200,
+      });
+    };
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      await provider.sendText({
+        instanceName: "mend-test",
+        number: "5511999999999",
+        text: "Já vou verificar",
+        quoted: {
+          providerMessageId: "wamid-in",
+          fromMe: false,
+          remoteJid: "5511999999999@s.whatsapp.net",
+          previewText: "O caixa não fecha",
+        },
+      });
+      await provider.updateMessage({
+        instanceName: "mend-test",
+        number: "5511999999999",
+        remoteJid: "5511999999999@s.whatsapp.net",
+        id: "wamid-out",
+        text: "Já verifiquei",
+      });
+      expect(calls[0].body.quoted).toEqual({
+        key: {
+          id: "wamid-in",
+          fromMe: false,
+          remoteJid: "5511999999999@s.whatsapp.net",
+        },
+        message: { conversation: "O caixa não fecha" },
+      });
+      expect(calls[1]).toEqual({
+        url: "https://provider.test/v2/chat/updateMessage/mend-test",
+        body: {
+          number: "5511999999999",
+          text: "Já verifiquei",
+          key: {
+            remoteJid: "5511999999999@s.whatsapp.net",
+            id: "wamid-out",
+            fromMe: true,
+          },
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("gives media and audio sends a longer timeout than other calls", async () => {
     const originalFetch = globalThis.fetch;
     // Answers after 60 ms unless the caller aborts first.

@@ -94,6 +94,7 @@ const loadOlderLiveConversationMessages = vi.fn(
 const deleteLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const updateLiveConversation = vi.fn(async (_input: unknown) => undefined);
 const sendLiveMessage = vi.fn(async (_input: unknown) => undefined);
+const editLiveMessage = vi.fn(async (_input: unknown) => undefined);
 const sendLiveContact = vi.fn(async (_input: unknown) => undefined);
 const pauseLiveConversationAi = vi.fn(async (_input: unknown) => undefined);
 const resumeLiveConversationAi = vi.fn(async (_input: unknown) => undefined);
@@ -119,6 +120,8 @@ vi.mock("../api", () => ({
   ) => loadOlderLiveConversationMessages(workspaceId, conversationId, before),
   deleteLiveConversation: (input: unknown) => deleteLiveConversation(input),
   deleteLiveMessage: vi.fn(),
+  editLiveMessage: (input: unknown) => editLiveMessage(input),
+  loadLiveZeloCustomer: vi.fn(async () => []),
   getMessageMediaUrl: vi.fn(async () => "https://media.example/1"),
   markLiveConversationRead: vi.fn(async () => undefined),
   reactToLiveMessage: vi.fn(),
@@ -235,6 +238,8 @@ describe("InboxPage new chat", () => {
     resumeLiveConversationAi.mockClear();
     sendLiveMessage.mockReset();
     sendLiveMessage.mockResolvedValue(undefined);
+    editLiveMessage.mockReset();
+    editLiveMessage.mockResolvedValue(undefined);
     sendLiveContact.mockReset();
     sendLiveContact.mockResolvedValue(undefined);
   });
@@ -539,6 +544,25 @@ describe("InboxPage new chat", () => {
         );
       await act(async () => voice()?.click());
       expect(voice()?.getAttribute("aria-pressed")).toBe("true");
+      // The operator sees it is recording, and for how long.
+      expect(
+        document.body.querySelector(".recording-indicator")?.textContent,
+      ).toContain("0:00");
+
+      // Discarding drops the clip instead of staging it.
+      await act(async () =>
+        document.body
+          .querySelector<HTMLButtonElement>(
+            ".recording-indicator [aria-label='Descartar gravação']",
+          )
+          ?.click(),
+      );
+      expect(document.body.querySelector(".recording-indicator")).toBeNull();
+      expect(
+        document.body.querySelector(".attachment-preview-card audio"),
+      ).toBeNull();
+
+      await act(async () => voice()?.click());
       await act(async () => voice()?.click());
 
       expect(voice()?.getAttribute("aria-pressed")).toBe("false");
@@ -890,6 +914,34 @@ describe("InboxPage new chat", () => {
     });
   });
 
+  it("marks where the unread messages start, even after the thread is read", async () => {
+    const unreadThread = { ...seedConversations[0], unread: 1 };
+    await act(async () =>
+      root.render(
+        <InboxHarness
+          initialConversations={[seedConversations[1], unreadThread]}
+        />,
+      ),
+    );
+    await act(async () => clickConversation(unreadThread.name));
+    await act(async () =>
+      updateConversations?.((current) =>
+        current.map((item) =>
+          item.id === unreadThread.id ? { ...item, unread: 0 } : item,
+        ),
+      ),
+    );
+
+    const divider = document.body.querySelector(".unread-divider");
+    expect(divider?.textContent).toBe("1 mensagem não lida");
+    const lastInbound = [...unreadThread.messages]
+      .reverse()
+      .find((message) => message.direction === "inbound");
+    expect(divider?.nextElementSibling?.textContent).toContain(
+      lastInbound?.text,
+    );
+  });
+
   it("bounds mark-read at the newest inbound message shown", async () => {
     const { markLiveConversationRead } = await import("../api");
     vi.mocked(markLiveConversationRead).mockClear();
@@ -1016,6 +1068,145 @@ describe("InboxPage new chat", () => {
       ).idempotencyKey,
     });
     expect(sendLiveMessage).not.toHaveBeenCalled();
+  });
+
+  describe("reply and edit", () => {
+    const customerId = "1c3e5a7b-9d2f-4a6b-8c0d-1e2f3a4b5c6d";
+    const sentId = "2d4f6b8c-0e1a-4b7c-9d1e-2f3a4b5c6d7e";
+    const thread = (): Conversation => ({
+      ...seedConversations[0],
+      id: "conv-reply-edit",
+      unread: 0,
+      messages: [
+        {
+          id: customerId,
+          providerMessageId: "wamid-customer",
+          conversationId: "conv-reply-edit",
+          direction: "inbound",
+          sender: "Cliente Exemplo",
+          text: "O caixa não fecha",
+          time: "11:50",
+          createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+          type: "text",
+        },
+        {
+          id: sentId,
+          providerMessageId: "wamid-sent",
+          conversationId: "conv-reply-edit",
+          direction: "outbound",
+          sender: "Você",
+          text: "_*Marina está te atendendo*_\n\nVou verificar",
+          time: "11:55",
+          createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+          type: "text",
+          status: "delivered",
+        },
+      ],
+    });
+    const menuAction = async (rowText: string, label: string) => {
+      const row = [
+        ...document.body.querySelectorAll<HTMLElement>(".message-row"),
+      ].find((item) =>
+        item.querySelector(".message-bubble")?.textContent?.includes(rowText),
+      );
+      await act(async () =>
+        row
+          ?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']")
+          ?.click(),
+      );
+      await act(async () =>
+        [...document.body.querySelectorAll<HTMLButtonElement>("button")]
+          .find((button) => button.textContent?.trim() === label)
+          ?.click(),
+      );
+    };
+    const composer = () => {
+      const element = document.body.querySelector("textarea");
+      if (!element) throw new Error("composer was not rendered");
+      return element;
+    };
+
+    it("quotes the message a reply answers", async () => {
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[thread()]} />),
+      );
+      await menuAction("O caixa não fecha", "Responder");
+      expect(
+        document.body.querySelector(".composer-context-bar")?.textContent,
+      ).toContain("Respondendo a Cliente Exemplo");
+
+      await act(async () => type(composer(), "Já estou olhando"));
+      await act(async () =>
+        document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+      );
+
+      expect(sendLiveMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Já estou olhando",
+          quotedMessageId: customerId,
+        }),
+      );
+      expect(document.body.querySelector(".composer-context-bar")).toBeNull();
+      const reply = [
+        ...document.body.querySelectorAll<HTMLElement>(".message-row"),
+      ].find((row) => row.textContent?.includes("Já estou olhando"));
+      expect(reply?.querySelector(".message-quote")?.textContent).toContain(
+        "O caixa não fecha",
+      );
+    });
+
+    it("rewrites a sent message and brings back the reply being typed", async () => {
+      await act(async () =>
+        root.render(<InboxHarness initialConversations={[thread()]} />),
+      );
+      await act(async () => type(composer(), "rascunho em andamento"));
+      await menuAction("Vou verificar", "Editar");
+      // Only the body is edited; the attending intro stays on WhatsApp.
+      expect(composer().value).toBe("Vou verificar");
+
+      await act(async () => type(composer(), "Já verifiquei, pode tentar"));
+      await act(async () =>
+        document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+      );
+
+      expect(editLiveMessage).toHaveBeenCalledWith({
+        workspaceId: "workspace-1",
+        conversationId: "conv-reply-edit",
+        messageId: sentId,
+        text: "Já verifiquei, pode tentar",
+      });
+      expect(sendLiveMessage).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Já verifiquei, pode tentar");
+      expect(document.body.textContent).toContain("Editada");
+      expect(composer().value).toBe("rascunho em andamento");
+    });
+
+    it("puts the old text back when WhatsApp refuses the edit", async () => {
+      const { LiveActionError } = await import("../api");
+      editLiveMessage.mockRejectedValueOnce(
+        new LiveActionError("closed", 409, "message_edit_window_closed"),
+      );
+      const toasts: string[] = [];
+      await act(async () =>
+        root.render(
+          <InboxHarness
+            initialConversations={[thread()]}
+            onToast={(message) => toasts.push(message)}
+          />,
+        ),
+      );
+      await menuAction("Vou verificar", "Editar");
+      await act(async () => type(composer(), "Texto novo"));
+      await act(async () =>
+        document.body.querySelector<HTMLButtonElement>(".send-button")?.click(),
+      );
+
+      expect(document.body.textContent).toContain("Vou verificar");
+      expect(document.body.textContent).not.toContain("Texto novo");
+      expect(toasts.at(-1)).toBe(
+        "O WhatsApp só permite editar até 15 minutos depois do envio.",
+      );
+    });
   });
 
   describe("IA ativa toggle", () => {

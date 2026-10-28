@@ -8,6 +8,7 @@ import type {
   IssueType,
   Priority,
   Message as UiMessage,
+  ZeloCustomer,
 } from "../types";
 import type { SupportFlow } from "../shared/support-flow";
 import {
@@ -801,6 +802,8 @@ export async function sendLiveMessage(input: {
   text: string;
   instanceName?: string;
   idempotencyKey?: string;
+  /** Message this text replies to; WhatsApp quotes it above the reply. */
+  quotedMessageId?: string;
 }) {
   if (!input.text.trim())
     throw new LiveActionError("Message text is required.");
@@ -814,8 +817,40 @@ export async function sendLiveMessage(input: {
         ...(input.idempotencyKey
           ? { idempotencyKey: input.idempotencyKey }
           : {}),
+        ...(input.quotedMessageId
+          ? { quotedMessageId: input.quotedMessageId }
+          : {}),
       }),
     },
+    input.workspaceId,
+  );
+}
+
+/** The Zelo store(s) behind a support contact, matched by phone on the server. */
+export async function loadLiveZeloCustomer(input: {
+  workspaceId: string;
+  conversationId: string;
+}) {
+  const response = await apiRequest<{ data?: ZeloCustomer[] }>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/zelo-customer`,
+    {},
+    input.workspaceId,
+  );
+  return response.data ?? [];
+}
+
+/** Rewrites the text of a message this workspace sent. */
+export async function editLiveMessage(input: {
+  workspaceId: string;
+  conversationId: string;
+  messageId: string;
+  text: string;
+}) {
+  if (!input.text.trim())
+    throw new LiveActionError("Message text is required.");
+  return apiRequest<unknown>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/messages/${encodeURIComponent(input.messageId)}`,
+    { method: "PATCH", body: JSON.stringify({ text: input.text.trim() }) },
     input.workspaceId,
   );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  replaceHumanWhatsAppBody,
   agentAttendingLine,
   agentFirstName,
   formatHumanWhatsAppText,
@@ -53,5 +54,20 @@ describe("whatsapp-agent-intro", () => {
 
   it("falls through when the agent name is empty", () => {
     expect(formatHumanWhatsAppText("   ", "Boa tarde!")).toBe("Boa tarde!");
+  });
+});
+
+describe("replaceHumanWhatsAppBody", () => {
+  it("keeps the attending intro the customer already saw", () => {
+    expect(
+      replaceHumanWhatsAppBody(
+        "_*Lucas está te atendendo*_\n\nResposta antiga",
+        "Resposta nova",
+      ),
+    ).toBe("_*Lucas está te atendendo*_\n\nResposta nova");
+  });
+
+  it("sends only the new body when the message had no intro", () => {
+    expect(replaceHumanWhatsAppBody("Resposta antiga", " Nova ")).toBe("Nova");
   });
 });

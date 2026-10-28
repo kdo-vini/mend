@@ -48,7 +48,9 @@
     "followIssue": "Acompanhe o chamado vinculado até um resultado verificado",
     "reviewTriage": "Revise a conversa e escolha o próximo passo seguro",
     "human": "Atendimento humano · IA pausada",
-    "ai": "IA ativa nesta conversa"
+    "ai": "IA ativa nesta conversa",
+    "expand": "Mostrar painel do cliente",
+    "collapse": "Recolher painel do cliente"
   },
   "newChat": {
     "eyebrow": "Iniciar uma conversa",
@@ -93,6 +95,7 @@
     "audioPause": "Pausar áudio",
     "audioSeek": "Avançar ou retroceder no áudio",
     "audioLoading": "Carregando áudio",
+    "audioSpeed": "Velocidade do áudio: {{rate}}. Toque para mudar",
     "previewImage": "Imagem",
     "previewVideo": "Vídeo",
     "previewDocument": "Documento",
@@ -133,6 +136,7 @@
     "stop": "Parar",
     "voice": "Voz",
     "transcriptionProcessing": "Transcrevendo áudio…",
+    "transcription": "Transcrição",
     "transcriptionUnavailable": "Transcrição indisponível",
     "generating": "Gerando…",
     "insertAiDraft": "Inserir rascunho de IA",
@@ -142,6 +146,8 @@
     "issueLinked": "Chamado vinculado",
     "scrollLatest": "Rolar até as mensagens mais recentes",
     "newMessages": "Novas mensagens",
+    "unreadMessages_one": "{{count}} mensagem não lida",
+    "unreadMessages_other": "{{count}} mensagens não lidas",
     "intent": "Intenção: {{intent}}",
     "sources": "Fontes: {{sources}}",
     "humanTakeoverReason": "Motivo da transferência para humano",
@@ -190,7 +196,16 @@
     "you": "Você",
     "now": "agora",
     "openConversation": "Abrir conversa com {{name}}",
-    "sent": "enviada"
+    "sent": "enviada",
+    "reply": "Responder",
+    "replyingTo": "Respondendo a {{name}}",
+    "cancelReply": "Cancelar resposta",
+    "editingMessage": "Editando mensagem",
+    "cancelEdit": "Cancelar edição",
+    "quotedMessageUnavailable": "Mensagem original não carregada",
+    "goToQuoted": "Ir para a mensagem citada",
+    "discardRecording": "Descartar gravação",
+    "recordingFor": "Tempo de gravação"
   },
   "toasts": {
     "chatStarted": "Conversa iniciada",
@@ -213,7 +228,8 @@
     "messageCanceled": "Mensagem cancelada",
     "draftFallback": "Entendi o impacto. Vou investigar este caso agora e te atualizo assim que tiver um próximo passo.",
     "aiTurnedOn": "IA ativada nesta conversa",
-    "aiTurnedOff": "IA desativada nesta conversa"
+    "aiTurnedOff": "IA desativada nesta conversa",
+    "messageEdited": "Mensagem editada"
   },
   "errors": {
     "assignment": "Não foi possível salvar a atribuição.",
@@ -240,7 +256,10 @@
     "sendTimeout": "O WhatsApp não respondeu a tempo. Confirme se a mensagem chegou antes de reenviar.",
     "sendUnavailable": "O WhatsApp está indisponível no momento. Toque em Reenviar em instantes.",
     "startChat": "Não foi possível iniciar a conversa.",
-    "syncingMessage": "Esta mensagem ainda está sincronizando com o WhatsApp."
+    "syncingMessage": "Esta mensagem ainda está sincronizando com o WhatsApp.",
+    "editSentMessage": "Não foi possível editar a mensagem.",
+    "editWindowClosed": "O WhatsApp só permite editar até 15 minutos depois do envio.",
+    "quotedMessageMissing": "A mensagem respondida não está mais disponível. Envie sem citar."
   },
   "confirmations": {
     "deleteConversationTitle": "Excluir conversa?",
@@ -249,5 +268,88 @@
     "deleteMessageTitle": "Excluir mensagem para todos?",
     "deleteMessageDescription": "Esta mensagem será excluída para todos no WhatsApp.",
     "deleteMessageConfirm": "Excluir mensagem"
+  },
+  "customer": {
+    "title": "Cliente no Zelo",
+    "loading": "Buscando a loja no Zelo…",
+    "unavailable": "Não foi possível consultar o Zelo agora.",
+    "notFound": "Nenhuma loja do Zelo usa este telefone.",
+    "manyStores": "Mais de uma loja usa este telefone:",
+    "unnamedStore": "Loja sem nome",
+    "openAdmin": "Abrir no Admin do Zelo",
+    "since": "Cliente desde {{date}}",
+    "matchedBy": {
+      "store": "Telefone de contato da loja",
+      "whatsapp": "WhatsApp da loja no Zelo",
+      "manager": "Telefone do gerente"
+    },
+    "sections": {
+      "subscription": "Assinatura",
+      "products": "Produtos",
+      "health": "Saúde agora",
+      "history": "Chamados desta conversa"
+    },
+    "plans": {
+      "pdv": "ZeloPDV",
+      "bundle": "Pacote (PDV + Atendimento)",
+      "chat": "Atendimento",
+      "none": "Sem assinatura"
+    },
+    "billing": {
+      "PIX": "Pix",
+      "CREDIT_CARD": "Cartão",
+      "INTERNAL": "Interna"
+    },
+    "payment": "Pagamento",
+    "monthlyValue": "Valor mensal",
+    "accessUntil": "Acesso até",
+    "nextCharge": "Próxima cobrança",
+    "status": {
+      "none": "Sem assinatura",
+      "canceled": "Cancelada",
+      "trialExpired": "Teste encerrado",
+      "expired_one": "Vencida há {{count}} dia",
+      "expired_other": "Vencida há {{count}} dias",
+      "trialing": "Em teste até {{date}}",
+      "cancelsOn": "Cancela em {{date}}",
+      "renewsSoon_one": "Vence em {{count}} dia",
+      "renewsSoon_other": "Vence em {{count}} dias",
+      "active": "Ativa até {{date}}",
+      "pending": "Pagamento pendente"
+    },
+    "products": {
+      "pdv": "PDV",
+      "menu": "Cardápio",
+      "chat": "Atendimento",
+      "tables": "Mesas",
+      "accesses": "Acessos",
+      "fiscal": "NFC-e",
+      "fiscalOff": "NFC-e desligada"
+    },
+    "health": {
+      "pdv": "Último uso do PDV",
+      "whatsapp": "WhatsApp da loja",
+      "printer": "Impressora",
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "noPrinter": "Nenhuma configurada"
+    },
+    "noHistory": "Nenhum chamado ligado a esta conversa.",
+    "copyId": "Copiar ID da loja",
+    "idCopied": "ID da loja copiado",
+    "alerts": {
+      "whatsappDisconnected": "WhatsApp da loja desconectado",
+      "deletionScheduled": "Conta com exclusão agendada"
+    },
+    "ago": {
+      "never": "Sem registro",
+      "now": "agora",
+      "minutes_one": "há {{count}} min",
+      "minutes_other": "há {{count}} min",
+      "hours_one": "há {{count}} h",
+      "hours_other": "há {{count}} h",
+      "days_one": "há {{count}} dia",
+      "days_other": "há {{count}} dias"
+    }
   }
 }

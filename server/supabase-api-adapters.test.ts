@@ -1157,6 +1157,56 @@ describe("Supabase API adapters", () => {
     );
   });
 
+  it("refuses to edit a message WhatsApp would reject", async () => {
+    const updateMessage = vi.fn(async () => undefined);
+    const provider = { ...fakeProvider(), updateMessage };
+    const recent = new Date().toISOString();
+    const client = new FakeClient({
+      messages: [
+        {
+          id: "message-inbound",
+          workspace_id: workspaceId,
+          conversation_id: conversationId,
+          provider_message_id: "provider-inbound",
+          direction: "inbound",
+          message_type: "text",
+          text: "Oi",
+          is_deleted: false,
+          created_at: recent,
+        },
+        {
+          id: "message-old",
+          workspace_id: workspaceId,
+          conversation_id: conversationId,
+          provider_message_id: "provider-old",
+          direction: "outbound",
+          message_type: "text",
+          text: "Resposta",
+          is_deleted: false,
+          created_at: new Date(Date.now() - 16 * 60 * 1000).toISOString(),
+        },
+      ],
+    });
+    const conversations = adapters(client, provider).conversations;
+    const context = { workspaceId, userId, role: "agent" as const };
+
+    await expect(
+      conversations.editMessage(
+        context,
+        conversationId,
+        "message-inbound",
+        "Novo",
+      ),
+    ).rejects.toThrow("message_not_editable");
+    await expect(
+      conversations.editMessage(context, conversationId, "message-old", "Novo"),
+    ).rejects.toThrow("message_edit_window_closed");
+    await expect(
+      conversations.editMessage(context, conversationId, "missing", "Novo"),
+    ).resolves.toBeNull();
+    expect(updateMessage).not.toHaveBeenCalled();
+  });
+
   it("keeps membership and workspace reads scoped to the requested user/workspace", async () => {
     const client = new FakeClient({
       workspace_members: [

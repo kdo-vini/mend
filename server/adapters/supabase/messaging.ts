@@ -27,7 +27,10 @@ import {
   WorkspaceSupportAudioTranscriber,
 } from "../../providers.js";
 import type { AnySupabaseClient, WhatsmiauProviderPort } from "./types.js";
-import { formatHumanWhatsAppText } from "../../whatsapp-agent-intro.js";
+import {
+  formatHumanWhatsAppText,
+  replaceHumanWhatsAppBody,
+} from "../../whatsapp-agent-intro.js";
 import {
   WhatsAppService,
   type WhatsAppProvider,
@@ -51,6 +54,8 @@ const CONVERSATION_SELECT =
 const THREAD_MESSAGE_LIMIT = 50;
 /** AI drafts get more context than the thread view needs. */
 const AI_DRAFT_MESSAGE_LIMIT = 100;
+/** WhatsApp lets the sender edit a message for 15 minutes. */
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 
 /** Opaque keyset cursor over (last_message_at desc nulls last, id desc). */
 export function encodeConversationCursor(
@@ -869,6 +874,101 @@ export class SupabaseConversationAdapter implements ConversationPort {
     return this.get(context, conversationId);
   }
 
+  /**
+   * Rewrites a text this workspace sent. WhatsApp only accepts edits for a
+   * short while after sending, so an older message is refused up front
+   * rather than failing at the provider.
+   */
+  async editMessage(
+    context: RequestContext,
+    conversationId: string,
+    messageId: string,
+    body: string,
+  ) {
+    const result = await this.client
+      .from("messages")
+      .select(
+        "id, provider_message_id, direction, is_deleted, message_type, text, created_at",
+      )
+      .eq("id", messageId)
+      .eq("conversation_id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const message = checked("messages.get_for_edit", result) as Record<
+      string,
+      unknown
+    > | null;
+    if (!message) return null;
+    if (
+      message.direction !== "outbound" ||
+      message.is_deleted === true ||
+      message.message_type !== "text" ||
+      !message.provider_message_id
+    )
+      throw new Error("message_not_editable");
+    const sentAt = Date.parse(str(message.created_at));
+    if (
+      !Number.isFinite(sentAt) ||
+      Date.now() - sentAt > MESSAGE_EDIT_WINDOW_MS
+    )
+      throw new Error("message_edit_window_closed");
+    const text = await this.whatsapp.editMessage(
+      {
+        workspaceId: context.workspaceId,
+        actorUserId: context.userId,
+        actorType: "user",
+      },
+      conversationId,
+      {
+        id: String(message.provider_message_id),
+        text: replaceHumanWhatsAppBody(str(message.text), body),
+      },
+    );
+    const updated = await this.client
+      .from("messages")
+      .update({
+        text,
+        edited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", messageId)
+      .eq("conversation_id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .select("id")
+      .maybeSingle();
+    checked("messages.mark_edited", updated);
+    return this.get(context, conversationId);
+  }
+
+  /**
+   * The provider key of a message in this thread, for quoting it in a reply.
+   * Refuses a message from another thread or one WhatsApp cannot quote.
+   */
+  private async quotedReference(
+    context: RequestContext,
+    conversationId: string,
+    messageId: string,
+  ) {
+    const result = await this.client
+      .from("messages")
+      .select("id, provider_message_id, direction, is_deleted, text, caption")
+      .eq("id", messageId)
+      .eq("conversation_id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const message = checked("messages.get_for_quote", result) as Record<
+      string,
+      unknown
+    > | null;
+    if (!message || message.is_deleted === true || !message.provider_message_id)
+      throw new Error("quoted_message_not_found");
+    return {
+      providerMessageId: String(message.provider_message_id),
+      fromMe: message.direction === "outbound",
+      previewText: str(message.text || message.caption).slice(0, 200),
+    };
+  }
+
   async reactToMessage(
     context: RequestContext,
     conversationId: string,
@@ -1170,6 +1270,15 @@ export class SupabaseConversationAdapter implements ConversationPort {
         }),
         ...(input.idempotencyKey
           ? { idempotencyKey: input.idempotencyKey }
+          : {}),
+        ...(input.quotedMessageId
+          ? {
+              quoted: await this.quotedReference(
+                context,
+                conversationId,
+                input.quotedMessageId,
+              ),
+            }
           : {}),
       });
     else
