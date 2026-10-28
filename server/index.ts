@@ -97,6 +97,8 @@ app.use(
           "data:",
           "blob:",
           ...(supabaseOrigin ? [supabaseOrigin] : []),
+          // Contact photos: Whatsmiau keeps its copy of each one here.
+          "https://storage.googleapis.com/whatsmiau/",
         ],
         mediaSrc: [
           "'self'",

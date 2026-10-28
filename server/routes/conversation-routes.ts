@@ -211,6 +211,24 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
       noContent(response);
     }),
   );
+  router.post(
+    "/api/conversations/:id/contact-photo",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response);
+      const refresh = dependencies.conversations.refreshContactPhoto;
+      const photo = refresh
+        ? requireFound(
+            await refresh.call(
+              dependencies.conversations,
+              context,
+              pathId(request),
+            ),
+            "conversation",
+          )
+        : { url: null };
+      send(response, 200, { data: photo });
+    }),
+  );
   router.get(
     "/api/conversations/:id/zelo-customer",
     asyncRoute(async (request, response) => {

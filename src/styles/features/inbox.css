@@ -288,6 +288,15 @@
   font-weight: 700;
   letter-spacing: 0.01em;
 }
+.conversation-avatar.has-photo {
+  overflow: hidden;
+  background: var(--surface-hover);
+}
+.conversation-avatar.has-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .conversation-avatar.large {
   width: 38px;
   height: 38px;
@@ -511,14 +520,6 @@
 .inbox-context-trigger,
 .inbox-context-close {
   display: inline-grid;
-}
-@media (min-width: 1280px) {
-  .inbox-page .inbox-layout.context-collapsed {
-    grid-template-columns: var(--inbox-rail-width) minmax(0, 1fr);
-  }
-  .inbox-layout.context-collapsed .inbox-case-context {
-    display: none;
-  }
 }
 .conversation-header {
   display: flex;
@@ -2118,6 +2119,68 @@
     animation: none;
   }
   .recording-bars span {
+    transition: none;
+  }
+}
+
+/* The header keeps one height in every thread: controls never wrap to a second
+   row, so the messages below do not jump when the assignee, the takeover
+   reason or a customer alert changes. */
+.inbox-page .inbox-layout .conversation-header {
+  flex-wrap: nowrap;
+  height: 72px;
+  min-height: 72px;
+}
+.inbox-page .inbox-layout .conversation-identity {
+  flex: 1 1 auto;
+}
+.inbox-page .inbox-layout .identity-name {
+  overflow: hidden;
+}
+.inbox-page .inbox-layout .identity-name h2 {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.inbox-page .inbox-layout .identity-name .customer-chip,
+.inbox-page .inbox-layout .identity-name .group-badge {
+  flex: 0 0 auto;
+}
+.inbox-page .inbox-layout .conversation-controls {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+}
+.inbox-page .inbox-layout .ai-reason {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.inbox-page .inbox-case-context-header {
+  height: 72px;
+  min-height: 72px;
+}
+
+/* Folding the customer column keeps its width, so the thread never resizes;
+   only the details slide up under the header. */
+.inbox-case-context-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--duration-normal) var(--ease);
+}
+.inbox-case-context-body > div {
+  min-height: 0;
+  overflow: hidden;
+}
+.inbox-case-context.collapsed .inbox-case-context-body {
+  grid-template-rows: 0fr;
+}
+.inbox-case-context-toggle svg {
+  transition: transform var(--duration-normal) var(--ease);
+}
+.inbox-case-context.collapsed .inbox-case-context-toggle svg {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .inbox-case-context-body,
+  .inbox-case-context-toggle svg {
     transition: none;
   }
 }

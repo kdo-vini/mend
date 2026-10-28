@@ -388,6 +388,40 @@ describe("Whatsmiau normalization", () => {
     }
   });
 
+  it("asks for a contact photo and reads the bucket URL back", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; body: unknown }> = [];
+    globalThis.fetch = async (input, init) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return new Response(
+        JSON.stringify({
+          wuid: "5511999999999@s.whatsapp.net",
+          profilePictureUrl:
+            "https://storage.googleapis.com/whatsmiau/p/5511999999999.jpeg",
+        }),
+        { status: 200 },
+      );
+    };
+    try {
+      const provider = new WhatsmiauMessagingProvider(
+        "https://provider.test/v2",
+        "test-key",
+      );
+      expect(
+        await provider.fetchProfilePictureUrl({
+          instanceName: "mend-test",
+          number: "5511999999999@s.whatsapp.net",
+        }),
+      ).toBe("https://storage.googleapis.com/whatsmiau/p/5511999999999.jpeg");
+      expect(calls[0]).toEqual({
+        url: "https://provider.test/v2/chat/fetchProfilePictureUrl/mend-test",
+        body: { number: "5511999999999@s.whatsapp.net" },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("sends a quoted reply and edits a sent text in the provider's format", async () => {
     const originalFetch = globalThis.fetch;
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];

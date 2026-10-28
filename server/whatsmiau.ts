@@ -769,6 +769,21 @@ export class WhatsmiauMessagingProvider {
       },
     );
   }
+  /**
+   * The contact's WhatsApp photo, or null when they hide it or have none.
+   * Whatsmiau answers with a copy in its own bucket, which is what the inbox
+   * stores and shows.
+   */
+  async fetchProfilePictureUrl(input: {
+    instanceName: string;
+    number: string;
+  }): Promise<string | null> {
+    const result = await this.request<Record<string, unknown> | undefined>(
+      `/chat/fetchProfilePictureUrl/${encodeURIComponent(input.instanceName)}`,
+      { method: "POST", body: JSON.stringify({ number: input.number }) },
+    );
+    return stringValue(asRecord(result).profilePictureUrl) ?? null;
+  }
   sendReaction(input: SendReactionInput) {
     return this.request<void>(
       `/message/sendReaction/${encodeURIComponent(input.instanceName)}`,

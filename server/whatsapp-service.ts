@@ -85,6 +85,10 @@ export interface WhatsAppProvider {
     id: string;
     text: string;
   }): Promise<unknown>;
+  fetchProfilePictureUrl?(input: {
+    instanceName: string;
+    number: string;
+  }): Promise<string | null>;
 }
 
 export interface SendTextRequest {
@@ -795,6 +799,27 @@ export class WhatsAppService {
       }),
     );
     return text;
+  }
+
+  /** The contact's current WhatsApp photo; null for groups or a hidden one. */
+  async fetchContactPhoto(
+    context: InboxContext,
+    conversationId: string,
+  ): Promise<string | null> {
+    const conversation = await this.inbox.getConversation(
+      context,
+      conversationId,
+    );
+    if (!conversation) throw new Error("conversation_not_found");
+    if (
+      !this.provider.fetchProfilePictureUrl ||
+      conversation.remoteJid.endsWith("@g.us")
+    )
+      return null;
+    return this.provider.fetchProfilePictureUrl({
+      instanceName: conversation.providerInstanceName,
+      number: conversation.remoteJid,
+    });
   }
 
   async deleteMessageForEveryone(

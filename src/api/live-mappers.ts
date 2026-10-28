@@ -10,6 +10,7 @@ import type {
   Workspace,
 } from "./workspace-data";
 import type { Database } from "../lib/database.types";
+import { contactPhotoUrl } from "../shared/contact-photo";
 import type {
   Conversation,
   CodingRun,
@@ -276,6 +277,7 @@ export function toUiConversation(
       : [...(target.reactions ?? []), mappedReaction];
   }
   const last = messages.at(-1);
+  const photoUrl = contactPhotoUrl(contact?.profile_picture_url);
   return {
     id: record.id,
     contactId: record.contact_id,
@@ -284,6 +286,7 @@ export function toUiConversation(
     company: contact?.company_name ?? "",
     phone: contact?.phone_number ?? "Phone unavailable",
     initials: initials(name),
+    ...(photoUrl ? { photoUrl } : {}),
     accent: accentFor(record.id),
     status: record.status as Conversation["status"],
     attention: record.attention_state as Conversation["attention"],
