@@ -2128,8 +2128,13 @@
    reason or a customer alert changes. */
 .inbox-page .inbox-layout .conversation-header {
   flex-wrap: nowrap;
-  height: 72px;
-  min-height: 72px;
+}
+/* Phones keep their compact 58px bar (plus the safe area) from kanban.css. */
+@media (min-width: 651px) {
+  .inbox-page .inbox-layout .conversation-header {
+    height: 72px;
+    min-height: 72px;
+  }
 }
 .inbox-page .inbox-layout .conversation-identity {
   flex: 1 1 auto;
