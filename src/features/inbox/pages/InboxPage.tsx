@@ -3276,6 +3276,22 @@ function AiDraftCard({
   );
 }
 
+/**
+ * "IA ativa" in full; a narrow thread keeps only the first word so the switch
+ * never loses its label.
+ */
+function AiToggleLabel({ text }: { text: string }) {
+  const [first, ...rest] = text.split(" ");
+  return (
+    <span className="conversation-ai-toggle-label">
+      {first}
+      {rest.length > 0 && (
+        <span className="conversation-ai-toggle-rest"> {rest.join(" ")}</span>
+      )}
+    </span>
+  );
+}
+
 function ConversationHeader({
   conversation,
   onMobileBack,
@@ -3402,6 +3418,17 @@ function ConversationHeader({
               ? t("ui.groupChat")
               : conversation.phone}
             {conversation.company ? ` · ${conversation.company}` : ""}
+            {conversation.humanTakeoverReason && (
+              <span className="ai-reason" title={t("ui.humanTakeoverReason")}>
+                <span className="ai-reason-separator"> · </span>
+                {t(`takeover.${conversation.humanTakeoverReason}`, {
+                  defaultValue: conversation.humanTakeoverReason.replaceAll(
+                    "_",
+                    " ",
+                  ),
+                })}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -3426,13 +3453,8 @@ function ConversationHeader({
           <span className="conversation-ai-toggle-track" aria-hidden="true">
             <span />
           </span>
-          <span>{t("ui.aiActive")}</span>
+          <AiToggleLabel text={t("ui.aiActive")} />
         </button>
-        {conversation.humanTakeoverReason && (
-          <span className="ai-reason" title={t("ui.humanTakeoverReason")}>
-            {conversation.humanTakeoverReason.replaceAll("_", " ")}
-          </span>
-        )}
         {SUPPORT_AI_SURFACES_ENABLED &&
           conversation.humanTakeoverReason?.startsWith("support_ai_") && (
             <Link
@@ -3460,7 +3482,7 @@ function ConversationHeader({
         </button>
         {onOpenLinkedIssue && (
           <button
-            className="icon-button conversation-desktop-control"
+            className="icon-button conversation-desktop-control linked-issue-shortcut"
             type="button"
             onClick={onOpenLinkedIssue}
             aria-label={t("ui.openLinkedIssue")}
@@ -3521,7 +3543,7 @@ function ConversationHeader({
               </label>
               {onOpenLinkedIssue && (
                 <button
-                  className="mobile-menu-control"
+                  className="mobile-menu-control linked-issue-menu-item"
                   type="button"
                   role="menuitem"
                   onClick={() => {
