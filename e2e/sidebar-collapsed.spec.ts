@@ -7,7 +7,8 @@ test("collapsed sidebar keeps every control inside the rail and remembers its st
     testInfo.project.name === "mobile",
     "phones replace the sidebar with the top bar",
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  // A short laptop viewport: the rail must still fit the footer and avatar.
+  await page.setViewportSize({ width: 1366, height: 560 });
   await page.goto("/inbox?demo=1");
   await page.getByRole("button", { name: "Recolher barra lateral" }).click();
   await expect(page.locator(".app-shell")).toHaveClass(/sidebar-is-collapsed/);
@@ -24,11 +25,23 @@ test("collapsed sidebar keeps every control inside the rail and remembers its st
         .filter((element) => element.offsetParent !== null)
         .filter((element) => {
           const box = element.getBoundingClientRect();
-          return box.left < rail.left || box.right > rail.right;
+          return (
+            box.left < rail.left ||
+            box.right > rail.right ||
+            box.top < rail.top ||
+            box.bottom > rail.bottom
+          );
         })
         .map((element) => element.className);
     });
   expect(overflowing).toEqual([]);
+
+  // The availability popover opens beside the rail, over the page content.
+  expect(
+    await page
+      .locator(".app-shell .sidebar")
+      .evaluate((sidebar) => getComputedStyle(sidebar).zIndex),
+  ).not.toBe("auto");
 
   await expect(
     page.locator(".primary-nav").getByRole("link", {

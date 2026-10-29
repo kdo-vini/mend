@@ -284,13 +284,23 @@
 }
 .app-shell.sidebar-is-collapsed .command-trigger,
 .app-shell.sidebar-is-collapsed .nav-item {
-  width: 40px;
-  min-height: 40px;
+  width: 36px;
+  min-height: 36px;
   margin-inline: auto;
 }
 .app-shell.sidebar-is-collapsed .sidebar-utilities .icon-button {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+}
+/* Short viewports: the nav scrolls so the footer and avatar stay inside. */
+.app-shell.sidebar-is-collapsed .primary-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.app-shell.sidebar-is-collapsed .sidebar-bottom {
+  padding-top: var(--space-3);
 }
 .sidebar-is-collapsed .brand-row > div:not(.brand-mark),
 .sidebar-is-collapsed .sidebar-bottom-label,
