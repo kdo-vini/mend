@@ -5,9 +5,10 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   LogOut,
-  Menu,
   MoreHorizontal,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Sun,
 } from "lucide-react";
@@ -258,6 +259,7 @@ export function NotificationCenter({
             ? ` (${t("navigation.unread", { count: unreadNotificationCount })})`
             : "",
         })}
+        title={t("navigation.notifications")}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((current) => !current)}
@@ -329,13 +331,28 @@ export function Sidebar({
               ? t("navigation.expandSidebar")
               : t("navigation.collapseSidebar")
           }
+          title={
+            collapsed
+              ? t("navigation.expandSidebar")
+              : t("navigation.collapseSidebar")
+          }
           aria-expanded={!collapsed}
           onClick={onToggle}
         >
-          <Menu size={16} />
+          {collapsed ? (
+            <PanelLeftOpen size={16} />
+          ) : (
+            <PanelLeftClose size={16} />
+          )}
         </button>
       </div>
-      <button className="command-trigger" type="button" onClick={onOpenCommand}>
+      <button
+        className="command-trigger"
+        type="button"
+        aria-label={t("navigation.searchEverything")}
+        title={collapsed ? t("navigation.searchEverything") : undefined}
+        onClick={onOpenCommand}
+      >
         <Search size={15} />
         <span>{t("navigation.searchEverything")}</span>
         <kbd>{t("navigation.shortcutCommand")}</kbd>
@@ -350,6 +367,8 @@ export function Sidebar({
             key={to}
             to={to}
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+            aria-label={t(`navigation.${id}`)}
+            title={collapsed ? t(`navigation.${id}`) : undefined}
           >
             <Icon size={16} strokeWidth={1.7} />
             <span>{t(`navigation.${id}`)}</span>
@@ -378,6 +397,13 @@ export function Sidebar({
                     : "navigation.themeDark",
                 ),
               })}
+              title={t("navigation.useTheme", {
+                theme: t(
+                  theme === "dark"
+                    ? "navigation.themeLight"
+                    : "navigation.themeDark",
+                ),
+              })}
               onClick={onToggleTheme}
             >
               {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
@@ -386,6 +412,7 @@ export function Sidebar({
               className="icon-button subtle"
               type="button"
               aria-label={t("navigation.logout")}
+              title={t("navigation.logout")}
               onClick={onSignOut}
             >
               <LogOut size={15} />
