@@ -100,6 +100,8 @@ export interface Conversation {
   company: string;
   phone: string;
   initials: string;
+  /** WhatsApp photo, only from the Whatsmiau bucket; initials otherwise. */
+  photoUrl?: string;
   accent: string;
   status: ConversationStatus;
   attention: AttentionState;

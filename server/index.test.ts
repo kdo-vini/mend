@@ -48,7 +48,9 @@ describe("API boundary", () => {
       const csp = response.headers["content-security-policy"];
       const supabaseOrigin = new URL(cspSupabaseUrl).origin;
 
-      expect(csp).toContain(`img-src 'self' data: blob: ${supabaseOrigin}`);
+      expect(csp).toContain(
+        `img-src 'self' data: blob: ${supabaseOrigin} https://storage.googleapis.com/whatsmiau/`,
+      );
       expect(csp).toContain(`media-src 'self' blob: ${supabaseOrigin}`);
     } finally {
       if (previousSupabaseUrl === undefined) delete process.env.SUPABASE_URL;

@@ -64,6 +64,7 @@ import {
   loadOlderLiveConversationMessages,
   markLiveConversationRead,
   reactToLiveMessage,
+  refreshLiveContactPhoto,
   requestAiDraft,
   resolveLiveConversation,
   resumeLiveConversationAi,
@@ -84,6 +85,8 @@ import { firstUnreadMessageId } from "../unread-divider";
 import { continuesGroup } from "../message-groups";
 import { useZeloCustomer } from "../hooks/useZeloCustomer";
 import { customerAlerts, type CustomerLabel } from "../zelo-customer";
+import { contactPhotoUrl } from "../../../shared/contact-photo";
+import { ContactAvatar } from "../components/ContactAvatar";
 import { ZeloCustomerPanel } from "../components/ZeloCustomerPanel";
 import { RecordingIndicator } from "../components/RecordingIndicator";
 import {
@@ -225,6 +228,7 @@ interface LightboxMedia {
  */
 const composerDrafts = createComposerDrafts();
 const CONTEXT_COLLAPSED_STORAGE_KEY = "mend.inbox-context-collapsed";
+const photoLookupsTried = new Set<string>();
 const CONTEXT_DRAWER_QUERY = "(max-width: 1279px)";
 
 function readContextCollapsed() {
@@ -566,6 +570,29 @@ export function InboxPage({
       )
     : undefined;
   const zeloCustomer = useZeloCustomer(workspaceId, selected?.id, liveMode);
+  // Contacts whose photo the webhook never brought get one looked up on open,
+  // once per page load; the server stores what it finds for everyone else.
+  const [foundPhotos, setFoundPhotos] = useState<Record<string, string>>({});
+  const photoLookupId =
+    liveMode &&
+    workspaceId &&
+    selected &&
+    selected.chatType === "direct" &&
+    !selected.photoUrl &&
+    !photoLookupsTried.has(selected.id)
+      ? selected.id
+      : undefined;
+  useEffect(() => {
+    if (!photoLookupId || !workspaceId) return;
+    photoLookupsTried.add(photoLookupId);
+    void refreshLiveContactPhoto({ workspaceId, conversationId: photoLookupId })
+      .then((url) => {
+        const photo = contactPhotoUrl(url);
+        if (photo)
+          setFoundPhotos((current) => ({ ...current, [photoLookupId]: photo }));
+      })
+      .catch(() => undefined);
+  }, [photoLookupId, workspaceId]);
   const headerAlerts: CustomerLabel[] =
     zeloCustomer?.status === "ready" && zeloCustomer.customers.length === 1
       ? customerAlerts(zeloCustomer.customers[0])
@@ -2375,7 +2402,7 @@ export function InboxPage({
         </div>
       </div>
       <div
-        className={`inbox-layout ${contextCollapsed ? "context-collapsed" : ""} ${mobileConversationOpen ? "mobile-conversation-open" : ""} ${filtered.length === 0 ? "no-visible-conversation" : ""} ${railDragging ? "is-resizing-rail" : ""}`}
+        className={`inbox-layout ${mobileConversationOpen ? "mobile-conversation-open" : ""} ${filtered.length === 0 ? "no-visible-conversation" : ""} ${railDragging ? "is-resizing-rail" : ""}`}
         style={railLayoutStyle}
       >
         <section className="conversation-rail">
@@ -2489,6 +2516,7 @@ export function InboxPage({
                 onSelectionChange={onRowSelectionChange}
                 onClick={onRowClick}
                 onDelete={onRowDelete}
+                photoUrl={conversation.photoUrl ?? foundPhotos[conversation.id]}
               />
             ))}
             {filtered.length === 0 && (
@@ -2549,6 +2577,7 @@ export function InboxPage({
             contextIsDrawer={contextIsDrawer}
             onOpenContext={toggleContext}
             customerAlerts={headerAlerts}
+            photoUrl={selected.photoUrl ?? foundPhotos[selected.id]}
           />
           <div className="message-canvas-shell">
             <ScrollArea
@@ -2735,6 +2764,8 @@ export function InboxPage({
           conversation={selected}
           issue={activeIssue}
           open={contextOpen}
+          collapsed={contextCollapsed}
+          onToggleCollapsed={toggleContext}
           onClose={() => {
             if (window.matchMedia(CONTEXT_DRAWER_QUERY).matches)
               setContextOpen(false);
@@ -3014,6 +3045,7 @@ const ConversationRow = memo(function ConversationRow({
   onSelectionChange,
   onClick,
   onDelete,
+  photoUrl = conversation.photoUrl,
 }: {
   conversation: Conversation;
   selected: boolean;
@@ -3023,6 +3055,8 @@ const ConversationRow = memo(function ConversationRow({
   onSelectionChange: (id: string, shiftKey: boolean) => void;
   onClick: (conversation: Conversation, shiftKey: boolean) => void;
   onDelete: (id: string) => void;
+  /** A photo found after the list loaded; defaults to the stored one. */
+  photoUrl?: string;
 }) {
   const { t } = useTranslation("inbox");
   return (
@@ -3063,15 +3097,7 @@ const ConversationRow = memo(function ConversationRow({
           onClick(conversation, event.shiftKey)
         }
       >
-        <div
-          className="conversation-avatar"
-          style={{
-            background: `${conversation.accent}18`,
-            color: conversation.accent,
-          }}
-        >
-          {conversation.initials}
-        </div>
+        <ContactAvatar conversation={conversation} photoUrl={photoUrl} />
         <div className="conversation-row-main">
           <div className="conversation-row-top">
             <strong>
@@ -3268,6 +3294,7 @@ function ConversationHeader({
   contextIsDrawer,
   onOpenContext,
   customerAlerts: alerts,
+  photoUrl = conversation.photoUrl,
 }: {
   conversation: Conversation;
   onMobileBack: () => void;
@@ -3288,6 +3315,7 @@ function ConversationHeader({
   onOpenContext: () => void;
   /** What the Zelo panel flags, kept in sight when the panel is folded. */
   customerAlerts: CustomerLabel[];
+  photoUrl?: string;
 }) {
   const { t } = useTranslation("inbox");
   const conversationAssigneeOptions = assigneeOptions.map((option) =>
@@ -3314,15 +3342,7 @@ function ConversationHeader({
         <ArrowLeft size={20} />
       </button>
       <div className="conversation-identity">
-        <div
-          className="conversation-avatar large"
-          style={{
-            background: `${conversation.accent}18`,
-            color: conversation.accent,
-          }}
-        >
-          {conversation.initials}
-        </div>
+        <ContactAvatar conversation={conversation} photoUrl={photoUrl} large />
         <div>
           <div className="identity-name">
             {editingName ? (

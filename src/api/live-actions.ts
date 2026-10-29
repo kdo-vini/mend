@@ -839,6 +839,19 @@ export async function loadLiveZeloCustomer(input: {
   return response.data ?? [];
 }
 
+/** Asks WhatsApp for the contact's photo; the server stores the one it finds. */
+export async function refreshLiveContactPhoto(input: {
+  workspaceId: string;
+  conversationId: string;
+}) {
+  const response = await apiRequest<{ data?: { url?: string | null } }>(
+    `/api/conversations/${encodeURIComponent(input.conversationId)}/contact-photo`,
+    { method: "POST" },
+    input.workspaceId,
+  );
+  return response.data?.url ?? null;
+}
+
 /** Rewrites the text of a message this workspace sent. */
 export async function editLiveMessage(input: {
   workspaceId: string;

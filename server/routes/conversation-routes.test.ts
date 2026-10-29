@@ -627,3 +627,45 @@ describe("GET /api/conversations/:id/zelo-customer", () => {
     });
   });
 });
+
+describe("POST /api/conversations/:id/contact-photo", () => {
+  function harness(
+    refreshContactPhoto?: () => Promise<{ url: string | null } | null>,
+  ) {
+    const workspaceId = randomUUID();
+    const app = express();
+    app.use(express.json());
+    app.use((request, response, next) =>
+      createApiRouter({
+        internalWorkspace: { resolve: async () => workspaceId },
+        auth: { authenticate: async () => user },
+        membership: {
+          getMembership: async () => ({ workspaceId, role: "agent" as const }),
+        },
+        conversations: refreshContactPhoto ? { refreshContactPhoto } : {},
+      } as unknown as ApiRouterDependencies)(request, response, next),
+    );
+    return () =>
+      request(app)
+        .post(`/api/conversations/${existingConversationId}/contact-photo`)
+        .set("x-mend-workspace-id", workspaceId);
+  }
+
+  it("returns the photo the server found on WhatsApp", async () => {
+    const url = "https://storage.googleapis.com/whatsmiau/p/1.jpeg";
+    const response = await harness(async () => ({ url }))();
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ url });
+  });
+
+  it("answers 404 for a thread outside the workspace", async () => {
+    const response = await harness(async () => null)();
+    expect(response.status).toBe(404);
+  });
+
+  it("answers no photo when the provider cannot look one up", async () => {
+    const response = await harness()();
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ url: null });
+  });
+});

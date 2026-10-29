@@ -293,6 +293,11 @@ export interface ConversationPort {
     conversationId: string,
     presence: "composing" | "recording" | "paused",
   ): Promise<void>;
+  /** Looks the contact's photo up on WhatsApp and stores it when found. */
+  refreshContactPhoto?(
+    context: RequestContext,
+    conversationId: string,
+  ): Promise<{ url: string | null } | null>;
   update(
     context: RequestContext,
     conversationId: string,

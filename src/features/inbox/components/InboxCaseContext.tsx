@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { ChevronUp, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useTranslation } from "react-i18next";
 import type { Conversation, Issue } from "../../../types";
@@ -23,6 +23,8 @@ export function InboxCaseContext({
   onClose,
   onOpenIssue,
   customer,
+  collapsed = false,
+  onToggleCollapsed,
   children,
 }: {
   conversation: Conversation;
@@ -32,6 +34,9 @@ export function InboxCaseContext({
   onOpenIssue: (issueId: string) => void;
   /** Who the contact is in Zelo; shown first, it answers most questions. */
   customer?: ReactNode;
+  /** Desktop only: details folded under the header, column width unchanged. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation("inbox");
@@ -45,11 +50,14 @@ export function InboxCaseContext({
     return () => media.removeEventListener("change", sync);
   }, []);
 
+  const folded = collapsed && !drawer;
+  const bodyId = `${INBOX_CASE_CONTEXT_ID}-body`;
+
   const context = (
     <aside
       id={INBOX_CASE_CONTEXT_ID}
       role="complementary"
-      className={`inbox-case-context ${open ? "open" : ""}`}
+      className={`inbox-case-context ${open ? "open" : ""} ${folded ? "collapsed" : ""}`}
       aria-label={t("context.title")}
     >
       <header className="inbox-case-context-header">
@@ -57,35 +65,53 @@ export function InboxCaseContext({
           <span className="page-kicker">{t("context.eyebrow")}</span>
           <h2>{t("context.title")}</h2>
         </div>
-        <button
-          ref={closeRef}
-          className="icon-button subtle inbox-context-close"
-          type="button"
-          aria-label={t("context.close")}
-          onClick={onClose}
-        >
-          <X size={16} />
-        </button>
+        {drawer || !onToggleCollapsed ? (
+          <button
+            ref={closeRef}
+            className="icon-button subtle inbox-context-close"
+            type="button"
+            aria-label={t("context.close")}
+            onClick={onClose}
+          >
+            <X size={16} />
+          </button>
+        ) : (
+          <button
+            className="icon-button subtle inbox-case-context-toggle"
+            type="button"
+            aria-label={folded ? t("context.expand") : t("context.collapse")}
+            title={folded ? t("context.expand") : t("context.collapse")}
+            aria-expanded={!folded}
+            aria-controls={bodyId}
+            onClick={onToggleCollapsed}
+          >
+            <ChevronUp size={16} />
+          </button>
+        )}
       </header>
-      {customer}
-      <section className="inbox-case-next-action">
-        <span>{t("context.nextAction")}</span>
-        <strong>
-          {issue ? t("context.followIssue") : t("context.reviewTriage")}
-        </strong>
-      </section>
-      {issue ? (
-        <button
-          className="inbox-linked-case"
-          type="button"
-          onClick={() => onOpenIssue(issue.id)}
-        >
-          <code>{issue.identifier}</code>
-          <strong>{issue.title}</strong>
-          <StatusPill status={issue.status} />
-        </button>
-      ) : null}
-      <div className="inbox-case-ai">{children}</div>
+      <div className="inbox-case-context-body" id={bodyId}>
+        <div inert={folded}>
+          {customer}
+          <section className="inbox-case-next-action">
+            <span>{t("context.nextAction")}</span>
+            <strong>
+              {issue ? t("context.followIssue") : t("context.reviewTriage")}
+            </strong>
+          </section>
+          {issue ? (
+            <button
+              className="inbox-linked-case"
+              type="button"
+              onClick={() => onOpenIssue(issue.id)}
+            >
+              <code>{issue.identifier}</code>
+              <strong>{issue.title}</strong>
+              <StatusPill status={issue.status} />
+            </button>
+          ) : null}
+          <div className="inbox-case-ai">{children}</div>
+        </div>
+      </div>
       <footer>
         {conversation.automationState === "human_paused"
           ? t("context.human")

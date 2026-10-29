@@ -874,6 +874,39 @@ export class SupabaseConversationAdapter implements ConversationPort {
     return this.get(context, conversationId);
   }
 
+  async refreshContactPhoto(context: RequestContext, conversationId: string) {
+    const result = await this.client
+      .from("conversations")
+      .select("contact_id")
+      .eq("id", conversationId)
+      .eq("workspace_id", context.workspaceId)
+      .maybeSingle();
+    const conversation = checked("conversations.get_for_photo", result) as {
+      contact_id?: unknown;
+    } | null;
+    if (!conversation) return null;
+    const url = await this.whatsapp.fetchContactPhoto(
+      {
+        workspaceId: context.workspaceId,
+        actorUserId: context.userId,
+        actorType: "user",
+      },
+      conversationId,
+    );
+    if (url) {
+      const updated = await this.client
+        .from("contacts")
+        .update({
+          profile_picture_url: url,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", str(conversation.contact_id))
+        .eq("workspace_id", context.workspaceId);
+      checked("contacts.profile_picture", updated);
+    }
+    return { url };
+  }
+
   /**
    * Rewrites a text this workspace sent. WhatsApp only accepts edits for a
    * short while after sending, so an older message is refused up front

@@ -122,6 +122,7 @@ vi.mock("../api", () => ({
   deleteLiveMessage: vi.fn(),
   editLiveMessage: (input: unknown) => editLiveMessage(input),
   loadLiveZeloCustomer: vi.fn(async () => []),
+  refreshLiveContactPhoto: vi.fn(async () => null),
   getMessageMediaUrl: vi.fn(async () => "https://media.example/1"),
   markLiveConversationRead: vi.fn(async () => undefined),
   reactToLiveMessage: vi.fn(),
