@@ -351,5 +351,12 @@
       "days_one": "há {{count}} dia",
       "days_other": "há {{count}} dias"
     }
+  },
+  "takeover": {
+    "human_message": "Humano respondeu",
+    "customer_requested_human": "Cliente pediu atendente",
+    "unsafe_intent": "Assunto sensível",
+    "low_confidence": "IA sem confiança",
+    "manual_pause": "Pausa manual"
   }
 }

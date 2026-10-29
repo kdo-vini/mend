@@ -2134,6 +2134,8 @@
   .inbox-page .inbox-layout .conversation-header {
     height: 72px;
     min-height: 72px;
+    padding-inline: 14px;
+    column-gap: 10px;
   }
 }
 .inbox-page .inbox-layout .conversation-identity {
@@ -2151,12 +2153,64 @@
   flex: 0 0 auto;
 }
 .inbox-page .inbox-layout .conversation-controls {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   flex-wrap: nowrap;
 }
-.inbox-page .inbox-layout .ai-reason {
-  flex: 0 1 auto;
-  min-width: 0;
+.inbox-page .inbox-layout .conversation-identity {
+  min-width: 150px;
+}
+.inbox-page .inbox-layout .conversation-identity .ai-reason {
+  max-width: none;
+  text-transform: none;
+}
+/* The assignee keeps room for a full name; its list opens wider than the
+   trigger, towards the thread, so every member reads in full. */
+.inbox-page .inbox-layout .conversation-assignee {
+  flex: 0 0 150px;
+  max-width: 150px;
+}
+.conversation-assignee .custom-select-menu {
+  left: auto;
+  width: max-content;
+  min-width: 100%;
+  max-width: 280px;
+}
+.conversation-assignee .custom-select-option {
+  white-space: nowrap;
+}
+/* Measured on the header, not the panel: containment on the panel would pin
+   the message menus (position: fixed) to it. */
+.inbox-page .inbox-layout .conversation-header {
+  container: conversation-header / inline-size;
+}
+@container conversation-header (max-width: 620px) {
+  .conversation-ai-toggle-rest {
+    display: none;
+  }
+  /* The linked issue moves into the menu so the name keeps its room. */
+  .conversation-header .linked-issue-shortcut {
+    display: none !important;
+  }
+  .conversation-header .context-menu .linked-issue-menu-item {
+    display: flex !important;
+  }
+  /* Phone and takeover reason stack instead of cutting each other off. */
+  .inbox-page .inbox-layout .conversation-identity p {
+    margin-top: 2px;
+    line-height: 14px;
+  }
+  .inbox-page .inbox-layout .conversation-identity .ai-reason {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ai-reason-separator {
+    display: none;
+  }
+  .inbox-page .inbox-layout .conversation-assignee {
+    flex-basis: 128px;
+    max-width: 128px;
+  }
 }
 .inbox-page .inbox-case-context-header {
   height: 72px;
