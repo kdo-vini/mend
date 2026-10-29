@@ -12,6 +12,9 @@
   /* Viewport-tall and sticky: long pages scroll their content, never the
      sidebar (it used to stretch with the tallest page). */
   position: sticky;
+  /* Sticky creates a stacking context; lift it so the availability popover,
+     which opens beside the compact rail, paints over the page content. */
+  z-index: var(--z-dropdown);
   top: 16px;
   align-self: flex-start;
   margin: 16px 0 16px 16px;
