@@ -262,14 +262,35 @@
     10px "JetBrains Mono",
     monospace;
 }
-.sidebar-is-collapsed .sidebar {
-  width: 58px;
-  flex-basis: 58px;
-  padding: 13px 8px;
+/* Collapsed rail: every row stacks vertically so nothing spills past the
+   rounded glass edge. `.app-shell` raises specificity over workspace-design. */
+.app-shell.sidebar-is-collapsed .sidebar {
+  width: 72px;
+  flex-basis: 72px;
+  padding: 20px 12px 12px;
 }
-.sidebar-is-collapsed .brand-row {
-  justify-content: center;
-  padding: 0 0 17px;
+.app-shell.sidebar-is-collapsed .brand-row {
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-4);
+}
+.app-shell.sidebar-is-collapsed .sidebar-collapse {
+  margin-left: 0;
+}
+.app-shell.sidebar-is-collapsed .sidebar-utilities {
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.app-shell.sidebar-is-collapsed .command-trigger,
+.app-shell.sidebar-is-collapsed .nav-item {
+  width: 40px;
+  min-height: 40px;
+  margin-inline: auto;
+}
+.app-shell.sidebar-is-collapsed .sidebar-utilities .icon-button {
+  width: 36px;
+  height: 36px;
 }
 .sidebar-is-collapsed .brand-row > div:not(.brand-mark),
 .sidebar-is-collapsed .sidebar-bottom-label,

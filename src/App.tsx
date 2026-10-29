@@ -217,7 +217,13 @@ function App() {
     !demoMode && !localOperatorMode,
   );
   const [liveDataRetry, setLiveDataRetry] = useState(0);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem("mend.sidebar-collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark";
     const saved = window.localStorage.getItem("mend.theme");
@@ -323,6 +329,17 @@ function App() {
     document.documentElement.classList.toggle("dark", theme === "dark");
     window.localStorage.setItem("mend.theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "mend.sidebar-collapsed",
+        sidebarCollapsed ? "1" : "0",
+      );
+    } catch {
+      // Storage can be unavailable (private mode); the rail just won't persist.
+    }
+  }, [sidebarCollapsed]);
 
   const handleEscapeOverlays = useCallback(() => {
     setCommandOpen(false);
