@@ -270,6 +270,13 @@ kbd {
   color: var(--text-muted);
   cursor: default;
 }
+.workspace-availability-hint {
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-1);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
 .workspace-availability-popover .workspace-availability-profile {
   margin-top: var(--space-1);
   padding-top: var(--space-2);

@@ -124,6 +124,9 @@ describe("WorkspaceAvailability", () => {
     expect(document.body.textContent).toContain("Ativo");
     expect(document.body.textContent).toContain("Ausente");
     expect(document.body.textContent).not.toContain("Conversas existentes");
+    expect(document.body.textContent).toContain(
+      "Ausente pausa suas notificações",
+    );
     const away = [...document.body.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("Ausente"),
     );

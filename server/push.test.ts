@@ -23,7 +23,27 @@ afterEach(() => {
   pushMocks.sendNotification.mockReset();
 });
 
-function pushClient(rows: unknown[]) {
+function activeMembers(userIds: string[]) {
+  const chain = {
+    eq: vi.fn(() => chain),
+    then: (
+      resolve: (value: { data: { user_id: string }[]; error: null }) => unknown,
+    ) =>
+      Promise.resolve(
+        resolve({
+          data: userIds.map((user_id) => ({ user_id })),
+          error: null,
+        }),
+      ),
+  };
+  return { select: vi.fn(() => chain), chain };
+}
+
+function pushClient(
+  rows: { user_id?: string }[],
+  activeUserIds = rows.flatMap((row) => (row.user_id ? [row.user_id] : [])),
+) {
+  const members = activeMembers(activeUserIds);
   const select = {
     eq: vi.fn(async () => ({ data: rows, error: null })),
   };
@@ -39,14 +59,9 @@ function pushClient(rows: unknown[]) {
             select: vi.fn(() => select),
             delete: vi.fn(() => remove),
           }
-        : {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn(async () => ({ data: null, error: null })),
-              })),
-            })),
-          },
+        : members,
     ),
+    members,
   };
 }
 
@@ -65,6 +80,7 @@ describe("workspace web push", () => {
     const client = pushClient([
       {
         id: "subscription-1",
+        user_id: "agent-1",
         endpoint: "https://push.example/1",
         p256dh: "p256dh",
         auth: "auth",
@@ -126,23 +142,15 @@ describe("workspace web push", () => {
     process.env.VAPID_PUBLIC_KEY = "public";
     process.env.VAPID_PRIVATE_KEY = "private";
     pushMocks.sendNotification.mockResolvedValue({});
-    const subscriptions = {
-      eq: vi.fn(async () => ({
-        data: [
-          {
-            id: "subscription-pt",
-            user_id: "user-pt",
-            endpoint: "https://push.example/pt",
-            p256dh: "p256dh",
-            auth: "auth",
-          },
-        ],
-        error: null,
-      })),
-    };
-    const client = {
-      from: vi.fn(() => ({ select: vi.fn(() => subscriptions) })),
-    };
+    const client = pushClient([
+      {
+        id: "subscription-pt",
+        user_id: "user-pt",
+        endpoint: "https://push.example/pt",
+        p256dh: "p256dh",
+        auth: "auth",
+      } as { user_id: string },
+    ]);
 
     await new WorkspacePushNotifier().notify(client as never, "workspace-1", {
       title: "New WhatsApp message",
@@ -155,7 +163,73 @@ describe("workspace web push", () => {
       expect.stringContaining("Nova mensagem no WhatsApp"),
       expect.anything(),
     );
-    expect(client.from).toHaveBeenCalledTimes(1);
     expect(client.from).toHaveBeenCalledWith("push_subscriptions");
+  });
+
+  it("skips members who marked themselves as away", async () => {
+    process.env.VAPID_PUBLIC_KEY = "public";
+    process.env.VAPID_PRIVATE_KEY = "private";
+    pushMocks.sendNotification.mockResolvedValue({});
+    const client = pushClient(
+      [
+        {
+          id: "subscription-on-shift",
+          user_id: "lucas",
+          endpoint: "https://push.example/on-shift",
+          p256dh: "p256dh",
+          auth: "auth",
+        },
+        {
+          id: "subscription-away",
+          user_id: "vinicius",
+          endpoint: "https://push.example/away",
+          p256dh: "p256dh",
+          auth: "auth",
+        },
+      ] as { user_id: string }[],
+      ["lucas"],
+    );
+
+    const result = await new WorkspacePushNotifier().notify(
+      client as never,
+      "workspace-1",
+      { title: "New message", body: "Hello" },
+    );
+
+    expect(result).toEqual({ sent: 1, configured: true });
+    expect(pushMocks.sendNotification).toHaveBeenCalledTimes(1);
+    expect(pushMocks.sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: "https://push.example/on-shift" }),
+      expect.any(String),
+      expect.anything(),
+    );
+    expect(client.from).toHaveBeenCalledWith("workspace_members");
+    expect(client.members.chain.eq).toHaveBeenCalledWith("is_active", true);
+  });
+
+  it("sends nothing when everyone is away", async () => {
+    process.env.VAPID_PUBLIC_KEY = "public";
+    process.env.VAPID_PRIVATE_KEY = "private";
+    const client = pushClient(
+      [
+        {
+          id: "subscription-away",
+          user_id: "vinicius",
+          endpoint: "https://push.example/away",
+          p256dh: "p256dh",
+          auth: "auth",
+        },
+      ] as { user_id: string }[],
+      [],
+    );
+
+    const result = await new WorkspacePushNotifier().notify(
+      client as never,
+      "workspace-1",
+      { title: "New message", body: "Hello" },
+    );
+
+    expect(result).toEqual({ sent: 0, configured: true });
+    expect(pushMocks.sendNotification).not.toHaveBeenCalled();
   });
 });

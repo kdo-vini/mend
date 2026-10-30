@@ -71,9 +71,26 @@ export class WorkspacePushNotifier {
     if (result.error)
       throw new Error(`supabase:push_subscriptions:${result.error.message}`);
 
-    const subscriptions = ((result.data ?? []) as PushSubscriptionRow[]).filter(
+    const candidates = ((result.data ?? []) as PushSubscriptionRow[]).filter(
       (subscription) =>
         !options.userId || subscription.user_id === options.userId,
+    );
+    if (candidates.length === 0) return { sent: 0, configured: true };
+
+    // Members marked "Ausente" are off shift: they keep the in-app inbox but
+    // get no device push until they switch back to "Ativo".
+    const members = await client
+      .from("workspace_members")
+      .select("user_id")
+      .eq("workspace_id", workspaceId)
+      .eq("is_active", true);
+    if (members.error)
+      throw new Error(`supabase:workspace_members:${members.error.message}`);
+    const onShift = new Set(
+      (members.data ?? []).map((member) => member.user_id),
+    );
+    const subscriptions = candidates.filter((subscription) =>
+      onShift.has(subscription.user_id),
     );
     const settled = await Promise.allSettled(
       subscriptions.map(async (subscription) => {

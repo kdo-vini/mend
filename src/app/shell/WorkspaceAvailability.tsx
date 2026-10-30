@@ -149,6 +149,9 @@ export function WorkspaceAvailability({
               <Circle aria-hidden="true" size={10} fill="currentColor" />
               {t("navigation.availabilityAway")}
             </button>
+            <p className="workspace-availability-hint">
+              {t("navigation.availabilityHint")}
+            </p>
             {showProfileAction && (
               <button
                 type="button"
