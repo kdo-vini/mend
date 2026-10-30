@@ -403,10 +403,32 @@ export function registerInternalSupportSendRoute(
             .status(503)
             .json({ error: "automation_mark_unavailable" });
         }
-        if (error instanceof OutboundSendError)
+        if (error instanceof OutboundSendError) {
+          // The provider's own answer is the only evidence of why WhatsApp
+          // refused this send; without it a 502 cannot be diagnosed.
+          const provider = error.providerError as
+            | { status?: unknown; responseBody?: unknown; message?: unknown }
+            | undefined;
+          options.logger?.error(
+            {
+              conversationId: parsed.data.conversationId,
+              reason: error.reason,
+              providerStatus: provider?.status,
+              providerBody:
+                typeof provider?.responseBody === "string"
+                  ? provider.responseBody.slice(0, 1_000)
+                  : undefined,
+              providerMessage:
+                typeof provider?.message === "string"
+                  ? provider.message
+                  : undefined,
+            },
+            "Support send provider failure",
+          );
           return response
             .status(outboundFailureStatus[error.reason])
             .json({ error: error.reason });
+        }
         if (
           error instanceof Error &&
           error.message === "conversation_not_found"

@@ -14,6 +14,7 @@ import {
   type SupportSendPort,
 } from "./support-send.js";
 import { OutboundSendError } from "./whatsapp-service.js";
+import { WhatsmiauApiError } from "./whatsmiau.js";
 
 const KEY = "support-test-key";
 const env = { [SUPPORT_EVENTS_API_KEY_ENV]: KEY };
@@ -171,6 +172,44 @@ describe("POST /internal/support/send", () => {
     });
     expect(response.status).toBe(503);
     expect(response.body).toEqual({ error: "channel_disconnected" });
+  });
+
+  it("logs the provider's answer when a send fails", async () => {
+    const port = fakePort({ workspaceId: WORKSPACE, aiMode: "safe_auto" });
+    port.sendText.mockRejectedValueOnce(
+      new OutboundSendError(
+        "provider_unavailable",
+        new WhatsmiauApiError(
+          "Whatsmiau request failed: 500",
+          500,
+          '{"message":"no sessions"}',
+        ),
+      ),
+    );
+    const logger = { error: vi.fn() };
+    const app = express();
+    app.use(express.json());
+    registerInternalSupportSendRoute(app, {
+      port,
+      env,
+      internalWorkspace: { resolve: async () => WORKSPACE },
+      logger,
+    });
+    const response = await post(app, {
+      conversationId: CONVERSATION,
+      text: "Oi",
+    });
+    expect(response.status).toBe(502);
+    expect(response.body).toEqual({ error: "provider_unavailable" });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: CONVERSATION,
+        reason: "provider_unavailable",
+        providerStatus: 500,
+        providerBody: '{"message":"no sessions"}',
+      }),
+      "Support send provider failure",
+    );
   });
 
   it("hides unexpected failures", async () => {
