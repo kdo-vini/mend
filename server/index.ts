@@ -22,6 +22,10 @@ import { createZeloCustomerService } from "./zelo-customer.js";
 import { createProviderBalancesService } from "./provider-balances.js";
 import { authenticateRequest } from "./auth.js";
 import { createApiRouter } from "./api-router.js";
+import {
+  registerWorkLogIngestRoute,
+  SupabaseWorkLogIngestStore,
+} from "./work-log.js";
 import type { AuthAdapter } from "./contracts/api-ports.js";
 import {
   createSupabaseApiAdapters,
@@ -214,6 +218,10 @@ registerInternalSupportRoutes(app, {
         : Promise.resolve(null),
   },
   store: workerSupabase ? SupabaseSupportEventStore.from(workerSupabase) : null,
+  logger,
+});
+registerWorkLogIngestRoute(app, {
+  store: workerSupabase ? new SupabaseWorkLogIngestStore(workerSupabase) : null,
   logger,
 });
 registerInternalSupportSendRoute(app, {

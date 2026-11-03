@@ -1787,3 +1787,90 @@ describe("projects and provider balance boundaries", () => {
     expect(d.providerBalances.load).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("work log (Diário) routes", () => {
+  const token = {
+    id: articleId,
+    label: "Notebook",
+    created_at: "2026-11-03T12:00:00.000Z",
+    last_used_at: null,
+    revoked_at: null,
+  };
+  function workLogApp() {
+    const d = createFakeDependencies();
+    d.workLog = {
+      list: vi.fn(async () => []),
+      remove: vi.fn(async () => true),
+      listTokens: vi.fn(async () => []),
+      createToken: vi.fn(async () => token),
+      revokeToken: vi.fn(async () => true),
+    };
+    return { d, app: makeApp(d), workLog: d.workLog };
+  }
+
+  it("lets any member read the feed and requires authentication", async () => {
+    const { d, app, workLog } = workLogApp();
+    d.membership.getMembership = vi.fn(async () => ({
+      workspaceId,
+      role: "viewer" as const,
+    }));
+    expect((await request(app).get("/api/work-log")).status).toBe(200);
+    d.auth.authenticate = vi.fn(async () => null);
+    expect((await request(app).get("/api/work-log")).status).toBe(401);
+    expect(workLog.list).toHaveBeenCalledTimes(1);
+  });
+
+  it("issues a token bound to the caller and returns the plain value once", async () => {
+    const { app, workLog } = workLogApp();
+    const response = await request(app)
+      .post("/api/work-log/tokens")
+      .send({ label: "Notebook" });
+    expect(response.status).toBe(201);
+    expect(response.body.secret).toMatch(/^mend_diario_[A-Za-z0-9_-]{43}$/);
+    expect(workLog.createToken).toHaveBeenCalledWith({
+      workspaceId,
+      userId,
+      label: "Notebook",
+      tokenHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+    const stored = vi.mocked(workLog.createToken).mock.calls[0][0];
+    expect(stored.tokenHash).not.toContain(response.body.secret);
+    expect(
+      (
+        await request(app)
+          .post("/api/work-log/tokens")
+          .send({ label: "x", userId: otherWorkspaceId })
+      ).status,
+    ).toBe(400);
+  });
+
+  it("caps active tokens per person", async () => {
+    const { app, workLog } = workLogApp();
+    workLog.listTokens = vi.fn(async () =>
+      Array.from({ length: 5 }, (_, index) => ({
+        ...token,
+        id: `${index}`,
+      })),
+    );
+    const response = await request(app)
+      .post("/api/work-log/tokens")
+      .send({ label: "Outro" });
+    expect(response.status).toBe(409);
+    expect(workLog.createToken).not.toHaveBeenCalled();
+  });
+
+  it("revokes only the caller's tokens and reports missing entries as 404", async () => {
+    const { app, workLog } = workLogApp();
+    expect(
+      (await request(app).delete(`/api/work-log/tokens/${articleId}`)).status,
+    ).toBe(204);
+    expect(workLog.revokeToken).toHaveBeenCalledWith(userId, articleId);
+    workLog.remove = vi.fn(async () => false);
+    expect(
+      (await request(app).delete(`/api/work-log/entries/${articleId}`)).status,
+    ).toBe(404);
+    expect(
+      (await request(app).delete("/api/work-log/entries/not-a-uuid")).status,
+    ).toBe(400);
+  });
+});

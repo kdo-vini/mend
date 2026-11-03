@@ -1,0 +1,55 @@
+{
+  "eyebrow": "Workspace Diagium",
+  "title": "Diário",
+  "description": "O que cada pessoa fez nos últimos dias. Cada registro some sozinho 7 dias depois de publicado.",
+  "loading": "Carregando o diário…",
+  "days": {
+    "today": "Hoje",
+    "yesterday": "Ontem"
+  },
+  "expiry_one": "Some em {{count}} dia",
+  "expiry_other": "Some em {{count}} dias",
+  "empty": {
+    "title": "Nenhum registro nos últimos 7 dias",
+    "description": "Peça ao Claude Code para registrar no Mend o que você fez. O resumo aparece aqui para toda a equipe."
+  },
+  "delete": {
+    "title": "Excluir este registro?",
+    "description": "\"{{title}}\" sai do diário para toda a equipe. Não é possível desfazer.",
+    "confirm": "Excluir registro"
+  },
+  "connect": {
+    "title": "Conectar o Claude Code",
+    "description": "Gere um token pessoal para o Claude Code publicar no diário em seu nome. Os registros aparecem com o seu nome.",
+    "labelField": "Nome do dispositivo",
+    "labelPlaceholder": "Ex.: notebook do escritório",
+    "secretLabel": "Token pessoal",
+    "secretHint": "Copie o token agora. Por segurança, ele não será mostrado de novo.",
+    "envHint": "Salve-o na variável de ambiente MEND_DIARIO_TOKEN do computador onde o Claude Code roda.",
+    "activeTitle": "Tokens ativos",
+    "noTokens": "Nenhum token ativo.",
+    "lastUsed": "Último uso em {{date}}",
+    "neverUsed": "Ainda não usado"
+  },
+  "actions": {
+    "connect": "Conectar o Claude",
+    "retry": "Tentar novamente",
+    "close": "Fechar",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "createToken": "Gerar token",
+    "creating": "Gerando…",
+    "revoke": "Revogar",
+    "revokeToken": "Revogar o token {{label}}",
+    "deleteEntry": "Excluir o registro {{title}}"
+  },
+  "errors": {
+    "load": "Não foi possível carregar o diário.",
+    "delete": "Não foi possível excluir o registro.",
+    "deleteMissing": "Este registro já não existe ou você não pode excluí-lo.",
+    "tokens": "Não foi possível carregar seus tokens.",
+    "tokenCreate": "Não foi possível gerar o token.",
+    "tokenLimit": "Você já tem 5 tokens ativos. Revogue um antes de gerar outro.",
+    "tokenRevoke": "Não foi possível revogar o token."
+  }
+}

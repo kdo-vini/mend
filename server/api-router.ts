@@ -36,6 +36,7 @@ import { registerCodingControlPlaneRoutes } from "./routes/coding-control-plane-
 import { registerImpactRoutes } from "./routes/impact-routes.js";
 import { registerFinanceRoutes } from "./routes/finance-routes.js";
 import { registerProjectRoutes } from "./projects.js";
+import { registerWorkLogRoutes } from "./work-log.js";
 import {
   InternalWorkspaceError,
   resolveInternalWorkspace,
@@ -875,6 +876,7 @@ export function createApiRouter(dependencies: ApiRouterDependencies): Router {
   registerImpactRoutes(routeContext);
   registerFinanceRoutes(routeContext);
   registerProjectRoutes(routeContext);
+  registerWorkLogRoutes(routeContext);
 
   router.use(
     (
