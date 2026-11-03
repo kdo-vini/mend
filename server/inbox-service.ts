@@ -245,6 +245,11 @@ export interface InboxPort {
     status: "processing" | "ready" | "failed";
     errorCode?: string;
   }): Promise<void>;
+  /** Records a session the provider reported closed while Mend still had it open. */
+  markChannelDisconnected?(input: {
+    workspaceId: string;
+    instanceName: string;
+  }): Promise<void>;
   linkIssueMessage(input: {
     workspaceId: string;
     issueId: string;
@@ -756,6 +761,23 @@ export class SupabaseInboxPort implements InboxPort {
       throw new Error(`supabase:messages_transcription:${error.message}`);
   }
 
+  async markChannelDisconnected(input: {
+    workspaceId: string;
+    instanceName: string;
+  }): Promise<void> {
+    const now = new Date().toISOString();
+    // Only an open row moves: a channel already pairing again must not be
+    // pushed back to closed by a send that failed before the new session.
+    const { error } = await this.client
+      .from("channel_connections")
+      .update({ status: "closed", last_event_at: now, updated_at: now })
+      .eq("workspace_id", input.workspaceId)
+      .eq("provider_instance_name", input.instanceName)
+      .eq("status", "open");
+    if (error)
+      throw new Error(`supabase:channel_connections_status:${error.message}`);
+  }
+
   async linkIssueMessage(
     input: Parameters<InboxPort["linkIssueMessage"]>[0],
   ): Promise<{ inserted: boolean }> {
@@ -983,6 +1005,28 @@ export class InboxService {
         error: redactJobError(error),
       });
       throw error;
+    }
+  }
+
+  /**
+   * Best-effort: the send already failed and its reason is what the operator
+   * needs, so a status write that also fails is logged instead of replacing it.
+   */
+  async markChannelDisconnected(
+    contextInput: InboxContext,
+    instanceName: string,
+  ): Promise<void> {
+    const context = this.context(contextInput);
+    try {
+      await this.port.markChannelDisconnected?.({
+        workspaceId: context.workspaceId,
+        instanceName,
+      });
+    } catch (error) {
+      console.warn("[mend-inbox] channel status update failed", {
+        instanceName,
+        error: redactJobError(error),
+      });
     }
   }
 

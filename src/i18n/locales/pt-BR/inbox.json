@@ -67,6 +67,10 @@
     "submit": "Iniciar conversa",
     "starting": "Iniciando…"
   },
+  "channelOffline": {
+    "message": "O WhatsApp está desconectado. Nenhuma mensagem será enviada até reconectar.",
+    "action": "Reconectar"
+  },
   "shareContact": {
     "eyebrow": "Compartilhar contato",
     "title": "Enviar cartão de contato",

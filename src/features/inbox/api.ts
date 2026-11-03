@@ -201,6 +201,21 @@ export async function listConnectedChannels(
   );
 }
 
+/**
+ * True when the workspace has WhatsApp channels and none of them holds a live
+ * session. Conversations do not carry their channel and the internal workspace
+ * runs a single number, so the thread warns on the workspace state. A workspace
+ * with no channel at all is onboarding, not an outage.
+ */
+export async function isWhatsAppDisconnected(
+  workspaceId: string,
+): Promise<boolean> {
+  const channels = await listLiveChannels(workspaceId);
+  return (
+    channels.length > 0 && !channels.some((channel) => channel.state === "open")
+  );
+}
+
 export function startConversation(input: {
   workspaceId: string;
   channelId: string;

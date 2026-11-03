@@ -38,6 +38,7 @@ import {
   Square,
   Trash2,
   UserRound,
+  WifiOff,
   X,
   Zap,
   ZoomIn,
@@ -58,6 +59,7 @@ import {
   deleteLiveConversation,
   deleteLiveMessage,
   editLiveMessage,
+  isWhatsAppDisconnected,
   listConnectedChannels,
   LiveActionError,
   loadLiveConversationSnapshot,
@@ -429,12 +431,41 @@ export function InboxPage({
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [newChatChannels, setNewChatChannels] = useState<NewChatChannel[]>([]);
   const [newChatStarting, setNewChatStarting] = useState(false);
+  const [whatsAppDisconnected, setWhatsAppDisconnected] = useState(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   const searchRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const lastSelectionIndexRef = useRef<number | null>(null);
+
+  // Channel status is left out of realtime (last_event_at moves on every
+  // webhook), so the thread warning reads it over HTTP: on open, when the tab
+  // comes back, and once a minute while it stays visible. A failed check keeps
+  // the last known state rather than flashing a warning.
+  useEffect(() => {
+    if (!liveMode || !workspaceId) {
+      setWhatsAppDisconnected(false);
+      return;
+    }
+    let active = true;
+    const check = () => {
+      if (document.visibilityState === "hidden") return;
+      void isWhatsAppDisconnected(workspaceId)
+        .then((disconnected) => {
+          if (active) setWhatsAppDisconnected(disconnected);
+        })
+        .catch(() => undefined);
+    };
+    check();
+    const timer = setInterval(check, 60_000);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [liveMode, workspaceId]);
 
   const openNewChat = () => {
     setNewChatOpen(true);
@@ -492,15 +523,18 @@ export function InboxPage({
       });
       onToast(t("toasts.chatExists"));
     } catch (error) {
-      onToast(
-        localizedError(
-          error,
-          error instanceof LiveActionError &&
-            error.code === "channel_not_connected"
-            ? t("errors.channelNotConnected")
-            : t("errors.startChat"),
-        ),
-      );
+      // A channel stored as connected can still have lost its WhatsApp session;
+      // the provider then answers channel_disconnected, which needs the same
+      // reconnect instruction rather than a generic "could not start".
+      const code = error instanceof LiveActionError ? error.code : undefined;
+      if (code === "channel_disconnected") setWhatsAppDisconnected(true);
+      const key =
+        code === "channel_not_connected" || code === "channel_disconnected"
+          ? "errors.channelNotConnected"
+          : code
+            ? sendErrorKeys[code]
+            : undefined;
+      onToast(localizedError(error, t(key ?? "errors.startChat")));
     } finally {
       setNewChatStarting(false);
     }
@@ -1334,6 +1368,8 @@ export function InboxPage({
     fallbackKey = "errors.sendMessage",
   ): string => {
     const code = error instanceof LiveActionError ? error.code : undefined;
+    // The failed send is fresher than the last status check.
+    if (code === "channel_disconnected") setWhatsAppDisconnected(true);
     const key = code ? sendErrorKeys[code] : undefined;
     return localizedError(error, t(key ?? fallbackKey));
   };
@@ -2706,6 +2742,15 @@ export function InboxPage({
               </button>
             )}
           </div>
+          {whatsAppDisconnected && (
+            <div className="channel-offline-notice" role="status">
+              <WifiOff size={15} aria-hidden="true" />
+              <span>{t("channelOffline.message")}</span>
+              <Link to="/settings/channels/whatsapp">
+                {t("channelOffline.action")}
+              </Link>
+            </div>
+          )}
           <MediaComposer
             // One composer per thread: staged files, a recording and the
             // pending text can never follow the operator into another chat.

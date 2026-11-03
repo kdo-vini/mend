@@ -60,6 +60,10 @@ class FakeInboxPort implements InboxPort {
   readonly messages = new Map<string, FakeMessage>();
   readonly timelineKeys = new Set<string>();
   readonly links = new Set<string>();
+  readonly disconnectedChannels: Array<{
+    workspaceId: string;
+    instanceName: string;
+  }> = [];
   readonly evidence: Array<{
     id: string;
     issueId: string;
@@ -216,6 +220,13 @@ class FakeInboxPort implements InboxPort {
       conversationId: input.conversationId,
       reason: input.reason ?? "human_message",
     });
+  }
+
+  async markChannelDisconnected(input: {
+    workspaceId: string;
+    instanceName: string;
+  }) {
+    this.disconnectedChannels.push(input);
   }
 
   async getLatestInbound(workspaceIdInput: string, id: string) {
@@ -1119,6 +1130,11 @@ describe("InboxService and WhatsAppService", () => {
       reason: "channel_disconnected",
     });
     expect(provider.getConnectionState).toHaveBeenCalledWith("mend-demo");
+    // The drop is recorded, because the provider may never send the
+    // connection.update that would otherwise close the stored channel.
+    expect(port.disconnectedChannels).toEqual([
+      { workspaceId, instanceName: "mend-demo" },
+    ]);
     // A refusal never reaches the thread as a delivered message.
     expect(
       [...port.messages.values()].some(
@@ -1167,6 +1183,8 @@ describe("InboxService and WhatsAppService", () => {
         .catch((value: unknown) => value);
       expect(error).toBeInstanceOf(OutboundSendError);
       expect((error as OutboundSendError).reason).toBe(scenario.reason);
+      // A live session keeps its stored status.
+      expect(port.disconnectedChannels).toEqual([]);
     }
   });
 

@@ -110,6 +110,7 @@ vi.mock("../api", () => ({
     }
   },
   listConnectedChannels: async () => [{ id: "channel-1", name: "Téchne" }],
+  isWhatsAppDisconnected: async () => false,
   startConversation: (input: unknown) => startConversation(input),
   loadLiveConversationSnapshot: (workspaceId: string, conversationId: string) =>
     loadLiveConversationSnapshot(workspaceId, conversationId),
