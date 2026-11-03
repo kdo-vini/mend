@@ -118,6 +118,11 @@ const FeatureFinancePage = lazy(() =>
     default: FinancePage,
   })),
 );
+const FeatureDiaryPage = lazy(() =>
+  import("./features/diary/DiaryPage").then(({ DiaryPage }) => ({
+    default: DiaryPage,
+  })),
+);
 const FeatureProjectsPage = lazy(() =>
   import("./features/projects/ProjectsPage").then(({ ProjectsPage }) => ({
     default: ProjectsPage,
@@ -1205,6 +1210,11 @@ function App() {
               projects={
                 <FeatureBoundary label={t("navigation.projects")}>
                   <FeatureProjectsPage />
+                </FeatureBoundary>
+              }
+              diary={
+                <FeatureBoundary label={t("navigation.diary")}>
+                  <FeatureDiaryPage />
                 </FeatureBoundary>
               }
               dashboard={

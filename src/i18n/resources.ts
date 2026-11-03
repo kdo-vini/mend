@@ -6,6 +6,7 @@ import kanban from "./locales/pt-BR/kanban.json";
 import knowledge from "./locales/pt-BR/knowledge.json";
 import notifications from "./locales/pt-BR/notifications.json";
 import projects from "./locales/pt-BR/projects.json";
+import diary from "./locales/pt-BR/diary.json";
 import runs from "./locales/pt-BR/runs.json";
 import settings from "./locales/pt-BR/settings.json";
 
@@ -22,6 +23,7 @@ export const resources = {
     knowledge,
     notifications,
     projects,
+    diary,
     runs,
     settings,
   },

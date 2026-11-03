@@ -97,7 +97,8 @@
     "shortcutCommand": "⌘ K",
     "dashboard": "Dashboard",
     "finance": "Financeiro",
-    "projects": "Projetos"
+    "projects": "Projetos",
+    "diary": "Diário"
   },
   "app": {
     "currentOperator": "Operador atual",
