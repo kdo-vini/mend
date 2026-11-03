@@ -9,6 +9,10 @@ export function mcpServerUrl(apiBaseUrl = mendApiBaseUrl) {
 export const agentKeyScopes = [
   "suporte:ler",
   "suporte:responder",
+  "suporte:pausar",
+  "conhecimento:ler",
+  "chamados:ler",
+  "chamados:escrever",
   "diario:escrever",
 ] as const;
 export type AgentKeyScope = (typeof agentKeyScopes)[number];

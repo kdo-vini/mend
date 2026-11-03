@@ -12,6 +12,9 @@ import {
   registerMcpServerRoute,
   type McpServerDependencies,
 } from "./mcp-server.js";
+import type { IssueService } from "./issue-service.js";
+import type { KnowledgeService } from "./knowledge-service.js";
+import type { SupportConversationPort } from "./support-conversation.js";
 import type { SupportEventStore } from "./support-events.js";
 import type { SupportSendPort } from "./support-send.js";
 import type { WorkLogIngestStore } from "./work-log.js";
@@ -78,12 +81,81 @@ function fakeWorkLog(): WorkLogIngestStore {
   };
 }
 
+function fakeConversations(): SupportConversationPort {
+  return {
+    view: vi.fn(async ({ conversationId }) => ({
+      conversationId,
+      contact: { name: "Cantinho do Pastel", phone: "5514999999999" },
+      aiMode: "safe_auto",
+      status: "open",
+      attentionState: "ai_handling",
+      automationState: "ai_active",
+      humanTookOver: false,
+      humanTakeoverAt: null,
+      humanTakeoverReason: null,
+      pausedUntil: null,
+      replyAllowed: true,
+      messages: [
+        {
+          id: "m1",
+          direction: "inbound",
+          senderType: "contact",
+          messageType: "text",
+          text: "Não está indo",
+          createdAt: "2026-11-04T08:28:00.000Z",
+          deleted: false,
+        },
+      ],
+      hasOlderMessages: false,
+    })),
+    pause: vi.fn(async () => undefined),
+    resume: vi.fn(async () => undefined),
+  };
+}
+
+function fakeKnowledge() {
+  return {
+    list: vi.fn(async () => [
+      {
+        id: "article-1",
+        title: "Como gerar o Pix da assinatura",
+        category: "Assinatura",
+        body: "x".repeat(5_000),
+      },
+    ]),
+  } as unknown as Pick<KnowledgeService, "list">;
+}
+
+function fakeIssues() {
+  return {
+    list: vi.fn(async () => ({ data: [], nextCursor: null })),
+    get: vi.fn(async (_context, identifier) =>
+      identifier === "ZEL-1" ? { identifier: "ZEL-1" } : null,
+    ),
+    create: vi.fn(async () => ({ identifier: "ZEL-2" })),
+    addComment: vi.fn(async () => ({ id: "comment-1" })),
+  } as unknown as Pick<IssueService, "list" | "get" | "create" | "addComment">;
+}
+
+const ALL_SCOPES: AgentScope[] = [
+  "suporte:ler",
+  "suporte:responder",
+  "suporte:pausar",
+  "conhecimento:ler",
+  "chamados:ler",
+  "chamados:escrever",
+  "diario:escrever",
+];
+
 function buildApp(overrides: Partial<McpServerDependencies> = {}) {
   const deps: McpServerDependencies = {
     keys: fakeKeys(["suporte:ler", "suporte:responder", "diario:escrever"]),
     internalWorkspace: { resolve: async () => WORKSPACE },
     supportEvents: fakeEvents(),
     supportSend: fakeSend(),
+    conversations: fakeConversations(),
+    knowledge: fakeKnowledge(),
+    issues: fakeIssues(),
     workLog: fakeWorkLog(),
     now: () => new Date("2026-11-04T12:00:00.000Z"),
     ...overrides,
@@ -167,7 +239,7 @@ describe("POST /mcp", () => {
     const { app } = buildApp();
     const response = await rpc(app, "tools/list", {}, { "x-api-key": KEY });
     expect(response.status).toBe(200);
-    expect(response.body.result.tools).toHaveLength(3);
+    expect(response.body.result.tools).toHaveLength(4);
   });
 
   it("does not run a tool outside the key's scopes", async () => {
@@ -310,6 +382,7 @@ describe("MCP client handshake", () => {
         "diario_registrar",
         "suporte_enviar_resposta",
         "suporte_listar_eventos",
+        "suporte_ver_conversa",
       ]);
       const called = await client.callTool({
         name: "diario_registrar",
@@ -321,5 +394,139 @@ describe("MCP client handshake", () => {
     } finally {
       server.close();
     }
+  });
+});
+
+describe("support, knowledge and issue tools", () => {
+  const call = (
+    app: express.Express,
+    name: string,
+    args: Record<string, unknown>,
+  ) => rpc(app, "tools/call", { name, arguments: args });
+
+  it("lists every tool when the key has every scope", async () => {
+    const { app } = buildApp({ keys: fakeKeys(ALL_SCOPES) });
+    const names = (
+      (await rpc(app, "tools/list")).body.result.tools as { name: string }[]
+    )
+      .map((tool) => tool.name)
+      .sort();
+    expect(names).toEqual([
+      "chamados_comentar",
+      "chamados_criar",
+      "chamados_listar",
+      "chamados_ver",
+      "conhecimento_buscar",
+      "diario_registrar",
+      "suporte_enviar_resposta",
+      "suporte_listar_eventos",
+      "suporte_pausar_ia",
+      "suporte_retomar_ia",
+      "suporte_ver_conversa",
+    ]);
+  });
+
+  it("shows one conversation's history and state in the key's workspace", async () => {
+    const conversations = fakeConversations();
+    const { app } = buildApp({ conversations });
+    const payload = toolPayload(
+      await call(app, "suporte_ver_conversa", {
+        conversationId: CONVERSATION,
+        limite: 20,
+      }),
+    );
+    expect(payload.data).toMatchObject({
+      humanTookOver: false,
+      replyAllowed: true,
+      messages: [{ senderType: "contact", text: "Não está indo" }],
+    });
+    expect(conversations.view).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE,
+      conversationId: CONVERSATION,
+      limit: 20,
+    });
+  });
+
+  it("pauses and resumes the AI only with the pause scope", async () => {
+    const conversations = fakeConversations();
+    const reader = buildApp({ conversations });
+    expect(
+      (
+        await call(reader.app, "suporte_pausar_ia", {
+          conversationId: CONVERSATION,
+        })
+      ).body.result?.isError ?? true,
+    ).toBe(true);
+    expect(conversations.pause).not.toHaveBeenCalled();
+
+    const { app } = buildApp({
+      keys: fakeKeys(["suporte:pausar"]),
+      conversations,
+    });
+    await call(app, "suporte_pausar_ia", { conversationId: CONVERSATION });
+    expect(conversations.pause).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE,
+      conversationId: CONVERSATION,
+      reason: "manual_pause",
+    });
+    await call(app, "suporte_retomar_ia", { conversationId: CONVERSATION });
+    expect(conversations.resume).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE,
+      conversationId: CONVERSATION,
+    });
+  });
+
+  it("searches only published knowledge and trims long articles", async () => {
+    const knowledge = fakeKnowledge();
+    const { app } = buildApp({
+      keys: fakeKeys(["conhecimento:ler"]),
+      knowledge,
+    });
+    const payload = toolPayload(
+      await call(app, "conhecimento_buscar", { busca: "Pix" }),
+    );
+    const [article] = payload.data as unknown as { body: string }[];
+    expect(article!.body).toHaveLength(4_000);
+    expect(knowledge.list).toHaveBeenCalledWith(
+      { userId: CREATOR, workspaceId: WORKSPACE, role: "agent" },
+      { search: "Pix", status: "published", limit: 5 },
+    );
+  });
+
+  it("opens and comments on issues signed with the agent's name", async () => {
+    const issues = fakeIssues();
+    const { app } = buildApp({
+      keys: fakeKeys(["chamados:ler", "chamados:escrever"]),
+      issues,
+    });
+    await call(app, "chamados_criar", {
+      title: "Pix não baixa o valor",
+      type: "bug",
+      description: "Cliente desmarcou o ZeloMenu e o valor seguiu R$ 99.",
+      conversationId: CONVERSATION,
+    });
+    expect(issues.create).toHaveBeenCalledWith(
+      { userId: CREATOR, workspaceId: WORKSPACE, role: "agent" },
+      expect.objectContaining({
+        title: "Pix não baixa o valor",
+        source: "ai",
+        conversationId: CONVERSATION,
+        description:
+          "Aberto por Rafa (agente) pelo MCP do Mend.\n\nCliente desmarcou o ZeloMenu e o valor seguiu R$ 99.",
+      }),
+    );
+    await call(app, "chamados_comentar", {
+      identificador: "ZEL-1",
+      texto: "Cliente confirmou que funcionou.",
+    });
+    expect(issues.addComment).toHaveBeenCalledWith(expect.anything(), "ZEL-1", {
+      body: "**Rafa (agente):** Cliente confirmou que funcionou.",
+    });
+    expect(
+      toolPayload(await call(app, "chamados_ver", { identificador: "ZEL-9" })),
+    ).toEqual({
+      isError: true,
+      data: { error: "issue_not_found", status: 404 },
+    });
   });
 });

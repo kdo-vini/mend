@@ -1945,6 +1945,10 @@ describe("agent key routes", () => {
     expect(list.body.scopes).toEqual([
       "suporte:ler",
       "suporte:responder",
+      "suporte:pausar",
+      "conhecimento:ler",
+      "chamados:ler",
+      "chamados:escrever",
       "diario:escrever",
     ]);
     expect(

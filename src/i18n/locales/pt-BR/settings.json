@@ -995,12 +995,28 @@
     "scopesHelp": "No agentes.chat você ainda escolhe quais agentes usam a conexão e quais ferramentas cada um usa.",
     "scopes": {
       "suporte_ler": {
-        "name": "Ler mensagens do suporte",
-        "help": "Lista as mensagens recebidas e enviadas no WhatsApp do suporte."
+        "name": "Ler mensagens e histórico do suporte",
+        "help": "Vê as mensagens novas e o histórico de cada conversa, inclusive se um humano assumiu."
       },
       "suporte_responder": {
         "name": "Responder clientes no WhatsApp",
         "help": "Envia respostas com as mesmas travas do bot: não responde com a IA pausada, em grupo ou se chegou mensagem mais nova."
+      },
+      "suporte_pausar": {
+        "name": "Pausar e retomar a IA nas conversas",
+        "help": "Pausa a IA quando a equipe pedir para não responder e devolve a conversa para a IA quando pedirem."
+      },
+      "conhecimento_ler": {
+        "name": "Consultar a base de conhecimento",
+        "help": "Busca artigos publicados para responder com a informação certa."
+      },
+      "chamados_ler": {
+        "name": "Ver chamados",
+        "help": "Lista e abre os chamados do Mend."
+      },
+      "chamados_escrever": {
+        "name": "Abrir e comentar chamados",
+        "help": "Abre chamados e comenta neles, sempre com o nome deste agente."
       },
       "diario_escrever": {
         "name": "Registrar no Diário",

@@ -88,7 +88,7 @@ describe("SettingsAgentKeysPage", () => {
     await render();
     expect(container.textContent).toContain("Maria");
     expect(container.textContent).toContain(
-      "Ler mensagens do suporte · Responder clientes no WhatsApp",
+      "Ler mensagens e histórico do suporte · Responder clientes no WhatsApp",
     );
     expect(container.textContent).toContain("Ainda não usada");
     expect(container.textContent).not.toContain("Antiga");

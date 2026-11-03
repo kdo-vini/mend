@@ -18,6 +18,18 @@ import {
   resolveInternalWorkspace,
   type InternalWorkspacePort,
 } from "./internal-workspace.js";
+import {
+  issueCreateSchema,
+  issueIdentifierSchema,
+  issueListQuerySchema,
+  type IssueRequestContext,
+  type IssueService,
+} from "./issue-service.js";
+import type { KnowledgeService } from "./knowledge-service.js";
+import {
+  supportPauseReasons,
+  type SupportConversationPort,
+} from "./support-conversation.js";
 import type { SupportEventStore } from "./support-events.js";
 import {
   executeSupportSend,
@@ -43,10 +55,34 @@ export interface McpServerDependencies {
   internalWorkspace: InternalWorkspacePort;
   supportEvents: SupportEventStore | null;
   supportSend: SupportSendPort | null;
+  conversations: SupportConversationPort | null;
+  knowledge: Pick<KnowledgeService, "list"> | null;
+  issues: Pick<IssueService, "list" | "get" | "create" | "addComment"> | null;
   workLog: WorkLogIngestStore | null;
   logger?: Pick<Logger, "error">;
   now?: () => Date;
 }
+
+/** Every tool runs in the internal workspace the key belongs to, nowhere else. */
+function workspaceFor(deps: McpServerDependencies, principal: AgentPrincipal) {
+  return resolveInternalWorkspace(
+    deps.internalWorkspace,
+    principal.workspaceId,
+  );
+}
+
+/**
+ * Issues are written as the key's creator (the tables reference real users);
+ * the agent's name goes into the text so the team sees who actually wrote it.
+ */
+function issueContext(
+  principal: AgentPrincipal,
+  workspaceId: string,
+): IssueRequestContext {
+  return { userId: principal.createdBy, workspaceId, role: "agent" };
+}
+
+const MAX_KNOWLEDGE_BODY = 4_000;
 
 function result(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data) }] };
@@ -170,6 +206,293 @@ export const mcpTools: ToolDefinition[] = [
           return outcome.ok
             ? result(outcome.body)
             : refusal(outcome.error, outcome.status);
+        },
+      );
+    },
+  },
+  {
+    scope: "suporte:ler",
+    register(server, principal, deps) {
+      server.registerTool(
+        "suporte_ver_conversa",
+        {
+          title: "Ver conversa com o cliente",
+          description:
+            "Mostra o histórico de uma conversa do suporte (mais antigas primeiro) e o estado dela: aiMode, se um humano assumiu (humanTookOver), motivo e horário da pausa e se a IA pode responder (replyAllowed). senderType diz quem escreveu: contact (cliente), user (pessoa da equipe), ai ou system. Leia antes de responder quando a conversa voltou para a IA depois de um humano.",
+          inputSchema: {
+            conversationId: z.string().uuid(),
+            limite: z
+              .number()
+              .int()
+              .min(1)
+              .max(200)
+              .optional()
+              .describe("Quantas mensagens recentes trazer (padrão 50)"),
+          },
+          annotations: { readOnlyHint: true, openWorldHint: false },
+        },
+        async ({ conversationId, limite }) => {
+          if (!deps.conversations)
+            return refusal("support_conversations_unavailable");
+          try {
+            const view = await deps.conversations.view({
+              workspaceId: await workspaceFor(deps, principal),
+              conversationId,
+              limit: limite ?? 50,
+            });
+            return view ? result(view) : refusal("conversation_not_found", 404);
+          } catch (error) {
+            return unavailable(error, deps, "suporte_ver_conversa");
+          }
+        },
+      );
+    },
+  },
+  {
+    scope: "suporte:pausar",
+    register(server, principal, deps) {
+      server.registerTool(
+        "suporte_pausar_ia",
+        {
+          title: "Pausar a IA numa conversa",
+          description:
+            "Pausa a IA nesta conversa, como o botão Pausar do Mend. Use quando alguém da equipe mandar não responder um cliente, quando o cliente pedir uma pessoa ou quando não for seguro responder. Enquanto pausada, suporte_enviar_resposta continua recusando se a IA estiver desligada, e você não deve responder.",
+          inputSchema: {
+            conversationId: z.string().uuid(),
+            motivo: z
+              .enum(supportPauseReasons)
+              .optional()
+              .describe(
+                "manual_pause (padrão: a equipe pediu), customer_requested_human, unsafe_intent ou low_confidence",
+              ),
+          },
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+          },
+        },
+        async ({ conversationId, motivo }) => {
+          if (!deps.conversations)
+            return refusal("support_conversations_unavailable");
+          try {
+            await deps.conversations.pause({
+              workspaceId: await workspaceFor(deps, principal),
+              conversationId,
+              reason: motivo ?? "manual_pause",
+            });
+            return result({ conversationId, paused: true });
+          } catch (error) {
+            return unavailable(error, deps, "suporte_pausar_ia");
+          }
+        },
+      );
+      server.registerTool(
+        "suporte_retomar_ia",
+        {
+          title: "Retomar a IA numa conversa",
+          description:
+            "Devolve a conversa para a IA, como o botão Retomar do Mend. Só use quando alguém da equipe pedir. Depois de retomar, leia a conversa com suporte_ver_conversa para entender o que o humano já falou.",
+          inputSchema: { conversationId: z.string().uuid() },
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+          },
+        },
+        async ({ conversationId }) => {
+          if (!deps.conversations)
+            return refusal("support_conversations_unavailable");
+          try {
+            await deps.conversations.resume({
+              workspaceId: await workspaceFor(deps, principal),
+              conversationId,
+            });
+            return result({ conversationId, resumed: true });
+          } catch (error) {
+            return unavailable(error, deps, "suporte_retomar_ia");
+          }
+        },
+      );
+    },
+  },
+  {
+    scope: "conhecimento:ler",
+    register(server, principal, deps) {
+      server.registerTool(
+        "conhecimento_buscar",
+        {
+          title: "Buscar na base de conhecimento",
+          description:
+            "Busca artigos publicados na base de conhecimento do Mend pelo título. Traz título, categoria e o texto do artigo (cortado em 4.000 caracteres).",
+          inputSchema: {
+            busca: z.string().trim().min(1).max(240),
+            limite: z.number().int().min(1).max(20).optional(),
+          },
+          annotations: { readOnlyHint: true, openWorldHint: false },
+        },
+        async ({ busca, limite }) => {
+          if (!deps.knowledge) return refusal("knowledge_unavailable");
+          try {
+            const workspaceId = await workspaceFor(deps, principal);
+            const page = (await deps.knowledge.list(
+              { userId: principal.createdBy, workspaceId, role: "agent" },
+              { search: busca, status: "published", limit: limite ?? 5 },
+            )) as
+              | { data?: Record<string, unknown>[] }
+              | Record<string, unknown>[];
+            const articles = Array.isArray(page) ? page : (page.data ?? []);
+            return result(
+              articles.map((article) => ({
+                id: article.id,
+                title: article.title,
+                category: article.category ?? null,
+                body:
+                  typeof article.body === "string"
+                    ? article.body.slice(0, MAX_KNOWLEDGE_BODY)
+                    : null,
+              })),
+            );
+          } catch (error) {
+            return unavailable(error, deps, "conhecimento_buscar");
+          }
+        },
+      );
+    },
+  },
+  {
+    scope: "chamados:ler",
+    register(server, principal, deps) {
+      server.registerTool(
+        "chamados_listar",
+        {
+          title: "Listar chamados",
+          description:
+            "Lista os chamados do Mend, com filtro por status, prioridade ou busca no título.",
+          inputSchema: issueListQuerySchema.omit({ assignedUserId: true })
+            .shape,
+          annotations: { readOnlyHint: true, openWorldHint: false },
+        },
+        async (query) => {
+          if (!deps.issues) return refusal("issues_unavailable");
+          try {
+            const workspaceId = await workspaceFor(deps, principal);
+            return result(
+              await deps.issues.list(
+                issueContext(principal, workspaceId),
+                query,
+              ),
+            );
+          } catch (error) {
+            return unavailable(error, deps, "chamados_listar");
+          }
+        },
+      );
+      server.registerTool(
+        "chamados_ver",
+        {
+          title: "Ver chamado",
+          description:
+            "Mostra um chamado pelo identificador (ex.: ZEL-42), com descrição, status e histórico.",
+          inputSchema: { identificador: issueIdentifierSchema },
+          annotations: { readOnlyHint: true, openWorldHint: false },
+        },
+        async ({ identificador }) => {
+          if (!deps.issues) return refusal("issues_unavailable");
+          try {
+            const workspaceId = await workspaceFor(deps, principal);
+            const issue = await deps.issues.get(
+              issueContext(principal, workspaceId),
+              identificador,
+            );
+            return issue ? result(issue) : refusal("issue_not_found", 404);
+          } catch (error) {
+            return unavailable(error, deps, "chamados_ver");
+          }
+        },
+      );
+    },
+  },
+  {
+    scope: "chamados:escrever",
+    register(server, principal, deps) {
+      server.registerTool(
+        "chamados_criar",
+        {
+          title: "Abrir chamado",
+          description:
+            "Abre um chamado no Mend (bug, dúvida, pedido). Ligue à conversa do cliente com conversationId quando vier do suporte. O chamado registra o nome deste agente.",
+          inputSchema: issueCreateSchema.pick({
+            title: true,
+            type: true,
+            priority: true,
+            description: true,
+            reproductionSteps: true,
+            expectedBehavior: true,
+            actualBehavior: true,
+            affectedProduct: true,
+            conversationId: true,
+          }).shape,
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false,
+          },
+        },
+        async (input) => {
+          if (!deps.issues) return refusal("issues_unavailable");
+          try {
+            const workspaceId = await workspaceFor(deps, principal);
+            return result(
+              await deps.issues.create(issueContext(principal, workspaceId), {
+                ...input,
+                source: "ai",
+                description: [
+                  `Aberto por ${principal.label} (agente) pelo MCP do Mend.`,
+                  input.description,
+                ]
+                  .filter(Boolean)
+                  .join("\n\n"),
+              }),
+            );
+          } catch (error) {
+            return unavailable(error, deps, "chamados_criar");
+          }
+        },
+      );
+      server.registerTool(
+        "chamados_comentar",
+        {
+          title: "Comentar em chamado",
+          description:
+            "Acrescenta um comentário num chamado. O comentário mostra o nome deste agente.",
+          inputSchema: {
+            identificador: issueIdentifierSchema,
+            texto: z.string().trim().min(1).max(19_000),
+          },
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false,
+          },
+        },
+        async ({ identificador, texto }) => {
+          if (!deps.issues) return refusal("issues_unavailable");
+          try {
+            const workspaceId = await workspaceFor(deps, principal);
+            const comment = await deps.issues.addComment(
+              issueContext(principal, workspaceId),
+              identificador,
+              { body: `**${principal.label} (agente):** ${texto}` },
+            );
+            return comment ? result(comment) : refusal("issue_not_found", 404);
+          } catch (error) {
+            return unavailable(error, deps, "chamados_comentar");
+          }
         },
       );
     },

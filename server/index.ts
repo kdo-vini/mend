@@ -67,6 +67,11 @@ import {
 import { SupabaseInternalWorkspaceAdapter } from "./internal-workspace.js";
 import { SupabaseAgentKeyLookup } from "./agent-keys.js";
 import { registerMcpServerRoute } from "./mcp-server.js";
+import { SupabaseSupportConversationPort } from "./support-conversation.js";
+import { IssueService } from "./issue-service.js";
+import { KnowledgeService } from "./knowledge-service.js";
+import { SupabaseIssueAdapter } from "./adapters/supabase/issues.js";
+import { SupabaseKnowledgeAdapter } from "./adapters/supabase/knowledge.js";
 import { InboxService, SupabaseInboxPort } from "./inbox-service.js";
 import { WhatsAppService } from "./whatsapp-service.js";
 
@@ -255,6 +260,20 @@ registerMcpServerRoute(app, {
     ? SupabaseSupportEventStore.from(workerSupabase)
     : null,
   supportSend: supportSendPort,
+  conversations: workerSupabase
+    ? new SupabaseSupportConversationPort(workerSupabase)
+    : null,
+  knowledge: workerSupabase
+    ? new KnowledgeService(new SupabaseKnowledgeAdapter(workerSupabase))
+    : null,
+  issues: workerSupabase
+    ? new IssueService(
+        new SupabaseIssueAdapter(
+          workerSupabase,
+          new WhatsmiauMessagingProvider(),
+        ),
+      )
+    : null,
   workLog: workerSupabase
     ? new SupabaseWorkLogIngestStore(workerSupabase)
     : null,

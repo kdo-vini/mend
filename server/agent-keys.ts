@@ -15,6 +15,10 @@ const MAX_ACTIVE_KEYS = 20;
 export const agentScopes = [
   "suporte:ler",
   "suporte:responder",
+  "suporte:pausar",
+  "conhecimento:ler",
+  "chamados:ler",
+  "chamados:escrever",
   "diario:escrever",
 ] as const;
 export type AgentScope = (typeof agentScopes)[number];

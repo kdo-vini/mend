@@ -14,13 +14,22 @@ O Mend expõe um servidor MCP em `POST /mcp` para que agentes externos (os bots 
 
 ## Escopos e ferramentas
 
-| Escopo              | Ferramenta                | O que faz                                                                                                                                                                                                           |
-| ------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `suporte:ler`       | `suporte_listar_eventos`  | Mesmo feed de `GET /internal/support/events` (cursor, texto, mídia, `aiMode`, `replyAllowed`).                                                                                                                      |
-| `suporte:responder` | `suporte_enviar_resposta` | Mesmo contrato de `POST /internal/support/send` via `executeSupportSend`: recusa com `reply_not_allowed`, `group_conversation` ou `superseded`, e repetir a mesma resposta para a mesma mensagem não envia de novo. |
-| `diario:escrever`   | `diario_registrar`        | Publica no Diário por 7 dias. O autor exibido é o nome da chave (ex.: "Rafa"); o `author_id` é quem criou a chave.                                                                                                  |
+| Escopo              | Ferramenta                                 | O que faz                                                                                                                                                                                                                                                                   |
+| ------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `suporte:ler`       | `suporte_listar_eventos`                   | Mesmo feed de `GET /internal/support/events` (cursor, texto, mídia, `aiMode`, `replyAllowed`).                                                                                                                                                                              |
+| `suporte:ler`       | `suporte_ver_conversa`                     | Histórico de uma conversa (mais antigas primeiro, `senderType` diz se foi cliente, equipe, IA ou sistema) e o estado: `aiMode`, `humanTookOver`, motivo e hora da pausa, `replyAllowed`. Serve para a IA entender o que o humano já falou quando a conversa volta para ela. |
+| `suporte:responder` | `suporte_enviar_resposta`                  | Mesmo contrato de `POST /internal/support/send` via `executeSupportSend`: recusa com `reply_not_allowed`, `group_conversation` ou `superseded`, e repetir a mesma resposta para a mesma mensagem não envia de novo.                                                         |
+| `suporte:pausar`    | `suporte_pausar_ia` / `suporte_retomar_ia` | Mesmas RPCs dos botões Pausar e Retomar do Inbox (`pause_conversation_ai` e `resume_conversation_ai`). Pausar aceita o motivo (`manual_pause` por padrão).                                                                                                                  |
+| `conhecimento:ler`  | `conhecimento_buscar`                      | Artigos publicados da base de conhecimento, buscando pelo título; o texto vem cortado em 4.000 caracteres.                                                                                                                                                                  |
+| `chamados:ler`      | `chamados_listar` / `chamados_ver`         | Lista e abre chamados pelo `IssueService`.                                                                                                                                                                                                                                  |
+| `chamados:escrever` | `chamados_criar` / `chamados_comentar`     | Abre chamado (`source: ai`, descrição começa com "Aberto por <agente>") e comenta com o nome do agente no início. As tabelas exigem um usuário real, então o autor gravado é quem criou a chave.                                                                            |
+| `diario:escrever`   | `diario_registrar`                         | Publica no Diário por 7 dias. O autor exibido é o nome da chave (ex.: "Rafa"); o `author_id` é quem criou a chave.                                                                                                                                                          |
 
-O financeiro não tem escopo: o bridge dos bots não concede acesso financeiro ([direção interna](../product/MEND_INTERNAL_PRODUCT_DIRECTION.md)).
+O financeiro não tem escopo: o bridge dos bots não concede acesso financeiro ([direção interna](../product/MEND_INTERNAL_PRODUCT_DIRECTION.md)). Dados das lojas do Zelo (plano, Pix, configuração) vivem no PDV, fora do Mend; a Maria continua pedindo ao Lee quando precisa deles.
+
+### Quando o humano assume
+
+Quando alguém da equipe responde pelo Mend, a IA da conversa pausa sozinha (`automation_state = human_paused`). `suporte_ver_conversa` mostra isso em `humanTookOver`. O agente não responde enquanto a conversa estiver com humano, e lê o histórico antes de responder quando ela volta para a IA.
 
 ## O que o MCP não substitui
 
