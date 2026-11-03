@@ -260,6 +260,7 @@ export class WhatsAppService {
    * message gets the blame.
    */
   private async sendFailure(
+    context: InboxContext,
     instanceName: string,
     error: unknown,
   ): Promise<OutboundSendError> {
@@ -271,8 +272,14 @@ export class WhatsAppService {
           .getConnectionState(instanceName)
           .catch(() => undefined)
       : undefined;
-    if (state && !connectedState(state.state))
+    if (state && !connectedState(state.state)) {
+      // The provider does not always deliver connection.update when a session
+      // drops, so the stored status can say open long after it closed. The
+      // send has just proven otherwise; recording it lets the inbox and
+      // Settings show the outage before the next send fails too.
+      await this.inbox.markChannelDisconnected(context, instanceName);
       return new OutboundSendError("channel_disconnected", error);
+    }
     return new OutboundSendError(
       retryableProviderFailure(error)
         ? "provider_unavailable"
@@ -283,13 +290,14 @@ export class WhatsAppService {
 
   /** Runs one provider send, classifying any fault before it leaves this port. */
   private async delivering<T>(
+    context: InboxContext,
     instanceName: string,
     send: () => Promise<T>,
   ): Promise<T> {
     try {
       return await send();
     } catch (error) {
-      throw await this.sendFailure(instanceName, error);
+      throw await this.sendFailure(context, instanceName, error);
     }
   }
 
@@ -312,6 +320,7 @@ export class WhatsAppService {
         .sendPresence(conversation.providerInstanceName, destination)
         .catch(() => undefined);
     const response = await this.delivering(
+      context,
       conversation.providerInstanceName,
       () =>
         this.provider.sendText({
@@ -361,6 +370,7 @@ export class WhatsAppService {
     const destination = outboundDestination(conversation);
     const sendContact = this.provider.sendContact.bind(this.provider);
     const response = await this.delivering(
+      context,
       conversation.providerInstanceName,
       () =>
         sendContact({
@@ -423,6 +433,7 @@ export class WhatsAppService {
     try {
       if (choices.length <= 3 && this.provider.sendButtons) {
         response = await this.delivering(
+          context,
           conversation.providerInstanceName,
           () =>
             this.provider.sendButtons!({
@@ -439,6 +450,7 @@ export class WhatsAppService {
         );
       } else if (this.provider.sendList) {
         response = await this.delivering(
+          context,
           conversation.providerInstanceName,
           () =>
             this.provider.sendList!({
@@ -513,7 +525,7 @@ export class WhatsAppService {
   ): Promise<InboxMessageRecord> {
     const text = markdownToWhatsApp(input.text.trim());
     if (!text || text.length > 20_000) throw new Error("message_text_invalid");
-    const response = await this.delivering(input.instanceName, () =>
+    const response = await this.delivering(context, input.instanceName, () =>
       this.provider.sendText({
         instanceName: input.instanceName,
         number: input.phoneNumber,
@@ -579,25 +591,31 @@ export class WhatsAppService {
     const value = providerMediaValue(media, signedUrl);
     let response: ProviderMessage | Record<string, unknown>;
     if (type === "audio") {
-      response = await this.delivering(conversation.providerInstanceName, () =>
-        this.provider.sendAudio({
-          instanceName: conversation.providerInstanceName,
-          number: destination,
-          audio: value,
-        }),
+      response = await this.delivering(
+        context,
+        conversation.providerInstanceName,
+        () =>
+          this.provider.sendAudio({
+            instanceName: conversation.providerInstanceName,
+            number: destination,
+            audio: value,
+          }),
       );
     } else {
-      response = await this.delivering(conversation.providerInstanceName, () =>
-        this.provider.sendMedia({
-          instanceName: conversation.providerInstanceName,
-          number: destination,
-          mediatype: type,
-          media: value,
-          caption: input.caption,
-          fileName:
-            input.fileName ??
-            ("fileName" in media ? media.fileName : undefined),
-        }),
+      response = await this.delivering(
+        context,
+        conversation.providerInstanceName,
+        () =>
+          this.provider.sendMedia({
+            instanceName: conversation.providerInstanceName,
+            number: destination,
+            mediatype: type,
+            media: value,
+            caption: input.caption,
+            fileName:
+              input.fileName ??
+              ("fileName" in media ? media.fileName : undefined),
+          }),
       );
     }
     const id = providerMessageId(response);
@@ -789,7 +807,7 @@ export class WhatsAppService {
     if (!this.provider.updateMessage)
       throw new Error("whatsmiau_message_edit_not_supported");
     const updateMessage = this.provider.updateMessage.bind(this.provider);
-    await this.delivering(conversation.providerInstanceName, () =>
+    await this.delivering(context, conversation.providerInstanceName, () =>
       updateMessage({
         instanceName: conversation.providerInstanceName,
         number: outboundDestination(conversation),

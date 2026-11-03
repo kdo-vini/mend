@@ -1505,6 +1505,37 @@
   color: var(--text-muted);
   font-size: 10px;
 }
+/* Sits on the composer it blocks, so the outage is read before typing. */
+.channel-offline-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 15px var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in oklch, var(--caution) 42%, var(--line));
+  border-radius: var(--radius-control);
+  background: color-mix(in oklch, var(--caution) 9%, var(--surface));
+  color: var(--text);
+  font-size: 12px;
+}
+.channel-offline-notice svg {
+  flex: none;
+  color: var(--caution);
+}
+.channel-offline-notice span {
+  flex: 1;
+  min-width: 0;
+}
+.channel-offline-notice a {
+  flex: none;
+  color: var(--action);
+  font-weight: 550;
+}
+.channel-offline-notice a:focus-visible {
+  border-radius: 4px;
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
 .composer {
   margin: 0 15px 15px;
   padding: 9px 10px 8px;
@@ -1796,6 +1827,9 @@
   .new-chat-dialog .modal-header .icon-button {
     min-width: var(--mobile-touch-target);
     min-height: var(--mobile-touch-target);
+  }
+  .channel-offline-notice {
+    margin: 0 var(--space-2) var(--space-2);
   }
   .inbox-page .composer {
     position: sticky;
