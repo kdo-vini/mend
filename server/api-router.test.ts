@@ -1874,3 +1874,90 @@ describe("work log (Diário) routes", () => {
     ).toBe(400);
   });
 });
+
+describe("agent key routes", () => {
+  const key = {
+    id: articleId,
+    label: "Rafa",
+    scopes: ["diario:escrever" as const],
+    created_by: userId,
+    created_at: "2026-11-04T12:00:00.000Z",
+    last_used_at: null,
+    revoked_at: null,
+  };
+  function agentKeyApp(role: "owner" | "admin" | "agent" = "admin") {
+    const d = createFakeDependencies();
+    d.membership.getMembership = vi.fn(async () => ({ workspaceId, role }));
+    d.agentKeys = {
+      list: vi.fn(async () => []),
+      create: vi.fn(async () => key),
+      revoke: vi.fn(async () => true),
+    };
+    return { app: makeApp(d), agentKeys: d.agentKeys };
+  }
+
+  it("keeps agent keys to workspace admins", async () => {
+    const { app, agentKeys } = agentKeyApp("agent");
+    expect((await request(app).get("/api/agent-keys")).status).toBe(403);
+    expect(
+      (
+        await request(app)
+          .post("/api/agent-keys")
+          .send({ label: "Rafa", scopes: ["diario:escrever"] })
+      ).status,
+    ).toBe(403);
+    expect(agentKeys.create).not.toHaveBeenCalled();
+  });
+
+  it("issues a scoped key and returns the plain value once", async () => {
+    const { app, agentKeys } = agentKeyApp();
+    const response = await request(app)
+      .post("/api/agent-keys")
+      .send({ label: "Rafa", scopes: ["diario:escrever", "diario:escrever"] });
+    expect(response.status).toBe(201);
+    expect(response.body.secret).toMatch(/^mend_agent_[A-Za-z0-9_-]{43}$/);
+    expect(agentKeys.create).toHaveBeenCalledWith({
+      workspaceId,
+      label: "Rafa",
+      scopes: ["diario:escrever"],
+      createdBy: userId,
+      tokenHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+  });
+
+  it("rejects unknown scopes and keys without scopes", async () => {
+    const { app, agentKeys } = agentKeyApp();
+    for (const scopes of [["financeiro:ler"], []])
+      expect(
+        (
+          await request(app)
+            .post("/api/agent-keys")
+            .send({ label: "x", scopes })
+        ).status,
+      ).toBe(400);
+    expect(agentKeys.create).not.toHaveBeenCalled();
+  });
+
+  it("lists keys with the scope catalog and revokes within the workspace", async () => {
+    const { app, agentKeys } = agentKeyApp("owner");
+    const list = await request(app).get("/api/agent-keys");
+    expect(list.status).toBe(200);
+    expect(list.body.scopes).toEqual([
+      "suporte:ler",
+      "suporte:responder",
+      "suporte:pausar",
+      "conhecimento:ler",
+      "chamados:ler",
+      "chamados:escrever",
+      "diario:escrever",
+    ]);
+    expect(
+      (await request(app).delete(`/api/agent-keys/${articleId}`)).status,
+    ).toBe(204);
+    expect(agentKeys.revoke).toHaveBeenCalledWith(workspaceId, articleId);
+    agentKeys.revoke = vi.fn(async () => false);
+    expect(
+      (await request(app).delete(`/api/agent-keys/${articleId}`)).status,
+    ).toBe(404);
+  });
+});

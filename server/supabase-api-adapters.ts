@@ -5,6 +5,7 @@ import {
 import { SupabaseFinanceAdapter } from "./adapters/supabase/finance.js";
 import { SupabaseProjectsAdapter } from "./projects.js";
 import { SupabaseWorkLogAdapter } from "./work-log.js";
+import { SupabaseAgentKeyAdapter } from "./agent-keys.js";
 import {
   SupabaseInternalWorkspaceAdapter,
   type InternalWorkspacePort,
@@ -105,6 +106,7 @@ export interface SupabaseApiAdapterOptions {
 export type SupabaseApiPortDependencies = {
   projects: import("./projects.js").ProjectsPort;
   workLog: import("./work-log.js").WorkLogPort;
+  agentKeys: import("./agent-keys.js").AgentKeyPort;
   finance: import("./finance-service.js").FinancePort;
   internalWorkspace: InternalWorkspacePort;
   membership: MembershipAdapter;
@@ -219,6 +221,7 @@ export function createSupabaseApiAdapters(
     finance: new SupabaseFinanceAdapter(client),
     projects: new SupabaseProjectsAdapter(client),
     workLog: new SupabaseWorkLogAdapter(client),
+    agentKeys: new SupabaseAgentKeyAdapter(client),
     internalWorkspace: new SupabaseInternalWorkspaceAdapter(client),
     membership,
     workspaces,

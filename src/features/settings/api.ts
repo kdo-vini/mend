@@ -82,4 +82,12 @@ export type {
   McpConnection,
   SupabaseMcpFeature,
 } from "../../api/mcp-connections";
+export {
+  agentKeyScopes,
+  createLiveAgentKey,
+  listLiveAgentKeys,
+  mcpServerUrl,
+  revokeLiveAgentKey,
+} from "../../api/agent-keys";
+export type { AgentKey, AgentKeyScope } from "../../api/agent-keys";
 export { supabase } from "../../lib/supabase";

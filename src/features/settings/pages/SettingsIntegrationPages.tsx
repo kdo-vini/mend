@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Bot,
   ExternalLink,
   Github,
   Link2,
@@ -10,6 +11,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Confirm } from "../../../shared/ui/ConfirmDialog";
+import { LiveActionError } from "../../../api/transport";
+import { listLiveAgentKeys } from "../api";
 import { EmptyState, LoadingState } from "../../../shared/ui/ResourceState";
 import { Select } from "../../../shared/ui/Select";
 import {
@@ -102,6 +105,37 @@ export function SettingsIntegrationsPage({
     };
   }, [workspaceId]);
 
+  // Agent keys are admin-only: a 403 means "not yours to manage", not broken.
+  const [agentsStatus, setAgentsStatus] = useState<IntegrationDirectoryStatus>(
+    () => (workspaceId ? "checking" : "unconfigured"),
+  );
+  useEffect(() => {
+    if (!workspaceId) {
+      setAgentsStatus("unconfigured");
+      return;
+    }
+    let active = true;
+    setAgentsStatus("checking");
+    listLiveAgentKeys(workspaceId)
+      .then((keys) => {
+        if (active)
+          setAgentsStatus(
+            keys.some((key) => !key.revoked_at) ? "connected" : "unconfigured",
+          );
+      })
+      .catch((reason: unknown) => {
+        if (active)
+          setAgentsStatus(
+            reason instanceof LiveActionError && reason.status === 403
+              ? "unconfigured"
+              : "attention",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
+
   return (
     <div className="settings-v2-page">
       <SettingsPageHeader
@@ -140,6 +174,13 @@ export function SettingsIntegrationsPage({
             title={t("v2.integrations.mcpTitle")}
             description={t("v2.integrations.mcpDescription")}
             status={statuses.mcp}
+          />
+          <IntegrationLink
+            to="/settings/integrations/agentes"
+            icon={<Bot size={17} />}
+            title={t("agentKeys.title")}
+            description={t("agentKeys.directoryDescription")}
+            status={agentsStatus}
           />
         </div>
       </SettingsSection>

@@ -65,6 +65,13 @@ import {
   SupabaseSupportSendPort,
 } from "./support-send.js";
 import { SupabaseInternalWorkspaceAdapter } from "./internal-workspace.js";
+import { SupabaseAgentKeyLookup } from "./agent-keys.js";
+import { registerMcpServerRoute } from "./mcp-server.js";
+import { SupabaseSupportConversationPort } from "./support-conversation.js";
+import { IssueService } from "./issue-service.js";
+import { KnowledgeService } from "./knowledge-service.js";
+import { SupabaseIssueAdapter } from "./adapters/supabase/issues.js";
+import { SupabaseKnowledgeAdapter } from "./adapters/supabase/knowledge.js";
 import { InboxService, SupabaseInboxPort } from "./inbox-service.js";
 import { WhatsAppService } from "./whatsapp-service.js";
 
@@ -224,22 +231,51 @@ registerWorkLogIngestRoute(app, {
   store: workerSupabase ? new SupabaseWorkLogIngestStore(workerSupabase) : null,
   logger,
 });
+const internalWorkspace = workerSupabase
+  ? new SupabaseInternalWorkspaceAdapter(workerSupabase)
+  : null;
+const internalWorkspacePort = {
+  resolve: () =>
+    internalWorkspace ? internalWorkspace.resolve() : Promise.resolve(null),
+};
+const supportSendPort = workerSupabase
+  ? SupabaseSupportSendPort.from(
+      workerSupabase,
+      new WhatsAppService(
+        new InboxService(new SupabaseInboxPort(workerSupabase)),
+        new WhatsmiauMessagingProvider(),
+      ),
+      markAutomationOutbound,
+    )
+  : null;
 registerInternalSupportSendRoute(app, {
-  internalWorkspace: {
-    resolve: () =>
-      workerSupabase
-        ? new SupabaseInternalWorkspaceAdapter(workerSupabase).resolve()
-        : Promise.resolve(null),
-  },
-  port: workerSupabase
-    ? SupabaseSupportSendPort.from(
-        workerSupabase,
-        new WhatsAppService(
-          new InboxService(new SupabaseInboxPort(workerSupabase)),
+  internalWorkspace: internalWorkspacePort,
+  port: supportSendPort,
+  logger,
+});
+registerMcpServerRoute(app, {
+  keys: workerSupabase ? new SupabaseAgentKeyLookup(workerSupabase) : null,
+  internalWorkspace: internalWorkspacePort,
+  supportEvents: workerSupabase
+    ? SupabaseSupportEventStore.from(workerSupabase)
+    : null,
+  supportSend: supportSendPort,
+  conversations: workerSupabase
+    ? new SupabaseSupportConversationPort(workerSupabase)
+    : null,
+  knowledge: workerSupabase
+    ? new KnowledgeService(new SupabaseKnowledgeAdapter(workerSupabase))
+    : null,
+  issues: workerSupabase
+    ? new IssueService(
+        new SupabaseIssueAdapter(
+          workerSupabase,
           new WhatsmiauMessagingProvider(),
         ),
-        markAutomationOutbound,
       )
+    : null,
+  workLog: workerSupabase
+    ? new SupabaseWorkLogIngestStore(workerSupabase)
     : null,
   logger,
 });
