@@ -287,7 +287,7 @@ export class SupabaseSupportSendPort implements SupportSendPort {
   }
 }
 
-const supportSendBodySchema = z.object({
+export const supportSendBodySchema = z.object({
   conversationId: z.string().uuid(),
   text: z.string().trim().min(1).max(MAX_SUPPORT_TEXT_LENGTH),
   workspaceId: z.string().uuid().optional(),
@@ -314,6 +314,122 @@ export interface SupportSendRouteOptions {
   port: SupportSendPort | null;
   env?: NodeJS.ProcessEnv;
   logger?: Pick<Logger, "error">;
+}
+
+export type SupportSendOutcome =
+  | {
+      ok: true;
+      body: { workspaceId: string; conversationId: string } & SupportSendResult;
+    }
+  | { ok: false; status: number; error: string };
+
+export interface SupportSendRequest {
+  conversationId: string;
+  text: string;
+  workspaceId?: string;
+  sourceMessageId?: string;
+  idempotencyKey?: string;
+}
+
+/**
+ * The Support reply contract shared by the HTTP route and the MCP tool:
+ * refuses when ai_mode=off, in groups or when a newer inbound superseded the
+ * answer, and dedupes retries with a deterministic idempotency key.
+ */
+export async function executeSupportSend(
+  options: Pick<SupportSendRouteOptions, "internalWorkspace" | "logger"> & {
+    port: SupportSendPort;
+  },
+  input: SupportSendRequest,
+): Promise<SupportSendOutcome> {
+  const { conversationId, text, sourceMessageId } = input;
+  try {
+    const workspaceId = await resolveInternalWorkspace(
+      options.internalWorkspace,
+      input.workspaceId,
+    );
+    const conversation = await options.port.findConversation({
+      conversationId,
+      workspaceId,
+    });
+    if (
+      !conversation ||
+      (workspaceId && conversation.workspaceId !== workspaceId)
+    )
+      return { ok: false, status: 404, error: "conversation_not_found" };
+    if (!supportReplyAllowed({ aiMode: conversation.aiMode }))
+      return { ok: false, status: 409, error: "reply_not_allowed" };
+    if (conversation.isGroup)
+      return { ok: false, status: 409, error: "group_conversation" };
+    const guard = options.port.checkReplyGuard
+      ? await options.port.checkReplyGuard({
+          workspaceId: conversation.workspaceId,
+          conversationId,
+          ...(sourceMessageId ? { sourceMessageId } : {}),
+        })
+      : {};
+    if (guard.reject) return { ok: false, status: 409, error: guard.reject };
+    const idempotencyKey =
+      input.idempotencyKey ??
+      deriveSupportIdempotencyKey({
+        conversationId,
+        anchorMessageId: sourceMessageId ?? guard.latestInboundId,
+        text,
+      });
+    const sent = await options.port.sendText({
+      workspaceId: conversation.workspaceId,
+      conversationId,
+      text,
+      idempotencyKey,
+    });
+    return {
+      ok: true,
+      body: { workspaceId: conversation.workspaceId, conversationId, ...sent },
+    };
+  } catch (error) {
+    if (error instanceof InternalWorkspaceError)
+      return {
+        ok: false,
+        status: error.code === "workspace_not_found" ? 404 : 503,
+        error: error.code,
+      };
+    if (error instanceof AutomationMarkError) {
+      options.logger?.error({ err: error }, "Support send mark failed");
+      return { ok: false, status: 503, error: "automation_mark_unavailable" };
+    }
+    if (error instanceof OutboundSendError) {
+      // The provider's own answer is the only evidence of why WhatsApp
+      // refused this send; without it a 502 cannot be diagnosed.
+      const provider = error.providerError as
+        | { status?: unknown; responseBody?: unknown; message?: unknown }
+        | undefined;
+      options.logger?.error(
+        {
+          conversationId,
+          reason: error.reason,
+          providerStatus: provider?.status,
+          providerBody:
+            typeof provider?.responseBody === "string"
+              ? provider.responseBody.slice(0, 1_000)
+              : undefined,
+          providerMessage:
+            typeof provider?.message === "string"
+              ? provider.message
+              : undefined,
+        },
+        "Support send provider failure",
+      );
+      return {
+        ok: false,
+        status: outboundFailureStatus[error.reason],
+        error: error.reason,
+      };
+    }
+    if (error instanceof Error && error.message === "conversation_not_found")
+      return { ok: false, status: 404, error: "conversation_not_found" };
+    options.logger?.error({ err: error }, "Support send failed");
+    return { ok: false, status: 500, error: "support_send_failed" };
+  }
 }
 
 /**
@@ -344,99 +460,29 @@ export function registerInternalSupportSendRoute(
           .status(503)
           .json({ error: "support_send_not_configured" });
 
-      const { conversationId, text, sourceMessageId } = parsed.data;
       const headerKey =
         request.get("idempotency-key")?.trim().slice(0, 200) || undefined;
-      try {
-        const workspaceId = await resolveInternalWorkspace(
-          options.internalWorkspace,
-          parsed.data.workspaceId,
-        );
-        const conversation = await options.port.findConversation({
-          conversationId,
-          workspaceId,
-        });
-        if (
-          !conversation ||
-          (workspaceId && conversation.workspaceId !== workspaceId)
-        )
-          return response.status(404).json({ error: "conversation_not_found" });
-        if (!supportReplyAllowed({ aiMode: conversation.aiMode }))
-          return response.status(409).json({ error: "reply_not_allowed" });
-        if (conversation.isGroup)
-          return response.status(409).json({ error: "group_conversation" });
-        const guard = options.port.checkReplyGuard
-          ? await options.port.checkReplyGuard({
-              workspaceId: conversation.workspaceId,
-              conversationId,
-              ...(sourceMessageId ? { sourceMessageId } : {}),
-            })
-          : {};
-        if (guard.reject)
-          return response.status(409).json({ error: guard.reject });
-        const idempotencyKey =
-          headerKey ??
-          deriveSupportIdempotencyKey({
-            conversationId,
-            anchorMessageId: sourceMessageId ?? guard.latestInboundId,
-            text,
-          });
-        const sent = await options.port.sendText({
-          workspaceId: conversation.workspaceId,
-          conversationId,
-          text,
-          idempotencyKey,
-        });
-        return response.status(201).json({
-          workspaceId: conversation.workspaceId,
-          conversationId,
-          ...sent,
-        });
-      } catch (error) {
-        if (error instanceof InternalWorkspaceError)
-          return response
-            .status(error.code === "workspace_not_found" ? 404 : 503)
-            .json({ error: error.code });
-        if (error instanceof AutomationMarkError) {
-          options.logger?.error({ err: error }, "Support send mark failed");
-          return response
-            .status(503)
-            .json({ error: "automation_mark_unavailable" });
-        }
-        if (error instanceof OutboundSendError) {
-          // The provider's own answer is the only evidence of why WhatsApp
-          // refused this send; without it a 502 cannot be diagnosed.
-          const provider = error.providerError as
-            | { status?: unknown; responseBody?: unknown; message?: unknown }
-            | undefined;
-          options.logger?.error(
-            {
-              conversationId: parsed.data.conversationId,
-              reason: error.reason,
-              providerStatus: provider?.status,
-              providerBody:
-                typeof provider?.responseBody === "string"
-                  ? provider.responseBody.slice(0, 1_000)
-                  : undefined,
-              providerMessage:
-                typeof provider?.message === "string"
-                  ? provider.message
-                  : undefined,
-            },
-            "Support send provider failure",
-          );
-          return response
-            .status(outboundFailureStatus[error.reason])
-            .json({ error: error.reason });
-        }
-        if (
-          error instanceof Error &&
-          error.message === "conversation_not_found"
-        )
-          return response.status(404).json({ error: "conversation_not_found" });
-        options.logger?.error({ err: error }, "Support send failed");
-        return response.status(500).json({ error: "support_send_failed" });
-      }
+      const outcome = await executeSupportSend(
+        {
+          internalWorkspace: options.internalWorkspace,
+          port: options.port,
+          ...(options.logger ? { logger: options.logger } : {}),
+        },
+        {
+          conversationId: parsed.data.conversationId,
+          text: parsed.data.text,
+          ...(parsed.data.workspaceId
+            ? { workspaceId: parsed.data.workspaceId }
+            : {}),
+          ...(parsed.data.sourceMessageId
+            ? { sourceMessageId: parsed.data.sourceMessageId }
+            : {}),
+          ...(headerKey ? { idempotencyKey: headerKey } : {}),
+        },
+      );
+      if (!outcome.ok)
+        return response.status(outcome.status).json({ error: outcome.error });
+      return response.status(201).json(outcome.body);
     },
   );
 }

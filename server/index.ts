@@ -65,6 +65,8 @@ import {
   SupabaseSupportSendPort,
 } from "./support-send.js";
 import { SupabaseInternalWorkspaceAdapter } from "./internal-workspace.js";
+import { SupabaseAgentKeyLookup } from "./agent-keys.js";
+import { registerMcpServerRoute } from "./mcp-server.js";
 import { InboxService, SupabaseInboxPort } from "./inbox-service.js";
 import { WhatsAppService } from "./whatsapp-service.js";
 
@@ -224,22 +226,37 @@ registerWorkLogIngestRoute(app, {
   store: workerSupabase ? new SupabaseWorkLogIngestStore(workerSupabase) : null,
   logger,
 });
+const internalWorkspace = workerSupabase
+  ? new SupabaseInternalWorkspaceAdapter(workerSupabase)
+  : null;
+const internalWorkspacePort = {
+  resolve: () =>
+    internalWorkspace ? internalWorkspace.resolve() : Promise.resolve(null),
+};
+const supportSendPort = workerSupabase
+  ? SupabaseSupportSendPort.from(
+      workerSupabase,
+      new WhatsAppService(
+        new InboxService(new SupabaseInboxPort(workerSupabase)),
+        new WhatsmiauMessagingProvider(),
+      ),
+      markAutomationOutbound,
+    )
+  : null;
 registerInternalSupportSendRoute(app, {
-  internalWorkspace: {
-    resolve: () =>
-      workerSupabase
-        ? new SupabaseInternalWorkspaceAdapter(workerSupabase).resolve()
-        : Promise.resolve(null),
-  },
-  port: workerSupabase
-    ? SupabaseSupportSendPort.from(
-        workerSupabase,
-        new WhatsAppService(
-          new InboxService(new SupabaseInboxPort(workerSupabase)),
-          new WhatsmiauMessagingProvider(),
-        ),
-        markAutomationOutbound,
-      )
+  internalWorkspace: internalWorkspacePort,
+  port: supportSendPort,
+  logger,
+});
+registerMcpServerRoute(app, {
+  keys: workerSupabase ? new SupabaseAgentKeyLookup(workerSupabase) : null,
+  internalWorkspace: internalWorkspacePort,
+  supportEvents: workerSupabase
+    ? SupabaseSupportEventStore.from(workerSupabase)
+    : null,
+  supportSend: supportSendPort,
+  workLog: workerSupabase
+    ? new SupabaseWorkLogIngestStore(workerSupabase)
     : null,
   logger,
 });

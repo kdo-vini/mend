@@ -2076,3 +2076,120 @@
     justify-content: flex-start;
   }
 }
+
+/* Agent keys (MCP do Mend): the plain key is shown once, with setup help. */
+.settings-v2-agent-scopes {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.settings-v2-agent-scopes label.settings-v2-checkbox-field {
+  align-items: flex-start;
+}
+
+.settings-v2-agent-scopes input {
+  margin-top: 2px;
+}
+
+.settings-v2-agent-scopes span {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-v2-agent-scopes strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.settings-v2-agent-scopes small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.settings-v2-agent-secret {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--action) 32%, var(--line));
+  border-radius: var(--radius-feature);
+  background: var(--surface);
+}
+
+.settings-v2-agent-secret > strong,
+.settings-v2-agent-setup > strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.settings-v2-agent-secret p,
+.settings-v2-agent-setup p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-v2-agent-secret-row {
+  display: flex;
+  width: 100%;
+  gap: var(--space-2);
+}
+
+.settings-v2-agent-secret input {
+  min-width: 0;
+  flex: 1;
+  font-family: var(--font-technical);
+  font-size: 12px;
+}
+
+.settings-v2-agent-setup {
+  display: grid;
+  width: 100%;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.settings-v2-agent-setup label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.settings-v2-agent-keys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 650px) {
+  .settings-v2-agent-secret-row {
+    flex-direction: column;
+  }
+
+  .settings-v2-agent-secret > .button {
+    width: 100%;
+  }
+}
+
+/* The name field stays one line; the permissions box takes the full row. */
+.settings-v2-agent-form {
+  align-items: start;
+  margin-bottom: 0;
+}
+
+.settings-v2-agent-form .settings-v2-mcp-scope {
+  grid-column: 1 / -1;
+}
+
+/* Permissions must read in full, so agent key rows wrap instead of clipping. */
+.settings-v2-agent-keys .settings-v2-row-main span,
+.settings-v2-agent-keys .settings-v2-row-main small {
+  white-space: normal;
+}

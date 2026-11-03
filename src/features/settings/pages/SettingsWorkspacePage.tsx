@@ -33,6 +33,7 @@ import {
   SettingsGooglePage,
   SettingsMcpPage,
 } from "./SettingsIntegrationPages";
+import { SettingsAgentKeysPage } from "./SettingsAgentKeysPage";
 import {
   SettingsRepositoriesPage,
   SettingsAgentsPage,
@@ -123,6 +124,16 @@ export function SettingsWorkspaceRoutes(props: SettingsWorkspacePageProps) {
           path="integrations/mcp"
           element={
             <SettingsMcpPage
+              workspaceId={props.workspaceId}
+              onToast={props.onToast}
+              onConfirm={props.onConfirm}
+            />
+          }
+        />
+        <Route
+          path="integrations/agentes"
+          element={
+            <SettingsAgentKeysPage
               workspaceId={props.workspaceId}
               onToast={props.onToast}
               onConfirm={props.onConfirm}

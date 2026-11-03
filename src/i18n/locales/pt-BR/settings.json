@@ -981,5 +981,61 @@
       "integrationDirectoryDescription": "Cada integração tem sua própria página, ciclo de vida e limite de acesso.",
       "githubDescription": "Conecte o GitHub uma vez e escolha os repositórios disponíveis para este espaço de trabalho."
     }
+  },
+  "agentKeys": {
+    "title": "Agentes (MCP do Mend)",
+    "description": "Chaves para os agentes do agentes.chat usarem o Mend pelo MCP. Cada chave só enxerga as ferramentas das permissões marcadas.",
+    "directoryDescription": "Chaves para a Maria, o Rafa e outros agentes usarem o Mend.",
+    "loading": "Carregando chaves de agente",
+    "createTitle": "Criar chave",
+    "createDescription": "Crie uma chave por agente para saber quem fez o quê e revogar só a dele. A chave aparece uma única vez.",
+    "labelField": "Nome do agente",
+    "labelPlaceholder": "Ex.: Maria",
+    "scopesLegend": "O que este agente pode fazer",
+    "scopesHelp": "No agentes.chat você ainda escolhe quais agentes usam a conexão e quais ferramentas cada um usa.",
+    "scopes": {
+      "suporte_ler": {
+        "name": "Ler mensagens do suporte",
+        "help": "Lista as mensagens recebidas e enviadas no WhatsApp do suporte."
+      },
+      "suporte_responder": {
+        "name": "Responder clientes no WhatsApp",
+        "help": "Envia respostas com as mesmas travas do bot: não responde com a IA pausada, em grupo ou se chegou mensagem mais nova."
+      },
+      "diario_escrever": {
+        "name": "Registrar no Diário",
+        "help": "Publica registros no Diário com o nome deste agente."
+      }
+    },
+    "create": "Criar chave",
+    "creating": "Criando…",
+    "secretTitle": "Chave criada para {{label}}",
+    "secretHint": "Copie agora: depois de fechar este aviso a chave não aparece de novo.",
+    "secretLabel": "Chave do agente",
+    "copy": "Copiar",
+    "copied": "Copiada",
+    "done": "Já copiei",
+    "setupTitle": "Como conectar no agentes.chat",
+    "setupSteps": "Configurações → Conectores e MCPs → Adicionar MCP → endereço abaixo → Conectar com uma chave de API.",
+    "serverUrlLabel": "Endereço do MCP",
+    "activeTitle": "Chaves ativas",
+    "activeDescription": "Revogar uma chave desliga o agente na hora. As outras continuam funcionando.",
+    "empty": "Nenhuma chave ativa",
+    "emptyDescription": "Crie a primeira chave para conectar um agente.",
+    "lastUsed": "Último uso em {{date}}",
+    "neverUsed": "Ainda não usada",
+    "createdAt": "Criada em {{date}}",
+    "revoke": "Revogar",
+    "revokeLabel": "Revogar a chave de {{label}}",
+    "confirmRevokeTitle": "Revogar a chave de {{label}}?",
+    "confirmRevokeDescription": "O agente perde o acesso ao Mend na hora. Para voltar, será preciso criar outra chave e trocar no agentes.chat.",
+    "revokedToast": "Chave revogada",
+    "errors": {
+      "load": "Não foi possível carregar as chaves de agente.",
+      "forbidden": "Só donos e admins do workspace podem gerenciar as chaves de agente.",
+      "create": "Não foi possível criar a chave.",
+      "limit": "Limite de chaves ativas atingido. Revogue uma antes de criar outra.",
+      "revoke": "Não foi possível revogar a chave."
+    }
   }
 }
