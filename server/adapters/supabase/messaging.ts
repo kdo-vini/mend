@@ -1,3 +1,9 @@
+import {
+  allowedChannelProductIds,
+  channelAiFromSettings,
+  lockedChannelAiSettings,
+  type ChannelAiSettings,
+} from "../../../src/shared/channel-ai.js";
 import { conversationReplyInput } from "../../automation/decision.js";
 import {
   type AgentCredentialPort,
@@ -1354,6 +1360,35 @@ export class SupabaseConversationAdapter implements ConversationPort {
     return updated;
   }
 
+  private async conversationChannelAi(
+    workspaceId: string,
+    conversationId: string,
+  ): Promise<ChannelAiSettings> {
+    const conversation = checked(
+      "conversations.channel",
+      await this.client
+        .from("conversations")
+        .select("channel_connection_id")
+        .eq("id", conversationId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle(),
+    ) as Row | null;
+    const channelId = conversation
+      ? str(conversation.channel_connection_id)
+      : "";
+    if (!channelId) return lockedChannelAiSettings();
+    const channel = checked(
+      "channel_connections.ai",
+      await this.client
+        .from("channel_connections")
+        .select("settings_json")
+        .eq("id", channelId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle(),
+    ) as Row | null;
+    return channelAiFromSettings(channel?.settings_json);
+  }
+
   async aiDraft(
     context: RequestContext,
     conversationId: string,
@@ -1373,13 +1408,42 @@ export class SupabaseConversationAdapter implements ConversationPort {
         caption: str(item.caption),
       })),
     );
-    const articles = await this.client
+    // Same per-channel lock as the worker: a locked number gets no AI and a
+    // product-scoped number only sees articles mapped to its products.
+    const channelAi = await this.conversationChannelAi(
+      context.workspaceId,
+      conversationId,
+    );
+    if (!channelAi.enabled) throw new Error("channel_ai_disabled");
+    const allowedProductIds = allowedChannelProductIds(channelAi);
+    let scopedArticleIds: string[] | undefined;
+    if (allowedProductIds) {
+      scopedArticleIds = allowedProductIds.length
+        ? rows(
+            checked(
+              "knowledge_article_products.channel_scope",
+              await this.client
+                .from("knowledge_article_products")
+                .select("article_id")
+                .eq("workspace_id", context.workspaceId)
+                .in("product_id", [...allowedProductIds]),
+            ),
+          ).map((item) => str(item.article_id))
+        : [];
+    }
+    let articlesQuery = this.client
       .from("knowledge_articles")
       .select("id, title, body")
       .eq("workspace_id", context.workspaceId)
-      .eq("status", "published")
-      .order("updated_at", { ascending: false })
-      .limit(50);
+      .eq("status", "published");
+    if (scopedArticleIds)
+      articlesQuery = articlesQuery.in("id", [...new Set(scopedArticleIds)]);
+    const articles =
+      scopedArticleIds?.length === 0
+        ? { data: [], error: null }
+        : await articlesQuery
+            .order("updated_at", { ascending: false })
+            .limit(50);
     const knowledge = rows(checked("knowledge_articles.published", articles))
       .map((item) => `${str(item.title)}\n${str(item.body)}`)
       .join("\n\n");

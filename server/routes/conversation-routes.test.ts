@@ -609,9 +609,20 @@ describe("GET /api/conversations/:id/zelo-customer", () => {
     subscription: { planTier: "bundle", monthlyValueCents: 19800 },
   };
 
-  function harness(financeAllowed: boolean) {
+  function harness(financeAllowed: boolean, zeloCustomerLookup = true) {
     const workspaceId = randomUUID();
     const lookupByPhone = vi.fn(async () => [summary]);
+    const getSettings = vi.fn(async () => ({
+      channelId: "channel-1",
+      settings: {
+        ai: {
+          enabled: false,
+          knowledge: { mode: "workspace" },
+          mcpEnabled: false,
+          zeloCustomerLookup,
+        },
+      },
+    }));
     const app = express();
     app.use(express.json());
     app.use((request, response, next) =>
@@ -624,9 +635,11 @@ describe("GET /api/conversations/:id/zelo-customer", () => {
         conversations: {
           get: async () => ({
             id: conversationId,
+            channelId: "channel-1",
             contact: { phoneNumber: "5514998360854" },
           }),
         },
+        channels: { getSettings },
         finance: { allowed: async () => financeAllowed },
         zeloCustomers: { lookupByPhone },
       } as unknown as ApiRouterDependencies)(request, response, next),
@@ -635,8 +648,17 @@ describe("GET /api/conversations/:id/zelo-customer", () => {
       request(app)
         .get(`/api/conversations/${conversationId}/zelo-customer`)
         .set("x-mend-workspace-id", workspaceId);
-    return { get, lookupByPhone };
+    return { get, lookupByPhone, getSettings };
   }
+
+  it("never reveals Zelo customers on a channel without the lookup", async () => {
+    const { get, lookupByPhone, getSettings } = harness(true, false);
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+    expect(getSettings).toHaveBeenCalledWith(expect.anything(), "channel-1");
+    expect(lookupByPhone).not.toHaveBeenCalled();
+  });
 
   it("looks the store up by the thread's own phone", async () => {
     const { get, lookupByPhone } = harness(true);

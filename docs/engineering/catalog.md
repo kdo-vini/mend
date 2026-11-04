@@ -265,6 +265,23 @@ ser automaticamente repetida.
   cards de draft; pausar/retomar continua visível porque o bot de Support o
   respeita.
 
+- Trava de IA por canal (`src/shared/channel-ai.ts`, em
+  `channel_connections.settings_json.ai`): cada número WhatsApp atende um
+  cliente, e a IA de um não usa conhecimento, ferramentas nem dados de outro.
+  Ausente ou inválida, falha fechada: IA desligada, sem conhecimento, sem MCP,
+  sem consulta de loja Zelo. `channelAiFromSettings` é a única leitura aceita.
+  Ela é aplicada no modo efetivo da automação (canal travado = `off`), na
+  checagem de envio (`sendAiReply`), no retrieval
+  (`retrieveChannelKnowledge`: escopo `products` não vê artigos compartilhados
+  nem o fallback da workspace), no rascunho manual (`channel_ai_disabled`), no
+  feed e no envio do bot de Support (canal travado aparece como `aiMode: off`)
+  e em `GET /api/conversations/:id/zelo-customer`. Admin edita em
+  `GET/PUT /api/channels/:id/ai`. Os canais existentes foram preenchidos com o
+  modo legado `workspace` pela migration `20261107120000_channel_ai_lock.sql`;
+  canais novos nascem travados. Ainda sem escopo de canal: a busca
+  `conhecimento_buscar` do MCP de agentes e as credenciais do provider de IA,
+  que são da workspace.
+
 Novos adapters ou processors desses domínios devem ir para `server/adapters/`
 ou `server/workers/`. Os adapters Supabase são agrupados por acesso,
 mensageria, issues, planejamento, repositórios, credenciais, coding runs,

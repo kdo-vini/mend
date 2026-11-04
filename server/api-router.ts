@@ -167,6 +167,12 @@ function codingControlPlaneApiError(error: unknown): {
       code,
       message: "Support AI knowledge search could not create embeddings.",
     };
+  if (code === "channel_ai_disabled")
+    return {
+      status: 409,
+      code,
+      message: "A IA está desligada para o canal desta conversa.",
+    };
   if (code === "support_ai_configuration_required")
     return {
       status: 409,

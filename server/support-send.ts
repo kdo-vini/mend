@@ -10,6 +10,7 @@ import type { Logger } from "pino";
 import { z } from "zod";
 import {
   authorizeSupportEventsRequest,
+  enabledAiChannelIds,
   SUPPORT_EVENTS_KEY_HEADER,
   supportReplyAllowed,
   type SupportEventsSupabaseClient,
@@ -153,7 +154,7 @@ export class SupabaseSupportSendPort implements SupportSendPort {
   }): Promise<SupportSendConversation | null> {
     let query = this.client
       .from("conversations")
-      .select("id, workspace_id, ai_mode, contact_id")
+      .select("id, workspace_id, ai_mode, contact_id, channel_connection_id")
       .eq("id", input.conversationId);
     if (input.workspaceId) query = query.eq("workspace_id", input.workspaceId);
     const result = await query.limit(1);
@@ -179,11 +180,20 @@ export class SupabaseSupportSendPort implements SupportSendPort {
         typeof jid?.provider_contact_id === "string" &&
         jid.provider_contact_id.endsWith("@g.us");
     }
+    const channelId =
+      typeof row.channel_connection_id === "string"
+        ? row.channel_connection_id
+        : "";
+    const channelEnabled = (
+      await enabledAiChannelIds(this.client, [channelId])
+    ).has(channelId);
     return {
       workspaceId: row.workspace_id,
       isGroup,
-      // Fail closed: a conversation without a mode is treated as off.
-      aiMode: typeof row.ai_mode === "string" ? row.ai_mode : "off",
+      // Fail closed: a conversation without a mode, or on a channel whose AI
+      // is locked, is treated as off.
+      aiMode:
+        channelEnabled && typeof row.ai_mode === "string" ? row.ai_mode : "off",
     };
   }
 

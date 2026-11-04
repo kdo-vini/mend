@@ -1,3 +1,4 @@
+import { channelAiFromSettings } from "../../src/shared/channel-ai.js";
 import type { ApiRouteModuleContext } from "../api-router.js";
 import { normalizePhoneNumber } from "../whatsmiau.js";
 import {
@@ -242,10 +243,26 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
         );
       const conversation = requireFound(
         (await dependencies.conversations.get(context, pathId(request))) as {
+          channelId?: string;
           contact?: { phoneNumber?: string };
         } | null,
         "conversation",
       );
+      // Zelo store data only belongs on channels allowed to show it; another
+      // client's number (Diagium) must not reveal Zelo customers.
+      const channelSettings = conversation.channelId
+        ? ((await dependencies.channels.getSettings(
+            context,
+            conversation.channelId,
+          )) as { settings?: unknown } | null)
+        : null;
+      if (
+        !channelAiFromSettings(channelSettings?.settings).zeloCustomerLookup
+      ) {
+        response.setHeader("Cache-Control", "no-store");
+        send(response, 200, { data: [] });
+        return;
+      }
       // The phone comes from the thread, never from the caller, so this
       // route cannot be used to look up an arbitrary store.
       const phone = conversation.contact?.phoneNumber ?? "";

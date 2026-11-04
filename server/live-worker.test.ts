@@ -222,6 +222,12 @@ class FakeSupabaseHandoff {
   assignments: Record<string, unknown>[] = [];
   messages: Record<string, unknown>[] = [];
   draftId = "draft-1";
+  channelAi: unknown = {
+    enabled: true,
+    knowledge: { mode: "workspace" },
+    mcpEnabled: true,
+    zeloCustomerLookup: true,
+  };
 
   from(table: string) {
     const builder = {
@@ -233,6 +239,11 @@ class FakeSupabaseHandoff {
       maybeSingle: async () => {
         if (table === "conversations")
           return { data: { ai_mode: "draft" }, error: null };
+        if (table === "channel_connections")
+          return {
+            data: { settings_json: { ai: this.channelAi } },
+            error: null,
+          };
         if (table === "workspaces")
           return { data: { ai_policy_json: this.policy }, error: null };
         if (table === "conversation_ai_state")
@@ -1339,6 +1350,54 @@ describe("live Whatsmiau worker", () => {
     expect(client.issue).toBeNull();
     expect(client.notifications).toEqual([]);
     expect(client.assignments).toEqual([]);
+  });
+
+  it("never triages or drafts on a channel whose AI is locked", async () => {
+    for (const channelAi of [
+      {
+        enabled: false,
+        knowledge: { mode: "workspace" },
+        mcpEnabled: true,
+        zeloCustomerLookup: true,
+      },
+      undefined,
+    ]) {
+      const client = new FakeSupabaseHandoff();
+      client.channelAi = channelAi;
+      const provider: SupportAiProvider = {
+        name: "openai",
+        draftReply: vi.fn(async () => "Resposta"),
+        triage: vi.fn(async () => "{}"),
+      };
+      const automation = new SupabaseLiveWorkerAutomation(
+        client as never,
+        provider,
+      );
+      const result = await automation.process({
+        binding,
+        idempotencyKey: "locked-key",
+        job: await enqueue(
+          new InMemoryJobStore<WhatsmiauMessageJobPayload>(),
+          "unused-locked",
+        ),
+        knowledge: [],
+        message: { ...message, text: "Qual o preço?" },
+        persisted: {
+          id: "message-locked",
+          workspaceId: binding.workspaceId,
+          conversationId: "conversation-locked",
+          contactId: "contact-1",
+          providerMessageId: message.providerMessageId,
+          direction: "inbound",
+          messageType: "text",
+          unreadCount: 1,
+          inserted: true,
+        },
+      });
+      expect(result).toBeUndefined();
+      expect(provider.triage).not.toHaveBeenCalled();
+      expect(provider.draftReply).not.toHaveBeenCalled();
+    }
   });
 
   it("drafts an unanswered question without escalating it", async () => {

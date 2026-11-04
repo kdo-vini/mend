@@ -1,3 +1,4 @@
+import { channelAiFromSettings } from "../src/shared/channel-ai.js";
 import {
   InternalWorkspaceError,
   resolveInternalWorkspace,
@@ -330,6 +331,27 @@ export interface SupportEventsSupabaseClient {
   from(table: string): LooseQuery;
 }
 
+/**
+ * Channels (of the given ids) whose per-channel AI lock is open. Support must
+ * treat a conversation on any other channel as `ai_mode=off`.
+ */
+export async function enabledAiChannelIds(
+  client: SupportEventsSupabaseClient,
+  channelIds: readonly string[],
+): Promise<Set<string>> {
+  const unique = [...new Set(channelIds.filter(Boolean))];
+  if (!unique.length) return new Set();
+  const result = await client
+    .from("channel_connections")
+    .select("id, settings_json")
+    .in("id", unique);
+  return new Set(
+    rows(result, "channel_connections")
+      .filter((row) => channelAiFromSettings(row.settings_json).enabled)
+      .map((row) => String(row.id)),
+  );
+}
+
 type Row = Record<string, unknown>;
 
 function rows(result: QueryResult, scope: string): Row[] {
@@ -436,7 +458,7 @@ export class SupabaseSupportEventStore implements SupportEventStore {
         .in("id", messageIds),
       this.client
         .from("conversations")
-        .select("id, ai_mode")
+        .select("id, ai_mode, channel_connection_id")
         .in("id", conversationIds),
       this.client
         .from("conversation_ai_state")
@@ -463,11 +485,21 @@ export class SupabaseSupportEventStore implements SupportEventStore {
     const states = new Map<string, Row>();
     for (const row of rows(stateResult, "conversation_ai_state"))
       states.set(String(row.conversation_id), row);
+    const conversationRows = rows(conversationResult, "conversations");
+    const enabledChannels = await enabledAiChannelIds(
+      this.client,
+      conversationRows.map((row) => str(row.channel_connection_id) ?? ""),
+    );
     const flags = new Map<string, SupportEventConversationFlags>();
-    for (const row of rows(conversationResult, "conversations")) {
+    for (const row of conversationRows) {
       const state = states.get(String(row.id));
+      const channelId = str(row.channel_connection_id);
       flags.set(String(row.id), {
-        aiMode: str(row.ai_mode),
+        // A locked channel reads as off so the feed never invites a reply.
+        aiMode:
+          channelId && enabledChannels.has(channelId)
+            ? str(row.ai_mode)
+            : "off",
         automationState: str(state?.automation_state),
         pausedUntil: str(state?.paused_until),
       });

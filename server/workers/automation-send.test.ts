@@ -7,7 +7,14 @@ interface Call {
   args: unknown[];
 }
 
-function fakeClient(failTable?: string) {
+const OPEN_CHANNEL_AI = {
+  enabled: true,
+  knowledge: { mode: "workspace" },
+  mcpEnabled: true,
+  zeloCustomerLookup: true,
+};
+
+function fakeClient(failTable?: string, channelAi: unknown = OPEN_CHANNEL_AI) {
   const calls: Call[] = [];
   const client = {
     rpc: vi.fn(async (name: string) =>
@@ -32,7 +39,10 @@ function fakeClient(failTable?: string) {
         };
       chain.then = (resolve: (value: unknown) => void) =>
         resolve({
-          data: null,
+          data:
+            table === "channel_connections"
+              ? { settings_json: { ai: channelAi } }
+              : null,
           error: table === failTable ? { message: "db down" } : null,
         });
       return chain;
@@ -42,7 +52,7 @@ function fakeClient(failTable?: string) {
 }
 
 const input = {
-  binding: { workspaceId: "ws-1" },
+  binding: { workspaceId: "ws-1", channelConnectionId: "channel-1" },
   conversationId: "conv-1",
   sourceMessageId: "msg-1",
   idempotencyKey: "key-1",
@@ -60,8 +70,9 @@ function build(
       onProviderMessageId?: (id: string) => Promise<void>;
     },
   ) => Promise<unknown>,
+  channelAi?: unknown,
 ) {
-  const { client, calls } = fakeClient(failTable);
+  const { client, calls } = fakeClient(failTable, channelAi);
   const automation = new SupabaseLiveWorkerAutomation(
     client as never,
     undefined,
@@ -76,6 +87,24 @@ const statuses = (calls: Call[]) =>
     .map((c) => (c.args[0] as { status: string }).status);
 
 describe("sendAiReply ledger", () => {
+  it("never sends on a channel whose AI is locked", async () => {
+    const sendText = vi.fn();
+    const { automation, calls } = build(undefined, sendText, {
+      ...OPEN_CHANNEL_AI,
+      enabled: false,
+    });
+    await automation.sendAiReply(input);
+    expect(sendText).not.toHaveBeenCalled();
+    expect(calls.some((c) => c.table === "ai_outbound_messages")).toBe(false);
+  });
+
+  it("treats a channel without AI settings as locked", async () => {
+    const sendText = vi.fn();
+    const { automation } = build(undefined, sendText, null);
+    await automation.sendAiReply(input);
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
   it("passes the ledger id as idempotency key and marks sent", async () => {
     const sendText = vi.fn(async (_c, _i, req) => {
       await req.onProviderMessageId?.("provider-1");

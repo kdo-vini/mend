@@ -45,6 +45,11 @@ import {
   type KnowledgeRepositorySyncJobPayload,
 } from "./knowledge-sync.js";
 import type { ProductResolution } from "./knowledge-products.js";
+import type { ChannelAiSettings } from "../src/shared/channel-ai.js";
+import {
+  retrieveChannelKnowledge,
+  type LiveWorkerKnowledgeScope,
+} from "./workers/channel-knowledge.js";
 import {
   supportRepositoryResearchJobPayloadSchema,
   type SupportRepositoryResearchJobPayload,
@@ -218,17 +223,23 @@ export interface LiveWorkerGroupDirectory {
 }
 
 export interface LiveWorkerKnowledge {
+  channelAi?( // per-channel AI lock, src/shared/channel-ai.ts
+    workspaceId: string,
+    channelConnectionId: string,
+  ): Promise<ChannelAiSettings>;
   resolveProducts?(
     workspaceId: string,
     conversationId: string,
     messageId: string,
     text: string,
+    scope?: LiveWorkerKnowledgeScope,
   ): Promise<ProductResolution>;
   listPublished(
     workspaceId: string,
     query?: string,
     productIds?: readonly string[],
     metricContext?: { conversationId: string; messageId: string },
+    scope?: LiveWorkerKnowledgeScope,
   ): Promise<readonly LiveWorkerKnowledgeArticle[]>;
 }
 
@@ -766,26 +777,18 @@ export class LiveWorker {
       return;
 
     let knowledge: readonly LiveWorkerKnowledgeArticle[] = [];
-    const productResolution = this.options.knowledge?.resolveProducts
-      ? await this.options.knowledge.resolveProducts(
-          payload.binding.workspaceId,
-          payload.persisted.conversationId,
-          payload.persisted.id,
-          messageText(payload.message),
-        )
-      : undefined;
+    let productResolution: ProductResolution | undefined;
     try {
-      knowledge = this.options.knowledge
-        ? await this.options.knowledge.listPublished(
-            payload.binding.workspaceId,
-            messageText(payload.message),
-            productResolution?.productIds,
-            {
-              conversationId: payload.persisted.conversationId,
-              messageId: payload.persisted.id,
-            },
-          )
-        : [];
+      ({ knowledge, productResolution } = await retrieveChannelKnowledge(
+        this.options.knowledge,
+        {
+          workspaceId: payload.binding.workspaceId,
+          channelConnectionId: payload.binding.channelConnectionId,
+          conversationId: payload.persisted.conversationId,
+          messageId: payload.persisted.id,
+          text: messageText(payload.message),
+        },
+      ));
     } catch (error) {
       if (
         error instanceof Error &&

@@ -400,6 +400,63 @@ describe("Mend API router", () => {
     });
   });
 
+  it("refuses a manual AI draft on a channel whose AI is locked", async () => {
+    const dependencies = createFakeDependencies();
+    dependencies.conversations.aiDraft = vi.fn(async () => {
+      throw new Error("channel_ai_disabled");
+    });
+    const response = await request(makeApp(dependencies))
+      .post(`/api/conversations/${conversationId}/ai-draft`)
+      .set(scoped())
+      .send({});
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("channel_ai_disabled");
+  });
+
+  it("reads a channel without AI settings as locked", async () => {
+    const response = await request(makeApp(createFakeDependencies()))
+      .get(`/api/channels/${channelId}/ai`)
+      .set(scoped());
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      channelId,
+      ai: {
+        enabled: false,
+        knowledge: { mode: "products", productIds: [] },
+        mcpEnabled: false,
+        zeloCustomerLookup: false,
+      },
+    });
+  });
+
+  it("stores a validated channel AI lock", async () => {
+    const dependencies = createFakeDependencies();
+    const ai = {
+      enabled: true,
+      knowledge: {
+        mode: "products",
+        productIds: ["33333333-3333-4333-8333-333333333333"],
+      },
+      mcpEnabled: false,
+      zeloCustomerLookup: false,
+    };
+    const response = await request(makeApp(dependencies))
+      .put(`/api/channels/${channelId}/ai`)
+      .set(scoped())
+      .send(ai);
+    expect(response.status).toBe(200);
+    expect(dependencies.channels.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId }),
+      channelId,
+      { ai },
+    );
+    const invalid = await request(makeApp(dependencies))
+      .put(`/api/channels/${channelId}/ai`)
+      .set(scoped())
+      .send({ enabled: true });
+    expect(invalid.status).toBe(400);
+  });
+
   it("returns Impact metrics for an explicit workspace-scoped period", async () => {
     const dependencies = createFakeDependencies();
     const response = await request(makeApp(dependencies))

@@ -1,5 +1,9 @@
 import type { ApiRouteModuleContext } from "../api-router.js";
 import {
+  channelAiFromSettings,
+  channelAiSettingsSchema,
+} from "../../src/shared/channel-ai.js";
+import {
   channelCreateSchema,
   channelFlowSchema,
   channelListQuerySchema,
@@ -68,6 +72,37 @@ export function registerChannelRoutes(context: ApiRouteModuleContext) {
           "channel",
         ),
       );
+    }),
+  );
+  // Per-channel AI lock. Unset means locked (see src/shared/channel-ai.ts).
+  router.get(
+    "/api/channels/:id/ai",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response);
+      const channelId = pathId(request);
+      const current = requireFound(
+        (await dependencies.channels.getSettings(context, channelId)) as {
+          settings?: unknown;
+        } | null,
+        "channel",
+      );
+      send(response, 200, {
+        channelId,
+        ai: channelAiFromSettings(current.settings),
+      });
+    }),
+  );
+  router.put(
+    "/api/channels/:id/ai",
+    asyncRoute(async (request, response) => {
+      const context = await scoped(request, response, "admin");
+      const channelId = pathId(request);
+      const ai = parse(channelAiSettingsSchema, request.body);
+      requireFound(
+        await dependencies.channels.updateSettings(context, channelId, { ai }),
+        "channel",
+      );
+      send(response, 200, { channelId, ai });
     }),
   );
   router.get(

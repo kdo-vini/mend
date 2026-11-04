@@ -261,6 +261,15 @@ describe("GET /internal/support/events", () => {
 
 type Call = { table: string; op: string; args: unknown[] };
 
+const OPEN_AI = {
+  ai: {
+    enabled: true,
+    knowledge: { mode: "workspace" },
+    mcpEnabled: true,
+    zeloCustomerLookup: true,
+  },
+};
+
 function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
   const calls: Call[] = [];
   const client: SupportEventsSupabaseClient = {
@@ -437,6 +446,42 @@ describe("SupabaseSupportEventStore", () => {
     ).toBeNull();
   });
 
+  it("reports a conversation on a locked channel as off", async () => {
+    for (const settings of [{}, { ai: { ...OPEN_AI.ai, enabled: false } }]) {
+      const { client } = fakeClient({
+        support_inbound_events: [
+          {
+            id: 1,
+            workspace_id: "w",
+            conversation_id: "c",
+            message_id: "m",
+            direction: "inbound",
+            remote_jid: "5511@s.whatsapp.net",
+            created_at: "2026-10-01T10:00:00Z",
+          },
+        ],
+        messages: [{ id: "m", message_type: "text", text: "Oi" }],
+        conversations: [
+          {
+            id: "c",
+            ai_mode: "safe_auto",
+            channel_connection_id: "ch-diagium",
+          },
+        ],
+        channel_connections: [{ id: "ch-diagium", settings_json: settings }],
+        conversation_ai_state: [],
+      });
+      const page = await new SupabaseSupportEventStore(client).list({
+        limit: 10,
+        workspaceId: "w",
+      });
+      expect(page.events[0]).toMatchObject({
+        aiMode: "off",
+        replyAllowed: false,
+      });
+    }
+  });
+
   it("joins live message, transcription and pause state into events", async () => {
     const { client, calls } = fakeClient({
       support_inbound_events: [
@@ -482,7 +527,10 @@ describe("SupabaseSupportEventStore", () => {
           transcription_status: "ready",
         },
       ],
-      conversations: [{ id: "c", ai_mode: "safe_auto" }],
+      conversations: [
+        { id: "c", ai_mode: "safe_auto", channel_connection_id: "ch-zelo" },
+      ],
+      channel_connections: [{ id: "ch-zelo", settings_json: OPEN_AI }],
       conversation_ai_state: [
         { conversation_id: "c", automation_state: "human_paused" },
       ],

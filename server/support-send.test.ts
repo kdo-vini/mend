@@ -225,10 +225,25 @@ describe("POST /internal/support/send", () => {
 });
 
 describe("SupabaseSupportSendPort", () => {
-  function client(data: unknown[], state: unknown[] = []) {
+  const OPEN_CHANNEL = {
+    id: "ch-zelo",
+    settings_json: {
+      ai: {
+        enabled: true,
+        knowledge: { mode: "workspace" },
+        mcpEnabled: true,
+        zeloCustomerLookup: true,
+      },
+    },
+  };
+  function client(
+    data: unknown[],
+    state: unknown[] = [],
+    channels: unknown[] = [OPEN_CHANNEL],
+  ) {
     const calls: Array<{ op: string; args: unknown[] }> = [];
     const query: Record<string, unknown> = {};
-    for (const op of ["select", "eq", "limit"])
+    for (const op of ["select", "eq", "limit", "in"])
       query[op] = (...args: unknown[]) => {
         calls.push({ op, args });
         return query;
@@ -236,7 +251,12 @@ describe("SupabaseSupportSendPort", () => {
     let table = "";
     query.then = (resolve: (value: unknown) => void) =>
       resolve({
-        data: table === "conversation_ai_state" ? state : data,
+        data:
+          table === "conversation_ai_state"
+            ? state
+            : table === "channel_connections"
+              ? channels
+              : data,
         error: null,
       });
     return {
@@ -273,7 +293,14 @@ describe("SupabaseSupportSendPort", () => {
 
   it("does not let human_paused block a conversation with the AI on", async () => {
     const fake = client(
-      [{ id: CONVERSATION, workspace_id: WORKSPACE, ai_mode: "safe_auto" }],
+      [
+        {
+          id: CONVERSATION,
+          workspace_id: WORKSPACE,
+          ai_mode: "safe_auto",
+          channel_connection_id: "ch-zelo",
+        },
+      ],
       [{ automation_state: "human_paused", paused_until: null }],
     );
     const port = new SupabaseSupportSendPort(fake.client, {
@@ -286,6 +313,29 @@ describe("SupabaseSupportSendPort", () => {
       isGroup: false,
       aiMode: "safe_auto",
     });
+  });
+
+  it("treats a conversation on a locked channel as off", async () => {
+    for (const channels of [[], [{ id: "ch-diagium", settings_json: {} }]]) {
+      const fake = client(
+        [
+          {
+            id: CONVERSATION,
+            workspace_id: WORKSPACE,
+            ai_mode: "safe_auto",
+            channel_connection_id: "ch-diagium",
+          },
+        ],
+        [],
+        channels,
+      );
+      const port = new SupabaseSupportSendPort(fake.client, {
+        sendText: vi.fn(),
+      });
+      await expect(
+        port.findConversation({ conversationId: CONVERSATION }),
+      ).resolves.toMatchObject({ aiMode: "off" });
+    }
   });
 
   it("sends as an AI outbound so the human pause is not triggered", async () => {

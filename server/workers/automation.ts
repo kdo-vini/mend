@@ -3,6 +3,10 @@ import {
   flowFromChannelSettings,
   type SupportFlowNode,
 } from "../../src/shared/support-flow.js";
+import {
+  channelAiFromSettings,
+  type ChannelAiSettings,
+} from "../../src/shared/channel-ai.js";
 import { row, run } from "../adapters/supabase-mappers.js";
 import {
   bugAcknowledgmentReplyBody,
@@ -278,7 +282,11 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
     // Billing/incident handoff must not depend on MCP credentials.
     const skipMcp =
       configuredRoute === "human_escalation" || configuredRoute === "no_action";
-    if (!skipMcp && modePolicy.policy.allowedIntegrations.includes("mcp")) {
+    if (
+      !skipMcp &&
+      modePolicy.channelAi.mcpEnabled &&
+      modePolicy.policy.allowedIntegrations.includes("mcp")
+    ) {
       const attempts =
         modePolicy.policy.mcpFailurePolicy === "retry_then_review" ? 3 : 1;
       for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -1000,6 +1008,14 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
 
   async sendAiReply(input: LiveWorkerSendAiReplyInput): Promise<void> {
     if (!this.whatsapp) throw new Error("whatsapp_provider_not_configured");
+    // The channel may have been locked between drafting and sending.
+    if (!(await this.channelAi(input.binding)).enabled) {
+      await this.auditDecision(input, input.triage, "ai.channel_locked", {
+        stage: "send_ai_reply",
+      });
+      await this.markDraftStatus(input, "pending_review");
+      return;
+    }
     const claim = await this.client.rpc("claim_ai_reply_send", {
       p_workspace_id: input.binding.workspaceId,
       p_conversation_id: input.conversationId,
@@ -1177,10 +1193,30 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       throw new Error(`supabase:ai_drafts:${updated.error.message}`);
   }
 
-  private async aiMode(
-    input: LiveWorkerAutomationInput,
-  ): Promise<{ mode: LiveWorkerAiMode; policy: LiveWorkerAiPolicy }> {
-    const [conversation, workspace] = await Promise.all([
+  private async channelAi(
+    binding: LiveWorkerAutomationInput["binding"],
+  ): Promise<ChannelAiSettings> {
+    const result = await this.client
+      .from("channel_connections")
+      .select("settings_json")
+      .eq("id", binding.channelConnectionId)
+      .eq("workspace_id", binding.workspaceId)
+      .maybeSingle();
+    if (result.error)
+      throw new Error(
+        `supabase:channel_connections:ai:${result.error.message}`,
+      );
+    return channelAiFromSettings(
+      (result.data as { settings_json?: unknown } | null)?.settings_json,
+    );
+  }
+
+  private async aiMode(input: LiveWorkerAutomationInput): Promise<{
+    mode: LiveWorkerAiMode;
+    policy: LiveWorkerAiPolicy;
+    channelAi: ChannelAiSettings;
+  }> {
+    const [conversation, workspace, channelAi] = await Promise.all([
       this.client
         .from("conversations")
         .select("ai_mode")
@@ -1192,6 +1228,7 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
         .select("ai_policy_json")
         .eq("id", input.binding.workspaceId)
         .maybeSingle(),
+      this.channelAi(input.binding),
     ]);
     if (conversation.error)
       throw new Error(`supabase:conversations:${conversation.error.message}`);
@@ -1199,10 +1236,14 @@ export class SupabaseLiveWorkerAutomation implements LiveWorkerAutomation {
       throw new Error(`supabase:workspaces:${workspace.error.message}`);
     const mode = conversation.data?.ai_mode;
     return {
-      mode:
-        mode === "off" || mode === "safe_auto" || mode === "draft"
+      // The channel lock wins over the conversation mode: a number whose AI is
+      // off never triages, drafts or answers, whatever the thread says.
+      mode: !channelAi.enabled
+        ? "off"
+        : mode === "off" || mode === "safe_auto" || mode === "draft"
           ? mode
           : "draft",
+      channelAi,
       policy: normalizeAiPolicy(
         (workspace.data as Record<string, unknown> | null)?.ai_policy_json,
       ),

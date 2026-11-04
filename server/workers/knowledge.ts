@@ -11,6 +11,11 @@ import type {
   LiveWorkerKnowledge,
   LiveWorkerSupabaseClient,
 } from "../live-worker.js";
+import type { LiveWorkerKnowledgeScope } from "./channel-knowledge.js";
+import {
+  channelAiFromSettings,
+  type ChannelAiSettings,
+} from "../../src/shared/channel-ai.js";
 import type { KnowledgeMetricWriter } from "../knowledge-evals.js";
 import { resolveSupportCredential } from "../providers.js";
 export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
@@ -30,19 +35,49 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
     }
   }
 
+  async channelAi(
+    workspaceId: string,
+    channelConnectionId: string,
+  ): Promise<ChannelAiSettings> {
+    const result = await this.client
+      .from("channel_connections")
+      .select("settings_json")
+      .eq("id", channelConnectionId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (result.error)
+      throw new Error(
+        `supabase:channel_connections:ai:${result.error.message}`,
+      );
+    return channelAiFromSettings(
+      (result.data as { settings_json?: unknown } | null)?.settings_json,
+    );
+  }
+
   async resolveProducts(
     workspaceId: string,
     conversationId: string,
     messageId: string,
     text: string,
+    scope?: LiveWorkerKnowledgeScope,
   ): Promise<ProductResolution> {
-    const productsResult = await this.client
+    if (scope?.allowedProductIds && !scope.allowedProductIds.length)
+      return {
+        productIds: [],
+        confidence: 1,
+        source: "shared",
+        ambiguous: false,
+      };
+    let productsQuery = this.client
       .from("support_products")
       .select(
         "id, workspace_id, product_key, name, description, aliases, status",
       )
       .eq("workspace_id", workspaceId)
       .eq("status", "active");
+    if (scope?.allowedProductIds)
+      productsQuery = productsQuery.in("id", [...scope.allowedProductIds]);
+    const productsResult = await productsQuery;
     if (productsResult.error)
       throw new Error(
         `supabase:support_products:${productsResult.error.message}`,
@@ -103,9 +138,12 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
       throw new Error(
         `supabase:conversation_product_context:${contextResult.error.message}`,
       );
-    const context = (contextResult.data ?? []) as Array<
-      Record<string, unknown>
-    >;
+    const allowed = scope?.allowedProductIds
+      ? new Set(scope.allowedProductIds)
+      : undefined;
+    const context = (
+      (contextResult.data ?? []) as Array<Record<string, unknown>>
+    ).filter((item) => !allowed || allowed.has(String(item.product_id)));
     if (context.length) {
       const primary = context.find((item) => item.is_primary);
       return {
@@ -133,8 +171,12 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
     query?: string,
     productIds: readonly string[] = [],
     metricContext?: { conversationId: string; messageId: string },
+    scope?: LiveWorkerKnowledgeScope,
   ): Promise<readonly LiveWorkerKnowledgeArticle[]> {
     const startedAt = Date.now();
+    const strict = Boolean(scope?.strictProducts);
+    // A product-scoped channel with no products has no knowledge at all.
+    if (strict && !productIds.length) return [];
     if (query?.trim()) {
       let queryEmbedding: readonly number[] | undefined;
       if (this.agentCredentials) {
@@ -170,7 +212,7 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
       });
       if (result.error)
         throw new Error(`supabase:knowledge_chunks:${result.error.message}`);
-      const articles: LiveWorkerKnowledgeArticle[] = (result.data ?? []).map(
+      const mapped: LiveWorkerKnowledgeArticle[] = (result.data ?? []).map(
         (value) => {
           const chunk = value as Record<string, unknown>;
           const title = String(chunk.article_title ?? "Published knowledge");
@@ -206,6 +248,17 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
           };
         },
       );
+      // Unmapped manual articles are shared across the workspace; a
+      // product-scoped channel must not see them (they may belong to another
+      // client). Mapped manual and repository chunks are already filtered by
+      // the RPC through `p_product_ids`.
+      const articles = strict
+        ? mapped.filter(
+            (article) =>
+              article.sourceKind === "repository" ||
+              (article.productIds ?? []).length > 0,
+          )
+        : mapped;
       if (metricContext)
         await this.metric({
           workspaceId,
@@ -231,9 +284,11 @@ export class SupabaseLiveWorkerKnowledge implements LiveWorkerKnowledge {
       // follow-up ("acessar pedidos"). Manual drafts already load published
       // articles without a query — mirror that fallback so the worker can still
       // write a coherent how-to instead of escalating.
-      if (articles.length) return articles;
+      if (articles.length || strict) return articles;
       return this.listPublishedFallback(workspaceId);
     }
+    // The workspace-wide fallback ignores products, so it is legacy-only.
+    if (strict) return [];
     return this.listPublishedFallback(workspaceId);
   }
 
