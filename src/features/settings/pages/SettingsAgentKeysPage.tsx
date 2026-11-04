@@ -46,6 +46,7 @@ export function SettingsAgentKeysPage({
     secret: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +92,7 @@ export function SettingsAgentKeysPage({
       });
       setCreated({ label: result.record.label, secret: result.secret });
       setCopied(false);
+      setCopyFailed(false);
       setLabel("");
       setScopes([]);
       await load();
@@ -169,13 +171,29 @@ export function SettingsAgentKeysPage({
 
   const copy = async () => {
     if (!created) return;
-    try {
-      await navigator.clipboard.writeText(created.secret);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-      secretRef.current?.select();
+    const input = secretRef.current;
+    let ok = false;
+    // Copy synchronously inside the click first: the async Clipboard API can
+    // resolve without writing (focus lost, browser policy), and an agent key
+    // pasted from a stale clipboard fails only later, far from here.
+    if (input) {
+      input.focus();
+      input.select();
+      try {
+        ok = document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
     }
+    try {
+      await navigator.clipboard?.writeText(created.secret);
+      ok = true;
+    } catch {
+      // Keep the execCommand result.
+    }
+    setCopied(ok);
+    setCopyFailed(!ok);
+    if (!ok) input?.select();
   };
 
   const active = keys.filter((key) => !key.revoked_at);
@@ -225,6 +243,11 @@ export function SettingsAgentKeysPage({
                     {copied ? t("agentKeys.copied") : t("agentKeys.copy")}
                   </button>
                 </div>
+                {copyFailed && (
+                  <p className="settings-v2-agent-copy-failed" role="alert">
+                    {t("agentKeys.copyFailed")}
+                  </p>
+                )}
                 <div className="settings-v2-agent-setup">
                   <strong>{t("agentKeys.setupTitle")}</strong>
                   <p>{t("agentKeys.setupSteps")}</p>

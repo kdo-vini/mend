@@ -1038,6 +1038,7 @@
     "secretLabel": "Chave do agente",
     "copy": "Copiar",
     "copied": "Copiada",
+    "copyFailed": "Não deu para copiar automaticamente. A chave está selecionada: use Ctrl+C (ou Cmd+C) antes de fechar este aviso.",
     "done": "Já copiei",
     "setupTitle": "Como conectar no agentes.chat",
     "setupSteps": "Configurações → Conectores e MCPs → Adicionar MCP → endereço abaixo → Conectar com uma chave de API.",

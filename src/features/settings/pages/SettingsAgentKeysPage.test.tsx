@@ -141,6 +141,67 @@ describe("SettingsAgentKeysPage", () => {
     expect(container.textContent).not.toContain("mend_agent_secret");
   });
 
+  describe("copying the new key", () => {
+    async function createKey() {
+      vi.mocked(settingsApi.listLiveAgentKeys).mockResolvedValue([]);
+      vi.mocked(settingsApi.createLiveAgentKey).mockResolvedValue({
+        secret: "mend_agent_secret",
+        record: { ...maria, label: "Rafa", scopes: ["diario:escrever"] },
+      });
+      await render();
+      await act(async () => {
+        setInput(container.querySelector("input:not([type])")!, "Rafa");
+      });
+      const diario = Array.from(
+        container.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+      ).find((input) =>
+        input.parentElement?.textContent?.includes("Registrar no Diário"),
+      )!;
+      await act(async () => diario.click());
+      await act(async () => button("Criar chave")!.click());
+    }
+
+    function stubClipboard(writeText: () => Promise<void>, execCopy: boolean) {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: vi.fn(writeText) },
+      });
+      Object.defineProperty(document, "execCommand", {
+        configurable: true,
+        value: vi.fn(() => execCopy),
+      });
+    }
+
+    it("copies synchronously during the click even when the async API is refused", async () => {
+      stubClipboard(() => Promise.reject(new Error("denied")), true);
+      await createKey();
+      await act(async () => button("Copiar")!.click());
+      expect(document.execCommand).toHaveBeenCalledWith("copy");
+      expect(button("Copiada")).toBeTruthy();
+      expect(container.querySelector("[role=alert]")).toBeNull();
+    });
+
+    it("accepts the async API when execCommand is unavailable", async () => {
+      stubClipboard(() => Promise.resolve(), false);
+      await createKey();
+      await act(async () => button("Copiar")!.click());
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        "mend_agent_secret",
+      );
+      expect(button("Copiada")).toBeTruthy();
+    });
+
+    it("warns and selects the key when nothing could copy it", async () => {
+      stubClipboard(() => Promise.reject(new Error("denied")), false);
+      await createKey();
+      await act(async () => button("Copiar")!.click());
+      expect(button("Copiada")).toBeFalsy();
+      expect(container.querySelector("[role=alert]")?.textContent).toContain(
+        "Ctrl+C",
+      );
+    });
+  });
+
   it("asks before revoking and removes the key after confirmation", async () => {
     vi.mocked(settingsApi.listLiveAgentKeys).mockResolvedValue([maria]);
     vi.mocked(settingsApi.revokeLiveAgentKey).mockResolvedValue();

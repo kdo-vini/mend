@@ -2164,6 +2164,13 @@
   gap: var(--space-2);
 }
 
+.settings-v2-agent-copy-failed {
+  margin: 0;
+  color: var(--negative);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .settings-v2-agent-secret input {
   min-width: 0;
   flex: 1;
