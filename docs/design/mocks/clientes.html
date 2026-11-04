@@ -86,8 +86,16 @@
           radial-gradient(ellipse at 95% 0, var(--deep-glow), transparent 62%),
           linear-gradient(115deg, var(--deep-shade), var(--deep-tint));
         --canvas-gradient:
-          radial-gradient(ellipse at 8% 15%, var(--canvas-glow), transparent 45%),
-          radial-gradient(ellipse at 95% 5%, var(--canvas-glow-2), transparent 40%),
+          radial-gradient(
+            ellipse at 8% 15%,
+            var(--canvas-glow),
+            transparent 45%
+          ),
+          radial-gradient(
+            ellipse at 95% 5%,
+            var(--canvas-glow-2),
+            transparent 40%
+          ),
           var(--canvas);
         --font-product: Inter, ui-sans-serif, system-ui, sans-serif;
         --font-display: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
@@ -264,7 +272,10 @@
         background: var(--surface-hover);
       }
       .btn-primary {
-        background: linear-gradient(var(--action-fill-highlight), var(--action-fill));
+        background: linear-gradient(
+          var(--action-fill-highlight),
+          var(--action-fill)
+        );
         color: var(--on-action);
         border-color: transparent;
         font-weight: 550;
@@ -913,18 +924,27 @@
             <div>
               <small>Leads esperando proposta</small>
               <div class="hero">7</div>
-              <div class="hero-sub"><b>3 chegaram esta semana</b> pelo Diagnóstico de marca</div>
+              <div class="hero-sub">
+                <b>3 chegaram esta semana</b> pelo Diagnóstico de marca
+              </div>
             </div>
             <div class="funnel">
               <button aria-pressed="false"><b>7</b><span>Lead</span></button>
-              <button aria-pressed="false"><b>4</b><span>Proposta</span></button>
+              <button aria-pressed="false">
+                <b>4</b><span>Proposta</span>
+              </button>
               <button aria-pressed="false"><b>12</b><span>Ativo</span></button>
               <button aria-pressed="false"><b>2</b><span>Churn</span></button>
             </div>
           </div>
 
           <div class="controls" role="search">
-            <input class="search" type="search" placeholder="Buscar nome, contato, telefone…" aria-label="Buscar clientes" />
+            <input
+              class="search"
+              type="search"
+              placeholder="Buscar nome, contato, telefone…"
+              aria-label="Buscar clientes"
+            />
             <select aria-label="Estágio">
               <option>Todos os estágios</option>
               <option>Lead</option>
@@ -964,26 +984,49 @@
               </thead>
               <tbody>
                 <tr data-go="detail">
-                  <td><div class="name">Dra. Helena Martins</div><div class="sub">Helena</div></td>
-                  <td class="stage-cell"><span class="stage lead">Lead</span></td>
-                  <td class="area-cell">Odontologia <span class="sub">· Ortodontia</span></td>
+                  <td>
+                    <div class="name">Dra. Helena Martins</div>
+                    <div class="sub">Helena</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage lead">Lead</span>
+                  </td>
+                  <td class="area-cell">
+                    Odontologia <span class="sub">· Ortodontia</span>
+                  </td>
                   <td class="hide-m muted">—</td>
                   <td class="hide-m nowrap">(11) 98765-4321</td>
-                  <td class="hide-m"><span class="tag origin">Diagnóstico</span></td>
+                  <td class="hide-m">
+                    <span class="tag origin">Diagnóstico</span>
+                  </td>
                   <td class="hide-m muted nowrap">hoje, 09:42</td>
                 </tr>
                 <tr data-go="detail">
-                  <td><div class="name">Rafael Duarte</div><div class="sub">Rafa · indicação de Carla</div></td>
-                  <td class="stage-cell"><span class="stage lead">Lead</span></td>
-                  <td class="area-cell">Psicologia <span class="sub">· Clínica</span></td>
+                  <td>
+                    <div class="name">Rafael Duarte</div>
+                    <div class="sub">Rafa · indicação de Carla</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage lead">Lead</span>
+                  </td>
+                  <td class="area-cell">
+                    Psicologia <span class="sub">· Clínica</span>
+                  </td>
                   <td class="hide-m muted">—</td>
                   <td class="hide-m nowrap">(21) 99812-0034</td>
-                  <td class="hide-m"><span class="tag origin">Diagnóstico</span></td>
+                  <td class="hide-m">
+                    <span class="tag origin">Diagnóstico</span>
+                  </td>
                   <td class="hide-m muted nowrap">ontem</td>
                 </tr>
                 <tr data-go="detail">
-                  <td><div class="name">Clínica Viver Bem</div><div class="sub">Dr. Paulo Nogueira</div></td>
-                  <td class="stage-cell"><span class="stage proposta">Proposta</span></td>
+                  <td>
+                    <div class="name">Clínica Viver Bem</div>
+                    <div class="sub">Dr. Paulo Nogueira</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage proposta">Proposta</span>
+                  </td>
                   <td class="area-cell">Fisioterapia</td>
                   <td class="hide-m">Site institucional</td>
                   <td class="hide-m nowrap">(31) 3222-1180</td>
@@ -991,26 +1034,47 @@
                   <td class="hide-m muted nowrap">2 nov</td>
                 </tr>
                 <tr data-go="detail">
-                  <td><div class="name">Dra. Marina Costa</div><div class="sub">Marina</div></td>
-                  <td class="stage-cell"><span class="stage ativo">Ativo</span></td>
-                  <td class="area-cell">Nutrição <span class="sub">· Esportiva</span></td>
+                  <td>
+                    <div class="name">Dra. Marina Costa</div>
+                    <div class="sub">Marina</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage ativo">Ativo</span>
+                  </td>
+                  <td class="area-cell">
+                    Nutrição <span class="sub">· Esportiva</span>
+                  </td>
                   <td class="hide-m">Site + SEO</td>
                   <td class="hide-m nowrap">(41) 99701-5566</td>
                   <td class="hide-m"><span class="tag">Manual</span></td>
                   <td class="hide-m muted nowrap">28 out</td>
                 </tr>
                 <tr data-go="detail">
-                  <td><div class="name">Dr. André Lopes</div><div class="sub">André</div></td>
-                  <td class="stage-cell"><span class="stage ativo">Ativo</span></td>
-                  <td class="area-cell">Medicina <span class="sub">· Dermatologia</span></td>
+                  <td>
+                    <div class="name">Dr. André Lopes</div>
+                    <div class="sub">André</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage ativo">Ativo</span>
+                  </td>
+                  <td class="area-cell">
+                    Medicina <span class="sub">· Dermatologia</span>
+                  </td>
                   <td class="hide-m">Site institucional</td>
                   <td class="hide-m nowrap">(11) 97444-2211</td>
-                  <td class="hide-m"><span class="tag origin">Diagnóstico</span></td>
+                  <td class="hide-m">
+                    <span class="tag origin">Diagnóstico</span>
+                  </td>
                   <td class="hide-m muted nowrap">20 out</td>
                 </tr>
                 <tr data-go="detail">
-                  <td><div class="name">Studio Fono Kids</div><div class="sub">Beatriz Ramos</div></td>
-                  <td class="stage-cell"><span class="stage churn">Churn</span></td>
+                  <td>
+                    <div class="name">Studio Fono Kids</div>
+                    <div class="sub">Beatriz Ramos</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage churn">Churn</span>
+                  </td>
                   <td class="area-cell">Fonoaudiologia</td>
                   <td class="hide-m">Site institucional</td>
                   <td class="hide-m nowrap">(51) 98100-7788</td>
@@ -1026,7 +1090,9 @@
         <section class="view" data-view="detail" hidden>
           <header class="page-header">
             <div>
-              <div class="crumb"><a href="#" data-go="list">Clientes</a> / Dra. Helena Martins</div>
+              <div class="crumb">
+                <a href="#" data-go="list">Clientes</a> / Dra. Helena Martins
+              </div>
               <div class="client-head">
                 <h1>Dra. Helena Martins</h1>
                 <label class="stage-select">
@@ -1051,15 +1117,45 @@
             <div>
               <div class="card" aria-label="Propriedades">
                 <dl class="props">
-                  <div class="prop"><dt>Contato</dt><dd>Helena</dd></div>
-                  <div class="prop"><dt>Telefone</dt><dd>(11) 98765-4321</dd></div>
-                  <div class="prop"><dt>Email</dt><dd class="empty">Adicionar</dd></div>
-                  <div class="prop"><dt>Site</dt><dd class="empty">Adicionar</dd></div>
-                  <div class="prop"><dt>Área</dt><dd>Odontologia · Ortodontia</dd></div>
-                  <div class="prop"><dt>Registro</dt><dd>CRO-SP 123456</dd></div>
-                  <div class="prop"><dt>Produto</dt><dd class="empty">Escolher projeto</dd></div>
-                  <div class="prop"><dt>Indicação</dt><dd>carla-ortodontia</dd></div>
-                  <div class="prop wide"><dt>Notas</dt><dd>Quer site novo antes de abrir o 2º consultório em março. Preferiu falar por WhatsApp.</dd></div>
+                  <div class="prop">
+                    <dt>Contato</dt>
+                    <dd>Helena</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Telefone</dt>
+                    <dd>(11) 98765-4321</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Email</dt>
+                    <dd class="empty">Adicionar</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Site</dt>
+                    <dd class="empty">Adicionar</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Área</dt>
+                    <dd>Odontologia · Ortodontia</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Registro</dt>
+                    <dd>CRO-SP 123456</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Produto</dt>
+                    <dd class="empty">Escolher projeto</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Indicação</dt>
+                    <dd>carla-ortodontia</dd>
+                  </div>
+                  <div class="prop wide">
+                    <dt>Notas</dt>
+                    <dd>
+                      Quer site novo antes de abrir o 2º consultório em março.
+                      Preferiu falar por WhatsApp.
+                    </dd>
+                  </div>
                 </dl>
                 <div class="props-foot">
                   Origem
@@ -1079,10 +1175,21 @@
                   <span class="summary">5 linhas</span>
                   <span class="chev" aria-hidden="true">›</span>
                 </button>
-                <div class="panel"><div><div class="prose">
-                  <p>Ortodontista há 9 anos, atende adultos e adolescentes em Moema. Quer ser lembrada como “a ortodontista que explica tudo”. Hoje 70% dos pacientes chegam por indicação e quase nada pelo Google.</p>
-                  <div class="edit"><button class="btn btn-ghost">Editar seção</button></div>
-                </div></div></div>
+                <div class="panel">
+                  <div>
+                    <div class="prose">
+                      <p>
+                        Ortodontista há 9 anos, atende adultos e adolescentes em
+                        Moema. Quer ser lembrada como “a ortodontista que
+                        explica tudo”. Hoje 70% dos pacientes chegam por
+                        indicação e quase nada pelo Google.
+                      </p>
+                      <div class="edit">
+                        <button class="btn btn-ghost">Editar seção</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="disclosure" data-open="false">
@@ -1091,12 +1198,19 @@
                   <span class="summary">4 respostas</span>
                   <span class="chev" aria-hidden="true">›</span>
                 </button>
-                <div class="panel"><div><div class="prose">
-                  <p class="q">Como os pacientes descrevem você?</p>
-                  <p>Paciente, didática, “não tem pressa na consulta”.</p>
-                  <p class="q">O que te diferencia?</p>
-                  <ul><li>Alinhadores invisíveis</li><li>Plano de tratamento em vídeo</li></ul>
-                </div></div></div>
+                <div class="panel">
+                  <div>
+                    <div class="prose">
+                      <p class="q">Como os pacientes descrevem você?</p>
+                      <p>Paciente, didática, “não tem pressa na consulta”.</p>
+                      <p class="q">O que te diferencia?</p>
+                      <ul>
+                        <li>Alinhadores invisíveis</li>
+                        <li>Plano de tratamento em vídeo</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="disclosure" data-open="false">
@@ -1105,10 +1219,18 @@
                   <span class="summary">5 respostas</span>
                   <span class="chev" aria-hidden="true">›</span>
                 </button>
-                <div class="panel"><div><div class="prose">
-                  <p class="q">Quais atendimentos quer destacar?</p>
-                  <ul><li>Alinhadores</li><li>Ortodontia adulto</li><li>Avaliação inicial</li></ul>
-                </div></div></div>
+                <div class="panel">
+                  <div>
+                    <div class="prose">
+                      <p class="q">Quais atendimentos quer destacar?</p>
+                      <ul>
+                        <li>Alinhadores</li>
+                        <li>Ortodontia adulto</li>
+                        <li>Avaliação inicial</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="disclosure" data-open="false">
@@ -1117,7 +1239,11 @@
                   <span class="summary">3 respostas</span>
                   <span class="chev" aria-hidden="true">›</span>
                 </button>
-                <div class="panel"><div><div class="prose"><p>…</p></div></div></div>
+                <div class="panel">
+                  <div>
+                    <div class="prose"><p>…</p></div>
+                  </div>
+                </div>
               </div>
 
               <div class="disclosure" data-open="false">
@@ -1126,7 +1252,11 @@
                   <span class="summary">4 respostas</span>
                   <span class="chev" aria-hidden="true">›</span>
                 </button>
-                <div class="panel"><div><div class="prose"><p>…</p></div></div></div>
+                <div class="panel">
+                  <div>
+                    <div class="prose"><p>…</p></div>
+                  </div>
+                </div>
               </div>
 
               <div class="disclosure" data-open="false">
@@ -1135,7 +1265,15 @@
                   <span class="summary">vazia</span>
                   <span class="chev" aria-hidden="true">›</span>
                 </button>
-                <div class="panel"><div><div class="prose"><p class="muted">Escreva aqui escopo, valores e prazos.</p></div></div></div>
+                <div class="panel">
+                  <div>
+                    <div class="prose">
+                      <p class="muted">
+                        Escreva aqui escopo, valores e prazos.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <button class="btn add-section">+ Nova seção</button>
@@ -1143,9 +1281,15 @@
 
             <aside class="side">
               <div class="card">
-                <div class="side-head"><h3>Linha do tempo</h3><span class="muted">3</span></div>
+                <div class="side-head">
+                  <h3>Linha do tempo</h3>
+                  <span class="muted">3</span>
+                </div>
                 <div class="composer">
-                  <textarea placeholder="Anotar algo sobre a Helena…" aria-label="Nova anotação"></textarea>
+                  <textarea
+                    placeholder="Anotar algo sobre a Helena…"
+                    aria-label="Nova anotação"
+                  ></textarea>
                   <div class="row">
                     <div class="seg" role="group" aria-label="Tipo">
                       <button class="on">Nota</button>
@@ -1157,7 +1301,9 @@
                 <ul class="timeline">
                   <li>
                     <div class="t">Ligação de apresentação</div>
-                    <div>Topou reunião quinta 15h para ver exemplos de sites.</div>
+                    <div>
+                      Topou reunião quinta 15h para ver exemplos de sites.
+                    </div>
                     <div class="meta">Reunião · Vinicius · hoje, 11:10</div>
                   </li>
                   <li>
@@ -1172,7 +1318,10 @@
               </div>
 
               <div class="card">
-                <div class="side-head"><h3>Chamados</h3><a href="#" class="link">Ligar chamado</a></div>
+                <div class="side-head">
+                  <h3>Chamados</h3>
+                  <a href="#" class="link">Ligar chamado</a>
+                </div>
                 <div class="issue-row">
                   <span class="id">MEND-142</span>
                   <span>Enviar exemplos de sites de ortodontia</span>

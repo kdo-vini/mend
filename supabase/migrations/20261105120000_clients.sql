@@ -20,9 +20,16 @@ create table public.clients (
   contact text check (contact is null or length(contact) <= 200),
   email text check (email is null or length(email) <= 320),
   phone text check (phone is null or length(phone) <= 40),
-  -- Digits only, for de-duplication by phone ("(11) 98765-4321" = "11987654321").
+  -- Digits only, without Brazil's 55, for de-duplication by phone:
+  -- "(11) 98765-4321" = "+55 11 98765-4321" = "11987654321".
   phone_digits text generated always as (
-    nullif(regexp_replace(coalesce(phone, ''), '\D', '', 'g'), '')
+    nullif(
+      regexp_replace(
+        regexp_replace(coalesce(phone, ''), '\D', '', 'g'),
+        '^55(\d{10,11})$', '\1'
+      ),
+      ''
+    )
   ) stored,
   site text check (site is null or length(site) <= 500),
   stage text not null default 'lead'

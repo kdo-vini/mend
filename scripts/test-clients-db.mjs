@@ -59,7 +59,10 @@ await db.exec(`
 
 await db.exec(
   readFileSync(
-    new URL("../supabase/migrations/20261105120000_clients.sql", import.meta.url),
+    new URL(
+      "../supabase/migrations/20261105120000_clients.sql",
+      import.meta.url,
+    ),
     "utf8",
   ),
 );
@@ -81,7 +84,7 @@ async function rejects(promise, pattern) {
 const created = await as(agent, () =>
   db.query(
     `insert into public.clients(workspace_id,name,phone,products,created_by)
-     values ($1,'Dra. Helena','(11) 98765-4321','{site,integracao}',$2)
+     values ($1,'Dra. Helena','+55 (11) 98765-4321','{site,integracao}',$2)
      returning id, phone_digits, stage`,
     [workspace, agent],
   ),
@@ -123,12 +126,16 @@ await rejects(
   /row-level security/,
 );
 const viewerUpdate = await as(viewer, () =>
-  db.query(`update public.clients set stage='ativo' where id=$1 returning id`, [clientId]),
+  db.query(`update public.clients set stage='ativo' where id=$1 returning id`, [
+    clientId,
+  ]),
 );
 assert.equal(viewerUpdate.rows.length, 0);
 
 // Other workspaces see nothing.
-const foreign = await as(foreignOwner, () => db.query("select id from public.clients"));
+const foreign = await as(foreignOwner, () =>
+  db.query("select id from public.clients"),
+);
 assert.equal(foreign.rows.length, 0);
 
 // Agents edit; updated_at moves.
@@ -143,7 +150,9 @@ assert.equal(edited.rows[0].stage, "proposta");
 // Only owner/admin archive.
 await rejects(
   as(agent, () =>
-    db.query(`update public.clients set archived_at=now() where id=$1`, [clientId]),
+    db.query(`update public.clients set archived_at=now() where id=$1`, [
+      clientId,
+    ]),
   ),
   /only owner or admin/,
 );
@@ -157,7 +166,10 @@ assert.ok(archived.rows[0].archived_at);
 
 // Service role ignores the archive check and sets columns users cannot.
 await db.exec("set role service_role;");
-await db.query(`update public.clients set archived_at=null, external_id='d1', source='diagnostico_marca' where id=$1`, [clientId]);
+await db.query(
+  `update public.clients set archived_at=null, external_id='d1', source='diagnostico_marca' where id=$1`,
+  [clientId],
+);
 await rejects(
   db.query(
     `insert into public.clients(workspace_id,name,source,external_id) values ($1,'Y','diagnostico_marca','d1')`,
@@ -170,7 +182,9 @@ await db.exec("reset role;");
 // Users cannot set external_id or source on update (column grants).
 await rejects(
   as(agent, () =>
-    db.query(`update public.clients set external_id='x' where id=$1`, [clientId]),
+    db.query(`update public.clients set external_id='x' where id=$1`, [
+      clientId,
+    ]),
   ),
   /permission denied/,
 );
@@ -217,21 +231,32 @@ await db.exec("reset role;");
 
 // Issues link to clients and keep their workspace when the client goes.
 await as(agent, () =>
-  db.query(`update public.issues set client_id=$1 where id=$2`, [clientId, issue]),
+  db.query(`update public.issues set client_id=$1 where id=$2`, [
+    clientId,
+    issue,
+  ]),
 );
 await rejects(
   as(agent, () =>
     db.query(`delete from public.clients where id=$1`, [clientId]).then((r) => {
-      if (r.affectedRows === 0) throw new Error("row-level security: not deleted");
+      if (r.affectedRows === 0)
+        throw new Error("row-level security: not deleted");
     }),
   ),
   /row-level security/,
 );
-await as(admin, () => db.query(`delete from public.clients where id=$1`, [clientId]));
-const unlinked = await db.query(`select workspace_id, client_id from public.issues where id=$1`, [issue]);
+await as(admin, () =>
+  db.query(`delete from public.clients where id=$1`, [clientId]),
+);
+const unlinked = await db.query(
+  `select workspace_id, client_id from public.issues where id=$1`,
+  [issue],
+);
 assert.equal(unlinked.rows[0].client_id, null);
 assert.equal(unlinked.rows[0].workspace_id, workspace);
-const entries = await db.query("select count(*)::int as n from public.client_entries");
+const entries = await db.query(
+  "select count(*)::int as n from public.client_entries",
+);
 assert.equal(entries.rows[0].n, 0);
 
 console.log("clients migration: ok");
