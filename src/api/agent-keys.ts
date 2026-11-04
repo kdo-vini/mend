@@ -14,6 +14,8 @@ export const agentKeyScopes = [
   "chamados:ler",
   "chamados:escrever",
   "diario:escrever",
+  "clientes:ler",
+  "clientes:escrever",
 ] as const;
 export type AgentKeyScope = (typeof agentKeyScopes)[number];
 

@@ -1021,6 +1021,14 @@
       "diario_escrever": {
         "name": "Registrar no Diário",
         "help": "Publica registros no Diário com o nome deste agente."
+      },
+      "clientes_ler": {
+        "name": "Ver clientes",
+        "help": "Lista e abre clientes, com propriedades, corpo, linha do tempo e chamados ligados."
+      },
+      "clientes_escrever": {
+        "name": "Cadastrar e anotar clientes",
+        "help": "Cria clientes, muda propriedades e estágio e anota na linha do tempo, sempre com o nome deste agente."
       }
     },
     "create": "Criar chave",

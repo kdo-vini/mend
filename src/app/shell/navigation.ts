@@ -5,6 +5,7 @@ import {
   Inbox as InboxIcon,
   LayoutDashboard,
   NotebookPen,
+  Users,
   Wallet,
   Settings as SettingsIcon,
   TerminalSquare,
@@ -15,6 +16,7 @@ export type WorkspaceNavigationId =
   | "dashboard"
   | "finance"
   | "projects"
+  | "clients"
   | "diary"
   | "inbox"
   | "issues"
@@ -26,6 +28,7 @@ export const navItems = [
   { id: "dashboard", to: "/dashboard", icon: LayoutDashboard },
   { id: "finance", to: "/financeiro", icon: Wallet },
   { id: "projects", to: "/projects", icon: FolderKanban },
+  { id: "clients", to: "/clientes", icon: Users },
   { id: "diary", to: "/diario", icon: NotebookPen },
   { id: "inbox", to: "/inbox", icon: InboxIcon },
   { id: "issues", to: "/issues", icon: CircleDot },

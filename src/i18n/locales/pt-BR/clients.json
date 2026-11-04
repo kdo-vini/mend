@@ -1,0 +1,204 @@
+{
+  "eyebrow": "Workspace Diagium",
+  "title": "Clientes",
+  "description": "Leads, propostas e clientes ativos da Diagium.",
+  "loading": "Carregando clientes…",
+  "loadingOne": "Carregando o cliente…",
+  "stages": {
+    "lead": "Lead",
+    "proposta": "Proposta",
+    "ativo": "Ativo",
+    "churn": "Churn"
+  },
+  "products": {
+    "site": "Site",
+    "sistema": "Sistema",
+    "integracao": "Integração"
+  },
+  "sources": {
+    "manual": "Manual",
+    "diagnostico_marca": "Diagnóstico de marca",
+    "agente": "Agente",
+    "importacao": "Importação"
+  },
+  "sourcesShort": {
+    "manual": "Manual",
+    "diagnostico_marca": "Diagnóstico",
+    "agente": "Agente",
+    "importacao": "Importação"
+  },
+  "actions": {
+    "new": "Novo cliente",
+    "create": "Criar cliente",
+    "creating": "Criando…",
+    "close": "Fechar",
+    "cancel": "Cancelar",
+    "retry": "Tentar de novo",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "openIssue": "Abrir chamado",
+    "whatsapp": "WhatsApp",
+    "archive": "Arquivar cliente",
+    "unarchive": "Desarquivar cliente",
+    "delete": "Excluir cliente",
+    "clearFilters": "Limpar filtros"
+  },
+  "funnel": {
+    "label": "Funil de clientes",
+    "title": "Leads esperando proposta",
+    "recent_zero": "Nenhum chegou esta semana",
+    "recent_one": "{{count}} chegou esta semana",
+    "recent_other": "{{count}} chegaram esta semana",
+    "recentSource": "pelo Diagnóstico de marca",
+    "filterLabel": "Filtrar por estágio"
+  },
+  "filters": {
+    "search": "Buscar clientes",
+    "searchPlaceholder": "Buscar nome, contato, telefone…",
+    "stage": "Estágio",
+    "allStages": "Todos os estágios",
+    "area": "Área",
+    "allAreas": "Todas as áreas",
+    "source": "Origem",
+    "allSources": "Toda origem",
+    "showArchived": "Mostrar arquivados",
+    "count_one": "{{count}} cliente",
+    "count_other": "{{count}} clientes"
+  },
+  "columns": {
+    "client": "Cliente",
+    "stage": "Estágio",
+    "area": "Área",
+    "product": "Produto",
+    "phone": "Telefone",
+    "source": "Origem",
+    "updated": "Atualizado"
+  },
+  "row": {
+    "referral": "indicação de {{name}}",
+    "archived": "Arquivado"
+  },
+  "empty": {
+    "title": "Nenhum cliente ainda",
+    "description": "Os leads do Diagnóstico de marca aparecem aqui sozinhos. Você também pode cadastrar um cliente à mão.",
+    "filteredTitle": "Nenhum cliente encontrado",
+    "filteredDescription": "Tente outra busca ou limpe os filtros."
+  },
+  "errors": {
+    "load": {
+      "title": "Não foi possível carregar os clientes",
+      "description": "Tente de novo em instantes."
+    },
+    "forbidden": "Você não tem permissão para fazer isso.",
+    "stage": "Não foi possível mudar o estágio.",
+    "archive": "Não foi possível arquivar o cliente.",
+    "unarchive": "Não foi possível desarquivar o cliente.",
+    "delete": "Não foi possível excluir o cliente.",
+    "create": {
+      "forbidden": "Você não tem permissão para criar clientes.",
+      "notFound": "Não foi possível criar o cliente.",
+      "generic": "Não foi possível criar o cliente. Tente de novo."
+    }
+  },
+  "fields": {
+    "name": "Nome",
+    "contact": "Contato",
+    "phone": "Telefone",
+    "email": "Email",
+    "site": "Site",
+    "area": "Área",
+    "specialty": "Especialidade",
+    "registration": "Registro",
+    "referral": "Indicação",
+    "notes": "Notas",
+    "products": "Produto",
+    "stage": "Estágio"
+  },
+  "create": {
+    "title": "Novo cliente",
+    "description": "Só o nome é obrigatório. O resto você completa na página do cliente."
+  },
+  "properties": {
+    "label": "Propriedades do cliente",
+    "origin": "Origem",
+    "utm": "utm: {{utm}}",
+    "required": "{{field}} é obrigatório.",
+    "saveError": "Não foi possível salvar. Tente de novo.",
+    "saving": "Salvando…",
+    "edit": "Editar {{field}}",
+    "add": "Adicionar"
+  },
+  "breadcrumb": {
+    "label": "Você está em"
+  },
+  "subtitle": {
+    "diagnostic": "Chegou pelo Diagnóstico de marca em {{date}}.",
+    "created": "Criado em {{date}}."
+  },
+  "body": {
+    "title": "Diagnóstico e anotações",
+    "intro": "Anotações",
+    "editAll": "Editar tudo em markdown",
+    "editAllLabel": "Corpo completo em markdown",
+    "markdownHint": "Cada título com ## vira uma seção. Ctrl+Enter salva, Esc cancela.",
+    "empty": "Nenhuma seção ainda. Crie a primeira para registrar diagnóstico, proposta ou combinados.",
+    "lines_one": "{{count}} linha",
+    "lines_other": "{{count}} linhas",
+    "emptySummary": "vazia",
+    "sectionLabel": "Conteúdo da seção {{title}}",
+    "sectionEmpty": "Seção vazia.",
+    "editSection": "Editar seção",
+    "newSectionTitle": "Título da nova seção",
+    "addSection": "Nova seção",
+    "addSectionConfirm": "Criar seção",
+    "saveError": "Não foi possível salvar. Tente de novo."
+  },
+  "timeline": {
+    "title": "Linha do tempo",
+    "titlePlaceholder": "Título (opcional)",
+    "titleLabel": "Título da anotação",
+    "bodyPlaceholder": "Anotar algo sobre {{name}}…",
+    "bodyLabel": "Nova anotação",
+    "kindLabel": "Tipo",
+    "kinds": {
+      "nota": "Nota",
+      "reuniao": "Reunião",
+      "diagnostico": "Diagnóstico",
+      "estagio": "Estágio"
+    },
+    "empty": "Nada registrado ainda.",
+    "addError": "Não foi possível salvar a anotação.",
+    "deleteTitle": "Excluir esta anotação?",
+    "deleteDescription": "Ela sai da linha do tempo do cliente. Não é possível desfazer.",
+    "deleteConfirm": "Excluir anotação",
+    "deleteError": "Não foi possível excluir a anotação.",
+    "deleteEntry": "Excluir {{title}}",
+    "diagnosticTitle": "Diagnóstico de marca recebido",
+    "stageTitle": "Estágio alterado",
+    "meta": "{{kind}} · {{author}} · {{date}}"
+  },
+  "issues": {
+    "title": "Chamados",
+    "link": "Ligar chamado",
+    "placeholder": "MEND-142",
+    "identifierLabel": "Identificador do chamado",
+    "linkConfirm": "Ligar",
+    "linkError": "Não encontramos esse chamado ou não foi possível ligá-lo.",
+    "unlinkError": "Não foi possível soltar o chamado.",
+    "empty": "Nenhum chamado ligado.",
+    "unlink": "Soltar {{identifier}}"
+  },
+  "notFound": {
+    "title": "Cliente não encontrado",
+    "description": "Ele pode ter sido excluído ou o endereço está errado.",
+    "back": "Voltar para clientes"
+  },
+  "delete": {
+    "title": "Excluir {{name}}?",
+    "description": "O cliente, a linha do tempo e o corpo saem do Mend. Os chamados ligados continuam, só perdem o vínculo. Não é possível desfazer.",
+    "confirm": "Excluir cliente"
+  },
+  "side": {
+    "label": "Linha do tempo e chamados"
+  }
+}
