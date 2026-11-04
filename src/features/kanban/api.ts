@@ -1,5 +1,4 @@
 import type { Database } from "../../lib/database.types";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase, type MendSupabaseClient } from "../../lib/supabase";
 import {
   apiRequest,
@@ -10,6 +9,7 @@ import {
   unwrap,
   unwrapPages,
 } from "../../api/transport";
+import { onWorkspaceChange } from "../../api/workspace-data";
 
 type Tables = Database["public"]["Tables"];
 type PersonalTaskRow = Tables["personal_tasks"]["Row"];
@@ -57,76 +57,29 @@ type KanbanRealtimeChange =
       row: Record<string, unknown>;
     };
 
+/**
+ * Board updates ride on the app's single private workspace channel (see
+ * `onWorkspaceChange`); opening a second channel on the same topic would
+ * share it, and closing the board would close the inbox's live updates too.
+ */
 export function subscribeToKanban(
   workspaceId: string,
   userId: string,
   onChange: (change: KanbanRealtimeChange) => void,
 ): () => void {
-  const client = supabase;
-  if (!client || !workspaceId || !userId) return () => undefined;
-  let channel: RealtimeChannel | null = client.channel(
-    `kanban:${workspaceId}:${userId}`,
-  );
-  const accepts = (payload: { new: unknown; old: unknown }) => {
-    const row = (
-      payload.new && Object.keys(payload.new).length ? payload.new : payload.old
-    ) as Record<string, unknown>;
-    return row.workspace_id === workspaceId && row.user_id === userId;
-  };
-  channel
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "issues",
-        filter: `workspace_id=eq.${workspaceId}`,
-      },
-      (payload) =>
-        onChange({
-          table: "issues",
-          row: (payload.new || payload.old) as Record<string, unknown>,
-        }),
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "personal_tasks",
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        if (accepts(payload))
-          onChange({
-            table: "personal_tasks",
-            row: (payload.new || payload.old) as Record<string, unknown>,
-          });
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "personal_events",
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        if (accepts(payload))
-          onChange({
-            table: "personal_events",
-            row: (payload.new || payload.old) as Record<string, unknown>,
-          });
-      },
-    )
-    .subscribe();
-  return () => {
-    if (channel) {
-      void client.removeChannel(channel);
-      channel = null;
+  if (!supabase || !workspaceId || !userId) return () => undefined;
+  return onWorkspaceChange((change) => {
+    if (change.record.workspace_id !== workspaceId) return;
+    if (change.table === "issues") {
+      onChange({ table: "issues", row: change.record });
+    } else if (
+      (change.table === "personal_tasks" ||
+        change.table === "personal_events") &&
+      change.record.user_id === userId
+    ) {
+      onChange({ table: change.table, row: change.record });
     }
-  };
+  });
 }
 
 function taskFromRow(row: PersonalTaskRow): PersonalTask {
