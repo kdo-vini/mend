@@ -783,11 +783,47 @@ export function buildMcpServer(
   return server;
 }
 
-/** Accepts `Authorization: Bearer mend_agent_…` or `x-api-key: mend_agent_…`. */
+/** Other headers MCP clients use for a plain API key. */
+const MCP_ALT_KEY_HEADERS = ["api-key", "x-mend-key"] as const;
+
+/** Trims and drops surrounding quotes that clients sometimes keep from a paste. */
+const cleanKey = (value: string | null | undefined) =>
+  value
+    ?.trim()
+    .replace(/^["']+|["']+$/g, "")
+    .trim() || undefined;
+
+/**
+ * Accepts `Authorization: Bearer mend_agent_…` (or any `<scheme> mend_agent_…`,
+ * or the bare key), `x-api-key`, `api-key` or `x-mend-key`. Only values with the
+ * `mend_agent_` prefix count; the hash lookup still decides if the key is valid.
+ */
 export function agentKeyFrom(request: Request): string | undefined {
-  const bearer = parseBearerToken(request.get("authorization"));
-  const key = bearer ?? request.get(MCP_API_KEY_HEADER)?.trim();
-  return key?.startsWith(AGENT_KEY_PREFIX) ? key : undefined;
+  const authorization = cleanKey(request.get("authorization"));
+  const candidates = [
+    parseBearerToken(authorization),
+    authorization?.split(/[\t ]+/).at(-1),
+    request.get(MCP_API_KEY_HEADER),
+    ...MCP_ALT_KEY_HEADERS.map((header) => request.get(header)),
+  ];
+  return candidates
+    .map(cleanKey)
+    .find((key) => key?.startsWith(AGENT_KEY_PREFIX));
+}
+
+/** Header names (never values) that came with a keyless call, for diagnosis. */
+function keylessCallShape(request: Request) {
+  const authorization = request.get("authorization")?.trim();
+  return {
+    headers: Object.keys(request.headers).filter(
+      (name) => name !== "cookie" && name !== "authorization",
+    ),
+    authorizationScheme: authorization
+      ? authorization.split(/[\t ]+/).length > 1
+        ? authorization.split(/[\t ]+/)[0]
+        : "(sem esquema)"
+      : null,
+  };
 }
 
 const mcpLimiter = rateLimit({
@@ -818,7 +854,13 @@ export function registerMcpServerRoute(
     mcpLimiter,
     async (request: Request, response: Response) => {
       const key = agentKeyFrom(request);
-      if (!key) return jsonRpcError(response, 401, "agent_key_required");
+      if (!key) {
+        deps.logger?.error(
+          keylessCallShape(request),
+          "MCP call without agent key",
+        );
+        return jsonRpcError(response, 401, "agent_key_required");
+      }
       if (!deps.keys) return jsonRpcError(response, 503, "mcp_not_configured");
       let principal: AgentPrincipal | null;
       try {

@@ -283,6 +283,34 @@ describe("POST /mcp", () => {
     expect(response.body.result.tools).toHaveLength(4);
   });
 
+  it.each([
+    ["a bare key in Authorization", { authorization: KEY }],
+    ["another scheme in Authorization", { authorization: `Token ${KEY}` }],
+    ["a quoted Bearer key", { authorization: `Bearer "${KEY}"` }],
+    ["the api-key header", { "api-key": KEY }],
+    ["the x-mend-key header", { "x-mend-key": ` ${KEY} ` }],
+  ])("accepts %s", async (_label, auth) => {
+    const { app } = buildApp();
+    const response = await rpc(app, "tools/list", {}, auth);
+    expect(response.status).toBe(200);
+  });
+
+  it("logs only header names when a call has no agent key", async () => {
+    const logger = { error: vi.fn() };
+    const { app } = buildApp({ logger });
+    const response = await rpc(
+      app,
+      "tools/list",
+      {},
+      { authorization: "Bearer nope" },
+    );
+    expect(response.status).toBe(401);
+    const [shape, message] = logger.error.mock.calls[0];
+    expect(message).toBe("MCP call without agent key");
+    expect(shape.authorizationScheme).toBe("Bearer");
+    expect(JSON.stringify(shape)).not.toContain("nope");
+  });
+
   it("does not run a tool outside the key's scopes", async () => {
     const send = fakeSend();
     const { app } = buildApp({
