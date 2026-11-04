@@ -38,8 +38,11 @@ test("workspace bootstrap does not restart when its resolved ID is published", a
   let conversationLoads = 0;
   let lastConversationAt = 0;
   await page.route("**/rest/v1/**", async (route) => {
-    const table = new URL(route.request().url()).pathname.split("/").pop();
-    if (table === "conversations") {
+    const url = new URL(route.request().url());
+    const table = url.pathname.split("/").pop();
+    // The live watch's light `id,updated_at` look is not a bootstrap load.
+    const isLiveWatch = url.searchParams.get("select") === "id,updated_at";
+    if (table === "conversations" && !isLiveWatch) {
       conversationLoads++;
       lastConversationAt = Date.now();
     }
