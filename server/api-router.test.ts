@@ -1892,6 +1892,10 @@ describe("agent key routes", () => {
       list: vi.fn(async () => []),
       create: vi.fn(async () => key),
       revoke: vi.fn(async () => true),
+      updateScopes: vi.fn(async (_workspace, _id, scopes) => ({
+        ...key,
+        scopes,
+      })),
     };
     return { app: makeApp(d), agentKeys: d.agentKeys };
   }
@@ -1936,6 +1940,69 @@ describe("agent key routes", () => {
         ).status,
       ).toBe(400);
     expect(agentKeys.create).not.toHaveBeenCalled();
+  });
+
+  it("edits the scopes of an existing key, deduped, for admins only", async () => {
+    const { app, agentKeys } = agentKeyApp();
+    const response = await request(app)
+      .patch(`/api/agent-keys/${articleId}`)
+      .send({ scopes: ["clientes:ler", "clientes:ler", "clientes:escrever"] });
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body.data.scopes).toEqual([
+      "clientes:ler",
+      "clientes:escrever",
+    ]);
+    expect(JSON.stringify(response.body)).not.toContain("token_hash");
+    expect(agentKeys.updateScopes).toHaveBeenCalledWith(
+      workspaceId,
+      articleId,
+      ["clientes:ler", "clientes:escrever"],
+    );
+
+    const denied = agentKeyApp("agent");
+    expect(
+      (
+        await request(denied.app)
+          .patch(`/api/agent-keys/${articleId}`)
+          .send({ scopes: ["clientes:ler"] })
+      ).status,
+    ).toBe(403);
+    expect(denied.agentKeys.updateScopes).not.toHaveBeenCalled();
+  });
+
+  it("answers 404 when editing a missing or revoked key", async () => {
+    const { app, agentKeys } = agentKeyApp();
+    agentKeys.updateScopes = vi.fn(async () => null);
+    const response = await request(app)
+      .patch(`/api/agent-keys/${articleId}`)
+      .send({ scopes: ["clientes:ler"] });
+    expect(response.status).toBe(404);
+    expect(response.body.error?.code ?? response.body.code).toBe(
+      "agent_key_not_found",
+    );
+  });
+
+  it("rejects invalid scope edits", async () => {
+    const { app, agentKeys } = agentKeyApp();
+    for (const body of [
+      { scopes: [] },
+      { scopes: ["financeiro:ler"] },
+      { scopes: ["clientes:ler"], label: "x" },
+      {},
+    ])
+      expect(
+        (await request(app).patch(`/api/agent-keys/${articleId}`).send(body))
+          .status,
+      ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .patch("/api/agent-keys/not-a-uuid")
+          .send({ scopes: ["clientes:ler"] })
+      ).status,
+    ).toBe(400);
+    expect(agentKeys.updateScopes).not.toHaveBeenCalled();
   });
 
   it("lists keys with the scope catalog and revokes within the workspace", async () => {

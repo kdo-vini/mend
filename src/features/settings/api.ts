@@ -88,6 +88,7 @@ export {
   listLiveAgentKeys,
   mcpServerUrl,
   revokeLiveAgentKey,
+  updateLiveAgentKeyScopes,
 } from "../../api/agent-keys";
 export type { AgentKey, AgentKeyScope } from "../../api/agent-keys";
 export { supabase } from "../../lib/supabase";
