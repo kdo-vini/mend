@@ -32,8 +32,9 @@ test("integration providers remain details, not sidebar destinations", async ({
 }) => {
   await page.goto("/settings/integrations?demo=1");
   await expect(page.getByRole("link", { name: "GitHub" })).toBeVisible();
+  // GitHub, Google Calendar, Supabase, Plugins MCP and Agentes (MCP do Mend).
   await expect(page.getByText("Não configurado", { exact: true })).toHaveCount(
-    4,
+    5,
   );
   await expect(
     page.locator(".settings-v2-nav").getByText("GitHub"),
