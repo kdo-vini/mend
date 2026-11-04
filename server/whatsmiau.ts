@@ -321,6 +321,30 @@ function unwrapMessages(
   return [dataRecord].filter((value) => Object.keys(value).length > 0);
 }
 
+/**
+ * Production payloads carry quote info at `data.contextInfo` (no `key` inside
+ * quotedMessage; the id is `stanzaId`). Keep in sync with
+ * supabase/functions/whats-mend-webhook/quote.ts.
+ */
+export function resolveQuotedProviderMessageId(
+  value: Record<string, unknown>,
+  message: Record<string, unknown>,
+): string | undefined {
+  const topContext = asRecord(value.contextInfo);
+  const extendedContext = asRecord(
+    asRecord(message.extendedTextMessage).contextInfo,
+  );
+  const quoted = asRecord(
+    extendedContext.quotedMessage ?? topContext.quotedMessage,
+  );
+  return stringValue(
+    topContext.stanzaId,
+    extendedContext.stanzaId,
+    asRecord(quoted.key).id,
+    asRecord(asRecord(message.reactionMessage).key).id,
+  );
+}
+
 /** Converts the current Whatsmiau/Baileys webhook shapes into one DB-safe message shape. */
 export function normalizeWhatsmiauEvent(
   input: unknown,
@@ -343,11 +367,9 @@ export function normalizeWhatsmiauEvent(
       stringValue(key.id, value.id, value.messageId, value.keyId) ??
       stableMessageId(instanceName, event, value);
     if (!remoteJid || !providerMessageId) return [];
-    const extended = asRecord(message.extendedTextMessage);
-    const quoted = asRecord(extended.contextInfo).quotedMessage;
-    const quotedProviderMessageId = stringValue(
-      asRecord(asRecord(quoted).key).id,
-      asRecord(asRecord(message.reactionMessage).key).id,
+    const quotedProviderMessageId = resolveQuotedProviderMessageId(
+      value,
+      message,
     );
     const timestamp = numberValue(value.messageTimestamp, value.timestamp);
     const timestampMs =
