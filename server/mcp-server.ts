@@ -811,17 +811,31 @@ export function agentKeyFrom(request: Request): string | undefined {
     .find((key) => key?.startsWith(AGENT_KEY_PREFIX));
 }
 
-/** Header names (never values) that came with a keyless call, for diagnosis. */
+/** Coarse kind of a credential value, so logs can explain a rejection without leaking it. */
+function credentialKind(value: string | undefined) {
+  if (!value) return "empty";
+  if (/^https?:\/\//i.test(value)) return "url";
+  if (/^eyJ[\w-]*\.[\w-]+\.[\w-]*$/.test(value)) return "jwt";
+  if (value.startsWith("mend_")) return "other_mend_key";
+  return "other";
+}
+
+/** Header names, the Authorization scheme and the token's kind and length (never values). */
 function keylessCallShape(request: Request) {
   const authorization = request.get("authorization")?.trim();
+  const parts = authorization?.split(/[\t ]+/) ?? [];
+  const token = cleanKey(parts.at(-1));
   return {
     headers: Object.keys(request.headers).filter(
       (name) => name !== "cookie" && name !== "authorization",
     ),
     authorizationScheme: authorization
-      ? authorization.split(/[\t ]+/).length > 1
-        ? authorization.split(/[\t ]+/)[0]
+      ? parts.length > 1
+        ? parts[0]
         : "(sem esquema)"
+      : null,
+    authorizationToken: authorization
+      ? { kind: credentialKind(token), length: token?.length ?? 0 }
       : null,
   };
 }
