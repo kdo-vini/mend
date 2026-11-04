@@ -9,6 +9,10 @@ import {
   readProviderMessageContent,
 } from "./message-content.ts";
 import {
+  normalizeConnectionState,
+  resolveQuotedProviderMessageId,
+} from "./quote.ts";
+import {
   applyProviderMessageEvent,
   buildMessageEventJob,
   extractProviderMessageEvents,
@@ -242,7 +246,6 @@ async function normalizeMessages(
         const key = asRecord(value.key);
         const providerContent = readProviderMessageContent(value);
         const message = providerContent.message;
-        const extended = asRecord(message.extendedTextMessage);
         const remoteJid =
           stringValue(key.remoteJid, value.remoteJid, value.chatId) ?? "";
         const phoneNumber = normalizePhoneNumber(remoteJid);
@@ -258,7 +261,6 @@ async function normalizeMessages(
             : timestamp;
         const parsedTimestamp =
           timestampMs === undefined ? undefined : new Date(timestampMs);
-        const quoted = asRecord(asRecord(extended.contextInfo).quotedMessage);
         const listResponse = asRecord(
           asRecord(message.listResponseMessage).singleSelectReply,
         );
@@ -270,9 +272,9 @@ async function normalizeMessages(
         const mediaUrl = publicProviderMediaUrl(
           ...providerContent.mediaUrlCandidates,
         );
-        const quotedProviderMessageId = stringValue(
-          asRecord(asRecord(quoted).key).id,
-          asRecord(asRecord(message.reactionMessage).key).id,
+        const quotedProviderMessageId = resolveQuotedProviderMessageId(
+          value,
+          message,
         );
         const contactName = stringValue(
           value.pushName,
@@ -362,10 +364,7 @@ async function markConnectionEvent(
     data.connection,
     payload.state,
   );
-  const state =
-    rawState && ["open", "closed", "connecting", "qr-code"].includes(rawState)
-      ? rawState
-      : undefined;
+  const state = normalizeConnectionState(rawState);
   const patch = {
     last_event_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
