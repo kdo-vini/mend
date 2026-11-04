@@ -321,7 +321,6 @@ function unwrapMessages(
   return [dataRecord].filter((value) => Object.keys(value).length > 0);
 }
 
-/** Converts the current Whatsmiau/Baileys webhook shapes into one DB-safe message shape. */
 /**
  * Production payloads carry quote info at `data.contextInfo` (no `key` inside
  * quotedMessage; the id is `stanzaId`). Keep in sync with
@@ -346,6 +345,7 @@ export function resolveQuotedProviderMessageId(
   );
 }
 
+/** Converts the current Whatsmiau/Baileys webhook shapes into one DB-safe message shape. */
 export function normalizeWhatsmiauEvent(
   input: unknown,
   fallbackInstanceName = "",
