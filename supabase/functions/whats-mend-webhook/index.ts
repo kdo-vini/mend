@@ -215,9 +215,9 @@ async function upsertProviderContacts(
   });
   if (rows.length === 0) return { processed: 0 };
 
-  const { error } = await client
-    .from("contacts")
-    .upsert(rows, { onConflict: "workspace_id,phone_number" });
+  const { error } = await client.from("contacts").upsert(rows, {
+    onConflict: "workspace_id,channel_connection_id,phone_number",
+  });
   if (error) throw new Error(`contact_sync_failed:${error.code ?? "database"}`);
   return { processed: rows.length };
 }

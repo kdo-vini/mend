@@ -223,13 +223,23 @@ function startConversation(
 }
 
 const existingThread = {
-  contacts: ({ workspaceId }: Workspaces, phoneNumber: string) => [
-    { id: contactId, workspace_id: workspaceId, phone_number: phoneNumber },
+  contacts: (
+    { workspaceId }: Workspaces,
+    phoneNumber: string,
+    threadChannelId = channelId,
+  ) => [
+    {
+      id: contactId,
+      workspace_id: workspaceId,
+      channel_connection_id: threadChannelId,
+      phone_number: phoneNumber,
+    },
   ],
-  conversations: ({ workspaceId }: Workspaces) => [
+  conversations: ({ workspaceId }: Workspaces, threadChannelId = channelId) => [
     {
       id: existingConversationId,
       workspace_id: workspaceId,
+      channel_connection_id: threadChannelId,
       contact_id: contactId,
     },
   ],
@@ -270,6 +280,25 @@ describe("POST /api/conversations", () => {
     });
     expect(provider.sendText).not.toHaveBeenCalled();
     expect(client.rpcCalls).toEqual([]);
+  });
+
+  it("starts a new thread when the phone only has a conversation on another channel", async () => {
+    const { app, provider, workspaceId } = createHarness({
+      contacts: (ids) =>
+        existingThread.contacts(ids, "5511988887777", disconnectedChannelId),
+      conversations: (ids) =>
+        existingThread.conversations(ids, disconnectedChannelId),
+    });
+
+    const response = await startConversation(app, workspaceId, {
+      channelId,
+      phoneNumber: "+55 (11) 98888-7777",
+      message: "Following up on your order",
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.created).toBe(true);
+    expect(provider.sendText).toHaveBeenCalledTimes(1);
   });
 
   it("matches a Brazilian contact stored without the ninth digit", async () => {

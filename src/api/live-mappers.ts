@@ -281,6 +281,7 @@ export function toUiConversation(
   return {
     id: record.id,
     contactId: record.contact_id,
+    channelId: record.channel_connection_id,
     chatType,
     name,
     company: contact?.company_name ?? "",
