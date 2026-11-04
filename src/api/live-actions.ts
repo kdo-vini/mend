@@ -479,6 +479,31 @@ export async function loadLiveWorkspace(
   };
 }
 
+/**
+ * Conversations touched since `sinceIso` (or the latest ones when null), for
+ * the live safety net. Ingest stamps `updated_at` on every new message.
+ */
+export async function listRecentlyUpdatedConversations(
+  client: MendSupabaseClient | null,
+  workspaceId: string,
+  sinceIso: string | null,
+): Promise<{ id: string; updatedAt: string }[]> {
+  const db = requireClient(client);
+  let query = db
+    .from("conversations")
+    .select("id, updated_at")
+    .eq("workspace_id", workspaceId);
+  if (sinceIso) query = query.gt("updated_at", sinceIso);
+  const { data, error } = await query
+    .order("updated_at", { ascending: false })
+    .limit(50);
+  if (error) throw new LiveActionError(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    updatedAt: row.updated_at,
+  }));
+}
+
 let snapshotRequestSequence = 0;
 
 /** Load only the conversation affected by a realtime event. */

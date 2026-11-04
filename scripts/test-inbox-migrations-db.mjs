@@ -51,6 +51,24 @@ await db.exec(`
   alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
   alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
   create publication supabase_realtime;
+  -- Minimal Realtime stub: realtime.send records what a trigger broadcast and
+  -- realtime.topic() reads the topic a test pretends to join.
+  create schema realtime;
+  grant usage on schema realtime to anon, authenticated, service_role;
+  create table realtime.messages(
+    id bigserial primary key, topic text, extension text, event text,
+    payload jsonb, private boolean
+  );
+  alter table realtime.messages enable row level security;
+  grant select on realtime.messages to authenticated;
+  create function realtime.topic() returns text language sql stable as $$
+    select nullif(current_setting('realtime.topic', true), '')
+  $$;
+  create function realtime.send(payload jsonb, event text, topic text, private boolean default true)
+    returns void language sql as $$
+    insert into realtime.messages(topic, extension, event, payload, private)
+    values (topic, 'broadcast', event, payload, private)
+  $$;
   create domain extensions.vector as real[];
   create function extensions.vec_cos(a real[], b real[]) returns float8
     language sql as $$ select 0::float8 $$;
@@ -511,5 +529,77 @@ await rejects(
   /workspace_requires_owner/,
   "owner is last again",
 );
+
+// ---- fast read policies + private workspace broadcast ------------------------
+await asSuper();
+const outsider = "aaaaaaa6-0000-4000-8000-000000000006";
+await db.query("insert into auth.users(id,email) values ($1,'out@x')", [
+  outsider,
+]);
+await db.exec("delete from realtime.messages");
+await asRole("service_role");
+r = await ingest("5511900000099", "2026-10-02T10:00:00Z");
+await asSuper();
+const broadcasts = await q(
+  "select topic, event, private, payload from realtime.messages where payload->>'table' = 'messages'",
+);
+assert.ok(broadcasts.length >= 1, "message insert broadcasts");
+assert.equal(broadcasts[0].topic, `workspace:${W}`);
+assert.equal(broadcasts[0].event, "change");
+assert.equal(broadcasts[0].private, true);
+assert.equal(broadcasts[0].payload.op, "INSERT");
+assert.equal(broadcasts[0].payload.record.conversation_id, r.conversation_id);
+assert.equal(
+  broadcasts[0].payload.record.text,
+  undefined,
+  "broadcast never carries message text",
+);
+const visibleTo = async (user, sql) => {
+  await asRole("authenticated", user);
+  const rows = await q(sql);
+  await asSuper();
+  return rows;
+};
+const messageCount = "select count(*)::int as n from public.messages";
+assert.ok((await visibleTo(viewer, messageCount))[0].n > 0, "viewer reads");
+assert.ok((await visibleTo(agentUser, messageCount))[0].n > 0, "agent reads");
+assert.equal(
+  (await visibleTo(outsider, messageCount))[0].n,
+  0,
+  "non-member reads nothing",
+);
+assert.equal(
+  (
+    await visibleTo(
+      outsider,
+      "select count(*)::int as n from public.conversations",
+    )
+  )[0].n,
+  0,
+  "non-member sees no conversations",
+);
+const joinAs = async (user, topic) => {
+  await db.query("select set_config('realtime.topic', $1, false)", [topic]);
+  const rows = await visibleTo(
+    user,
+    "select count(*)::int as n from realtime.messages",
+  );
+  await db.query("select set_config('realtime.topic', '', false)");
+  return rows[0].n;
+};
+assert.ok((await joinAs(viewer, `workspace:${W}`)) > 0, "member joins topic");
+assert.equal(await joinAs(outsider, `workspace:${W}`), 0, "outsider denied");
+assert.equal(
+  await joinAs(viewer, "workspace:00000000-0000-4000-8000-000000000000"),
+  0,
+  "member denied on another workspace topic",
+);
+const published = (
+  await q(
+    "select tablename from pg_publication_tables where pubname='supabase_realtime'",
+  )
+).map((row) => row.tablename);
+assert.ok(!published.includes("channel_connections"));
+assert.ok(!published.includes("webhook_events"));
 
 console.log("inbox/job-lane/security migration DB tests passed");

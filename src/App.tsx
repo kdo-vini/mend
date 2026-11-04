@@ -28,6 +28,7 @@ import {
   type WorkspaceNotification,
 } from "./api/notifications";
 import {
+  createConversationWatch,
   createLiveCatchUp,
   createRealtimeFallback,
   hasActiveRuns,
@@ -41,6 +42,7 @@ import {
   isDemoModeRequested,
   isLiveConfigured,
   listLiveChannels,
+  listRecentlyUpdatedConversations,
   loadLiveConversationSnapshot,
   loadLiveWorkspace,
   mendApiBaseUrl,
@@ -503,28 +505,38 @@ function App() {
       reconcileQueue = reconcileQueue
         .then(async () => {
           if (!active) return;
-          if (batch.workspace) await hydrate(false);
           const workspaceId = liveWorkspaceId;
-          if (!active || !workspaceId) return;
+          // The thread first: a new message must not wait for the full
+          // workspace reload that the AI's side effects (timeline, issues)
+          // trigger in the same window.
+          if (workspaceId) {
+            const contactConversationIds = conversationsRef.current
+              .filter(
+                (conversation) =>
+                  conversation.contactId &&
+                  batch.contactIds.includes(conversation.contactId),
+              )
+              .map((conversation) => conversation.id);
+            await Promise.all(
+              [
+                ...new Set([
+                  ...batch.conversationIds,
+                  ...contactConversationIds,
+                ]),
+              ].map((id) => refreshConversation(workspaceId, id)),
+            );
+          }
+          if (!active) return;
+          if (batch.workspace) await hydrate(false);
+          const hydratedWorkspaceId = liveWorkspaceId;
+          if (!active || !hydratedWorkspaceId) return;
           if (batch.notifications) {
             const nextNotifications = await listWorkspaceNotifications(
               client,
-              workspaceId,
+              hydratedWorkspaceId,
             );
             if (active) setNotifications(nextNotifications);
           }
-          const contactConversationIds = conversationsRef.current
-            .filter(
-              (conversation) =>
-                conversation.contactId &&
-                batch.contactIds.includes(conversation.contactId),
-            )
-            .map((conversation) => conversation.id);
-          await Promise.all(
-            [
-              ...new Set([...batch.conversationIds, ...contactConversationIds]),
-            ].map((id) => refreshConversation(workspaceId, id)),
-          );
         })
         .catch((error) => {
           if (active)
@@ -597,16 +609,16 @@ function App() {
         if (!workspaceSubscribed) {
           workspaceSubscribed = true;
           liveCatchUp.start();
+          conversationWatch.start();
           unsubscribe = subscribeToWorkspace(
             client,
             workspace.id,
-            (payload) => {
+            (change) => {
               if (!active) return;
               refreshBatcher.add(
                 workspaceRefreshTarget({
-                  table: String(payload.table ?? ""),
-                  new: payload.new as Record<string, unknown>,
-                  old: payload.old as Record<string, unknown>,
+                  table: change.table,
+                  new: change.record,
                 }),
               );
             },
@@ -665,6 +677,20 @@ function App() {
       },
       { isRealtimeHealthy: () => realtimeHealthy },
     );
+    // Runs even while the channel looks healthy: a channel can stay
+    // "SUBSCRIBED" and still stop delivering.
+    const conversationWatch = createConversationWatch(
+      async (since) => {
+        const workspaceId = liveWorkspaceId;
+        if (!workspaceId) throw new Error("workspace_not_loaded");
+        return listRecentlyUpdatedConversations(client, workspaceId, since);
+      },
+      (conversationIds) => {
+        if (!active) return;
+        for (const id of conversationIds)
+          refreshBatcher.add({ kind: "conversation", id });
+      },
+    );
     runStatusTimer = setInterval(() => {
       if (
         !active ||
@@ -681,6 +707,7 @@ function App() {
       unsubscribe();
       realtimeFallback.stop();
       liveCatchUp.stop();
+      conversationWatch.stop();
       if (runStatusTimer) clearInterval(runStatusTimer);
       refreshBatcher.stop();
     };
