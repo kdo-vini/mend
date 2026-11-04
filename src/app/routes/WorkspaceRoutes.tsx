@@ -11,6 +11,8 @@ export interface WorkspaceRouteElements {
   dashboard?: ReactNode;
   finance?: ReactNode;
   projects?: ReactNode;
+  clients?: ReactNode;
+  clientDetail?: ReactNode;
   diary?: ReactNode;
   inbox: ReactNode;
   issuesList: ReactNode;
@@ -52,6 +54,11 @@ export function WorkspaceRoutes(elements: WorkspaceRouteElements) {
       <Route
         path="/projects"
         element={elements.projects ?? elements.fallback}
+      />
+      <Route path="/clientes" element={elements.clients ?? elements.fallback} />
+      <Route
+        path="/clientes/:id"
+        element={elements.clientDetail ?? elements.fallback}
       />
       <Route path="/diario" element={elements.diary ?? elements.fallback} />
       <Route

@@ -125,6 +125,16 @@ const FeatureDiaryPage = lazy(() =>
     default: DiaryPage,
   })),
 );
+const FeatureClientsPage = lazy(() =>
+  import("./features/clients/ClientsPage").then(({ ClientsPage }) => ({
+    default: ClientsPage,
+  })),
+);
+const FeatureClientPage = lazy(() =>
+  import("./features/clients/ClientPage").then(({ ClientPage }) => ({
+    default: ClientPage,
+  })),
+);
 const FeatureProjectsPage = lazy(() =>
   import("./features/projects/ProjectsPage").then(({ ProjectsPage }) => ({
     default: ProjectsPage,
@@ -1237,6 +1247,16 @@ function App() {
               projects={
                 <FeatureBoundary label={t("navigation.projects")}>
                   <FeatureProjectsPage />
+                </FeatureBoundary>
+              }
+              clients={
+                <FeatureBoundary label={t("navigation.clients")}>
+                  <FeatureClientsPage />
+                </FeatureBoundary>
+              }
+              clientDetail={
+                <FeatureBoundary label={t("navigation.clients")}>
+                  <FeatureClientPage />
                 </FeatureBoundary>
               }
               diary={

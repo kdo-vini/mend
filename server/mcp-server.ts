@@ -14,6 +14,13 @@ import {
 } from "./agent-keys.js";
 import { parseBearerToken } from "./auth.js";
 import {
+  clientProducts,
+  clientStages,
+  emptyToNull,
+  type ClientAgentStore,
+  type ClientWriteFields,
+} from "./clients.js";
+import {
   InternalWorkspaceError,
   resolveInternalWorkspace,
   type InternalWorkspacePort,
@@ -59,6 +66,7 @@ export interface McpServerDependencies {
   knowledge: Pick<KnowledgeService, "list"> | null;
   issues: Pick<IssueService, "list" | "get" | "create" | "addComment"> | null;
   workLog: WorkLogIngestStore | null;
+  clients: ClientAgentStore | null;
   logger?: Pick<Logger, "error">;
   now?: () => Date;
 }
@@ -123,6 +131,52 @@ const supportReplyShape = supportSendBodySchema.omit({
   workspaceId: true,
 }).shape;
 const workLogShape = workLogIngestBody.shape;
+
+const clientName = z.string().trim().min(1).max(200);
+const clientInputFields = {
+  contato: z.string().trim().max(200).optional(),
+  email: z.string().trim().max(320).optional(),
+  telefone: z.string().trim().max(40).optional(),
+  site: z.string().trim().max(500).optional(),
+  estagio: z.enum(clientStages).optional(),
+  produtos: z
+    .array(z.enum(clientProducts))
+    .max(clientProducts.length)
+    .optional()
+    .describe("site, sistema e/ou integracao"),
+  notas: z.string().trim().max(2000).optional(),
+  corpo: z.string().max(100_000).optional().describe("Página em markdown"),
+  area: z.string().trim().max(120).optional(),
+  especialidade: z.string().trim().max(200).optional(),
+};
+
+/** pt-BR tool arguments to the column names; empty text clears the field. */
+function clientFieldsFrom(
+  input: Partial<{
+    [K in keyof typeof clientInputFields]: z.infer<
+      (typeof clientInputFields)[K]
+    >;
+  }>,
+): ClientWriteFields {
+  const fields: ClientWriteFields = {};
+  const set = <K extends keyof ClientWriteFields>(
+    key: K,
+    value: ClientWriteFields[K] | undefined,
+  ) => {
+    if (value !== undefined) fields[key] = value;
+  };
+  set("contact", emptyToNull(input.contato));
+  set("email", emptyToNull(input.email));
+  set("phone", emptyToNull(input.telefone));
+  set("site", emptyToNull(input.site));
+  set("stage", input.estagio);
+  set("products", input.produtos ? [...new Set(input.produtos)] : undefined);
+  set("notes", emptyToNull(input.notas));
+  set("body", input.corpo);
+  set("area", emptyToNull(input.area));
+  set("specialty", emptyToNull(input.especialidade));
+  return fields;
+}
 
 /** Every tool Mend exposes; the key's scopes filter this list per request. */
 export const mcpTools: ToolDefinition[] = [
@@ -537,6 +591,180 @@ export const mcpTools: ToolDefinition[] = [
             });
           } catch (error) {
             return unavailable(error, deps, "diario_registrar");
+          }
+        },
+      );
+    },
+  },
+  {
+    scope: "clientes:ler",
+    register(server, principal, deps) {
+      server.registerTool(
+        "clientes_listar",
+        {
+          title: "Listar clientes",
+          description:
+            "Lista os clientes da Diagium (não arquivados), do mais recente para o mais antigo, sem o texto da página. Filtre por estágio (lead, proposta, ativo ou churn), por área ou por busca no nome, contato, telefone ou e-mail.",
+          inputSchema: {
+            estagio: z.enum(clientStages).optional(),
+            area: z.string().trim().min(1).max(120).optional(),
+            busca: z.string().trim().min(1).max(240).optional(),
+            limite: z.number().int().min(1).max(200).optional(),
+          },
+          annotations: { readOnlyHint: true, openWorldHint: false },
+        },
+        async ({ estagio, area, busca, limite }) => {
+          if (!deps.clients) return refusal("clients_unavailable");
+          try {
+            return result(
+              await deps.clients.list(await workspaceFor(deps, principal), {
+                ...(estagio ? { stage: estagio } : {}),
+                ...(area ? { area } : {}),
+                ...(busca ? { search: busca } : {}),
+                limit: limite ?? 50,
+              }),
+            );
+          } catch (error) {
+            return unavailable(error, deps, "clientes_listar");
+          }
+        },
+      );
+      server.registerTool(
+        "clientes_ver",
+        {
+          title: "Ver cliente",
+          description:
+            "Mostra um cliente pelo id: propriedades, o texto da página (markdown), as 50 últimas entradas da linha do tempo (notas, reuniões, diagnósticos e mudanças de estágio) e os chamados ligados.",
+          inputSchema: { id: z.string().uuid() },
+          annotations: { readOnlyHint: true, openWorldHint: false },
+        },
+        async ({ id }) => {
+          if (!deps.clients) return refusal("clients_unavailable");
+          try {
+            const view = await deps.clients.get(
+              await workspaceFor(deps, principal),
+              id,
+            );
+            return view
+              ? result({
+                  ...view.client,
+                  entries: view.entries,
+                  issues: view.issues,
+                })
+              : refusal("client_not_found", 404);
+          } catch (error) {
+            return unavailable(error, deps, "clientes_ver");
+          }
+        },
+      );
+    },
+  },
+  {
+    scope: "clientes:escrever",
+    register(server, principal, deps) {
+      const author = { id: principal.createdBy, name: principal.label };
+      server.registerTool(
+        "clientes_criar",
+        {
+          title: "Criar cliente",
+          description:
+            "Cria um cliente na Diagium (origem: agente) e registra na linha do tempo quem criou. Use clientes_listar antes para não duplicar. Estágio padrão: lead.",
+          inputSchema: { nome: clientName, ...clientInputFields },
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false,
+          },
+        },
+        async ({ nome, ...fields }) => {
+          if (!deps.clients) return refusal("clients_unavailable");
+          try {
+            return result(
+              await deps.clients.create(
+                await workspaceFor(deps, principal),
+                { name: nome, ...clientFieldsFrom(fields) },
+                author,
+              ),
+            );
+          } catch (error) {
+            return unavailable(error, deps, "clientes_criar");
+          }
+        },
+      );
+      server.registerTool(
+        "clientes_atualizar",
+        {
+          title: "Atualizar cliente",
+          description:
+            "Muda propriedades, estágio ou o texto da página de um cliente. Só os campos enviados mudam; texto vazio limpa o campo. Mudar o estágio registra a mudança na linha do tempo com o nome deste agente. corpo substitui a página inteira: leia com clientes_ver antes.",
+          inputSchema: {
+            id: z.string().uuid(),
+            nome: clientName.optional(),
+            ...clientInputFields,
+          },
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+          },
+        },
+        async ({ id, nome, ...fields }) => {
+          if (!deps.clients) return refusal("clients_unavailable");
+          const changes: ClientWriteFields = {
+            ...(nome ? { name: nome } : {}),
+            ...clientFieldsFrom(fields),
+          };
+          if (Object.keys(changes).length === 0)
+            return refusal("nothing_to_update", 400);
+          try {
+            const client = await deps.clients.update(
+              await workspaceFor(deps, principal),
+              id,
+              changes,
+              author,
+            );
+            return client ? result(client) : refusal("client_not_found", 404);
+          } catch (error) {
+            return unavailable(error, deps, "clientes_atualizar");
+          }
+        },
+      );
+      server.registerTool(
+        "clientes_anotar",
+        {
+          title: "Anotar na linha do tempo do cliente",
+          description:
+            "Acrescenta uma nota ou o resumo de uma reunião na linha do tempo permanente do cliente. A entrada mostra o nome deste agente.",
+          inputSchema: {
+            id: z.string().uuid(),
+            tipo: z.enum(["nota", "reuniao"]),
+            titulo: z.string().trim().min(1).max(200).optional(),
+            texto: z.string().trim().min(1).max(100_000),
+          },
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false,
+          },
+        },
+        async ({ id, tipo, titulo, texto }) => {
+          if (!deps.clients) return refusal("clients_unavailable");
+          try {
+            const entry = await deps.clients.addEntry({
+              workspaceId: await workspaceFor(deps, principal),
+              clientId: id,
+              kind: tipo,
+              title: titulo ?? null,
+              body: texto,
+              authorId: author.id,
+              authorName: author.name,
+            });
+            return entry ? result(entry) : refusal("client_not_found", 404);
+          } catch (error) {
+            return unavailable(error, deps, "clientes_anotar");
           }
         },
       );

@@ -28,11 +28,11 @@ test("advanced filters stay behind one explicit control", async ({ page }) => {
   await expect(advanced).toBeVisible();
   await expect(page.getByLabel("Prioridade")).toBeVisible();
   await expect(page.getByLabel("Etiquetas")).toBeVisible();
-  await expect(page.getByLabel("Cliente")).toBeVisible();
+  await expect(page.getByLabel("Cliente", { exact: true })).toBeVisible();
 
   await page.getByLabel("Prioridade").click();
   await page.getByRole("option", { name: "Urgente", exact: true }).click();
-  await page.getByLabel("Cliente").click();
+  await page.getByLabel("Cliente", { exact: true }).click();
   await page
     .getByRole("option", { name: "Cliente Exemplo", exact: true })
     .click();
@@ -43,7 +43,9 @@ test("advanced filters stay behind one explicit control", async ({ page }) => {
   await page.getByRole("button", { name: "Limpar filtros" }).click();
   await expect(moreFilters.locator(".filter-count")).toHaveCount(0);
   await expect(page.getByLabel("Prioridade")).toContainText("Todos");
-  await expect(page.getByLabel("Cliente")).toContainText("Todos os clientes");
+  await expect(page.getByLabel("Cliente", { exact: true })).toContainText(
+    "Todos os clientes",
+  );
   await expect(page.locator(".issues-desktop-table tbody tr")).toHaveCount(6);
 });
 

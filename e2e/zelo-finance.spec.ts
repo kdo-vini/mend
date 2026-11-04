@@ -242,6 +242,8 @@ test("revoked access removes the displayed provider feed and cached figures", as
 test("switching month preserves the old labeled snapshot until its response arrives", async ({
   page,
 }) => {
+  // The page opens on the current month; this scenario starts in October 2026.
+  await page.clock.setFixedTime(new Date("2026-10-15T12:00:00-03:00"));
   const state = await setup(page);
   await selectZelo(page);
   await expect(page.getByText("bill_pix", { exact: true })).toBeVisible();

@@ -17,6 +17,7 @@ import type { KnowledgeService } from "./knowledge-service.js";
 import type { SupportConversationPort } from "./support-conversation.js";
 import type { SupportEventStore } from "./support-events.js";
 import type { SupportSendPort } from "./support-send.js";
+import type { ClientAgentStore } from "./clients.js";
 import type { WorkLogIngestStore } from "./work-log.js";
 
 const KEY = `mend_agent_${"a".repeat(43)}`;
@@ -79,6 +80,25 @@ function fakeWorkLog(): WorkLogIngestStore {
     touchToken: vi.fn(),
     purgeExpired: vi.fn(async () => undefined),
   };
+}
+
+const CLIENT = "44444444-4444-4444-8444-444444444444";
+
+function fakeClients(): ClientAgentStore {
+  const client = { id: CLIENT, name: "Clínica Helena", stage: "lead" };
+  return {
+    list: vi.fn(async () => [client]),
+    get: vi.fn(async (_workspace, id) =>
+      id === CLIENT ? { client, entries: [{ id: "e1" }], issues: [] } : null,
+    ),
+    create: vi.fn(async (_workspace, input) => ({ ...client, ...input })),
+    update: vi.fn(async (_workspace, id, fields) =>
+      id === CLIENT ? { ...client, ...fields } : null,
+    ),
+    addEntry: vi.fn(async (input) =>
+      input.clientId === CLIENT ? { id: "entry-1", kind: input.kind } : null,
+    ),
+  } as unknown as ClientAgentStore;
 }
 
 function fakeConversations(): SupportConversationPort {
@@ -145,6 +165,8 @@ const ALL_SCOPES: AgentScope[] = [
   "chamados:ler",
   "chamados:escrever",
   "diario:escrever",
+  "clientes:ler",
+  "clientes:escrever",
 ];
 
 function buildApp(overrides: Partial<McpServerDependencies> = {}) {
@@ -157,6 +179,7 @@ function buildApp(overrides: Partial<McpServerDependencies> = {}) {
     knowledge: fakeKnowledge(),
     issues: fakeIssues(),
     workLog: fakeWorkLog(),
+    clients: fakeClients(),
     now: () => new Date("2026-11-04T12:00:00.000Z"),
     ...overrides,
   };
@@ -416,6 +439,11 @@ describe("support, knowledge and issue tools", () => {
       "chamados_criar",
       "chamados_listar",
       "chamados_ver",
+      "clientes_anotar",
+      "clientes_atualizar",
+      "clientes_criar",
+      "clientes_listar",
+      "clientes_ver",
       "conhecimento_buscar",
       "diario_registrar",
       "suporte_enviar_resposta",
@@ -527,6 +555,199 @@ describe("support, knowledge and issue tools", () => {
     ).toEqual({
       isError: true,
       data: { error: "issue_not_found", status: 404 },
+    });
+  });
+});
+
+describe("client tools", () => {
+  const call = (
+    app: express.Express,
+    name: string,
+    args: Record<string, unknown>,
+  ) => rpc(app, "tools/call", { name, arguments: args });
+  const toolNames = async (app: express.Express) =>
+    (
+      (await rpc(app, "tools/list")).body.result.tools as { name: string }[]
+    ).map((tool) => tool.name);
+  const MISSING = "55555555-5555-4555-8555-555555555555";
+
+  it("shows reading and writing tools only with their own scope", async () => {
+    expect(
+      await toolNames(buildApp({ keys: fakeKeys(["clientes:ler"]) }).app),
+    ).toEqual(["clientes_listar", "clientes_ver"]);
+    expect(
+      await toolNames(buildApp({ keys: fakeKeys(["clientes:escrever"]) }).app),
+    ).toEqual(["clientes_criar", "clientes_atualizar", "clientes_anotar"]);
+    expect(
+      await toolNames(buildApp({ keys: fakeKeys(["chamados:ler"]) }).app),
+    ).not.toContain("clientes_listar");
+  });
+
+  it("refuses calls outside the key scopes", async () => {
+    const clients = fakeClients();
+    const readOnly = buildApp({ keys: fakeKeys(["clientes:ler"]), clients });
+    for (const [name, args] of [
+      ["clientes_criar", { nome: "X" }],
+      ["clientes_atualizar", { id: CLIENT, estagio: "ativo" }],
+      ["clientes_anotar", { id: CLIENT, tipo: "nota", texto: "oi" }],
+    ] as const) {
+      const response = await call(readOnly.app, name, args);
+      expect(response.body.error ?? response.body.result.isError).toBeTruthy();
+    }
+    const writeOnly = buildApp({
+      keys: fakeKeys(["clientes:escrever"]),
+      clients,
+    });
+    const listed = await call(writeOnly.app, "clientes_listar", {});
+    expect(listed.body.error ?? listed.body.result.isError).toBeTruthy();
+    expect(clients.create).not.toHaveBeenCalled();
+    expect(clients.update).not.toHaveBeenCalled();
+    expect(clients.addEntry).not.toHaveBeenCalled();
+    expect(clients.list).not.toHaveBeenCalled();
+  });
+
+  it("lists clients of the internal workspace with the filters", async () => {
+    const clients = fakeClients();
+    const { app } = buildApp({ keys: fakeKeys(["clientes:ler"]), clients });
+    const payload = toolPayload(
+      await call(app, "clientes_listar", {
+        estagio: "lead",
+        area: "Odontologia",
+        busca: "helena",
+        limite: 20,
+      }),
+    );
+    expect(payload.isError).toBe(false);
+    expect(clients.list).toHaveBeenCalledWith(WORKSPACE, {
+      stage: "lead",
+      area: "Odontologia",
+      search: "helena",
+      limit: 20,
+    });
+    await call(app, "clientes_listar", {});
+    expect(clients.list).toHaveBeenLastCalledWith(WORKSPACE, { limit: 50 });
+    expect(
+      (await call(app, "clientes_listar", { limite: 500 })).body.result.isError,
+    ).toBe(true);
+  });
+
+  it("shows one client with timeline and issues, or not found", async () => {
+    const { app } = buildApp({ keys: fakeKeys(["clientes:ler"]) });
+    expect(
+      toolPayload(await call(app, "clientes_ver", { id: CLIENT })).data,
+    ).toMatchObject({ id: CLIENT, entries: [{ id: "e1" }], issues: [] });
+    expect(
+      toolPayload(await call(app, "clientes_ver", { id: MISSING })),
+    ).toEqual({
+      isError: true,
+      data: { error: "client_not_found", status: 404 },
+    });
+  });
+
+  it("creates a client as the agent, mapping pt-BR names to columns", async () => {
+    const clients = fakeClients();
+    const { app } = buildApp({
+      keys: fakeKeys(["clientes:escrever"]),
+      clients,
+    });
+    const payload = toolPayload(
+      await call(app, "clientes_criar", {
+        nome: "Clínica Nova",
+        contato: "Ana",
+        telefone: "11999990000",
+        email: "",
+        estagio: "proposta",
+        produtos: ["site", "site", "sistema"],
+        corpo: "## Resumo",
+        especialidade: "Ortodontia",
+      }),
+    );
+    expect(payload.isError).toBe(false);
+    expect(clients.create).toHaveBeenCalledWith(
+      WORKSPACE,
+      {
+        name: "Clínica Nova",
+        contact: "Ana",
+        phone: "11999990000",
+        email: null,
+        stage: "proposta",
+        products: ["site", "sistema"],
+        body: "## Resumo",
+        specialty: "Ortodontia",
+      },
+      { id: CREATOR, name: "Rafa" },
+    );
+  });
+
+  it("updates only the fields sent and refuses an empty update", async () => {
+    const clients = fakeClients();
+    const { app } = buildApp({
+      keys: fakeKeys(["clientes:escrever"]),
+      clients,
+    });
+    await call(app, "clientes_atualizar", {
+      id: CLIENT,
+      estagio: "ativo",
+      notas: "",
+    });
+    expect(clients.update).toHaveBeenCalledWith(
+      WORKSPACE,
+      CLIENT,
+      { stage: "ativo", notes: null },
+      { id: CREATOR, name: "Rafa" },
+    );
+    expect(
+      toolPayload(await call(app, "clientes_atualizar", { id: CLIENT })),
+    ).toEqual({
+      isError: true,
+      data: { error: "nothing_to_update", status: 400 },
+    });
+    expect(
+      toolPayload(
+        await call(app, "clientes_atualizar", { id: MISSING, nome: "X" }),
+      ).data,
+    ).toEqual({ error: "client_not_found", status: 404 });
+  });
+
+  it("appends notes and meetings signed with the agent name", async () => {
+    const clients = fakeClients();
+    const { app } = buildApp({
+      keys: fakeKeys(["clientes:escrever"]),
+      clients,
+    });
+    await call(app, "clientes_anotar", {
+      id: CLIENT,
+      tipo: "reuniao",
+      titulo: "Kickoff",
+      texto: "Definimos o escopo.",
+    });
+    expect(clients.addEntry).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE,
+      clientId: CLIENT,
+      kind: "reuniao",
+      title: "Kickoff",
+      body: "Definimos o escopo.",
+      authorId: CREATOR,
+      authorName: "Rafa",
+    });
+    expect(
+      (
+        await call(app, "clientes_anotar", {
+          id: CLIENT,
+          tipo: "estagio",
+          texto: "x",
+        })
+      ).body.result.isError,
+    ).toBe(true);
+  });
+
+  it("reports the store as unavailable when it is not configured", async () => {
+    const { app } = buildApp({
+      keys: fakeKeys(["clientes:ler"]),
+      clients: null,
+    });
+    expect(toolPayload(await call(app, "clientes_listar", {})).data).toEqual({
+      error: "clients_unavailable",
     });
   });
 });

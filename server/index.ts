@@ -26,6 +26,12 @@ import {
   registerWorkLogIngestRoute,
   SupabaseWorkLogIngestStore,
 } from "./work-log.js";
+import {
+  mountClientIngestBodyLimit,
+  registerClientIngestRoute,
+  SupabaseClientIngestStore,
+} from "./clients-ingest.js";
+import { SupabaseClientAgentStore } from "./clients.js";
 import type { AuthAdapter } from "./contracts/api-ports.js";
 import {
   createSupabaseApiAdapters,
@@ -123,6 +129,8 @@ app.use(
 // The live attachment path accepts bounded base64 data URLs (validated again
 // by the API/media normalizer). Keep the parser limit just above the 12 MiB
 // data-url contract so oversized requests are rejected before route work.
+// The Diagnóstico de marca ingestion route parses its own 256 KB body first.
+mountClientIngestBodyLimit(app);
 app.use(express.json({ limit: "13mb" }));
 // Whatsmiau reaches this API through a TLS reverse proxy/tunnel in local
 // development and through a load balancer in production. Trust one proxy so
@@ -238,6 +246,14 @@ const internalWorkspacePort = {
   resolve: () =>
     internalWorkspace ? internalWorkspace.resolve() : Promise.resolve(null),
 };
+registerClientIngestRoute(app, {
+  store: workerSupabase ? new SupabaseClientIngestStore(workerSupabase) : null,
+  token: process.env.MEND_CLIENT_INGEST_TOKEN,
+  internalWorkspace: internalWorkspacePort,
+  appBaseUrl:
+    process.env.APP_BASE_URL?.trim() || process.env.PUBLIC_APP_URL?.trim(),
+  logger,
+});
 const supportSendPort = workerSupabase
   ? SupabaseSupportSendPort.from(
       workerSupabase,
@@ -277,6 +293,7 @@ registerMcpServerRoute(app, {
   workLog: workerSupabase
     ? new SupabaseWorkLogIngestStore(workerSupabase)
     : null,
+  clients: workerSupabase ? new SupabaseClientAgentStore(workerSupabase) : null,
   logger,
 });
 

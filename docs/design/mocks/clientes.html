@@ -1,0 +1,1367 @@
+<!doctype html>
+<!--
+  Mock — Clientes (Céu e Profundo). Proposta antes da implementação.
+  Abre direto no navegador; os tokens estão copiados de src/styles/tokens.css
+  para o arquivo funcionar sozinho (na implementação vêm do tokens.css real).
+
+  Contrato que este mock propõe:
+  1. /clientes: header (título + "Novo cliente", primário por último) → barra
+     de vidro (busca · estágio · área · origem) → funil em Profundo (o único
+     bloco escuro: quantos leads esperam proposta) → tabela densa.
+  2. /clientes/:id: header com nome e estágio → propriedades no topo em grade
+     (como um Notion) → corpo em seções que abrem e fecham (Disclosure, a
+     primeira aberta) → coluna lateral com linha do tempo e chamados ligados.
+     Na página do cliente não há Profundo: o estágio é a informação-chave e
+     fica no seletor do header.
+  3. Mobile (<= 650px): tabela vira lista de linhas; a coluna lateral desce
+     para baixo do corpo.
+-->
+<html lang="pt-BR" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mend · Clientes — mock</title>
+    <style>
+      :root,
+      [data-theme="light"] {
+        --canvas: #edf2f7;
+        --canvas-glow: #c5ddf5;
+        --canvas-glow-2: #deddf2;
+        --glass: #ffffffa8;
+        --glass-line: #fffffff0;
+        --surface: #ffffff;
+        --surface-subtle: #f3f7fc;
+        --surface-hover: #eaf1fa;
+        --surface-selected: #d9e6f6;
+        --line: #dce4ed;
+        --line-strong: #b6c8dd;
+        --line-control: #7a8ea6;
+        --text: #182d44;
+        --text-secondary: #304a65;
+        --text-muted: #52677e;
+        --action: #2468d8;
+        --action-strong: #235bb1;
+        --action-wash: #2468e815;
+        --positive: oklch(0.48 0.13 150);
+        --caution: oklch(0.55 0.14 75);
+        --negative: oklch(0.55 0.18 25);
+        --shadow-float: 0 8px 28px #2444660c;
+      }
+      [data-theme="dark"] {
+        --canvas: #101b2a;
+        --canvas-glow: #284969;
+        --canvas-glow-2: #302b50;
+        --glass: #263b53b8;
+        --glass-line: #ffffff24;
+        --surface: #1b2b40;
+        --surface-subtle: #1b2b40;
+        --surface-hover: #263b54;
+        --surface-selected: #314a69;
+        --line: #ffffff18;
+        --line-strong: #526780;
+        --line-control: #7489a3;
+        --text: #e1eaf7;
+        --text-secondary: #cddbee;
+        --text-muted: #b2c3d9;
+        --action: #75a7ff;
+        --action-strong: #a6c7ff;
+        --action-wash: #528aec26;
+        --positive: oklch(0.74 0.14 150);
+        --caution: oklch(0.78 0.15 86);
+        --negative: oklch(0.69 0.18 25);
+        --shadow-float: 0 8px 28px #07132122;
+      }
+      :root {
+        --brand: #2e7dff;
+        --action-fill: #235fcf;
+        --action-fill-highlight: #347af0;
+        --on-action: #fff;
+        --deep-shade: #112e51;
+        --deep-tint: #193e6a;
+        --deep-glow: #376ba5;
+        --on-deep: #fff;
+        --on-deep-muted: #c8daee;
+        --on-deep-caution: #ffe0a3;
+        --deep-gradient:
+          radial-gradient(ellipse at 95% 0, var(--deep-glow), transparent 62%),
+          linear-gradient(115deg, var(--deep-shade), var(--deep-tint));
+        --canvas-gradient:
+          radial-gradient(
+            ellipse at 8% 15%,
+            var(--canvas-glow),
+            transparent 45%
+          ),
+          radial-gradient(
+            ellipse at 95% 5%,
+            var(--canvas-glow-2),
+            transparent 40%
+          ),
+          var(--canvas);
+        --font-product: Inter, ui-sans-serif, system-ui, sans-serif;
+        --font-display: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+        --radius-control: 10px;
+        --radius-nav: 12px;
+        --radius-card: 16px;
+        --radius-feature: 22px;
+        --radius-shell: 24px;
+        --page-padding-block: 29px;
+        --page-padding-inline: 34px;
+        --focus-ring: 2px solid var(--action);
+        --ease-spring: cubic-bezier(0.2, 1.45, 0.35, 1);
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        font: 13px/1.45 var(--font-product);
+        color: var(--text);
+        background: var(--canvas-gradient);
+        background-attachment: fixed;
+        min-height: 100vh;
+      }
+      button,
+      select,
+      input,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+      :focus-visible {
+        outline: var(--focus-ring);
+        outline-offset: 2px;
+      }
+
+      /* Mock switcher (não faz parte da UI) */
+      .mockbar {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 50;
+        display: flex;
+        gap: 6px;
+        padding: 6px;
+        border-radius: 14px;
+        background: #0b1626e6;
+        color: #fff;
+        font-size: 12px;
+      }
+      .mockbar button {
+        border: 0;
+        border-radius: 9px;
+        padding: 6px 10px;
+        background: transparent;
+        color: #c8daee;
+        cursor: pointer;
+      }
+      .mockbar button.on {
+        background: #ffffff22;
+        color: #fff;
+      }
+
+      .shell {
+        display: flex;
+        align-items: flex-start;
+        min-height: 100vh;
+      }
+      .sidebar {
+        position: sticky;
+        top: 16px;
+        flex: 0 0 242px;
+        height: calc(100vh - 32px);
+        margin: 16px 0 16px 16px;
+        padding: 25px 12px 12px;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--glass-line);
+        border-radius: var(--radius-shell);
+        background: var(--glass);
+        backdrop-filter: blur(24px);
+        box-shadow: var(--shadow-float);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 700 22px var(--font-display);
+        padding: 0 8px 20px;
+      }
+      .brand i {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 4px solid var(--brand);
+        border-right-color: transparent;
+      }
+      .nav a {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 11px 9px;
+        border-radius: var(--radius-nav);
+        color: var(--text-muted);
+        text-decoration: none;
+      }
+      .nav a.on {
+        background: var(--surface);
+        color: var(--action-strong);
+        box-shadow: var(--shadow-float);
+        font-weight: 550;
+      }
+      .nav a span.dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 5px;
+        border: 1.5px solid currentColor;
+        opacity: 0.8;
+      }
+      .sidebar footer {
+        margin-top: auto;
+        border-top: 1px solid var(--line);
+        padding: 12px 8px 0;
+        color: var(--text-muted);
+      }
+      main {
+        flex: 1;
+        min-width: 0;
+        padding: var(--page-padding-block) var(--page-padding-inline);
+      }
+
+      .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 25px;
+      }
+      h1 {
+        font: 600 30px/1.15 var(--font-display);
+        letter-spacing: -0.03em;
+        margin-bottom: 6px;
+      }
+      .page-header p {
+        color: var(--text-secondary);
+      }
+      .crumb {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+      .crumb a {
+        color: var(--action-strong);
+        text-decoration: none;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .btn {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--line);
+        background: var(--surface);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .btn:hover {
+        background: var(--surface-hover);
+      }
+      .btn-primary {
+        background: linear-gradient(
+          var(--action-fill-highlight),
+          var(--action-fill)
+        );
+        color: var(--on-action);
+        border-color: transparent;
+        font-weight: 550;
+      }
+      .btn-primary:hover {
+        background: var(--action-fill);
+      }
+      .btn-ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--action-strong);
+      }
+      .link {
+        color: var(--action-strong);
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 12px;
+        border: 1px solid var(--glass-line);
+        border-radius: var(--radius-card);
+        background: var(--glass);
+        backdrop-filter: blur(24px);
+        margin-bottom: 16px;
+      }
+      .controls select,
+      .search {
+        height: 32px;
+        padding: 0 10px;
+        border: 1px solid var(--line-control);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+      }
+      .search {
+        width: 280px;
+      }
+      .controls .count {
+        margin-left: auto;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      /* Profundo: o funil */
+      .deep {
+        background: var(--deep-gradient);
+        color: var(--on-deep);
+        border-radius: var(--radius-feature);
+        padding: 22px 24px;
+        margin-bottom: 16px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr);
+        gap: 24px;
+        align-items: end;
+      }
+      .deep small {
+        color: var(--on-deep-muted);
+        font-size: 12px;
+      }
+      .deep .hero {
+        font: 700 46px/1 var(--font-product);
+        letter-spacing: -0.03em;
+        margin: 8px 0 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .deep .hero-sub {
+        color: var(--on-deep-muted);
+      }
+      .deep .hero-sub b {
+        color: var(--on-deep-caution);
+        font-weight: 550;
+      }
+      .funnel {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1px;
+        border-radius: 14px;
+        overflow: hidden;
+        background: #ffffff1f;
+      }
+      .funnel button {
+        all: unset;
+        cursor: pointer;
+        padding: 12px 14px;
+        background: #0b1a2e40;
+      }
+      .funnel button:hover {
+        background: #ffffff14;
+      }
+      .funnel button:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: -2px;
+      }
+      .funnel b {
+        display: block;
+        font-size: 21px;
+        font-variant-numeric: tabular-nums;
+      }
+      .funnel span {
+        color: var(--on-deep-muted);
+        font-size: 12px;
+      }
+
+      /* Tabela */
+      .table-card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-feature);
+        overflow: hidden;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th {
+        text-align: left;
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: 500;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface-subtle);
+        white-space: nowrap;
+      }
+      th:first-child,
+      td:first-child {
+        padding-left: 20px;
+      }
+      td {
+        padding: 11px 12px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: middle;
+      }
+      tbody tr {
+        cursor: pointer;
+      }
+      tbody tr:hover {
+        background: var(--surface-hover);
+      }
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      .name {
+        font-weight: 550;
+      }
+      .sub {
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+      .muted {
+        color: var(--text-muted);
+      }
+      .nowrap {
+        white-space: nowrap;
+      }
+
+      /* Estágio: ponto + texto, nunca só cor */
+      .stage {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 24px;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 550;
+        white-space: nowrap;
+        border: 1px solid transparent;
+      }
+      .stage::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .stage.lead {
+        color: var(--text-secondary);
+        background: color-mix(in oklch, var(--text-muted) 12%, transparent);
+      }
+      .stage.proposta {
+        color: var(--caution);
+        background: color-mix(in oklch, var(--caution) 14%, transparent);
+      }
+      .stage.ativo {
+        color: var(--positive);
+        background: color-mix(in oklch, var(--positive) 14%, transparent);
+      }
+      .stage.churn {
+        color: var(--negative);
+        background: color-mix(in oklch, var(--negative) 12%, transparent);
+      }
+      .tag {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 6px;
+        font-size: 11px;
+        color: var(--text-secondary);
+        background: var(--surface-subtle);
+        border: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      .tag.origin {
+        color: var(--action-strong);
+        background: var(--action-wash);
+        border-color: transparent;
+      }
+
+      /* Página do cliente */
+      .client-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .stage-select {
+        position: relative;
+      }
+      .stage-select select {
+        appearance: none;
+        height: 30px;
+        padding: 0 28px 0 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line-control);
+        background: var(--surface);
+        font-weight: 550;
+        cursor: pointer;
+      }
+      .stage-select::after {
+        content: "▾";
+        position: absolute;
+        right: 10px;
+        top: 6px;
+        color: var(--text-muted);
+        pointer-events: none;
+        font-size: 11px;
+      }
+      .detail {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 16px;
+        align-items: start;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-feature);
+        padding: 20px 24px;
+      }
+      .card + .card {
+        margin-top: 16px;
+      }
+      .card h3 {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .props {
+        display: grid;
+        grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr);
+        column-gap: 16px;
+      }
+      .prop {
+        display: contents;
+      }
+      .prop dt,
+      .prop dd {
+        padding: 7px 0;
+        border-bottom: 1px solid var(--line);
+        min-height: 34px;
+        display: flex;
+        align-items: center;
+      }
+      .prop dt {
+        color: var(--text-muted);
+        font-size: 12px;
+        gap: 6px;
+      }
+      .prop dd {
+        margin: 0;
+        border-radius: 8px;
+        padding-left: 6px;
+        margin-left: -6px;
+        cursor: text;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .prop dd:hover {
+        background: var(--surface-hover);
+      }
+      .prop dd.empty {
+        color: var(--text-muted);
+      }
+      .prop.wide dd {
+        grid-column: span 3;
+      }
+      .props-foot {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+        padding-top: 12px;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .body-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin: 28px 0 15px;
+      }
+      .body-head h2 {
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .disclosure {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-card);
+        margin-bottom: 8px;
+        overflow: hidden;
+      }
+      .disclosure > button {
+        all: unset;
+        box-sizing: border-box;
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 20px;
+        cursor: pointer;
+      }
+      .disclosure > button:focus-visible {
+        outline: var(--focus-ring);
+        outline-offset: -2px;
+      }
+      .disclosure > button:hover {
+        background: var(--surface-hover);
+      }
+      .disclosure .title {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .disclosure .summary {
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+      .disclosure .chev {
+        transition: transform 160ms;
+        color: var(--text-muted);
+      }
+      .disclosure[data-open="true"] .chev {
+        transform: rotate(90deg);
+      }
+      .disclosure .panel {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 280ms var(--ease-spring);
+      }
+      .disclosure[data-open="true"] .panel {
+        grid-template-rows: 1fr;
+      }
+      .disclosure .panel > div {
+        overflow: hidden;
+      }
+      .prose {
+        padding: 2px 20px 18px;
+        border-top: 1px solid var(--line);
+        padding-top: 14px;
+        max-width: 72ch;
+      }
+      .prose p + p,
+      .prose p + ul,
+      .prose ul + p {
+        margin-top: 8px;
+      }
+      .prose b {
+        font-weight: 600;
+      }
+      .prose .q {
+        font-weight: 600;
+        margin-top: 14px;
+      }
+      .prose .q:first-child {
+        margin-top: 0;
+      }
+      .prose ul {
+        padding-left: 18px;
+        margin-top: 4px;
+      }
+      .prose .edit {
+        margin-top: 14px;
+        display: flex;
+        gap: 8px;
+      }
+      .add-section {
+        width: 100%;
+        justify-content: center;
+        border-style: dashed;
+        color: var(--text-muted);
+        background: transparent;
+      }
+
+      .side h3 {
+        font-size: 15px;
+      }
+      .side .card {
+        padding: 18px 20px;
+      }
+      .side-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 10px;
+      }
+      .composer {
+        border: 1px solid var(--line-control);
+        border-radius: var(--radius-control);
+        padding: 8px 10px;
+        margin-bottom: 12px;
+      }
+      .composer textarea {
+        width: 100%;
+        border: 0;
+        resize: none;
+        min-height: 44px;
+        background: transparent;
+        outline: none;
+      }
+      .composer .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+      .seg {
+        display: inline-flex;
+        gap: 2px;
+        padding: 2px;
+        border-radius: 9px;
+        background: var(--surface-subtle);
+        border: 1px solid var(--line);
+      }
+      .seg button {
+        border: 0;
+        background: transparent;
+        padding: 3px 8px;
+        border-radius: 7px;
+        font-size: 12px;
+        color: var(--text-muted);
+        cursor: pointer;
+      }
+      .seg button.on {
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: 0 1px 2px #0001;
+        font-weight: 550;
+      }
+      .composer .btn {
+        min-height: 30px;
+        padding: 0 10px;
+      }
+      .timeline {
+        list-style: none;
+        padding: 0;
+      }
+      .timeline li {
+        position: relative;
+        padding: 0 0 14px 18px;
+      }
+      .timeline li::before {
+        content: "";
+        position: absolute;
+        left: 4px;
+        top: 6px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--line-strong);
+      }
+      .timeline li::after {
+        content: "";
+        position: absolute;
+        left: 7px;
+        top: 16px;
+        bottom: 0;
+        width: 1px;
+        background: var(--line);
+      }
+      .timeline li:last-child::after {
+        display: none;
+      }
+      .timeline li.diag::before {
+        background: var(--action);
+      }
+      .timeline .meta {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .timeline .t {
+        font-weight: 550;
+      }
+      .issue-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 10px;
+        padding: 10px 0;
+        border-top: 1px solid var(--line);
+      }
+      .issue-row .id {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .view[hidden] {
+        display: none;
+      }
+
+      @media (max-width: 1100px) {
+        .detail {
+          grid-template-columns: 1fr;
+        }
+        .props {
+          grid-template-columns: 120px minmax(0, 1fr);
+        }
+        .prop.wide dd {
+          grid-column: auto;
+        }
+      }
+      @media (max-width: 820px) {
+        .sidebar {
+          display: none;
+        }
+        main {
+          padding: 22px 17px 90px;
+        }
+        .deep {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 650px) {
+        main {
+          padding: 16px 13px 90px;
+        }
+        .page-header {
+          flex-direction: column;
+        }
+        .actions,
+        .actions .btn {
+          width: 100%;
+          justify-content: center;
+        }
+        .search {
+          width: 100%;
+        }
+        .controls select {
+          flex: 1;
+        }
+        .controls .count {
+          width: 100%;
+          margin: 0;
+        }
+        .funnel {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .deep .hero {
+          font-size: 38px;
+        }
+        thead {
+          display: none;
+        }
+        table,
+        tbody,
+        tr,
+        td {
+          display: block;
+        }
+        tr {
+          position: relative;
+          padding: 12px 16px;
+          border-bottom: 1px solid var(--line);
+        }
+        td,
+        td:first-child {
+          padding: 0;
+          border: 0;
+        }
+        td.hide-m {
+          display: none;
+        }
+        td.stage-cell {
+          position: absolute;
+          right: 16px;
+          top: 12px;
+        }
+        td.area-cell {
+          margin-top: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mockbar" role="group" aria-label="Controles do mock">
+      <button data-go="list" class="on">Lista</button>
+      <button data-go="detail">Cliente</button>
+      <button data-theme-toggle>Tema</button>
+    </div>
+
+    <div class="shell">
+      <aside class="sidebar" aria-label="Navegação">
+        <div class="brand"><i aria-hidden="true"></i>Mend</div>
+        <nav class="nav">
+          <a href="#"><span class="dot"></span>Visão geral</a>
+          <a href="#"><span class="dot"></span>Financeiro</a>
+          <a href="#"><span class="dot"></span>Projetos</a>
+          <a href="#" class="on"><span class="dot"></span>Clientes</a>
+          <a href="#"><span class="dot"></span>Diário</a>
+          <a href="#"><span class="dot"></span>Inbox</a>
+          <a href="#"><span class="dot"></span>Chamados</a>
+          <a href="#"><span class="dot"></span>Configurações</a>
+        </nav>
+        <footer>Vinicius · Diagium</footer>
+      </aside>
+
+      <main>
+        <!-- ============ LISTA ============ -->
+        <section class="view" data-view="list">
+          <header class="page-header">
+            <div>
+              <h1>Clientes</h1>
+              <p>Leads, propostas e clientes ativos da Diagium.</p>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary">+ Novo cliente</button>
+            </div>
+          </header>
+
+          <div class="deep" role="region" aria-label="Funil">
+            <div>
+              <small>Leads esperando proposta</small>
+              <div class="hero">7</div>
+              <div class="hero-sub">
+                <b>3 chegaram esta semana</b> pelo Diagnóstico de marca
+              </div>
+            </div>
+            <div class="funnel">
+              <button aria-pressed="false"><b>7</b><span>Lead</span></button>
+              <button aria-pressed="false">
+                <b>4</b><span>Proposta</span>
+              </button>
+              <button aria-pressed="false"><b>12</b><span>Ativo</span></button>
+              <button aria-pressed="false"><b>2</b><span>Churn</span></button>
+            </div>
+          </div>
+
+          <div class="controls" role="search">
+            <input
+              class="search"
+              type="search"
+              placeholder="Buscar nome, contato, telefone…"
+              aria-label="Buscar clientes"
+            />
+            <select aria-label="Estágio">
+              <option>Todos os estágios</option>
+              <option>Lead</option>
+              <option>Proposta</option>
+              <option>Ativo</option>
+              <option>Churn</option>
+            </select>
+            <select aria-label="Área">
+              <option>Todas as áreas</option>
+              <option>Odontologia</option>
+              <option>Medicina</option>
+              <option>Psicologia</option>
+              <option>Fisioterapia</option>
+              <option>Nutrição</option>
+            </select>
+            <select aria-label="Origem">
+              <option>Toda origem</option>
+              <option>Diagnóstico de marca</option>
+              <option>Indicação</option>
+              <option>Manual</option>
+            </select>
+            <span class="count">25 clientes</span>
+          </div>
+
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Estágio</th>
+                  <th>Área</th>
+                  <th>Produto</th>
+                  <th>Telefone</th>
+                  <th>Origem</th>
+                  <th>Atualizado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-go="detail">
+                  <td>
+                    <div class="name">Dra. Helena Martins</div>
+                    <div class="sub">Helena</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage lead">Lead</span>
+                  </td>
+                  <td class="area-cell">
+                    Odontologia <span class="sub">· Ortodontia</span>
+                  </td>
+                  <td class="hide-m muted">—</td>
+                  <td class="hide-m nowrap">(11) 98765-4321</td>
+                  <td class="hide-m">
+                    <span class="tag origin">Diagnóstico</span>
+                  </td>
+                  <td class="hide-m muted nowrap">hoje, 09:42</td>
+                </tr>
+                <tr data-go="detail">
+                  <td>
+                    <div class="name">Rafael Duarte</div>
+                    <div class="sub">Rafa · indicação de Carla</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage lead">Lead</span>
+                  </td>
+                  <td class="area-cell">
+                    Psicologia <span class="sub">· Clínica</span>
+                  </td>
+                  <td class="hide-m muted">—</td>
+                  <td class="hide-m nowrap">(21) 99812-0034</td>
+                  <td class="hide-m">
+                    <span class="tag origin">Diagnóstico</span>
+                  </td>
+                  <td class="hide-m muted nowrap">ontem</td>
+                </tr>
+                <tr data-go="detail">
+                  <td>
+                    <div class="name">Clínica Viver Bem</div>
+                    <div class="sub">Dr. Paulo Nogueira</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage proposta">Proposta</span>
+                  </td>
+                  <td class="area-cell">Fisioterapia</td>
+                  <td class="hide-m">Site institucional</td>
+                  <td class="hide-m nowrap">(31) 3222-1180</td>
+                  <td class="hide-m"><span class="tag">Indicação</span></td>
+                  <td class="hide-m muted nowrap">2 nov</td>
+                </tr>
+                <tr data-go="detail">
+                  <td>
+                    <div class="name">Dra. Marina Costa</div>
+                    <div class="sub">Marina</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage ativo">Ativo</span>
+                  </td>
+                  <td class="area-cell">
+                    Nutrição <span class="sub">· Esportiva</span>
+                  </td>
+                  <td class="hide-m">Site + SEO</td>
+                  <td class="hide-m nowrap">(41) 99701-5566</td>
+                  <td class="hide-m"><span class="tag">Manual</span></td>
+                  <td class="hide-m muted nowrap">28 out</td>
+                </tr>
+                <tr data-go="detail">
+                  <td>
+                    <div class="name">Dr. André Lopes</div>
+                    <div class="sub">André</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage ativo">Ativo</span>
+                  </td>
+                  <td class="area-cell">
+                    Medicina <span class="sub">· Dermatologia</span>
+                  </td>
+                  <td class="hide-m">Site institucional</td>
+                  <td class="hide-m nowrap">(11) 97444-2211</td>
+                  <td class="hide-m">
+                    <span class="tag origin">Diagnóstico</span>
+                  </td>
+                  <td class="hide-m muted nowrap">20 out</td>
+                </tr>
+                <tr data-go="detail">
+                  <td>
+                    <div class="name">Studio Fono Kids</div>
+                    <div class="sub">Beatriz Ramos</div>
+                  </td>
+                  <td class="stage-cell">
+                    <span class="stage churn">Churn</span>
+                  </td>
+                  <td class="area-cell">Fonoaudiologia</td>
+                  <td class="hide-m">Site institucional</td>
+                  <td class="hide-m nowrap">(51) 98100-7788</td>
+                  <td class="hide-m"><span class="tag">Manual</span></td>
+                  <td class="hide-m muted nowrap">3 set</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============ CLIENTE ============ -->
+        <section class="view" data-view="detail" hidden>
+          <header class="page-header">
+            <div>
+              <div class="crumb">
+                <a href="#" data-go="list">Clientes</a> / Dra. Helena Martins
+              </div>
+              <div class="client-head">
+                <h1>Dra. Helena Martins</h1>
+                <label class="stage-select">
+                  <span class="sr" hidden>Estágio</span>
+                  <select aria-label="Estágio">
+                    <option selected>● Lead</option>
+                    <option>● Proposta</option>
+                    <option>● Ativo</option>
+                    <option>● Churn</option>
+                  </select>
+                </label>
+              </div>
+              <p>Chegou pelo Diagnóstico de marca hoje, 09:42.</p>
+            </div>
+            <div class="actions">
+              <button class="btn">Abrir chamado</button>
+              <button class="btn btn-primary">Abrir conversa</button>
+            </div>
+          </header>
+
+          <div class="detail">
+            <div>
+              <div class="card" aria-label="Propriedades">
+                <dl class="props">
+                  <div class="prop">
+                    <dt>Contato</dt>
+                    <dd>Helena</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Telefone</dt>
+                    <dd>(11) 98765-4321</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Email</dt>
+                    <dd class="empty">Adicionar</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Site</dt>
+                    <dd class="empty">Adicionar</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Área</dt>
+                    <dd>Odontologia · Ortodontia</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Registro</dt>
+                    <dd>CRO-SP 123456</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Produto</dt>
+                    <dd class="empty">Escolher projeto</dd>
+                  </div>
+                  <div class="prop">
+                    <dt>Indicação</dt>
+                    <dd>carla-ortodontia</dd>
+                  </div>
+                  <div class="prop wide">
+                    <dt>Notas</dt>
+                    <dd>
+                      Quer site novo antes de abrir o 2º consultório em março.
+                      Preferiu falar por WhatsApp.
+                    </dd>
+                  </div>
+                </dl>
+                <div class="props-foot">
+                  Origem
+                  <span class="tag origin">Diagnóstico de marca</span>
+                  <span class="tag">utm: instagram / bio / diag-nov</span>
+                </div>
+              </div>
+
+              <div class="body-head">
+                <h2>Diagnóstico e anotações</h2>
+                <button class="btn btn-ghost">Editar tudo em markdown</button>
+              </div>
+
+              <div class="disclosure" data-open="true">
+                <button aria-expanded="true">
+                  <span class="title">Resumo</span>
+                  <span class="summary">5 linhas</span>
+                  <span class="chev" aria-hidden="true">›</span>
+                </button>
+                <div class="panel">
+                  <div>
+                    <div class="prose">
+                      <p>
+                        Ortodontista há 9 anos, atende adultos e adolescentes em
+                        Moema. Quer ser lembrada como “a ortodontista que
+                        explica tudo”. Hoje 70% dos pacientes chegam por
+                        indicação e quase nada pelo Google.
+                      </p>
+                      <div class="edit">
+                        <button class="btn btn-ghost">Editar seção</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="disclosure" data-open="false">
+                <button aria-expanded="false">
+                  <span class="title">1. Sobre você</span>
+                  <span class="summary">4 respostas</span>
+                  <span class="chev" aria-hidden="true">›</span>
+                </button>
+                <div class="panel">
+                  <div>
+                    <div class="prose">
+                      <p class="q">Como os pacientes descrevem você?</p>
+                      <p>Paciente, didática, “não tem pressa na consulta”.</p>
+                      <p class="q">O que te diferencia?</p>
+                      <ul>
+                        <li>Alinhadores invisíveis</li>
+                        <li>Plano de tratamento em vídeo</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="disclosure" data-open="false">
+                <button aria-expanded="false">
+                  <span class="title">2. Seus atendimentos</span>
+                  <span class="summary">5 respostas</span>
+                  <span class="chev" aria-hidden="true">›</span>
+                </button>
+                <div class="panel">
+                  <div>
+                    <div class="prose">
+                      <p class="q">Quais atendimentos quer destacar?</p>
+                      <ul>
+                        <li>Alinhadores</li>
+                        <li>Ortodontia adulto</li>
+                        <li>Avaliação inicial</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="disclosure" data-open="false">
+                <button aria-expanded="false">
+                  <span class="title">3. Sua marca e o seu futuro</span>
+                  <span class="summary">3 respostas</span>
+                  <span class="chev" aria-hidden="true">›</span>
+                </button>
+                <div class="panel">
+                  <div>
+                    <div class="prose"><p>…</p></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="disclosure" data-open="false">
+                <button aria-expanded="false">
+                  <span class="title">4. Presença online hoje</span>
+                  <span class="summary">4 respostas</span>
+                  <span class="chev" aria-hidden="true">›</span>
+                </button>
+                <div class="panel">
+                  <div>
+                    <div class="prose"><p>…</p></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="disclosure" data-open="false">
+                <button aria-expanded="false">
+                  <span class="title">Proposta</span>
+                  <span class="summary">vazia</span>
+                  <span class="chev" aria-hidden="true">›</span>
+                </button>
+                <div class="panel">
+                  <div>
+                    <div class="prose">
+                      <p class="muted">
+                        Escreva aqui escopo, valores e prazos.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button class="btn add-section">+ Nova seção</button>
+            </div>
+
+            <aside class="side">
+              <div class="card">
+                <div class="side-head">
+                  <h3>Linha do tempo</h3>
+                  <span class="muted">3</span>
+                </div>
+                <div class="composer">
+                  <textarea
+                    placeholder="Anotar algo sobre a Helena…"
+                    aria-label="Nova anotação"
+                  ></textarea>
+                  <div class="row">
+                    <div class="seg" role="group" aria-label="Tipo">
+                      <button class="on">Nota</button>
+                      <button>Reunião</button>
+                    </div>
+                    <button class="btn btn-primary">Salvar</button>
+                  </div>
+                </div>
+                <ul class="timeline">
+                  <li>
+                    <div class="t">Ligação de apresentação</div>
+                    <div>
+                      Topou reunião quinta 15h para ver exemplos de sites.
+                    </div>
+                    <div class="meta">Reunião · Vinicius · hoje, 11:10</div>
+                  </li>
+                  <li>
+                    <div class="t">Estágio: Lead</div>
+                    <div class="meta">Rafa (agente) · hoje, 09:43</div>
+                  </li>
+                  <li class="diag">
+                    <div class="t">Diagnóstico de marca recebido</div>
+                    <div class="meta">Site Diagium · hoje, 09:42</div>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="card">
+                <div class="side-head">
+                  <h3>Chamados</h3>
+                  <a href="#" class="link">Ligar chamado</a>
+                </div>
+                <div class="issue-row">
+                  <span class="id">MEND-142</span>
+                  <span>Enviar exemplos de sites de ortodontia</span>
+                  <span></span>
+                  <span class="sub">A fazer · Vinicius</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const views = document.querySelectorAll(".view");
+      const tabs = document.querySelectorAll(".mockbar [data-go]");
+      function go(name) {
+        views.forEach((v) => (v.hidden = v.dataset.view !== name));
+        tabs.forEach((t) => t.classList.toggle("on", t.dataset.go === name));
+        window.scrollTo(0, 0);
+      }
+      document.addEventListener("click", (e) => {
+        const target = e.target.closest("[data-go]");
+        if (target) {
+          e.preventDefault();
+          go(target.dataset.go);
+        }
+        const toggle = e.target.closest("[data-theme-toggle]");
+        if (toggle) {
+          const root = document.documentElement;
+          root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+        }
+        const head = e.target.closest(".disclosure > button");
+        if (head) {
+          const box = head.parentElement;
+          const open = box.dataset.open !== "true";
+          box.dataset.open = String(open);
+          head.setAttribute("aria-expanded", String(open));
+        }
+      });
+    </script>
+  </body>
+</html>
