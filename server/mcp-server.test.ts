@@ -258,6 +258,24 @@ describe("POST /mcp", () => {
     expect(names).toEqual(["diario_registrar"]);
   });
 
+  it("reflects scopes edited between requests on the next tools/list", async () => {
+    let scopes: AgentScope[] = ["diario:escrever"];
+    const keys: AgentKeyLookup = {
+      findActive: vi.fn(async () => principal(scopes)),
+      touch: vi.fn(async () => undefined),
+    };
+    const { app } = buildApp({ keys });
+    const names = async () =>
+      (
+        (await rpc(app, "tools/list")).body.result.tools as { name: string }[]
+      ).map((tool) => tool.name);
+    expect(await names()).toEqual(["diario_registrar"]);
+    scopes = ["diario:escrever", "clientes:ler"];
+    expect(await names()).toEqual(
+      expect.arrayContaining(["diario_registrar", "clientes_listar"]),
+    );
+  });
+
   it("accepts the key in the x-api-key header", async () => {
     const { app } = buildApp();
     const response = await rpc(app, "tools/list", {}, { "x-api-key": KEY });

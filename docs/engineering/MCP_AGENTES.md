@@ -10,6 +10,7 @@ O Mend expõe um servidor MCP em `POST /mcp` para que agentes externos (os bots 
   1. **No Mend:** cada chave tem escopos. A chave só **vê** as ferramentas dos seus escopos (`tools/list` já vem filtrado) e não consegue chamar as outras.
   2. **No agentes.chat:** em "Conectores e MCPs", a conexão define quais agentes usam o MCP e quais ferramentas cada um usa.
 - **Quem pode criar:** só owner e admin do workspace (`/api/agent-keys`). A chave age em nome de quem a criou e deixa de valer se essa pessoa perder o papel de admin.
+- **Editar escopos:** owner e admin também editam os escopos de uma chave ativa (`PATCH /api/agent-keys/:id`, corpo `{ "scopes": [...] }`), sem criar outra chave. Chave revogada não é editável (404). Como o MCP é sem sessão e o `findActive` lê os escopos a cada requisição, a mudança vale na próxima requisição da chave. O bot só enxerga as ferramentas novas depois de se reconectar ou atualizar a lista de ferramentas, e no agentes.chat as ferramentas novas também precisam ser habilitadas para o agente em "Conectores e MCPs".
 - **Limite:** 120 chamadas por minuto em `/mcp`, além do limite global por IP.
 
 ## Escopos e ferramentas
@@ -40,7 +41,7 @@ O MCP é chamado pelo agente; ele não acorda o agente. O aviso de mensagem nova
 ## Ativação
 
 1. Aplicar a migration `20261104120000_agent_api_keys.sql` e publicar o servidor.
-2. Um admin cria a chave em Configurações → Integrações → Agentes (MCP do Mend) (`/settings/integrations/agentes`), com o nome do agente e as permissões. A chave aparece uma vez, junto com o endereço do MCP. A tela usa `GET/POST/DELETE /api/agent-keys`.
+2. Um admin cria a chave em Configurações → Integrações → Agentes (MCP do Mend) (`/settings/integrations/agentes`), com o nome do agente e as permissões. A chave aparece uma vez, junto com o endereço do MCP. A tela usa `GET/POST/PATCH/DELETE /api/agent-keys` (o PATCH edita os escopos de uma chave existente; migration `20261106120000_agent_api_keys_edit_scopes.sql`).
 3. No agentes.chat: Configurações → Conectores e MCPs → Adicionar MCP → endereço `https://<mend>/mcp` → "Conectar com uma chave de API".
 4. No passo "Quem pode usar", liberar só os agentes e ferramentas desejados.
 
@@ -49,3 +50,4 @@ O MCP é chamado pelo agente; ele não acorda o agente. O aviso de mensagem nova
 1. Acrescentar o escopo em `agentScopes` (`server/agent-keys.ts`).
 2. Acrescentar a definição em `mcpTools` (`server/mcp-server.ts`), reaproveitando o serviço da rota que já existe em vez de duplicar regra.
 3. Cobrir em `server/mcp-server.test.ts`: aparece só com o escopo, mantém o contrato da rota e recusa fora do escopo.
+4. Para bots que já têm chave: um admin marca o escopo novo em Configurações → Integrações → Agentes → "Editar permissões" (não precisa criar chave nem reconfigurar o bot). Depois, o bot atualiza a lista de ferramentas e, no agentes.chat, o agente ganha as ferramentas novas em "Conectores e MCPs".

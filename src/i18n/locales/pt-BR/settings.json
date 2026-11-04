@@ -1049,6 +1049,14 @@
     "lastUsed": "Último uso em {{date}}",
     "neverUsed": "Ainda não usada",
     "createdAt": "Criada em {{date}}",
+    "edit": "Editar permissões",
+    "editLabel": "Editar as permissões da chave de {{label}}",
+    "editTitle": "Permissões de {{label}}",
+    "editHint": "A mudança vale a partir da próxima chamada do agente, sem trocar a chave. Para ver as ferramentas novas, o agente precisa se reconectar ou atualizar a lista de ferramentas. No agentes.chat, habilite também as ferramentas novas para o agente em Conectores e MCPs.",
+    "saveScopes": "Salvar permissões",
+    "savingScopes": "Salvando…",
+    "cancelEdit": "Cancelar",
+    "scopesSavedToast": "Permissões de {{label}} atualizadas",
     "revoke": "Revogar",
     "revokeLabel": "Revogar a chave de {{label}}",
     "confirmRevokeTitle": "Revogar a chave de {{label}}?",
@@ -1059,7 +1067,9 @@
       "forbidden": "Só donos e admins do workspace podem gerenciar as chaves de agente.",
       "create": "Não foi possível criar a chave.",
       "limit": "Limite de chaves ativas atingido. Revogue uma antes de criar outra.",
-      "revoke": "Não foi possível revogar a chave."
+      "revoke": "Não foi possível revogar a chave.",
+      "updateScopes": "Não foi possível salvar as permissões.",
+      "notFound": "Essa chave não existe mais ou já foi revogada. Atualize a página."
     }
   }
 }

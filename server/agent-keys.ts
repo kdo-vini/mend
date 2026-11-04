@@ -70,6 +70,12 @@ export interface AgentKeyPort {
     tokenHash: string;
   }): Promise<AgentKey>;
   revoke(workspaceId: string, id: string): Promise<boolean>;
+  /** Replaces the scopes of an active key; null when missing or revoked. */
+  updateScopes(
+    workspaceId: string,
+    id: string,
+    scopes: AgentScope[],
+  ): Promise<AgentKey | null>;
 }
 
 function failed(code: string): never {
@@ -131,6 +137,19 @@ export class SupabaseAgentKeyAdapter implements AgentKeyPort {
     if (result.error) failed(result.error.code ?? "");
     return (result.data ?? []).length > 0;
   }
+
+  async updateScopes(workspaceId: string, id: string, scopes: AgentScope[]) {
+    const result = await this.client
+      .from("agent_api_keys")
+      .update({ scopes })
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .is("revoked_at", null)
+      .select(keyColumns);
+    if (result.error) failed(result.error.code ?? "");
+    const row = (result.data ?? [])[0];
+    return row ? toKey(row as Record<string, unknown>) : null;
+  }
 }
 
 /** Service-role lookup used by the MCP endpoint; never trusts the request body. */
@@ -186,6 +205,12 @@ const createKeyBody = z
   })
   .strict();
 
+const updateScopesBody = z
+  .object({
+    scopes: z.array(z.enum(agentScopes)).min(1).max(agentScopes.length),
+  })
+  .strict();
+
 export function registerAgentKeyRoutes(ctx: ApiRouteModuleContext) {
   const { router, dependencies, asyncRoute, scoped, send, noContent, parse } =
     ctx;
@@ -234,6 +259,28 @@ export function registerAgentKeyRoutes(ctx: ApiRouteModuleContext) {
       // The plain key leaves the server only in this response. `send` strips
       // token-like keys by design, so this one reply bypasses it.
       res.status(201).json({ secret: key, record: sanitizePublic(record) });
+    }),
+  );
+  router.patch(
+    "/api/agent-keys/:id",
+    asyncRoute(async (req, res) => {
+      const scope = await scoped(req, res, "admin");
+      const body = parse(updateScopesBody, req.body);
+      // MCP requests are stateless and findActive reads scopes each time, so
+      // the new scopes apply from the key's next MCP request.
+      const record = await port().updateScopes(
+        scope.workspaceId,
+        ctx.pathId(req),
+        [...new Set(body.scopes)],
+      );
+      if (!record)
+        throw new ApiHttpError(
+          404,
+          "agent_key_not_found",
+          "Chave não encontrada.",
+        );
+      res.setHeader("Cache-Control", "no-store");
+      send(res, 200, { data: record });
     }),
   );
   router.delete(

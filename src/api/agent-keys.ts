@@ -56,3 +56,16 @@ export async function revokeLiveAgentKey(workspaceId: string, id: string) {
     workspaceId,
   );
 }
+
+export async function updateLiveAgentKeyScopes(
+  workspaceId: string,
+  id: string,
+  scopes: AgentKeyScope[],
+) {
+  const response = await apiRequest<{ data: AgentKey }>(
+    `/api/agent-keys/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify({ scopes }) },
+    workspaceId,
+  );
+  return response.data;
+}

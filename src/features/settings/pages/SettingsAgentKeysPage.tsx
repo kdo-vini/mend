@@ -11,6 +11,7 @@ import {
   listLiveAgentKeys,
   mcpServerUrl,
   revokeLiveAgentKey,
+  updateLiveAgentKeyScopes,
   type AgentKey,
   type AgentKeyScope,
 } from "../api";
@@ -20,6 +21,9 @@ import {
   SettingsSection,
   SettingsWorkspaceRequired,
 } from "../components/SettingsShared";
+
+const sameScopes = (a: AgentKeyScope[], b: AgentKeyScope[]) =>
+  a.length === b.length && a.every((scope) => b.includes(scope));
 
 /** i18next reads ":" as a namespace separator, so scope keys use "_". */
 const scopeKey = (scope: AgentKeyScope) => scope.replace(":", "_");
@@ -45,6 +49,8 @@ export function SettingsAgentKeysPage({
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<AgentKeyScope[]>([]);
   const secretRef = useRef<HTMLInputElement>(null);
 
   const describe = useCallback(
@@ -118,6 +124,44 @@ export function SettingsAgentKeysPage({
       onToast(t("agentKeys.revokedToast"));
     } catch (reason) {
       setError(describe(reason, t("agentKeys.errors.revoke")));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const startEdit = (key: AgentKey) => {
+    setEditingId(key.id);
+    setDraft(key.scopes);
+    setError(null);
+  };
+
+  const saveScopes = async (key: AgentKey) => {
+    if (
+      !workspaceId ||
+      action ||
+      !draft.length ||
+      sameScopes(draft, key.scopes)
+    )
+      return;
+    setAction(key.id);
+    setError(null);
+    try {
+      const updated = await updateLiveAgentKeyScopes(
+        workspaceId,
+        key.id,
+        agentKeyScopes.filter((scope) => draft.includes(scope)),
+      );
+      setKeys((current) =>
+        current.map((item) => (item.id === key.id ? updated : item)),
+      );
+      setEditingId(null);
+      onToast(t("agentKeys.scopesSavedToast", { label: key.label }));
+    } catch (reason) {
+      setError(
+        reason instanceof LiveActionError && reason.status === 404
+          ? t("agentKeys.errors.notFound")
+          : describe(reason, t("agentKeys.errors.updateScopes")),
+      );
     } finally {
       setAction(null);
     }
@@ -310,6 +354,17 @@ export function SettingsAgentKeysPage({
                         className="button button-ghost button-small"
                         type="button"
                         disabled={action !== null}
+                        aria-label={t("agentKeys.editLabel", {
+                          label: key.label,
+                        })}
+                        onClick={() => startEdit(key)}
+                      >
+                        {t("agentKeys.edit")}
+                      </button>
+                      <button
+                        className="button button-ghost button-small"
+                        type="button"
+                        disabled={action !== null}
                         aria-label={t("agentKeys.revokeLabel", {
                           label: key.label,
                         })}
@@ -318,6 +373,72 @@ export function SettingsAgentKeysPage({
                         {t("agentKeys.revoke")}
                       </button>
                     </div>
+                    {editingId === key.id && (
+                      <fieldset
+                        className="settings-v2-mcp-scope settings-v2-agent-editor"
+                        disabled={action === key.id}
+                      >
+                        <legend>
+                          {t("agentKeys.editTitle", { label: key.label })}
+                        </legend>
+                        <p>{t("agentKeys.editHint")}</p>
+                        <div className="settings-v2-agent-scopes">
+                          {agentKeyScopes.map((scope) => (
+                            <label
+                              key={scope}
+                              className="settings-v2-checkbox-field"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={draft.includes(scope)}
+                                onChange={(event) =>
+                                  setDraft((current) =>
+                                    event.target.checked
+                                      ? [...new Set([...current, scope])]
+                                      : current.filter(
+                                          (item) => item !== scope,
+                                        ),
+                                  )
+                                }
+                              />
+                              <span>
+                                <strong>
+                                  {t(
+                                    `agentKeys.scopes.${scopeKey(scope)}.name`,
+                                  )}
+                                </strong>
+                                <small>
+                                  {t(
+                                    `agentKeys.scopes.${scopeKey(scope)}.help`,
+                                  )}
+                                </small>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <div className="settings-v2-form-actions">
+                          <button
+                            className="button button-primary button-small"
+                            type="button"
+                            disabled={
+                              !draft.length || sameScopes(draft, key.scopes)
+                            }
+                            onClick={() => void saveScopes(key)}
+                          >
+                            {action === key.id
+                              ? t("agentKeys.savingScopes")
+                              : t("agentKeys.saveScopes")}
+                          </button>
+                          <button
+                            className="button button-ghost button-small"
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                          >
+                            {t("agentKeys.cancelEdit")}
+                          </button>
+                        </div>
+                      </fieldset>
+                    )}
                   </li>
                 ))}
               </ul>

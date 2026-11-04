@@ -15,6 +15,7 @@ vi.mock("../api", async (importOriginal) => {
     listLiveAgentKeys: vi.fn(),
     createLiveAgentKey: vi.fn(),
     revokeLiveAgentKey: vi.fn(),
+    updateLiveAgentKeyScopes: vi.fn(),
   };
 });
 
@@ -163,6 +164,94 @@ describe("SettingsAgentKeysPage", () => {
     );
     expect(toast).toHaveBeenCalledWith("Chave revogada");
     expect(container.textContent).toContain("Nenhuma chave ativa");
+  });
+
+  it("edits the permissions of an active key and saves them", async () => {
+    vi.mocked(settingsApi.listLiveAgentKeys).mockResolvedValue([maria]);
+    vi.mocked(settingsApi.updateLiveAgentKeyScopes).mockResolvedValue({
+      ...maria,
+      scopes: ["suporte:ler", "suporte:responder", "clientes:ler"],
+    });
+    const { toast } = await render();
+    expect(container.textContent).not.toContain("Salvar permissões");
+
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          "button[aria-label='Editar as permissões da chave de Maria']",
+        )!
+        .click(),
+    );
+    const editor = container.querySelector(
+      "fieldset.settings-v2-agent-editor",
+    )!;
+    expect(editor.textContent).toContain("Conectores e MCPs");
+    expect(editor.textContent).toContain("reconectar");
+    const save = button("Salvar permissões")!;
+    expect(save.disabled).toBe(true);
+
+    const boxes = Array.from(
+      editor.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+    );
+    const clientes = boxes.find((input) =>
+      input.parentElement?.textContent?.includes("Ver clientes"),
+    )!;
+    await act(async () => clientes.click());
+    expect(save.disabled).toBe(false);
+    await act(async () => clientes.click());
+    expect(save.disabled).toBe(true);
+    await act(async () => clientes.click());
+
+    await act(async () => save.click());
+    expect(settingsApi.updateLiveAgentKeyScopes).toHaveBeenCalledWith(
+      "workspace-1",
+      "key-1",
+      ["suporte:ler", "suporte:responder", "clientes:ler"],
+    );
+    expect(toast).toHaveBeenCalledWith("Permissões de Maria atualizadas");
+    expect(container.querySelector(".settings-v2-agent-editor")).toBeNull();
+    expect(container.textContent).toContain("Ver clientes");
+  });
+
+  it("blocks saving with no permission and can cancel the edit", async () => {
+    vi.mocked(settingsApi.listLiveAgentKeys).mockResolvedValue([
+      { ...maria, scopes: ["suporte:ler"] },
+    ]);
+    await render();
+    await act(async () => button("Editar permissões")!.click());
+    const editor = container.querySelector(
+      "fieldset.settings-v2-agent-editor",
+    )!;
+    const first = Array.from(
+      editor.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+    ).find((input) => input.checked)!;
+    await act(async () => first.click());
+    expect(button("Salvar permissões")!.disabled).toBe(true);
+    await act(async () => button("Cancelar")!.click());
+    expect(container.querySelector(".settings-v2-agent-editor")).toBeNull();
+    expect(settingsApi.updateLiveAgentKeyScopes).not.toHaveBeenCalled();
+  });
+
+  it("shows an error when saving permissions fails", async () => {
+    vi.mocked(settingsApi.listLiveAgentKeys).mockResolvedValue([maria]);
+    vi.mocked(settingsApi.updateLiveAgentKeyScopes).mockRejectedValue(
+      new LiveActionError("boom", 500),
+    );
+    await render();
+    await act(async () => button("Editar permissões")!.click());
+    const diario = Array.from(
+      container.querySelectorAll<HTMLInputElement>(
+        ".settings-v2-agent-editor input[type=checkbox]",
+      ),
+    ).find((input) =>
+      input.parentElement?.textContent?.includes("Registrar no Diário"),
+    )!;
+    await act(async () => diario.click());
+    await act(async () => button("Salvar permissões")!.click());
+    expect(container.querySelector("[role=alert]")?.textContent).toContain(
+      "Não foi possível salvar as permissões.",
+    );
+    expect(container.querySelector(".settings-v2-agent-editor")).not.toBeNull();
   });
 
   it("explains that only owners and admins manage agent keys", async () => {
