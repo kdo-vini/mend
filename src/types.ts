@@ -95,6 +95,8 @@ export interface AiDraft {
 export interface Conversation {
   id: string;
   contactId?: string;
+  /** WhatsApp number (inbox) the thread belongs to: Zelo, Diagium, ... */
+  channelId?: string;
   chatType: "direct" | "group";
   name: string;
   company: string;

@@ -261,9 +261,10 @@ export interface ConversationStartInput {
 export interface ConversationPort {
   list(context: RequestContext, query: ConversationListQuery): Promise<unknown>;
   get(context: RequestContext, conversationId: string): Promise<unknown | null>;
-  /** Workspace-scoped lookup that keeps a first message out of an existing thread. */
+  /** Channel-scoped lookup that keeps a first message out of an existing thread. */
   findByPhone(
     context: RequestContext,
+    channelId: string,
     phoneNumber: string,
   ): Promise<{ id: string } | null>;
   start(

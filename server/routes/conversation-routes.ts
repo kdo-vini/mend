@@ -106,6 +106,7 @@ export function registerConversationRoutes(context: ApiRouteModuleContext) {
       // an unexpected message into a live one.
       const existing = await dependencies.conversations.findByPhone(
         context,
+        input.channelId,
         phoneNumber,
       );
       if (existing) {

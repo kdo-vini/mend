@@ -149,6 +149,7 @@ describe("live conversation mapper", () => {
       ],
     );
 
+    expect(result.channelId).toBe("channel-1");
     expect(result.lastMessage).toMatch(/áudio|Audio message/i);
   });
 

@@ -767,13 +767,20 @@ export class SupabaseConversationAdapter implements ConversationPort {
     });
   }
 
-  async findByPhone(context: RequestContext, phoneNumber: string) {
+  async findByPhone(
+    context: RequestContext,
+    channelId: string,
+    phoneNumber: string,
+  ) {
+    // Contacts are per channel: the same number on the Zelo and the Diagium
+    // channel are two threads, so only the chosen channel's thread counts.
     // The typed form is probed first, so an exact contact always wins.
     for (const candidate of brazilianPhoneVariants(phoneNumber)) {
       const contactResult = await this.client
         .from("contacts")
         .select("id")
         .eq("workspace_id", context.workspaceId)
+        .eq("channel_connection_id", channelId)
         .eq("phone_number", candidate)
         .maybeSingle();
       const contact = checked("contacts.by_phone", contactResult);
@@ -782,6 +789,7 @@ export class SupabaseConversationAdapter implements ConversationPort {
         .from("conversations")
         .select("id")
         .eq("workspace_id", context.workspaceId)
+        .eq("channel_connection_id", channelId)
         .eq("contact_id", str(row(contact).id))
         .order("last_message_at", { ascending: false })
         .limit(1)
