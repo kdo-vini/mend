@@ -625,6 +625,7 @@ export interface ImpactPort {
 export interface ApiRouterDependencies {
   projects?: import("../projects.js").ProjectsPort;
   workLog?: import("../work-log.js").WorkLogPort;
+  clients?: import("../clients.js").ClientsPort;
   agentKeys?: import("../agent-keys.js").AgentKeyPort;
   providerBalances?: {
     load(): Promise<import("../provider-balances.js").ProviderBalances>;

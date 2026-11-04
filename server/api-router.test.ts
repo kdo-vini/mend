@@ -1950,6 +1950,8 @@ describe("agent key routes", () => {
       "chamados:ler",
       "chamados:escrever",
       "diario:escrever",
+      "clientes:ler",
+      "clientes:escrever",
     ]);
     expect(
       (await request(app).delete(`/api/agent-keys/${articleId}`)).status,

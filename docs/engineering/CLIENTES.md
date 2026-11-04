@@ -6,18 +6,18 @@ Tela em `/clientes` (lista) e `/clientes/:id` (página do cliente); mock em
 
 ## Modelo (`supabase/migrations/20261105120000_clients.sql`)
 
-| Notion   | Mend (`clients`)                                                                 |
-| -------- | -------------------------------------------------------------------------------- |
-| Cliente  | `name`                                                                           |
-| Contato  | `contact`                                                                        |
-| Email    | `email`                                                                          |
-| Telefone | `phone` (+ `phone_digits`, gerado, para achar duplicados)                        |
-| Site     | `site`                                                                           |
-| Estágio  | `stage`: `lead` · `proposta` · `ativo` · `churn`                                 |
-| Notas    | `notes` (curto, até 2.000)                                                       |
-| Produto  | `products`: lista com `site`, `sistema`, `integracao`                            |
-| Reuniões | `client_entries` com `kind = 'reuniao'` (linha do tempo permanente)              |
-| (página) | `body`: markdown; cada `## Título` vira uma seção que abre e fecha na tela       |
+| Notion   | Mend (`clients`)                                                           |
+| -------- | -------------------------------------------------------------------------- |
+| Cliente  | `name`                                                                     |
+| Contato  | `contact`                                                                  |
+| Email    | `email`                                                                    |
+| Telefone | `phone` (+ `phone_digits`, gerado, para achar duplicados)                  |
+| Site     | `site`                                                                     |
+| Estágio  | `stage`: `lead` · `proposta` · `ativo` · `churn`                           |
+| Notas    | `notes` (curto, até 2.000)                                                 |
+| Produto  | `products`: lista com `site`, `sistema`, `integracao`                      |
+| Reuniões | `client_entries` com `kind = 'reuniao'` (linha do tempo permanente)        |
+| (página) | `body`: markdown; cada `## Título` vira uma seção que abre e fecha na tela |
 
 Todo site já inclui SEO básico (robots.txt, llms.txt); `sistema` e
 `integracao` são os projetos que vão além do site.
@@ -41,7 +41,7 @@ grants por coluna e trigger), não só a API.
 
 Campos em `snake_case`, como no resto da API.
 
-- `GET /api/clients?archived=1` → `{ data: ClientSummary[], permissions: { canEdit, canArchive } }`. Sem `archived=1`, só os não arquivados. `ClientSummary` é o cliente sem `body`.
+- `GET /api/clients?archived=1` → `{ data: ClientSummary[], permissions: { canEdit, canArchive } }`. Sem `archived=1`, só os não arquivados; com `archived=1`, só os arquivados. `ClientSummary` é o cliente sem `body`.
 - `GET /api/clients/:id` → `{ data: Client & { entries: ClientEntry[], issues: { id, identifier, title, status }[] }, permissions }`
 - `POST /api/clients` `{ name, contact?, email?, phone?, site?, stage?, products?, notes?, body?, area?, specialty?, registration?, referral? }` → `201 { data: Client }`
 - `PATCH /api/clients/:id` com qualquer campo acima e `archived?: boolean` → `{ data: Client }`. Mudar `stage` registra uma entrada `estagio` na linha do tempo.
@@ -82,7 +82,13 @@ responde `503`.
     "registro": "CRO-SP 123456",
     "rqe": null,
     "ref": "carla-ortodontia",
-    "utm": { "source": "instagram", "medium": "bio", "campaign": "diag-nov", "term": "", "content": "" },
+    "utm": {
+      "source": "instagram",
+      "medium": "bio",
+      "campaign": "diag-nov",
+      "term": "",
+      "content": ""
+    },
     "respostas": [
       {
         "questionId": "como-descrevem",
@@ -112,13 +118,19 @@ opcional (padrão: agora). Limite: 256 KB por requisição, 120 respostas.
 ### O que acontece
 
 1. Já existe entrada `diagnostico` com esse `externalId` → nada muda; `200`, `status: "duplicate"`.
-2. O WhatsApp bate com um cliente não arquivado → o diagnóstico entra na linha do tempo dele; `200`, `status: "attached"`.
-3. Senão → cria o cliente com Estágio Lead, origem `diagnostico_marca`, área, especialidade, registro, indicação e utm; o corpo recebe o resumo e uma seção `##` por seção do formulário. `201`, `status: "created"`.
+2. O WhatsApp (só os dígitos, com ou sem o 55) bate com um cliente não arquivado → o diagnóstico entra na linha do tempo dele; `200`, `status: "attached"`.
+3. Senão → cria o cliente com Estágio Lead e uma entrada "Diagnóstico de marca recebido" na linha do tempo, origem `diagnostico_marca`, área, especialidade, registro, indicação e utm; o corpo recebe o resumo e uma seção `##` por seção do formulário. `201`, `status: "created"`.
 
 ### Resposta
 
 ```json
-{ "data": { "clientId": "8f0c…", "status": "created", "url": "https://<mend>/clientes/8f0c…" } }
+{
+  "data": {
+    "clientId": "8f0c…",
+    "status": "created",
+    "url": "https://<mend>/clientes/8f0c…"
+  }
+}
 ```
 
 | Status | Corpo                                         | Quando                                  |
@@ -141,10 +153,10 @@ Em 5xx o site pode tentar de novo com o mesmo `externalId`.
 
 ## MCP
 
-| Escopo             | Ferramenta           | O que faz                                                         |
-| ------------------ | -------------------- | ----------------------------------------------------------------- |
-| `clientes:ler`     | `clientes_listar`    | Lista clientes (filtros: estágio, área, busca), sem o corpo.      |
-| `clientes:ler`     | `clientes_ver`       | Cliente completo: propriedades, corpo, linha do tempo e chamados. |
-| `clientes:escrever` | `clientes_criar`     | Cria cliente (origem `agente`).                                  |
-| `clientes:escrever` | `clientes_atualizar` | Muda propriedades, estágio ou corpo.                             |
-| `clientes:escrever` | `clientes_anotar`    | Anexa nota ou reunião na linha do tempo, com o nome do agente.   |
+| Escopo              | Ferramenta           | O que faz                                                         |
+| ------------------- | -------------------- | ----------------------------------------------------------------- |
+| `clientes:ler`      | `clientes_listar`    | Lista clientes (filtros: estágio, área, busca), sem o corpo.      |
+| `clientes:ler`      | `clientes_ver`       | Cliente completo: propriedades, corpo, linha do tempo e chamados. |
+| `clientes:escrever` | `clientes_criar`     | Cria cliente (origem `agente`).                                   |
+| `clientes:escrever` | `clientes_atualizar` | Muda propriedades, estágio ou corpo.                              |
+| `clientes:escrever` | `clientes_anotar`    | Anexa nota ou reunião na linha do tempo, com o nome do agente.    |
