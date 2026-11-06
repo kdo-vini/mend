@@ -71,6 +71,22 @@ describe("WorkspaceAvailability", () => {
     expect(container.textContent).not.toContain("@gmail.com");
   });
 
+  it("shows the current status on the avatar without opening the menu", async () => {
+    await render({ isActive: false });
+    expect(
+      container
+        .querySelector(".workspace-availability-dot")
+        ?.getAttribute("data-state"),
+    ).toBe("away");
+
+    await render({ isActive: true });
+    expect(
+      container
+        .querySelector(".workspace-availability-dot")
+        ?.getAttribute("data-state"),
+    ).toBe("active");
+  });
+
   it("opens on keyboard focus and changes to Active", async () => {
     const { onChange } = await render();
     const trigger = container.querySelector<HTMLButtonElement>(".user-row");

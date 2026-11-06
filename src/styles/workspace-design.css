@@ -29,6 +29,38 @@
     var(--shadow-float);
   padding-top: 25px;
 }
+/* Expanded or collapsed, the rail keeps brand, search, footer and avatar
+   inside it: only the nav list gives up height and scrolls when the viewport
+   is short. */
+.app-shell .sidebar > .brand-row,
+.app-shell .sidebar > .command-trigger,
+.app-shell .sidebar > .sidebar-bottom {
+  flex: 0 0 auto;
+}
+.app-shell .sidebar > .primary-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.app-shell .workspace-availability-trigger .avatar {
+  position: relative;
+}
+.app-shell .workspace-availability-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--positive);
+}
+.app-shell .workspace-availability-dot[data-state="away"] {
+  background: var(--caution);
+}
 .app-shell .brand-name {
   font-family: var(--font-display);
   font-size: 22px;
@@ -44,6 +76,31 @@
 }
 .app-shell .command-trigger {
   border-radius: var(--radius-control);
+}
+/* Short laptop screens (1366×640 and similar): tighten the rail's vertical
+   rhythm so every nav item fits before the list has to scroll. */
+@media (min-width: 821px) and (max-height: 760px) {
+  .app-shell .sidebar {
+    padding-top: 18px;
+    padding-bottom: 12px;
+  }
+  .app-shell .sidebar .brand-row {
+    padding-bottom: 12px;
+  }
+  .app-shell .sidebar .command-trigger {
+    margin: 8px 0 14px;
+  }
+  .app-shell .sidebar .nav-item {
+    min-height: 34px;
+    padding-block: 7px;
+  }
+  .app-shell .sidebar .sidebar-bottom {
+    gap: 6px;
+    padding-top: 10px;
+  }
+  .app-shell .sidebar .user-row {
+    min-height: 40px;
+  }
 }
 .app-shell .page-header h1,
 .app-shell .inbox-toolbar h1 {

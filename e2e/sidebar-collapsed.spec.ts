@@ -56,3 +56,47 @@ test("collapsed sidebar keeps every control inside the rail and remembers its st
     /sidebar-is-collapsed/,
   );
 });
+
+test("expanded sidebar keeps the footer and avatar inside the rail on a short laptop", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "mobile",
+    "phones replace the sidebar with the top bar",
+  );
+  for (const height of [640, 560]) {
+    await page.setViewportSize({ width: 1366, height });
+    await page.goto("/inbox?demo=1");
+    await expect(page.locator(".app-shell")).not.toHaveClass(
+      /sidebar-is-collapsed/,
+    );
+    const outside = await page
+      .locator(".app-shell .sidebar")
+      .evaluate((sidebar) => {
+        const rail = sidebar.getBoundingClientRect();
+        return [
+          ...sidebar.querySelectorAll<HTMLElement>(
+            ".brand-row, .command-trigger, .sidebar-utilities .icon-button, .user-row",
+          ),
+        ]
+          .filter((element) => element.offsetParent !== null)
+          .filter((element) => {
+            const box = element.getBoundingClientRect();
+            return (
+              box.top < rail.top ||
+              box.bottom > rail.bottom ||
+              box.bottom > window.innerHeight
+            );
+          })
+          .map((element) => element.className);
+      });
+    expect(outside, `height ${height}`).toEqual([]);
+    // The inbox fits the viewport: the shell itself never scrolls.
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollHeight - window.innerHeight,
+      ),
+      `height ${height}`,
+    ).toBeLessThanOrEqual(0);
+  }
+});

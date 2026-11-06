@@ -459,25 +459,34 @@ function App() {
   const changeAvailability = (isActive: boolean) => {
     if (!workspaceId || demoMode || !operatorIdentity.id || availabilitySaving)
       return;
+    const previousIsActive = ownWorkspaceMember?.isActive;
+    const applyAvailability = (next: boolean) =>
+      setWorkspaceMembersByUserId((members) =>
+        members[operatorIdentity.id]
+          ? {
+              ...members,
+              [operatorIdentity.id]: {
+                ...members[operatorIdentity.id],
+                isActive: next,
+              },
+            }
+          : members,
+      );
+    // Optimistic: the menu closes on click, so the new status must show at
+    // once instead of after the round trip (it looked like the click failed).
+    applyAvailability(isActive);
     setAvailabilitySaving(true);
     void setLiveWorkspaceAvailability({ workspaceId, isActive })
-      .then(() =>
-        setWorkspaceMembersByUserId((members) => ({
-          ...members,
-          [operatorIdentity.id]: {
-            ...members[operatorIdentity.id],
-            isActive,
-          },
-        })),
-      )
-      .catch((error) =>
+      .catch((error) => {
+        if (typeof previousIsActive === "boolean")
+          applyAvailability(previousIsActive);
         notify(
           error instanceof Error
             ? error.message
             : t("errors.liveReconciliation"),
           "error",
-        ),
-      )
+        );
+      })
       .finally(() => setAvailabilitySaving(false));
   };
 
