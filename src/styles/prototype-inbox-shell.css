@@ -20,7 +20,9 @@
 .app-shell .inbox-layout {
   grid-template-columns: var(--inbox-rail-width, 250px) minmax(0, 1fr) 235px;
   height: calc(100dvh - 139px);
-  min-height: 550px;
+  /* Low enough that a 1366×640 laptop fits the page without scrolling the
+     whole shell (550px pushed the header off screen). */
+  min-height: 420px;
   border-radius: var(--radius-feature);
   overflow: hidden;
 }

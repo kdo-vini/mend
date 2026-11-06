@@ -62,6 +62,12 @@ export function WorkspaceAvailability({
     >
       <div className="avatar avatar-small avatar-violet" aria-hidden="true">
         {initials}
+        {isActive !== null && (
+          <span
+            className="workspace-availability-dot"
+            data-state={isActive ? "active" : "away"}
+          />
+        )}
       </div>
       <span className="user-row-name">
         <strong>{name}</strong>
